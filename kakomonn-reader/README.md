@@ -1,0 +1,30 @@
+# kakomonn-reader
+
+中小企業診断士試験の過去問ページ向けユーザースクリプトです.
+
+## 機能
+
+- 問題文と解説の連続読み上げ.
+- 次の問題へ移動した回数の日次カウント.
+- 問題文と解説のクリップボードへのコピー.
+- 1日100問の完了判定.
+
+## ビルド
+
+```bash
+python3 build.py
+```
+
+`src/part-*.js`を順番に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyなどのユーザースクリプトマネージャーには, 生成されたファイルを登録してください.
+
+## バージョン管理
+
+ファイル名およびユーザースクリプトのメタデータにはバージョン番号を付けません. 変更履歴はGitのコミットで管理します.
+
+## 動作確認
+
+```bash
+python3 build.py
+node --check kakomonn-reader.user.js
+python3 tests/smoke_test.py
+```

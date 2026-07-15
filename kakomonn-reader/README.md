@@ -17,6 +17,10 @@ python3 build.py
 
 `src/part-*.js`を順番に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyなどのユーザースクリプトマネージャーには, 生成されたファイルを登録してください.
 
+## 動作環境
+
+SafariのUserscriptsとChromeまたはEdgeのTampermonkeyに対応します. 読み上げにはブラウザのWeb Speech APIを使用し, `ja-JP`に対応するブラウザ既定の音声を利用します.
+
 ## バージョン管理
 
 ファイル名およびユーザースクリプトのメタデータにはバージョン番号を付けません. 変更履歴はGitのコミットで管理します.

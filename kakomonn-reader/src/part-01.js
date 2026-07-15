@@ -50,6 +50,10 @@
   startButton.id = "kakomonn-reader-start";
   startButton.type = "button";
   startButton.textContent = "読み上げを開始";
+  if (!speechSupported) {
+    startButton.textContent = "読み上げ非対応";
+    startButton.disabled = true;
+  }
   startWrap.appendChild(startButton);
 
   document.body.replaceChildren(
@@ -111,7 +115,9 @@
   function stopSpeech() {
     speechRunId += 1;
     activeUtterance = null;
-    speech.cancel();
+    if (speechSupported) {
+      speech.cancel();
+    }
     stopButton.style.display = "none";
 
     if (speechEnabled) {
@@ -247,4 +253,3 @@
       documentNode.body,
       NodeFilterConstructor.SHOW_TEXT
     );
-

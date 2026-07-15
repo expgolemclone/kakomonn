@@ -161,15 +161,6 @@
     return chunks;
   }
 
-  function selectJapaneseVoice() {
-    const voices = speech.getVoices();
-    return (
-      voices.find((voice) => voice.lang === "ja-JP") ??
-      voices.find((voice) => voice.lang.toLowerCase().startsWith("ja")) ??
-      null
-    );
-  }
-
   function speakChunks(chunks, runId, label, rate, index = 0) {
     if (runId !== speechRunId) {
       return;
@@ -182,16 +173,11 @@
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(chunks[index]);
+    const utterance = new SpeechUtterance(chunks[index]);
     utterance.lang = "ja-JP";
     utterance.rate = rate;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
-
-    const voice = selectJapaneseVoice();
-    if (voice) {
-      utterance.voice = voice;
-    }
 
     utterance.onstart = () => {
       if (runId === speechRunId) {

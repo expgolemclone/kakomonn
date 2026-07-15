@@ -29,6 +29,11 @@
   const EXPLANATION_SPEECH_RATE = 1.2;
 
   const speech = window.speechSynthesis;
+  const SpeechUtterance = window.SpeechSynthesisUtterance;
+  const speechSupported =
+    typeof speech?.cancel === "function" &&
+    typeof speech?.speak === "function" &&
+    typeof SpeechUtterance === "function";
   let speechEnabled = false;
   let speechRunId = 0;
   let activeUtterance = null;

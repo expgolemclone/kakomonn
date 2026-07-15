@@ -178,7 +178,9 @@
     loadTimer = window.setTimeout(() => {
       loadTimer = null;
 
-      if (speechEnabled) {
+      if (!speechSupported) {
+        setStatus("読み上げ非対応");
+      } else if (speechEnabled) {
         readCurrentPage();
       } else {
         setStatus("開始ボタンを押してください");
@@ -187,6 +189,11 @@
   }
 
   startButton.addEventListener("click", () => {
+    if (!speechSupported) {
+      setStatus("読み上げ非対応");
+      return;
+    }
+
     speechEnabled = true;
     startWrap.remove();
     nextQuestionButton.hidden = false;

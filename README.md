@@ -11,6 +11,7 @@
 ```bash
 npm ci
 npm test
+npm run test:smoke
 ```
 
-ユーザースクリプトのメタデータがTampermonkeyの仕様に沿っていることと, JavaScriptがES2020構文で解釈できることを検証します.
+`npm ci`でPlaywrightと対応するChromiumもインストールします. ユーザースクリプトのメタデータがTampermonkeyの仕様に沿っていること, JavaScriptがES2020構文で解釈できること, Chromium上で主要な操作が動作することを検証します.

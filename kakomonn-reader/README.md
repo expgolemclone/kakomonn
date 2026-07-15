@@ -23,8 +23,10 @@ python3 build.py
 
 ## 動作確認
 
+リポジトリのルートで依存関係をインストールし, TampermonkeyメタデータとES2020構文を検証します.
+
 ```bash
-python3 build.py
-node --check kakomonn-reader.user.js
-python3 tests/smoke_test.py
+npm ci
+npm test
+npm run test:smoke
 ```

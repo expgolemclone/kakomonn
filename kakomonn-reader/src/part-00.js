@@ -4,7 +4,6 @@
 // @description  問題文を1.5倍速, 解説を1.2倍速で読み上げ, 次問時の先頭表示, 問題・解説コピー, 日次100問カウントを提供します.
 // @match        https://chushoks.kakomonn.com/*
 // @run-at       document-end
-// @inject-into  content
 // @noframes
 // @grant        none
 // ==/UserScript==

@@ -1,0 +1,13 @@
+{
+  "name": "browser-extensions",
+  "private": true,
+  "scripts": {
+    "build:kakomonn-reader": "python3 kakomonn-reader/build.py",
+    "test": "npm run test:userscripts",
+    "test:userscripts": "npm run build:kakomonn-reader && es-check es2020 kakomonn-reader/kakomonn-reader.user.js && python3 kakomonn-reader/tests/userscript_metadata_test.py",
+    "test:smoke": "python3 kakomonn-reader/tests/smoke_test.py"
+  },
+  "devDependencies": {
+    "es-check": "9.6.4"
+  }
+}

@@ -227,7 +227,24 @@
 
     const chunks = splitText(text);
     if (chunks.length === 0) {
-      setStatus(`${label}·
-K–>[–ú_Ÿ7ûo
-M€¤ì(€€€€€É•ÑÕÉ¸ì(€€€ô((€€€ÍÁ••¡IÕ¹%€¬ô€Äì(€€€½¹ÍĞÉÕ¹%€ôÍÁ••¡IÕ¹%ì(€€€ÍÁ•• ¹…¹•° ¤ì(€€€Í•ÑMÑ…ÑÕÌ¡€‘í±…‰•±÷šê[–
-g’âµ€¤ì(€€€ÍÁ•…­¡Õ¹­Ì¡¡Õ¹­Ì°ÉÕ¹%°±…‰•°°É…Ñ”¤ì(€ô((€™Õ¹Ñ¥½¸É•…‘ÕÉÉ•¹ÑA…” ¤ì(€€€¥˜€ …ÍÁ••¡¹…‰±•¤ì(€€€€€É•ÑÕÉ¸ì(€€€ô((€€€½¹ÍĞìÅÕ•ÍÑ¥½¹Q•áĞ°•áÁ±…¹…Ñ¥½¹Q•áĞô€ô•áÑÉ…ÑI•…‘…‰±•M•Ñ¥½¹Ì ¤ì(€€€±…ÍÑáÁ±…¹…Ñ¥½¹Q•áĞ€ô•áÁ±…¹…Ñ¥½¹Q•áĞì((€€€¥˜€¡•áÁ±…¹…Ñ¥½¹Q•áĞ¤ì(€€€€€ÕÉÉ•¹ÑEÕ•ÍÑ¥½¹Q•áĞ€ô€ˆˆì(
+      setStatus(`${label}ã‚’å–å¾—ã§ãã¾ã›ã‚“`);
+      return;
+    }
+
+    speechRunId += 1;
+    const runId = speechRunId;
+    speech.cancel();
+    setStatus(`${label}æº–å‚™ä¸­`);
+    speakChunks(chunks, runId, label, rate);
+  }
+
+  function readCurrentPage() {
+    if (!speechEnabled) {
+      return;
+    }
+
+    const { questionText, explanationText } = extractReadableSections();
+    lastExplanationText = explanationText;
+
+    if (explanationText) {
+      currentQuestionText = "";

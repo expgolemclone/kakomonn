@@ -13,11 +13,21 @@ GAI明電福朗で, Claude Opus 4.8, Thinking, Effort Max, 指定システムプ
 
 ## ビルド
 
+リポジトリのルートで次を実行します.
+
+```bash
+npm run build:gai
+```
+
+または, `gai`ディレクトリで次を実行します.
+
 ```bash
 python3 build.py
 ```
 
-`src/userscript.js`へ`system-prompt.md`をJSON文字列として埋め込み, `gai.user.js`を生成します. Tampermonkeyなどのユーザースクリプトマネージャーには, 生成されたファイルを登録してください.
+ビルドは`src/userscript.js`へ`system-prompt.md`の全文をJSON文字列として内蔵し, 単独で実行できる`gai.user.js`を生成します. 外部のプロンプトファイルは実行時に読み込みません.
+
+Tampermonkeyへ登録するファイルは, ビルド後の`gai.user.js`です. `src/userscript.js`はビルド用テンプレートなので, Tampermonkeyへ直接登録しないでください.
 
 ## 動作確認
 

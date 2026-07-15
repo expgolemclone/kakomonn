@@ -20,16 +20,16 @@ def main() -> None:
     if not prompt.strip():
         raise RuntimeError("system prompt must not be empty")
 
-    output = source.replace(
-        PROMPT_PLACEHOLDER,
-        json.dumps(prompt, ensure_ascii=False),
-    )
+    embedded_prompt = json.dumps(prompt, ensure_ascii=False)
+    output = source.replace(PROMPT_PLACEHOLDER, embedded_prompt)
     if not output.startswith("// ==UserScript=="):
         raise RuntimeError("generated output does not start with a userscript header")
     if "// @version" in output:
         raise RuntimeError("userscript version metadata must not be added")
     if PROMPT_PLACEHOLDER in output:
         raise RuntimeError("prompt placeholder remains in generated output")
+    if output.count(embedded_prompt) != 1:
+        raise RuntimeError("system prompt was not embedded exactly once")
 
     OUTPUT_PATH.write_text(output, encoding="utf-8")
     print(OUTPUT_PATH)

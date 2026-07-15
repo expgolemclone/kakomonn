@@ -7,6 +7,20 @@ const { chromium } = require("playwright");
 
 const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
+const edgeUserAgent =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+  "AppleWebKit/537.36 (KHTML, like Gecko) " +
+  "Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0";
+const chromeUserAgent =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+  "AppleWebKit/537.36 (KHTML, like Gecko) " +
+  "Chrome/150.0.0.0 Safari/537.36";
+const iosUserAgent =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) " +
+  "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 " +
+  "Mobile/15E148 Safari/604.1";
+const edgeVoiceName =
+  "Microsoft Nanami Online (Natural) - Japanese (Japan)";
 
 const mockBody = `
   <div id="meta">中小企業診断士試験 令和6年度 第1問</div>
@@ -51,6 +65,13 @@ async function preparePage(page, speechSupported) {
     }
 
     window.__speechCalls = [];
+    let voices = [];
+    const edgeVoice = {
+      name: "Microsoft Nanami Online (Natural) - Japanese (Japan)",
+      lang: "ja-JP",
+      default: false,
+      localService: false,
+    };
 
     class FakeSpeechSynthesisUtterance {
       constructor(text) {
@@ -68,6 +89,9 @@ async function preparePage(page, speechSupported) {
 
     const fakeSpeechSynthesis = {
       cancel() {},
+      getVoices() {
+        return voices;
+      },
       speak(utterance) {
         window.__speechCalls.push({
           text: utterance.text,
@@ -75,8 +99,16 @@ async function preparePage(page, speechSupported) {
           rate: utterance.rate,
           pitch: utterance.pitch,
           volume: utterance.volume,
-          voice: utterance.voice,
+          voice: utterance.voice?.name ?? null,
         });
+
+        if (utterance.text === "準備") {
+          voices = [edgeVoice];
+          window.setTimeout(() => {
+            utterance.onerror?.({ error: "synthesis-failed" });
+          }, 0);
+          return;
+        }
 
         window.setTimeout(() => {
           utterance.onstart?.();
@@ -98,6 +130,25 @@ async function preparePage(page, speechSupported) {
   return errors;
 }
 
+async function loadMockQuestion(page, script) {
+  await page.addScriptTag({ content: script });
+  await page.waitForSelector("#kakomonn-reader-frame");
+
+  const childFrames = page
+    .frames()
+    .filter((frame) => frame !== page.mainFrame());
+  assert.equal(childFrames.length, 1);
+  const childFrame = childFrames[0];
+  await childFrame.evaluate(
+    (html) => {
+      document.body.innerHTML = html;
+    },
+    mockBody,
+  );
+  await page.waitForTimeout(900);
+  return childFrame;
+}
+
 async function main() {
   execFileSync("python3", ["build.py"], {
     cwd: projectRoot,
@@ -109,25 +160,10 @@ async function main() {
 
   const browser = await chromium.launch({ headless: true });
   try {
-    const context = await browser.newContext();
+    const context = await browser.newContext({ userAgent: edgeUserAgent });
     const page = await context.newPage();
     const errors = await preparePage(page, true);
-    await page.addScriptTag({ content: script });
-    await page.waitForSelector("#kakomonn-reader-frame");
-
-    const childFrames = page
-      .frames()
-      .filter((frame) => frame !== page.mainFrame());
-    assert.equal(childFrames.length, 1);
-    const childFrame = childFrames[0];
-    await childFrame.evaluate(
-      (html) => {
-        document.body.innerHTML = html;
-      },
-      mockBody,
-    );
-
-    await page.waitForTimeout(900);
+    const childFrame = await loadMockQuestion(page, script);
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
       "0/100",
@@ -154,19 +190,27 @@ async function main() {
     );
 
     assert.deepEqual(await page.evaluate(() => window.__speechCalls[0]), {
+      text: "準備",
+      lang: "ja-JP",
+      rate: 1,
+      pitch: 1,
+      volume: 1,
+      voice: null,
+    });
+    assert.deepEqual(await page.evaluate(() => window.__speechCalls[1]), {
       text: "問題文。これは動作確認用の問題文です.",
       lang: "ja-JP",
       rate: 1.5,
       pitch: 1,
       volume: 1,
-      voice: null,
+      voice: edgeVoiceName,
     });
 
     await childFrame.evaluate(() => {
       document.querySelector("#explanation-lock").hidden = true;
       document.querySelector("#explanation").hidden = false;
     });
-    await page.waitForFunction(() => window.__speechCalls.length === 2);
+    await page.waitForFunction(() => window.__speechCalls.length === 3);
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
@@ -177,13 +221,13 @@ async function main() {
         document.querySelector("#kakomonn-reader-status").textContent ===
         "解説完了",
     );
-    assert.deepEqual(await page.evaluate(() => window.__speechCalls[1]), {
+    assert.deepEqual(await page.evaluate(() => window.__speechCalls[2]), {
       text: "解説。これは動作確認用の解説です.",
       lang: "ja-JP",
       rate: 1.2,
       pitch: 1,
       volume: 1,
-      voice: null,
+      voice: edgeVoiceName,
     });
 
     await childFrame.locator("#next").click();
@@ -213,6 +257,46 @@ async function main() {
         "読み上げ非対応",
     );
     assert.deepEqual(unsupportedErrors, []);
+
+    const chromeContext = await browser.newContext({
+      userAgent: chromeUserAgent,
+    });
+    const chromePage = await chromeContext.newPage();
+    const chromeErrors = await preparePage(chromePage, true);
+    await chromePage.addScriptTag({ content: script });
+    await chromePage.waitForSelector("#kakomonn-reader-start");
+    assert.equal(
+      await chromePage.locator("#kakomonn-reader-start").innerText(),
+      "読み上げ非対応",
+    );
+    assert.equal(
+      await chromePage.locator("#kakomonn-reader-start").isDisabled(),
+      true,
+    );
+    assert.deepEqual(chromeErrors, []);
+    await chromeContext.close();
+
+    const iosContext = await browser.newContext({ userAgent: iosUserAgent });
+    const iosPage = await iosContext.newPage();
+    const iosErrors = await preparePage(iosPage, true);
+    await loadMockQuestion(iosPage, script);
+    await iosPage.locator("#kakomonn-reader-start").click();
+    await iosPage.waitForFunction(() => window.__speechCalls.length === 1);
+    await iosPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "問題文完了",
+    );
+    assert.deepEqual(await iosPage.evaluate(() => window.__speechCalls[0]), {
+      text: "問題文。これは動作確認用の問題文です.",
+      lang: "ja-JP",
+      rate: 1.5,
+      pitch: 1,
+      volume: 1,
+      voice: null,
+    });
+    assert.deepEqual(iosErrors, []);
+    await iosContext.close();
   } finally {
     await browser.close();
   }

@@ -19,7 +19,7 @@ python3 build.py
 
 ## 動作環境
 
-SafariのUserscriptsとChromeまたはEdgeのTampermonkeyに対応します. 読み上げにはブラウザのWeb Speech APIを使用し, `ja-JP`に対応するブラウザ既定の音声を利用します.
+iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 読み上げにはブラウザのWeb Speech APIを使用します. iOSではブラウザ既定の日本語音声を利用し, WindowsではEdgeの`Microsoft Nanami Online (Natural)`を利用するためインターネット接続が必要です.
 
 ## バージョン管理
 

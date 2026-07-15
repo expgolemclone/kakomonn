@@ -161,6 +161,61 @@
     return chunks;
   }
 
+  function findRequiredSpeechVoice() {
+    if (!isWindowsEdge) {
+      return null;
+    }
+
+    return (
+      speech
+        .getVoices()
+        .find((voice) => voice.name === EDGE_JAPANESE_VOICE_NAME) ?? null
+    );
+  }
+
+  function initializeSpeechVoice(runId, onReady) {
+    if (!isWindowsEdge) {
+      onReady();
+      return;
+    }
+
+    speechVoice = findRequiredSpeechVoice();
+    if (speechVoice !== null) {
+      onReady();
+      return;
+    }
+
+    setStatus("音声準備中");
+    const warmupUtterance = new SpeechUtterance("準備");
+    warmupUtterance.lang = "ja-JP";
+    let warmupFinished = false;
+
+    const finishWarmup = () => {
+      if (warmupFinished || runId !== speechRunId) {
+        return;
+      }
+
+      warmupFinished = true;
+      activeUtterance = null;
+      speechVoice = findRequiredSpeechVoice();
+      if (speechVoice === null) {
+        setStatus("日本語音声を利用できません");
+        return;
+      }
+
+      window.setTimeout(() => {
+        if (runId === speechRunId) {
+          onReady();
+        }
+      }, 0);
+    };
+
+    warmupUtterance.onend = finishWarmup;
+    warmupUtterance.onerror = finishWarmup;
+    activeUtterance = warmupUtterance;
+    speech.speak(warmupUtterance);
+  }
+
   function speakChunks(chunks, runId, label, rate, index = 0) {
     if (runId !== speechRunId) {
       return;
@@ -178,6 +233,16 @@
     utterance.rate = rate;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
+    if (isWindowsEdge) {
+      if (speechVoice === null) {
+        activeUtterance = null;
+        stopButton.style.display = "none";
+        setStatus("日本語音声を利用できません");
+        return;
+      }
+
+      utterance.voice = speechVoice;
+    }
 
     utterance.onstart = () => {
       if (runId === speechRunId) {

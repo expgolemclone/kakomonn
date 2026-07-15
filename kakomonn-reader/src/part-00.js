@@ -27,16 +27,27 @@
   const MAX_CHUNK_LENGTH = 120;
   const QUESTION_SPEECH_RATE = 1.5;
   const EXPLANATION_SPEECH_RATE = 1.2;
+  const EDGE_JAPANESE_VOICE_NAME =
+    "Microsoft Nanami Online (Natural) - Japanese (Japan)";
 
   const speech = window.speechSynthesis;
   const SpeechUtterance = window.SpeechSynthesisUtterance;
+  const isIOS =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isWindowsEdge =
+    navigator.userAgent.includes("Windows NT") &&
+    navigator.userAgent.includes("Edg/");
   const speechSupported =
     typeof speech?.cancel === "function" &&
     typeof speech?.speak === "function" &&
-    typeof SpeechUtterance === "function";
+    typeof speech?.getVoices === "function" &&
+    typeof SpeechUtterance === "function" &&
+    (isIOS || isWindowsEdge);
   let speechEnabled = false;
   let speechRunId = 0;
   let activeUtterance = null;
+  let speechVoice = null;
   let frameDocument = null;
   let boundFrameDocument = null;
   let currentFrameURL = location.href;

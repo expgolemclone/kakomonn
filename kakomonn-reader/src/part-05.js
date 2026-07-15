@@ -203,7 +203,9 @@
 
     // iOSでは初回の発話をユーザー操作の中で直接開始する必要があります.
     speech.cancel();
-    readCurrentPage();
+    speechRunId += 1;
+    const runId = speechRunId;
+    initializeSpeechVoice(runId, readCurrentPage);
   });
 
   nextQuestionButton.addEventListener("click", () => {

@@ -2,11 +2,13 @@
   "name": "browser-extensions",
   "private": true,
   "scripts": {
+    "build": "npm run build:kakomonn-reader && npm run build:gai",
     "postinstall": "playwright install chromium",
     "build:kakomonn-reader": "python3 kakomonn-reader/build.py",
+    "build:gai": "python3 gai/build.py",
     "test": "npm run test:userscripts",
-    "test:userscripts": "npm run build:kakomonn-reader && es-check es2020 chatgpt-initial-prompt/chatgpt-initial-prompt.user.js kakomonn-reader/kakomonn-reader.user.js && python3 kakomonn-reader/tests/userscript_metadata_test.py chatgpt-initial-prompt/chatgpt-initial-prompt.user.js kakomonn-reader/kakomonn-reader.user.js",
-    "test:smoke": "node chatgpt-initial-prompt/tests/smoke_test.js && node kakomonn-reader/tests/smoke_test.js"
+    "test:userscripts": "npm run build && es-check es2020 chatgpt-initial-prompt/chatgpt-initial-prompt.user.js kakomonn-reader/kakomonn-reader.user.js gai/gai.user.js && python3 tests/userscript_metadata_test.py chatgpt-initial-prompt/chatgpt-initial-prompt.user.js kakomonn-reader/kakomonn-reader.user.js gai/gai.user.js",
+    "test:smoke": "node chatgpt-initial-prompt/tests/smoke_test.js && node kakomonn-reader/tests/smoke_test.js && node gai/tests/smoke_test.js"
   },
   "devDependencies": {
     "es-check": "9.6.4",

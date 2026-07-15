@@ -1,3 +1,5 @@
 __pycache__/
 node_modules/
+.env
+gai/gai.user.js
 kakomonn-reader/kakomonn-reader.user.js

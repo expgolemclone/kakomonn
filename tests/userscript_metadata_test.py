@@ -5,9 +5,8 @@ from pathlib import Path
 import re
 import sys
 
-# This validator is shared by every userscript in the repository.
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 HEADER_START = "// ==UserScript=="
 HEADER_END = "// ==/UserScript=="

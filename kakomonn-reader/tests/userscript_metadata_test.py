@@ -3,10 +3,11 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 import re
+import sys
 
+# This validator is shared by every userscript in the repository.
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT_PATH = PROJECT_ROOT / "kakomonn-reader.user.js"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 HEADER_START = "// ==UserScript=="
 HEADER_END = "// ==/UserScript=="
@@ -117,8 +118,8 @@ def require_single_value(
     return value
 
 
-def main() -> None:
-    script = SCRIPT_PATH.read_text(encoding="utf-8")
+def validate(script_path: Path) -> None:
+    script = script_path.read_text(encoding="utf-8")
     metadata = extract_metadata(script)
 
     require_single_value(metadata, "name")
@@ -141,8 +142,20 @@ def main() -> None:
         "@grant none cannot be combined with other grants"
     )
 
-    assert "version" not in metadata, "userscript version metadata must not be added"
-    print("userscript metadata test passed")
+    version_values = metadata.get("version", [])
+    assert len(version_values) <= 1, "@version must not occur more than once"
+    print(f"userscript metadata test passed: {script_path}")
+
+
+def main() -> None:
+    if len(sys.argv) < 2:
+        raise SystemExit("at least one userscript path is required")
+    for argument in sys.argv[1:]:
+        script_path = (REPOSITORY_ROOT / argument).resolve()
+        assert script_path.is_relative_to(REPOSITORY_ROOT), (
+            f"userscript path must stay inside the repository: {argument}"
+        )
+        validate(script_path)
 
 
 if __name__ == "__main__":

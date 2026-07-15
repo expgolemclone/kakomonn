@@ -4,6 +4,7 @@
 
 ## Extensions
 
+- [`chatgpt-initial-prompt`](chatgpt-initial-prompt/README.md): ChatGPTの新しい会話へ学習支援用プロンプトを1回だけ入力するスクリプト.
 - [`kakomonn-reader`](kakomonn-reader/README.md): 中小企業診断士試験の過去問ページ向け読み上げ・日次カウントスクリプト.
 
 ## テスト

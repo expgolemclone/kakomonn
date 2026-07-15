@@ -1,22 +1,6 @@
-// ==UserScript==
-// @name         ChatGPT Initial Prompt
-// @namespace    local
-// @version      1.3.0
-// @description  ChatGPTを開いたとき,最初の1回だけ複数行プロンプトを入力し,カーソルを先頭へ移動する
-// @match        https://chatgpt.com/*
-// @run-at       document-start
-// @grant        none
-// ==/UserScript==
 
-(() => {
-    'use strict';
 
-    // プロンプトの上に作る空行数.
-    const LEADING_BLANK_LINES = 3;
-
-    const BASE_PROMPT = `
-
-## 以下のskillに従え
+# 1. use this skill
 
 ---
 name: guided-learning-tutor
@@ -65,7 +49,7 @@ description: ユーザーが答えへ至る重要な判断を自分で行い, �
 
 教師が説明, ヒント, 訂正, 例示の中で実質的な答えを示した内容として扱う.
 
-同じ答えや理由をそのまま問い返さない. \`説明済みだが適用未確認\`として保持し, セッションが進んだ後に別の条件で確認する.
+同じ答えや理由をそのまま問い返さない. `説明済みだが適用未確認`として保持し, セッションが進んだ後に別の条件で確認する.
 
 ### まだ導かれていない内容
 
@@ -102,7 +86,7 @@ description: ユーザーが答えへ至る重要な判断を自分で行い, �
 
 ### 確認待ちとして保持する
 
-教師が核心を説明した場合は, その内容を内部的に\`説明済みだが適用未確認\`として保持する.
+教師が核心を説明した場合は, その内容を内部的に`説明済みだが適用未確認`として保持する.
 
 確認を急がない. ユーザーが後の会話でその考え方を自力で使えた場合は, その時点で理解確認済みとして扱い, 改めて質問しない.
 
@@ -187,7 +171,7 @@ description: ユーザーが答えへ至る重要な判断を自分で行い, �
 
 問題の中心が結果の解釈なら, 解釈を先に説明しない.
 
-ただし, 問題を考えるために必要な未習知識は短く説明する. 未習事項を推測させない.
+ただし, 問題を考えるために必要な未習知識は矮く説明する. 未習事項を推測させない.
 
 説明や訂正によって核心を開示した場合は, その項目を教師が提示した内容として扱い, 同じ問題では問い返さない.
 
@@ -261,7 +245,7 @@ description: ユーザーが答えへ至る重要な判断を自分で行い, �
 
 自然な区切りに達した場合は, 適用確認を待っている内容から最も重要なものを1つ選び, 条件を変えた短い問題で理解を確認する.
 
-## 応答の基本形
+## 応答の基本彞
 
 ### 新しい概念
 
@@ -318,162 +302,10 @@ description: ユーザーが答えへ至る重要な判断を自分で行い, �
 
 各応答の末尾を必ず質問にする必要はない.
 
+---
 
-`;
+# 2. user's query
 
-    const PROMPT = '\n'.repeat(LEADING_BLANK_LINES) + BASE_PROMPT;
 
-    let started = false;
-    let completed = false;
 
-    const findEditor = () =>
-    document.querySelector(
-        '#prompt-textarea[contenteditable="true"], textarea#prompt-textarea',
-    );
 
-    const getEditorText = (editor) => {
-        if (editor instanceof HTMLTextAreaElement) {
-            return editor.value;
-        }
-
-        return editor.innerText;
-    };
-
-    const setTextareaText = (editor, text) => {
-        const valueSetter = Object.getOwnPropertyDescriptor(
-            HTMLTextAreaElement.prototype,
-            'value',
-        )?.set;
-
-        if (!valueSetter) {
-            throw new Error('textareaのvalue setterを取得できませんでした.');
-        }
-
-        valueSetter.call(editor, text);
-
-        editor.dispatchEvent(
-            new InputEvent('input', {
-                bubbles: true,
-                composed: true,
-                inputType: 'insertText',
-                data: text,
-            }),
-        );
-    };
-
-    const setContentEditableText = (editor, text) => {
-        editor.focus({ preventScroll: true });
-
-        const selection = window.getSelection();
-        const range = document.createRange();
-
-        range.selectNodeContents(editor);
-        selection.removeAllRanges();
-        selection.addRange(range);
-
-        const inserted = document.execCommand('insertText', false, text);
-
-        selection.removeAllRanges();
-
-        if (!inserted) {
-            throw new Error('プロンプトを入力できませんでした.');
-        }
-    };
-
-    const placeCaretAtStart = (editor) => {
-        editor.focus({ preventScroll: true });
-
-        if (editor instanceof HTMLTextAreaElement) {
-            editor.setSelectionRange(0, 0);
-            return;
-        }
-
-        const selection = window.getSelection();
-        const range = document.createRange();
-
-        range.selectNodeContents(editor);
-        range.collapse(true);
-
-        selection.removeAllRanges();
-        selection.addRange(range);
-    };
-
-    const stabilizeCaretAtStart = (editor) => {
-        placeCaretAtStart(editor);
-
-        requestAnimationFrame(() => {
-            placeCaretAtStart(editor);
-
-            requestAnimationFrame(() => {
-                placeCaretAtStart(editor);
-            });
-        });
-
-        setTimeout(() => {
-            placeCaretAtStart(editor);
-        }, 100);
-    };
-
-    const insertPrompt = (editor) => {
-        if (editor instanceof HTMLTextAreaElement) {
-            setTextareaText(editor, PROMPT);
-        } else if (editor instanceof HTMLElement && editor.isContentEditable) {
-            setContentEditableText(editor, PROMPT);
-        } else {
-            throw new Error('対応していない入力欄です.');
-        }
-
-        stabilizeCaretAtStart(editor);
-    };
-
-    const observer = new MutationObserver(() => {
-        insertOnce();
-    });
-
-    const finish = () => {
-        completed = true;
-        observer.disconnect();
-    };
-
-    function insertOnce() {
-        if (completed) {
-            return;
-        }
-
-        const editor = findEditor();
-
-        if (!editor) {
-            return;
-        }
-
-        // 既に文章が入力されている場合は上書きしない.
-        if (getEditorText(editor).trim() !== '') {
-            finish();
-            return;
-        }
-
-        try {
-            insertPrompt(editor);
-        } finally {
-            finish();
-        }
-    }
-
-    const start = () => {
-        if (started || !document.documentElement) {
-            return;
-        }
-
-        started = true;
-
-        observer.observe(document.documentElement, {
-            childList: true,
-            subtree: true,
-        });
-
-        insertOnce();
-    };
-
-    document.addEventListener('DOMContentLoaded', start, { once: true });
-    start();
-})();

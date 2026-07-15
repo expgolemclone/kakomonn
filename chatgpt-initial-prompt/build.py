@@ -4,11 +4,11 @@ import json
 from pathlib import Path
 
 
-GAI_ROOT = Path(__file__).resolve().parent
-REPOSITORY_ROOT = GAI_ROOT.parent
-SOURCE_PATH = GAI_ROOT / "src" / "userscript.js"
+EXTENSION_ROOT = Path(__file__).resolve().parent
+REPOSITORY_ROOT = EXTENSION_ROOT.parent
+SOURCE_PATH = EXTENSION_ROOT / "src" / "userscript.js"
 PROMPT_PATH = REPOSITORY_ROOT / "system-prompt.md"
-OUTPUT_PATH = GAI_ROOT / "gai.user.js"
+OUTPUT_PATH = EXTENSION_ROOT / "chatgpt-initial-prompt.user.js"
 PROMPT_PLACEHOLDER = "__SYSTEM_PROMPT_JSON__"
 
 
@@ -25,8 +25,6 @@ def main() -> None:
     output = source.replace(PROMPT_PLACEHOLDER, embedded_prompt)
     if not output.startswith("// ==UserScript=="):
         raise RuntimeError("generated output does not start with a userscript header")
-    if "// @version" in output:
-        raise RuntimeError("userscript version metadata must not be added")
     if PROMPT_PLACEHOLDER in output:
         raise RuntimeError("prompt placeholder remains in generated output")
     if output.count(embedded_prompt) != 1:

@@ -25,7 +25,7 @@ npm run build:gai
 python3 build.py
 ```
 
-ビルドは`src/userscript.js`へ`system-prompt.md`の全文をJSON文字列として内蔵し, 単独で実行できる`gai.user.js`を生成します. 外部のプロンプトファイルは実行時に読み込みません.
+ビルドは`src/userscript.js`へリポジトリ直下の`system-prompt.md`の全文をJSON文字列として内蔵し, 単独で実行できる`gai.user.js`を生成します. `chatgpt-initial-prompt`も同じ`system-prompt.md`を参照します. 外部のプロンプトファイルは実行時に読み込みません.
 
 Tampermonkeyへ登録するファイルは, ビルド後の`gai.user.js`です. `src/userscript.js`はビルド用テンプレートなので, Tampermonkeyへ直接登録しないでください.
 

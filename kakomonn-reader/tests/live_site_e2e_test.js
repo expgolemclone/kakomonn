@@ -18,29 +18,63 @@ async function getQuestionFrame(page) {
 
 async function submitAnswer(frame, answerText) {
   const selection = await frame.locator("body").evaluate((body, text) => {
+    const view = body.ownerDocument.defaultView;
     const isVisible = (element) => {
-      const style = element.ownerDocument.defaultView.getComputedStyle(element);
+      const style = view.getComputedStyle(element);
       return (
         style.display !== "none" &&
         style.visibility !== "hidden" &&
+        style.opacity !== "0" &&
         element.getClientRects().length > 0
       );
     };
     const normalize = (value) => value.replace(/\s+/g, "").trim();
-    const radios = [...body.querySelectorAll('input[type="radio"]')].filter(isVisible);
-    const radio = radios.find((candidate) => {
-      const label = candidate.closest("label");
-      return label !== null && normalize(label.innerText).includes(normalize(text));
-    });
-    if (radio === undefined) {
+    const targetText = normalize(text);
+    const allElements = [...body.querySelectorAll("*")];
+    const visibleLabels = allElements.filter(
+      (element) =>
+        element.tagName === "LABEL" &&
+        isVisible(element) &&
+        normalize(element.innerText).includes(targetText),
+    );
+    const exactTextElements = allElements
+      .filter(
+        (element) =>
+          isVisible(element) && normalize(element.innerText) === targetText,
+      )
+      .sort((left, right) => right.querySelectorAll("*").length - left.querySelectorAll("*").length);
+
+    const answerElement = visibleLabels[0] ?? exactTextElements.at(-1) ?? null;
+    if (answerElement === null) {
+      const visibleTextSamples = allElements
+        .filter(isVisible)
+        .map((element) => ({
+          tag: element.tagName,
+          text: normalize(element.innerText),
+          role: element.getAttribute("role"),
+          className: element.className,
+        }))
+        .filter((entry) => entry.text.length > 0 && entry.text.length <= 160)
+        .slice(0, 120);
       return {
         selected: false,
-        visibleRadioLabels: radios.map((candidate) =>
-          normalize(candidate.closest("label")?.innerText ?? ""),
-        ),
+        targetText,
+        visibleTextSamples,
+        inputs: [...body.querySelectorAll("input")].map((input) => ({
+          type: input.type,
+          name: input.name,
+          value: input.value,
+          checked: input.checked,
+          id: input.id,
+          visible: isVisible(input),
+        })),
       };
     }
-    radio.click();
+
+    const clickable =
+      answerElement.closest("label, button, a, [role='radio'], [role='button']") ??
+      answerElement;
+    clickable.click();
 
     const answerControl = [...body.querySelectorAll("a, button, input[type='button'], input[type='submit']")]
       .filter(isVisible)
@@ -54,23 +88,36 @@ async function submitAnswer(frame, answerText) {
         ) === "解答する",
       );
     if (answerControl === undefined) {
-      return { selected: true, submitted: false };
+      return {
+        selected: true,
+        submitted: false,
+        selectedTag: clickable.tagName,
+        selectedText: normalize(clickable.innerText),
+      };
     }
     answerControl.click();
-    return { selected: true, submitted: true };
+    return {
+      selected: true,
+      submitted: true,
+      selectedTag: clickable.tagName,
+      selectedText: normalize(clickable.innerText),
+    };
   }, answerText);
 
   assert.equal(selection.selected, true, JSON.stringify(selection));
   assert.equal(selection.submitted, true, JSON.stringify(selection));
+  console.log(JSON.stringify({ phase: "selection", answerText, selection }));
 }
 
 async function clickNextQuestion(frame) {
   const clicked = await frame.locator("body").evaluate((body) => {
+    const view = body.ownerDocument.defaultView;
     const isVisible = (element) => {
-      const style = element.ownerDocument.defaultView.getComputedStyle(element);
+      const style = view.getComputedStyle(element);
       return (
         style.display !== "none" &&
         style.visibility !== "hidden" &&
+        style.opacity !== "0" &&
         element.getClientRects().length > 0
       );
     };
@@ -151,6 +198,7 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
     }
 
     assert.equal(await readStoredCount(page), expectedCount);
+    assert.deepEqual(pageErrors, []);
     console.log(
       JSON.stringify({
         answerText,

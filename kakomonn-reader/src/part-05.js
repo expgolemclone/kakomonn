@@ -63,36 +63,15 @@
   }
 
   function getCurrentAnswerResult() {
-    const lines = getVisibleLines();
-    const resultStartIndex = findFirstIndex(
-      lines,
-      0,
-      (line) => compactLine(line) === "解答結果"
-    );
-    if (resultStartIndex < 0) {
+    const visibleLabels = new Set(getVisibleLines().map(compactLine));
+    const correctResultVisible = visibleLabels.has("正解！素晴らしいです");
+    const incorrectResultVisible = visibleLabels.has("残念...");
+
+    if (correctResultVisible === incorrectResultVisible) {
       return "unknown";
     }
 
-    const explanationIndex = findFirstIndex(
-      lines,
-      resultStartIndex + 1,
-      isExplanationHeading
-    );
-    const resultLines = lines.slice(
-      resultStartIndex + 1,
-      explanationIndex < 0 ? lines.length : explanationIndex
-    );
-    const resultText = compactLine(resultLines.join(""));
-
-    if (resultText.includes("不正解")) {
-      return "incorrect";
-    }
-
-    if (resultText.includes("正解")) {
-      return "correct";
-    }
-
-    return "unknown";
+    return correctResultVisible ? "correct" : "incorrect";
   }
 
   function onFrameClick(event) {

@@ -6,8 +6,9 @@ const path = require("node:path");
 const { chromium } = require("playwright");
 
 const projectRoot = path.resolve(__dirname, "..");
+const repositoryRoot = path.resolve(projectRoot, "..");
 const scriptPath = path.join(projectRoot, "gai.user.js");
-const promptPath = path.join(projectRoot, "system-prompt.md");
+const promptPath = path.join(repositoryRoot, "system-prompt.md");
 
 async function installMockGAI(page) {
   await page.evaluate(() => {

@@ -28,6 +28,8 @@ const mockBody = `
   <div><label><input type="radio" name="answer">選択肢1</label></div>
   <div><label><input type="radio" name="answer">選択肢2</label></div>
   <button type="button">解答する</button>
+  <div>解答結果</div>
+  <p id="answer-result" hidden>正解です！</p>
   <h2>この過去問の解説</h2>
   <p id="explanation-lock">解説は問題に回答すると<br>表示されます。</p>
   <p id="explanation" hidden>これは動作確認用の解説です.</p>
@@ -156,6 +158,14 @@ async function loadMockQuestion(page, script) {
   return childFrame;
 }
 
+async function markAnswerCorrect(childFrame) {
+  await childFrame.evaluate(() => {
+    document.querySelector("#answer-result").hidden = false;
+    document.querySelector("#explanation-lock").hidden = true;
+    document.querySelector("#explanation").hidden = false;
+  });
+}
+
 async function main() {
   execFileSync("python3", ["build.py"], {
     cwd: projectRoot,
@@ -173,7 +183,7 @@ async function main() {
     const childFrame = await loadMockQuestion(page, script);
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
-      "0/100",
+      "0/50",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-start").isVisible(),
@@ -213,10 +223,7 @@ async function main() {
       voice: edgeVoiceName,
     });
 
-    await childFrame.evaluate(() => {
-      document.querySelector("#explanation-lock").hidden = true;
-      document.querySelector("#explanation").hidden = false;
-    });
+    await markAnswerCorrect(childFrame);
     await page.waitForFunction(() => window.__speechCalls.length === 3);
     await page.waitForFunction(
       () =>
@@ -241,7 +248,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "1/100",
+        "1/50",
     );
 
     assert.deepEqual(errors, []);
@@ -263,11 +270,12 @@ async function main() {
       firstPersistentPage,
       script,
     );
+    await markAnswerCorrect(firstPersistentFrame);
     await firstPersistentFrame.locator("#next").click();
     await firstPersistentPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "1/100",
+        "1/50",
     );
     assert.deepEqual(firstPersistentErrors, []);
     await firstPersistentPage.close();
@@ -281,7 +289,7 @@ async function main() {
     await resumedPage.waitForSelector("#kakomonn-reader-count");
     assert.equal(
       await resumedPage.locator("#kakomonn-reader-count").innerText(),
-      "1/100",
+      "1/50",
     );
     assert.equal(new URL(resumedPage.url()).searchParams.has("count50"), false);
     assert.deepEqual(resumedErrors, []);

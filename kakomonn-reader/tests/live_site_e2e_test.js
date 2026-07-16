@@ -16,113 +16,55 @@ async function getQuestionFrame(page) {
   return frame;
 }
 
-async function submitAnswer(frame, answerText) {
-  const selection = await frame.locator("body").evaluate((body, text) => {
-    const view = body.ownerDocument.defaultView;
-    const isVisible = (element) => {
-      const style = view.getComputedStyle(element);
+async function waitForReaderReady(page) {
+  await page.waitForFunction(
+    () => {
+      const status = document.querySelector("#kakomonn-reader-status")?.textContent;
       return (
-        style.display !== "none" &&
-        style.visibility !== "hidden" &&
-        style.opacity !== "0" &&
-        element.getClientRects().length > 0
+        status === "読み上げ非対応" ||
+        status === "開始ボタンを押してください"
       );
-    };
-    const normalize = (value) => value.replace(/\s+/g, "").trim();
-    const targetText = normalize(text);
-    const allElements = [...body.querySelectorAll("*")];
-    const exactTextElements = allElements
-      .filter(
-        (element) =>
-          isVisible(element) && normalize(element.innerText) === targetText,
-      )
-      .sort((left, right) => left.querySelectorAll("*").length - right.querySelectorAll("*").length);
-
-    const answerElement = exactTextElements[0] ?? null;
-    if (answerElement === null) {
-      return {
-        selected: false,
-        targetText,
-        inputs: [...body.querySelectorAll("input")].map((input) => ({
-          type: input.type,
-          name: input.name,
-          value: input.value,
-          checked: input.checked,
-          id: input.id,
-          visible: isVisible(input),
-        })),
-      };
-    }
-
-    let choiceContainer = answerElement;
-    let choiceControl = null;
-    while (choiceContainer !== null && choiceContainer !== body) {
-      choiceControl = choiceContainer.matches("input[type='radio'], [role='radio']")
-        ? choiceContainer
-        : choiceContainer.querySelector("input[type='radio'], [role='radio']");
-      if (choiceControl !== null) {
-        break;
-      }
-      choiceContainer = choiceContainer.parentElement;
-    }
-
-    if (choiceControl === null) {
-      const label = answerElement.closest("label");
-      choiceControl = label ?? answerElement;
-    }
-
-    choiceControl.click();
-    const checkedInputs = [...body.querySelectorAll("input[type='radio']:checked")].map(
-      (input) => ({ id: input.id, name: input.name, value: input.value }),
-    );
-    const checkedRoles = [...body.querySelectorAll("[role='radio'][aria-checked='true']")].map(
-      (element) => ({ id: element.id, text: normalize(element.innerText) }),
-    );
-
-    const answerControl = [...body.querySelectorAll("a, button, input[type='button'], input[type='submit']")]
-      .filter(isVisible)
-      .find((control) =>
-        normalize(
-          control.innerText ||
-            control.textContent ||
-            control.value ||
-            control.getAttribute("aria-label") ||
-            "",
-        ) === "解答する",
-      );
-    if (answerControl === undefined) {
-      return {
-        selected: true,
-        submitted: false,
-        selectedTag: choiceControl.tagName,
-        selectedText: normalize(answerElement.innerText),
-        checkedInputs,
-        checkedRoles,
-      };
-    }
-    answerControl.click();
-    return {
-      selected: true,
-      submitted: true,
-      selectedTag: choiceControl.tagName,
-      selectedText: normalize(answerElement.innerText),
-      checkedInputs,
-      checkedRoles,
-    };
-  }, answerText);
-
-  assert.equal(selection.selected, true, JSON.stringify(selection));
-  assert.equal(selection.submitted, true, JSON.stringify(selection));
-  assert.equal(
-    selection.checkedInputs.length + selection.checkedRoles.length > 0,
-    true,
-    JSON.stringify(selection),
+    },
+    null,
+    { timeout: 15_000 },
   );
-  console.log(JSON.stringify({ phase: "selection", answerText, selection }));
+}
+
+async function submitAnswer(frame, answerText) {
+  const normalize = (value) => value.replace(/\s+/g, "").trim();
+  const choiceTexts = await frame
+    .locator(".problem_detail ul.list > li")
+    .allInnerTexts();
+  const choiceIndex = choiceTexts.findIndex(
+    (choiceText) => normalize(choiceText) === normalize(answerText),
+  );
+  assert.notEqual(choiceIndex, -1, `answer choice was not found: ${answerText}`);
+
+  const answerInputs = frame.locator(
+    ".problem_detail ul.check input[name='intAnswerData']",
+  );
+  assert.equal(await answerInputs.count(), choiceTexts.length);
+
+  const answerInput = answerInputs.nth(choiceIndex);
+  await frame
+    .locator(".problem_detail ul.check > li > label")
+    .nth(choiceIndex)
+    .click({ force: true });
+  assert.equal(await answerInput.isChecked(), true);
+  await frame.locator("#send_exam_btn").click({ force: true });
+
+  console.log(
+    JSON.stringify({
+      phase: "selection",
+      answerText,
+      choiceIndex,
+      answerValue: await answerInput.getAttribute("value"),
+    }),
+  );
 }
 
 async function clickNextQuestion(frame) {
-  const clicked = await frame.locator("body").evaluate((body) => {
+  const clickedControl = await frame.locator("body").evaluate((body) => {
     const view = body.ownerDocument.defaultView;
     const isVisible = (element) => {
       const style = view.getComputedStyle(element);
@@ -134,7 +76,11 @@ async function clickNextQuestion(frame) {
       );
     };
     const normalize = (value) => value.replace(/\s+/g, "").trim();
-    const control = [...body.querySelectorAll("a, button, input[type='button'], input[type='submit']")]
+    const nextQuestionControl = [
+      ...body.querySelectorAll(
+        "a, button, input[type='button'], input[type='submit']",
+      ),
+    ]
       .filter(isVisible)
       .find((candidate) => {
         const label = normalize(
@@ -146,13 +92,22 @@ async function clickNextQuestion(frame) {
         );
         return label === "次の問題へ" || /^次の問題[（(]問\d+[）)]へ$/.test(label);
       });
-    if (control === undefined) {
-      return false;
+
+    if (nextQuestionControl === undefined) {
+      return null;
     }
-    control.click();
-    return true;
+
+    const descriptor = {
+      tag: nextQuestionControl.tagName,
+      id: nextQuestionControl.id,
+      className: nextQuestionControl.className,
+      label: normalize(nextQuestionControl.innerText),
+    };
+    nextQuestionControl.click();
+    return descriptor;
   });
-  assert.equal(clicked, true, "visible next-question control was not found");
+  assert.notEqual(clickedControl, null, "visible next-question control was not found");
+  console.log(JSON.stringify({ phase: "next-control", clickedControl }));
 }
 
 async function readStoredCount(page) {
@@ -162,8 +117,27 @@ async function readStoredCount(page) {
   }, countKey);
 }
 
+async function blockThirdPartyAds(context) {
+  await context.route("**/*", async (route) => {
+    const hostname = new URL(route.request().url()).hostname;
+    const isAdRequest =
+      hostname.endsWith(".googlesyndication.com") ||
+      hostname.endsWith(".doubleclick.net") ||
+      hostname === "anymind360.com" ||
+      hostname.endsWith(".anymind360.com");
+
+    if (isAdRequest) {
+      await route.abort();
+      return;
+    }
+
+    await route.continue();
+  });
+}
+
 async function runCase(browser, script, { answerText, expectedBanner, expectedCount }) {
   const context = await browser.newContext();
+  await blockThirdPartyAds(context);
   const page = await context.newPage();
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(String(error)));
@@ -186,6 +160,7 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
     console.log(JSON.stringify({ phase: "script-injected", answerText }));
     const frame = await getQuestionFrame(page);
     await page.locator("#kakomonn-reader-count").waitFor({ state: "visible" });
+    await waitForReaderReady(page);
     assert.equal(await page.locator("#kakomonn-reader-count").innerText(), "0/50");
 
     await submitAnswer(frame, answerText);
@@ -194,6 +169,10 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
       state: "visible",
       timeout: 15_000,
     });
+    const expectedResultClass = expectedCount === 1 ? "is-correct" : "is-wrong";
+    const resultClasses =
+      (await frame.locator("#js-answer-result-box").getAttribute("class")) ?? "";
+    assert.equal(resultClasses.split(/\s+/).includes(expectedResultClass), true);
 
     await clickNextQuestion(frame);
     console.log(JSON.stringify({ phase: "next-clicked", answerText }));
@@ -227,6 +206,8 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
         answerText,
         pageUrl: page.url(),
         countText: await page.locator("#kakomonn-reader-count").textContent().catch(() => null),
+        statusText: await page.locator("#kakomonn-reader-status").textContent().catch(() => null),
+        storedCount: await readStoredCount(page).catch(() => null),
         pageErrors,
       }),
     );

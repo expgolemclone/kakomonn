@@ -63,15 +63,19 @@
   }
 
   function getCurrentAnswerResult() {
-    const visibleLabels = new Set(getVisibleLines().map(compactLine));
-    const correctResultVisible = visibleLabels.has("正解！素晴らしいです");
-    const incorrectResultVisible = visibleLabels.has("残念...");
-
-    if (correctResultVisible === incorrectResultVisible) {
+    const resultBox = frameDocument?.querySelector("#js-answer-result-box");
+    if (resultBox === null || resultBox === undefined) {
       return "unknown";
     }
 
-    return correctResultVisible ? "correct" : "incorrect";
+    const correctResult = resultBox.classList.contains("is-correct");
+    const incorrectResult = resultBox.classList.contains("is-wrong");
+
+    if (correctResult === incorrectResult) {
+      return "unknown";
+    }
+
+    return correctResult ? "correct" : "incorrect";
   }
 
   function onFrameClick(event) {
@@ -174,7 +178,7 @@
     navigationInProgress = false;
     frameDocument = nextDocument;
     scheduleFrameScrollReset(frameDocument);
-    frameDocument.addEventListener("click", onFrameClick, true);
+    frame.contentWindow.addEventListener("click", onFrameClick, true);
     frame.contentWindow.addEventListener(
       "pagehide",
       clearNextQuestionReloadTimer,

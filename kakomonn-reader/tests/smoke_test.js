@@ -32,6 +32,7 @@ const mockBody = `
   <p id="incorrect-result" hidden>残念...</p>
   <h2>この過去問の解説</h2>
   <div>解答結果</div>
+  <div id="js-answer-result-box"></div>
   <p id="explanation-lock">解説は問題に回答すると<br>表示されます。</p>
   <p id="explanation" hidden>これは動作確認用の解説です.</p>
   <a href="#report">（訂正依頼・報告はこちら）</a>
@@ -162,6 +163,7 @@ async function loadMockQuestion(page, script) {
 async function markAnswerCorrect(childFrame) {
   await childFrame.evaluate(() => {
     document.querySelector("#correct-result").hidden = false;
+    document.querySelector("#js-answer-result-box").classList.add("is-correct");
     document.querySelector("#explanation-lock").hidden = true;
     document.querySelector("#explanation").hidden = false;
   });

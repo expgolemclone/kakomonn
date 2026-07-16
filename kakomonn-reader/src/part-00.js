@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         過去問100問＋連続自動読み上げ
+// @name         過去問50問＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @description  問題文を1.5倍速, 解説を1.2倍速で読み上げ, 次問時の先頭表示, 問題・解説コピー, 日次100問カウントを提供します.
+// @description  問題文を1.5倍速, 解説を1.2倍速で読み上げ, 次問時の先頭表示, 問題・解説コピー, 日次50問カウントを提供します.
 // @match        https://chushoks.kakomonn.com/*
 // @run-at       document-end
 // @noframes
@@ -15,7 +15,7 @@
     return;
   }
 
-  const GOAL = 100;
+  const GOAL = 50;
   const SHORTCUT_NAME = "過去問50問";
   const COUNT_STATE_KEY = "kakomonn-reader.daily-count";
   const START_PARAMETER = "count50";

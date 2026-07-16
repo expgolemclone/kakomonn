@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   live-site-e2e:
@@ -23,32 +22,15 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: python3 kakomonn-reader/build.py
-      - id: live
-        continue-on-error: true
+      - name: Run live site E2E
         shell: bash
         run: |
           set -o pipefail
           node kakomonn-reader/tests/live_site_e2e_test.js 2>&1 | tee live-e2e.log
-      - name: Post live E2E log
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v8
-        env:
-          LIVE_OUTCOME: ${{ steps.live.outcome }}
+      - name: Upload live E2E log
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const fs = require('node:fs');
-            let log = fs.existsSync('live-e2e.log')
-              ? fs.readFileSync('live-e2e.log', 'utf8')
-              : 'live-e2e.log was not created';
-            if (log.length > 50000) {
-              log = log.slice(-50000);
-            }
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `Live E2E outcome: ${process.env.LIVE_OUTCOME}\n\n\`\`\`text\n${log}\n\`\`\``,
-            });
-      - name: Fail when live E2E failed
-        if: steps.live.outcome != 'success'
-        run: exit 1
+          name: live-e2e-log
+          path: live-e2e.log
+          if-no-files-found: error

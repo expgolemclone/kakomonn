@@ -12,19 +12,20 @@ const edgeUserAgent =
   "AppleWebKit/537.36 (KHTML, like Gecko) " +
   "Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0";
 
-function createMockBody(resultText) {
-  const result =
-    resultText === null ? "" : `<div id="answer-result">${resultText}</div>`;
+function createMockBody(result) {
+  const correctHidden = result === "correct" ? "" : " hidden";
+  const incorrectHidden = result === "incorrect" ? "" : " hidden";
   return `
-    <div id="meta">中小企業診断士試験 令和6年度 第1問</div>
+    <div id="meta">中小企業診断士試験 令和7年度（2025年） 問1（経済学・経済政策 問1）</div>
     <p>これは動作確認用の問題文です.</p>
     <div><label><input type="radio" name="answer">選択肢1</label></div>
     <div><label><input type="radio" name="answer">選択肢2</label></div>
     <button type="button">解答する</button>
-    <div>解答結果</div>
-    ${result}
+    <p id="correct-result"${correctHidden}>正解！素晴らしいです</p>
+    <p id="incorrect-result"${incorrectHidden}>残念...</p>
     <h2>この過去問の解説</h2>
-    <p>これは動作確認用の解説です.</p>
+    <div>解答結果</div>
+    <p>選択肢2は正解の選択肢となります.</p>
     <a href="#report">（訂正依頼・報告はこちら）</a>
     <button id="next" type="button">次の問題へ</button>
   `;
@@ -57,7 +58,7 @@ async function preparePage(page) {
   return errors;
 }
 
-async function runCountCase(browser, script, resultText, expectedCount) {
+async function runCountCase(browser, script, result, expectedCount) {
   const context = await browser.newContext({ userAgent: edgeUserAgent });
   try {
     const page = await context.newPage();
@@ -74,7 +75,7 @@ async function runCountCase(browser, script, resultText, expectedCount) {
       (html) => {
         document.body.innerHTML = html;
       },
-      createMockBody(resultText),
+      createMockBody(result),
     );
     await page.waitForTimeout(950);
 
@@ -103,14 +104,9 @@ async function main() {
 
   const browser = await chromium.launch({ headless: true });
   try {
-    await runCountCase(browser, script, "正解です！", "1/50");
-    await runCountCase(
-      browser,
-      script,
-      "不正解です。正解はアです。",
-      "0/50",
-    );
-    await runCountCase(browser, script, null, "0/50");
+    await runCountCase(browser, script, "correct", "1/50");
+    await runCountCase(browser, script, "incorrect", "0/50");
+    await runCountCase(browser, script, "unknown", "0/50");
   } finally {
     await browser.close();
   }

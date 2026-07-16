@@ -62,6 +62,39 @@
     window.location.href = shortcutURL.href;
   }
 
+  function getCurrentAnswerResult() {
+    const lines = getVisibleLines();
+    const resultStartIndex = findFirstIndex(
+      lines,
+      0,
+      (line) => compactLine(line) === "解答結果"
+    );
+    if (resultStartIndex < 0) {
+      return "unknown";
+    }
+
+    const explanationIndex = findFirstIndex(
+      lines,
+      resultStartIndex + 1,
+      isExplanationHeading
+    );
+    const resultLines = lines.slice(
+      resultStartIndex + 1,
+      explanationIndex < 0 ? lines.length : explanationIndex
+    );
+    const resultText = compactLine(resultLines.join(""));
+
+    if (resultText.includes("不正解")) {
+      return "incorrect";
+    }
+
+    if (resultText.includes("正解")) {
+      return "correct";
+    }
+
+    return "unknown";
+  }
+
   function onFrameClick(event) {
     const target = event.target;
     if (!(target instanceof frame.contentWindow.Element)) {
@@ -95,10 +128,15 @@
       return;
     }
 
+    const answerResult = getCurrentAnswerResult();
     navigationInProgress = true;
-    count = Math.min(count + 1, GOAL);
-    saveCountState(activeCountDate, count);
-    renderCount();
+
+    if (answerResult === "correct") {
+      count = Math.min(count + 1, GOAL);
+      saveCountState(activeCountDate, count);
+      renderCount();
+    }
+
     updateNextQuestionButton();
     updateCopyButton();
 

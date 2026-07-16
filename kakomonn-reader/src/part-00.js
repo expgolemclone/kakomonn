@@ -116,7 +116,6 @@
 
   const initialURL = new URL(location.href);
   if (initialURL.searchParams.get(START_PARAMETER) === "start") {
-    saveCountState(getLocalDateKey(), 0);
     initialURL.searchParams.delete(START_PARAMETER);
     history.replaceState(null, "", initialURL.href);
     currentFrameURL = initialURL.href;

@@ -130,6 +130,13 @@ async function preparePage(page, speechSupported) {
   return errors;
 }
 
+async function preparePersistentPage(page, url) {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  await page.goto(url);
+  return errors;
+}
+
 async function loadMockQuestion(page, script) {
   await page.addScriptTag({ content: script });
   await page.waitForSelector("#kakomonn-reader-frame");
@@ -238,6 +245,47 @@ async function main() {
     );
 
     assert.deepEqual(errors, []);
+
+    await context.route("https://chushoks.kakomonn.com/**", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: "<!doctype html><html><body></body></html>",
+      }),
+    );
+
+    const firstPersistentPage = await context.newPage();
+    const firstPersistentErrors = await preparePersistentPage(
+      firstPersistentPage,
+      "https://chushoks.kakomonn.com/question/1",
+    );
+    await firstPersistentPage.evaluate(() => localStorage.clear());
+    const firstPersistentFrame = await loadMockQuestion(
+      firstPersistentPage,
+      script,
+    );
+    await firstPersistentFrame.locator("#next").click();
+    await firstPersistentPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-count").textContent ===
+        "1/100",
+    );
+    assert.deepEqual(firstPersistentErrors, []);
+    await firstPersistentPage.close();
+
+    const resumedPage = await context.newPage();
+    const resumedErrors = await preparePersistentPage(
+      resumedPage,
+      "https://chushoks.kakomonn.com/question/2?count50=start",
+    );
+    await resumedPage.addScriptTag({ content: script });
+    await resumedPage.waitForSelector("#kakomonn-reader-count");
+    assert.equal(
+      await resumedPage.locator("#kakomonn-reader-count").innerText(),
+      "1/100",
+    );
+    assert.equal(new URL(resumedPage.url()).searchParams.has("count50"), false);
+    assert.deepEqual(resumedErrors, []);
+    await resumedPage.close();
 
     const unsupportedPage = await context.newPage();
     const unsupportedErrors = await preparePage(unsupportedPage, false);

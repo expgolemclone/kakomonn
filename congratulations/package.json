@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
+    "postinstall": "playwright install chromium",
     "test": "node tests/smoke.mjs && node tests/browser.mjs",
     "check": "node --check app.js && node --check server.mjs && node --check tests/smoke.mjs && node --check tests/browser.mjs"
   },
@@ -12,6 +13,6 @@
     "gsap": "3.15.0"
   },
   "devDependencies": {
-    "puppeteer-core": "24.15.0"
+    "playwright": "1.61.1"
   }
 }

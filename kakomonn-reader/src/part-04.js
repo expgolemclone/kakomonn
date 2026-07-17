@@ -173,6 +173,12 @@
   }
 
   function updateCopyButton() {
+    if (nextQuestionOperationInProgress) {
+      copyButton.textContent = "正解情報を処理中";
+      copyButton.disabled = true;
+      return;
+    }
+
     if (!navigator.clipboard?.writeText) {
       copyButton.textContent = "コピー非対応";
       copyButton.disabled = true;

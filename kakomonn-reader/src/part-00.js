@@ -1,14 +1,18 @@
 // ==UserScript==
 // @name         過去問50問＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @description  問題文を1.5倍速, 解説を1.2倍速で読み上げ, 次問時の先頭表示, 問題・解説コピー, 日次50問カウントを提供します.
+// @description  問題文と解説の読み上げ, コピー, 端末間で共有する日次50問カウントを提供します.
 // @match        https://chushoks.kakomonn.com/*
+// @connect      kakomonn-count-sync.expgolem-lab.workers.dev
 // @run-at       document-end
 // @noframes
-// @grant        none
+// @grant        GM.getValue
+// @grant        GM.setValue
+// @grant        GM.deleteValue
+// @grant        GM.xmlHttpRequest
 // ==/UserScript==
 
-(() => {
+(async () => {
   "use strict";
 
   if (window.top !== window.self) {
@@ -16,9 +20,12 @@
   }
 
   const GOAL = 50;
-  const SHORTCUT_NAME = "過去問50問";
-  const COUNT_STATE_KEY = "kakomonn-reader.daily-count";
+  const SYNC_API_URL =
+    "https://kakomonn-count-sync.expgolem-lab.workers.dev";
+  const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
+  const PENDING_CORRECT_KEY = "kakomonn-reader.pending-correct";
   const START_PARAMETER = "count50";
+  const SYNC_TIMEOUT_MS = 15000;
   const FRAME_LOAD_DELAY_MS = 900;
   const EXPLANATION_CHANGE_DELAY_MS = 700;
   const NEXT_QUESTION_RELOAD_DELAY_MS = 1200;
@@ -61,58 +68,15 @@
   let currentQuestionText = "";
   let goalCompleted = false;
   let navigationInProgress = false;
-  let dailyResetTimer = null;
+  let nextQuestionOperationInProgress = false;
+  let allowNextQuestionClick = false;
+  let count = null;
   let activeCountDate = "";
-
-  function getLocalDateKey(date = new Date()) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-
-  function saveCountState(dateKey, value) {
-    localStorage.setItem(
-      COUNT_STATE_KEY,
-      JSON.stringify({ date: dateKey, count: value })
-    );
-  }
-
-  function loadCountState() {
-    const today = getLocalDateKey();
-    const rawState = localStorage.getItem(COUNT_STATE_KEY);
-
-    if (rawState === null) {
-      saveCountState(today, 0);
-      return { date: today, count: 0 };
-    }
-
-    let parsedState;
-    try {
-      parsedState = JSON.parse(rawState);
-    } catch {
-      saveCountState(today, 0);
-      return { date: today, count: 0 };
-    }
-
-    const storedCount = Number.parseInt(parsedState?.count, 10);
-    const isValidState =
-      typeof parsedState?.date === "string" &&
-      Number.isFinite(storedCount) &&
-      storedCount >= 0;
-
-    if (!isValidState || parsedState.date !== today) {
-      saveCountState(today, 0);
-      return { date: today, count: 0 };
-    }
-
-    const normalizedCount = Math.min(storedCount, GOAL);
-    if (normalizedCount !== storedCount) {
-      saveCountState(today, normalizedCount);
-    }
-
-    return { date: today, count: normalizedCount };
-  }
+  let syncToken = "";
+  let syncReady = false;
+  let syncInProgress = false;
+  let syncPromise = null;
+  let pendingCorrect = null;
 
   const initialURL = new URL(location.href);
   if (initialURL.searchParams.get(START_PARAMETER) === "start") {
@@ -120,11 +84,6 @@
     history.replaceState(null, "", initialURL.href);
     currentFrameURL = initialURL.href;
   }
-
-  const initialCountState = loadCountState();
-  let count = initialCountState.count;
-  activeCountDate = initialCountState.date;
-  goalCompleted = count >= GOAL;
 
   const style = document.createElement("style");
   style.textContent = `
@@ -165,7 +124,8 @@
 
     #kakomonn-reader-count,
     #kakomonn-reader-status,
-    #kakomonn-reader-stop {
+    #kakomonn-reader-stop,
+    #kakomonn-reader-sync-settings-button {
       border: 0;
       border-radius: 999px;
       background: rgba(20, 20, 20, 0.90);
@@ -187,6 +147,16 @@
     #kakomonn-reader-stop {
       pointer-events: auto;
       display: none;
+    }
+
+    #kakomonn-reader-sync-settings-button {
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    #kakomonn-reader-sync-settings-button:disabled {
+      cursor: default;
+      opacity: 0.55;
     }
 
     #kakomonn-reader-next,
@@ -260,5 +230,96 @@
       font-weight: 800;
       box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
       pointer-events: auto;
+    }
+
+    #kakomonn-reader-start:disabled {
+      background: rgba(90, 90, 90, 0.90);
+    }
+
+    #kakomonn-reader-sync-settings {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+      background: rgba(0, 0, 0, 0.48);
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    #kakomonn-reader-sync-settings[hidden] {
+      display: none;
+    }
+
+    #kakomonn-reader-sync-settings-panel {
+      width: min(420px, 100%);
+      padding: 22px;
+      box-sizing: border-box;
+      border-radius: 18px;
+      background: #fff;
+      color: #1a202c;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.34);
+    }
+
+    #kakomonn-reader-sync-settings-title {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+
+    #kakomonn-reader-sync-settings-description {
+      margin: 0 0 14px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    #kakomonn-reader-sync-token {
+      width: 100%;
+      min-height: 46px;
+      padding: 10px 12px;
+      box-sizing: border-box;
+      border: 1px solid #a0aec0;
+      border-radius: 10px;
+      font-size: 16px;
+    }
+
+    #kakomonn-reader-sync-settings-error {
+      min-height: 20px;
+      margin: 10px 0;
+      color: #c53030;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    #kakomonn-reader-sync-settings-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    #kakomonn-reader-sync-settings-save,
+    #kakomonn-reader-sync-settings-cancel {
+      min-height: 42px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    #kakomonn-reader-sync-settings-save {
+      background: #1473e6;
+      color: #fff;
+    }
+
+    #kakomonn-reader-sync-settings-cancel {
+      background: #e2e8f0;
+      color: #1a202c;
+    }
+
+    #kakomonn-reader-sync-settings-save:disabled,
+    #kakomonn-reader-sync-settings-cancel:disabled {
+      opacity: 0.55;
     }
   `;

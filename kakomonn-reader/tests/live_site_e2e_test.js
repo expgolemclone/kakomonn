@@ -2,11 +2,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
+const { installSyncMock } = require("./sync_mock");
 
 const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const questionUrl = "https://chushoks.kakomonn.com/questions/86956";
-const countKey = "kakomonn-reader.daily-count";
 
 async function getQuestionFrame(page) {
   await page.locator("#kakomonn-reader-frame").waitFor({ state: "attached" });
@@ -111,10 +111,7 @@ async function clickNextQuestion(frame) {
 }
 
 async function readStoredCount(page) {
-  return page.evaluate((key) => {
-    const raw = localStorage.getItem(key);
-    return raw === null ? null : JSON.parse(raw).count;
-  }, countKey);
+  return page.evaluate(() => window.__syncMock?.count ?? null);
 }
 
 async function blockThirdPartyAds(context) {
@@ -153,6 +150,7 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
     await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
+    await installSyncMock(page);
     await page.evaluate((source) => {
       (0, eval)(source);
     }, script);
@@ -208,6 +206,7 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
         countText: await page.locator("#kakomonn-reader-count").textContent().catch(() => null),
         statusText: await page.locator("#kakomonn-reader-status").textContent().catch(() => null),
         storedCount: await readStoredCount(page).catch(() => null),
+        syncCalls: await page.evaluate(() => window.__syncMock?.calls ?? []).catch(() => []),
         pageErrors,
       }),
     );

@@ -7,8 +7,11 @@
 - [`chatgpt-initial-prompt`](chatgpt-initial-prompt/README.md): ChatGPTの新しい会話へ学習支援用プロンプトを1回だけ入力するスクリプト.
 - [`gai`](gai/README.md): GAI明電福朗向けのモデル, Thinking, Effort, システムプロンプト自動設定スクリプト.
 - [`kakomonn-reader`](kakomonn-reader/README.md): 中小企業診断士試験の過去問ページ向け読み上げ・日次カウントスクリプト.
+- [`kakomonn-sync`](kakomonn-sync/README.md): kakomonn-readerの当日正解数を端末間で共有するCloudflare Worker.
 
 ## テスト
+
+Node.js 22.12以上とPython 3を使用します.
 
 ```bash
 npm ci

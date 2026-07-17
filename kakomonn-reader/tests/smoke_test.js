@@ -4,6 +4,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const { chromium } = require("playwright");
+const {
+  installSyncMock,
+  SYNC_API_ORIGIN,
+  SYNC_TOKEN_KEY,
+} = require("./sync_mock");
 
 const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
@@ -39,7 +44,7 @@ const mockBody = `
   <button id="next" type="button">次の問題へ</button>
 `;
 
-async function preparePage(page, speechSupported) {
+async function preparePage(page, speechSupported, syncOptions = {}) {
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
 
@@ -53,6 +58,15 @@ async function preparePage(page, speechSupported) {
         setItem: (key, value) => store.set(key, String(value)),
         removeItem: (key) => store.delete(key),
         clear: () => store.clear(),
+      },
+    });
+    window.__copiedTexts = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        async writeText(value) {
+          window.__copiedTexts.push(value);
+        },
       },
     });
 
@@ -131,13 +145,8 @@ async function preparePage(page, speechSupported) {
     });
   }, speechSupported);
 
-  return errors;
-}
+  await installSyncMock(page, syncOptions);
 
-async function preparePersistentPage(page, url) {
-  const errors = [];
-  page.on("pageerror", (error) => errors.push(String(error)));
-  await page.goto(url);
   return errors;
 }
 
@@ -177,6 +186,11 @@ async function main() {
 
   const script = fs.readFileSync(scriptPath, "utf8");
   assert.equal(script.includes("// @version"), false);
+  assert.equal(script.includes(SYNC_API_ORIGIN), true);
+  assert.equal(
+    script.includes(`// @connect      ${new URL(SYNC_API_ORIGIN).host}`),
+    true,
+  );
 
   const browser = await chromium.launch({ headless: true });
   try {
@@ -247,6 +261,45 @@ async function main() {
       voice: edgeVoiceName,
     });
 
+    await page.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+      window.__syncMock.failNextRequest = true;
+      window.dispatchEvent(new Event("focus"));
+    });
+    await page.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-copy").innerText(),
+      "問題・解説をコピー",
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-copy").isDisabled(),
+      false,
+    );
+    await page.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "正解数を同期できません.再試行してください",
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-copy").innerText(),
+      "問題・解説をコピー",
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-copy").isDisabled(),
+      false,
+    );
+    await page.locator("#kakomonn-reader-copy").click();
+    assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-next").textContent ===
+        "次の問題へ",
+    );
+
     await childFrame.locator("#next").click();
     await page.waitForFunction(
       () =>
@@ -254,49 +307,101 @@ async function main() {
         "1/50",
     );
 
-    assert.deepEqual(errors, []);
-
-    await context.route("https://chushoks.kakomonn.com/**", (route) =>
-      route.fulfill({
-        contentType: "text/html",
-        body: "<!doctype html><html><body></body></html>",
-      }),
+    await page.evaluate(() => {
+      window.__syncMock.count = 7;
+      window.__syncMock.holdNextRequest = true;
+      window.dispatchEvent(new Event("focus"));
+    });
+    await page.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
     );
-
-    const firstPersistentPage = await context.newPage();
-    const firstPersistentErrors = await preparePersistentPage(
-      firstPersistentPage,
-      "https://chushoks.kakomonn.com/question/1",
+    assert.equal(
+      await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
+      true,
     );
-    await firstPersistentPage.evaluate(() => localStorage.clear());
-    const firstPersistentFrame = await loadMockQuestion(
-      firstPersistentPage,
-      script,
-    );
-    await markAnswerCorrect(firstPersistentFrame);
-    await firstPersistentFrame.locator("#next").click();
-    await firstPersistentPage.waitForFunction(
+    await page.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "1/50",
+        "7/50",
     );
-    assert.deepEqual(firstPersistentErrors, []);
-    await firstPersistentPage.close();
-
-    const resumedPage = await context.newPage();
-    const resumedErrors = await preparePersistentPage(
-      resumedPage,
-      "https://chushoks.kakomonn.com/question/2?count50=start",
-    );
-    await resumedPage.addScriptTag({ content: script });
-    await resumedPage.waitForSelector("#kakomonn-reader-count");
     assert.equal(
-      await resumedPage.locator("#kakomonn-reader-count").innerText(),
-      "1/50",
+      await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
+      false,
     );
-    assert.equal(new URL(resumedPage.url()).searchParams.has("count50"), false);
-    assert.deepEqual(resumedErrors, []);
-    await resumedPage.close();
+
+    assert.deepEqual(errors, []);
+
+    const setupPage = await context.newPage();
+    const setupErrors = await preparePage(setupPage, false, {
+      configured: false,
+    });
+    await setupPage.addScriptTag({ content: script });
+    await setupPage.waitForSelector("#kakomonn-reader-sync-settings", {
+      state: "visible",
+    });
+    assert.equal(
+      await setupPage.locator("#kakomonn-reader-count").innerText(),
+      "--/50",
+    );
+    await setupPage.locator("#kakomonn-reader-sync-token").fill("test-sync-token");
+    await setupPage.locator("#kakomonn-reader-sync-settings-save").click();
+    await setupPage.waitForSelector("#kakomonn-reader-sync-settings", {
+      state: "hidden",
+    });
+    assert.equal(
+      await setupPage.locator("#kakomonn-reader-count").innerText(),
+      "0/50",
+    );
+    assert.equal(
+      await setupPage.evaluate(
+        (key) => window.__getGMValue(key),
+        SYNC_TOKEN_KEY,
+      ),
+      "test-sync-token",
+    );
+    assert.deepEqual(setupErrors, []);
+    await setupPage.close();
+
+    const failedSetupPage = await context.newPage();
+    const failedSetupErrors = await preparePage(failedSetupPage, false, {
+      configured: false,
+    });
+    await failedSetupPage.addScriptTag({ content: script });
+    await failedSetupPage.waitForSelector("#kakomonn-reader-sync-settings", {
+      state: "visible",
+    });
+    await failedSetupPage.evaluate(() => {
+      window.__syncMock.failNextSetValue = true;
+    });
+    await failedSetupPage
+      .locator("#kakomonn-reader-sync-token")
+      .fill("test-sync-token");
+    await failedSetupPage
+      .locator("#kakomonn-reader-sync-settings-save")
+      .click();
+    await failedSetupPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-sync-settings-error")
+          .textContent === "正解数を同期できません.",
+    );
+    assert.equal(
+      await failedSetupPage.locator("#kakomonn-reader-sync-settings").isVisible(),
+      true,
+    );
+    assert.equal(
+      await failedSetupPage.evaluate(
+        (key) => window.__getGMValue(key),
+        SYNC_TOKEN_KEY,
+      ),
+      null,
+    );
+    assert.equal(
+      await failedSetupPage.locator("#kakomonn-reader-start").innerText(),
+      "同期設定が必要",
+    );
+    assert.deepEqual(failedSetupErrors, []);
+    await failedSetupPage.close();
 
     const unsupportedPage = await context.newPage();
     const unsupportedErrors = await preparePage(unsupportedPage, false);
@@ -337,8 +442,10 @@ async function main() {
 
     const iosContext = await browser.newContext({ userAgent: iosUserAgent });
     const iosPage = await iosContext.newPage();
-    const iosErrors = await preparePage(iosPage, true);
-    await loadMockQuestion(iosPage, script);
+    const iosErrors = await preparePage(iosPage, true, {
+      userscriptsPromise: true,
+    });
+    const iosFrame = await loadMockQuestion(iosPage, script);
     await iosPage.locator("#kakomonn-reader-start").click();
     await iosPage.waitForFunction(() => window.__speechCalls.length === 1);
     await iosPage.waitForFunction(
@@ -354,6 +461,33 @@ async function main() {
       volume: 1,
       voice: null,
     });
+    await markAnswerCorrect(iosFrame);
+    await iosFrame.locator("#next").click();
+    await iosPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-count").textContent ===
+        "1/50",
+    );
+    await iosPage.evaluate(() => {
+      window.__syncMock.count = 6;
+      window.dispatchEvent(new Event("focus"));
+    });
+    await iosPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-count").textContent ===
+        "6/50",
+    );
+    assert.equal(
+      await iosPage.evaluate(
+        () =>
+          window.__syncMock.calls.filter(
+            (call) =>
+              call.method === "POST" &&
+              new URL(call.url).pathname === "/v1/correct",
+          ).length,
+      ),
+      1,
+    );
     assert.deepEqual(iosErrors, []);
     await iosContext.close();
   } finally {

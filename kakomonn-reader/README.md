@@ -5,7 +5,7 @@
 ## 機能
 
 - 問題文と解説の連続読み上げ.
-- 正解した問題だけを対象にした日次カウント. 当日の値は`localStorage`へ保存され, ページを開き直しても引き継がれます.
+- 正解した問題だけを対象にした日次カウント. 当日の値は`kakomonn-sync`へ保存され,Win11 EdgeとiPhone Safariで共有されます.
 - 問題文と解説のクリップボードへのコピー.
 - 1日50問の完了判定.
 
@@ -32,6 +32,14 @@ gh workflow run release-kakomonn-reader.yml --ref main
 ## 動作環境
 
 iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 読み上げにはブラウザのWeb Speech APIを使用します. iOSではブラウザ既定の日本語音声を利用し, WindowsではEdgeの`Microsoft Nanami Online (Natural)`を利用するためインターネット接続が必要です.
+
+## 正解数の同期設定
+
+先に[`kakomonn-sync`](../kakomonn-sync/README.md)をCloudflareへデプロイし,生成されたAPI URLを`src/part-00.js`の`SYNC_API_URL`と`@connect`へ設定してビルドします.
+
+初回起動時に同期トークンの入力画面が開きます.Win11とiPhoneへ,Worker Secretの`SYNC_TOKEN`と同じ値を入力してください.トークンは各ユーザースクリプトマネージャーの専用ストレージへ保存され,対象サイトの`localStorage`には保存されません.
+
+正解時の同期に失敗した場合は次問へ進まず,同じ操作IDで再試行します.通信が復旧した後に`同期を再試行`を押してください.同じ操作の再送は二重加算されません.
 
 ## バージョン管理
 

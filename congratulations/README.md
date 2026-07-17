@@ -2,4 +2,4 @@
 
 ## sensational
 
-- [`victory-signal`](sensational/victory-signal/README.md), editorial posterとaward ceremonyを組み合わせた祝福animation.
+- [`victory-observatory`](sensational/victory-observatory/README.md), cinematic aperture, kinetic typography, orbit, spotlight, spark, confettiを統合した祝福animation.

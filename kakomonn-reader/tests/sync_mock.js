@@ -5,6 +5,8 @@ const SYNC_API_ORIGIN =
   "https://kakomonn-count-sync.expgolem-lab.workers.dev";
 const CONGRATULATIONS_ORIGIN =
   "https://kakomonn-congratulations.expgolem-lab.workers.dev";
+const AZURE_SPEECH_ORIGIN = "https://japaneast.tts.speech.microsoft.com";
+const AZURE_SPEECH_TOKEN = "test-azure-speech-token";
 
 async function installSyncMock(
   page,
@@ -33,6 +35,8 @@ async function installSyncMock(
       pendingKey,
       celebrationKey,
       expectedOrigin,
+      expectedSpeechOrigin,
+      expectedSpeechToken,
     }) => {
       const values = new Map();
       if (hasStoredToken) {
@@ -103,11 +107,22 @@ async function installSyncMock(
                 rejectRequest = reject;
               })
             : null;
-          const respond = (status, body) => {
+          const respondJSON = (status, body) => {
             window.setTimeout(() => {
               const response = {
                 status,
                 responseText: JSON.stringify(body),
+              };
+              details.onload?.(response);
+              resolveRequest?.(response);
+            }, 0);
+          };
+          const respondAudio = () => {
+            window.setTimeout(() => {
+              const response = {
+                status: 200,
+                response: new Uint8Array([0x49, 0x44, 0x33, 0x04]).buffer,
+                responseHeaders: "content-type: audio/mpeg",
               };
               details.onload?.(response);
               resolveRequest?.(response);
@@ -118,11 +133,18 @@ async function installSyncMock(
             details.onerror?.({});
             rejectRequest?.(error);
           };
+          const contentType = details.headers?.["Content-Type"] ?? "";
           const call = {
             method: details.method,
             url: details.url,
             authorization: details.headers?.Authorization ?? "",
-            body: details.data === undefined ? null : JSON.parse(details.data),
+            headers: { ...(details.headers ?? {}) },
+            body:
+              details.data === undefined
+                ? null
+                : contentType === "application/json"
+                  ? JSON.parse(details.data)
+                  : details.data,
           };
           mock.calls.push(call);
 
@@ -133,20 +155,31 @@ async function installSyncMock(
               return;
             }
 
-            if (call.authorization !== `Bearer ${mock.token}`) {
-              respond(401, { error: "unauthorized" });
+            const requestURL = new URL(call.url);
+            if (requestURL.origin === expectedSpeechOrigin) {
+              if (
+                call.method !== "POST" ||
+                requestURL.pathname !== "/cognitiveservices/v1" ||
+                call.authorization !== `Bearer ${expectedSpeechToken}`
+              ) {
+                respondJSON(401, { error: "invalid_speech_request" });
+                return;
+              }
+              respondAudio();
               return;
             }
-
-            const requestURL = new URL(call.url);
             if (requestURL.origin !== expectedOrigin) {
-              respond(404, { error: "unexpected_origin" });
+              respondJSON(404, { error: "unexpected_origin" });
+              return;
+            }
+            if (call.authorization !== `Bearer ${mock.token}`) {
+              respondJSON(401, { error: "unauthorized" });
               return;
             }
 
             const pathname = requestURL.pathname;
             if (call.method === "GET" && pathname === "/v1/count") {
-              respond(200, {
+              respondJSON(200, {
                 date: mock.date,
                 count: mock.count,
                 milestoneInterval: 50,
@@ -154,9 +187,20 @@ async function installSyncMock(
               return;
             }
 
+            if (
+              call.method === "POST" &&
+              pathname === "/v1/speech-token"
+            ) {
+              respondJSON(200, {
+                token: expectedSpeechToken,
+                expiresInSeconds: 600,
+              });
+              return;
+            }
+
             if (call.method === "POST" && pathname === "/v1/correct") {
               if (call.body?.date !== mock.date) {
-                respond(409, {
+                respondJSON(409, {
                   error: "date_changed",
                   state: {
                     date: mock.date,
@@ -169,7 +213,7 @@ async function installSyncMock(
 
               const operationId = call.body?.operationId;
               if (!/^[0-9a-f]{32}$/.test(operationId)) {
-                respond(400, { error: "invalid_request" });
+                respondJSON(400, { error: "invalid_request" });
                 return;
               }
               let resultingCount = processedOperationResults.get(operationId);
@@ -185,7 +229,7 @@ async function installSyncMock(
                 return;
               }
 
-              respond(200, {
+              respondJSON(200, {
                 state: {
                   date: mock.date,
                   count: mock.count,
@@ -199,7 +243,7 @@ async function installSyncMock(
               return;
             }
 
-            respond(404, { error: "not_found" });
+            respondJSON(404, { error: "not_found" });
           };
 
           if (mock.holdNextRequest) {
@@ -235,11 +279,14 @@ async function installSyncMock(
       pendingKey: PENDING_CORRECT_KEY,
       celebrationKey: PENDING_CELEBRATION_KEY,
       expectedOrigin: SYNC_API_ORIGIN,
+      expectedSpeechOrigin: AZURE_SPEECH_ORIGIN,
+      expectedSpeechToken: AZURE_SPEECH_TOKEN,
     },
   );
 }
 
 module.exports = {
+  AZURE_SPEECH_ORIGIN,
   installSyncMock,
   CONGRATULATIONS_ORIGIN,
   PENDING_CELEBRATION_KEY,

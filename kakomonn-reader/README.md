@@ -31,11 +31,11 @@ gh workflow run release-kakomonn-reader.yml --ref main
 
 ## 動作環境
 
-iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 読み上げにはブラウザのWeb Speech APIを使用します. Windows Edgeでは,同期と問題ページの準備が完了すると自動で読み上げを開始します. iOSではWebKitの制約により,準備完了後の最初の画面タップで読み上げを開始し,以降の問題は自動で読み上げます. iOSではブラウザ既定の日本語音声を利用し,WindowsではEdgeの`Microsoft Nanami Online (Natural)`を利用するためインターネット接続が必要です.
+iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 両端末ともAzure Speechの`ja-JP-NanamiNeural`を使用し,短期tokenの取得後はAzureから音声を直接受信します. Windows Edgeでは,同期と問題ページの準備が完了すると自動で読み上げを開始します. ブラウザが自動再生を拒否した場合とiOSでは,準備完了後の最初の画面タップで読み上げを開始し,以降の問題は自動で読み上げます. 読み上げにはインターネット接続が必要です.
 
 ## 正解数の同期設定
 
-先に[`kakomonn-sync`](../kakomonn-sync/README.md)をCloudflareへデプロイし,生成されたAPI URLを`src/part-00.js`の`SYNC_API_URL`と`@connect`へ設定してビルドします.
+先に[`kakomonn-sync`](../kakomonn-sync/README.md)へAzure Speech F0のkeyを設定してCloudflareへデプロイし,生成されたAPI URLを`src/part-00.js`の`SYNC_API_URL`と`@connect`へ設定してビルドします. Speech resourceは,音声endpointと同じ`Japan East`に作成します.
 
 初回起動時に同期トークンの入力画面が開きます.Win11とiPhoneへ,Worker Secretの`SYNC_TOKEN`と同じ値を入力してください.トークンは各ユーザースクリプトマネージャーの専用ストレージへ保存され,対象サイトの`localStorage`には保存されません.
 

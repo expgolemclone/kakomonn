@@ -170,6 +170,18 @@
     );
   }
 
+  function isSpeechTokenResponse(value) {
+    return (
+      value !== null &&
+      typeof value === "object" &&
+      typeof value.token === "string" &&
+      value.token.length > 0 &&
+      value.token.length <= 8192 &&
+      !/\s/.test(value.token) &&
+      value.expiresInSeconds === 600
+    );
+  }
+
   function isPendingCorrect(value) {
     return (
       value !== null &&
@@ -203,7 +215,8 @@
   }
 
   function gmXMLHttpRequest(details) {
-    return new Promise((resolve, reject) => {
+    let abortRequest = () => {};
+    const promise = new Promise((resolve, reject) => {
       let settled = false;
       const resolveOnce = (response) => {
         if (!settled) {
@@ -221,12 +234,15 @@
       try {
         const request = GM.xmlHttpRequest({
           ...details,
-          timeout: SYNC_TIMEOUT_MS,
+          timeout: details.timeout ?? SYNC_TIMEOUT_MS,
           onload: resolveOnce,
           onerror: () => rejectOnce("network_error"),
           onabort: () => rejectOnce("request_aborted"),
           ontimeout: () => rejectOnce("request_timeout"),
         });
+        if (typeof request?.abort === "function") {
+          abortRequest = () => request.abort();
+        }
         if (typeof request?.catch === "function") {
           request.catch(() => rejectOnce("network_error"));
         }
@@ -234,6 +250,8 @@
         rejectOnce("network_error");
       }
     });
+    promise.abort = () => abortRequest();
+    return promise;
   }
 
   async function requestSyncResponse(
@@ -298,6 +316,45 @@
       isCorrectResponse,
       operation
     );
+  }
+
+  function requestSpeechTokenResult(token) {
+    return requestSyncResponse(
+      "POST",
+      "/v1/speech-token",
+      token,
+      isSpeechTokenResponse
+    );
+  }
+
+  function clearAzureSpeechToken() {
+    azureSpeechToken = "";
+    azureSpeechTokenExpiresAt = 0;
+  }
+
+  function getAzureSpeechToken() {
+    if (
+      azureSpeechToken &&
+      Date.now() + SPEECH_TOKEN_RENEWAL_SKEW_MS < azureSpeechTokenExpiresAt
+    ) {
+      return Promise.resolve(azureSpeechToken);
+    }
+    if (azureSpeechTokenPromise !== null) {
+      return azureSpeechTokenPromise;
+    }
+
+    clearAzureSpeechToken();
+    azureSpeechTokenPromise = requestSpeechTokenResult(syncToken)
+      .then((result) => {
+        azureSpeechToken = result.token;
+        azureSpeechTokenExpiresAt =
+          Date.now() + result.expiresInSeconds * 1000;
+        return azureSpeechToken;
+      })
+      .finally(() => {
+        azureSpeechTokenPromise = null;
+      });
+    return azureSpeechTokenPromise;
   }
 
   function syncErrorMessage(error) {
@@ -458,6 +515,7 @@
         await GM.setValue(SYNC_TOKEN_KEY, candidateToken);
 
         syncToken = candidateToken;
+        clearAzureSpeechToken();
         applyRemoteState(state);
         syncReady = true;
         syncSettings.dataset.required = "false";
@@ -508,8 +566,10 @@
       if (typeof storedToken !== "string") {
         await GM.deleteValue(SYNC_TOKEN_KEY);
         syncToken = "";
+        clearAzureSpeechToken();
       } else {
         syncToken = storedToken.trim();
+        clearAzureSpeechToken();
       }
 
       if (storedPending !== null && !isPendingCorrect(storedPending)) {
@@ -564,10 +624,7 @@
       speechEnabled = false;
     }
     speechRunId += 1;
-    activeUtterance = null;
-    if (speechSupported) {
-      speech.cancel();
-    }
+    cancelActiveSpeech();
     stopButton.style.display = "none";
 
     if (speechEnabled) {

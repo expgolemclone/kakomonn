@@ -24,8 +24,19 @@ const iosUserAgent =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 " +
   "Mobile/15E148 Safari/604.1";
-const edgeVoiceName =
-  "Microsoft Nanami Online (Natural) - Japanese (Japan)";
+const azureSpeechUrl =
+  "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
+const azureSpeechVoiceName = "ja-JP-NanamiNeural";
+const azureSpeechOutputFormat = "audio-24khz-48kbitrate-mono-mp3";
+
+function expectedSpeechSSML(text, rate) {
+  return (
+    '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ja-JP">' +
+    `<voice name="${azureSpeechVoiceName}">` +
+    `<prosody rate="${rate}">${text}</prosody>` +
+    "</voice></speak>"
+  );
+}
 
 const mockBody = `
   <div id="meta">中小企業診断士試験 令和6年度 第1問</div>
@@ -71,77 +82,44 @@ async function preparePage(page, speechSupported, syncOptions = {}) {
     });
 
     if (!supportsSpeech) {
-      Object.defineProperty(window, "speechSynthesis", {
-        configurable: true,
-        value: undefined,
-      });
-      Object.defineProperty(window, "SpeechSynthesisUtterance", {
+      Object.defineProperty(window, "Audio", {
         configurable: true,
         value: undefined,
       });
       return;
     }
 
-    window.__speechCalls = [];
-    let voices = [];
-    const edgeVoice = {
-      name: "Microsoft Nanami Online (Natural) - Japanese (Japan)",
-      lang: "ja-JP",
-      default: false,
-      localService: false,
-    };
-
-    class FakeSpeechSynthesisUtterance {
-      constructor(text) {
-        this.text = text;
-        this.lang = "";
-        this.rate = 1;
-        this.pitch = 1;
-        this.volume = 1;
-        this.voice = null;
-        this.onstart = null;
-        this.onend = null;
+    class FakeAudio {
+      constructor() {
+        this.src = "";
+        this.onplay = null;
+        this.onended = null;
         this.onerror = null;
+      }
+
+      canPlayType(type) {
+        return type === "audio/mpeg" ? "probably" : "";
+      }
+
+      pause() {}
+
+      load() {}
+
+      play() {
+        if (this.src.startsWith("data:audio/wav")) {
+          return Promise.resolve();
+        }
+        window.setTimeout(() => {
+          this.onplay?.();
+          window.setTimeout(() => this.onended?.(), 100);
+        }, 0);
+        return Promise.resolve();
       }
     }
 
-    const fakeSpeechSynthesis = {
-      cancel() {},
-      getVoices() {
-        return voices;
-      },
-      speak(utterance) {
-        window.__speechCalls.push({
-          text: utterance.text,
-          lang: utterance.lang,
-          rate: utterance.rate,
-          pitch: utterance.pitch,
-          volume: utterance.volume,
-          voice: utterance.voice?.name ?? null,
-        });
-
-        if (utterance.text === "準備") {
-          voices = [edgeVoice];
-          window.setTimeout(() => {
-            utterance.onerror?.({ error: "synthesis-failed" });
-          }, 0);
-          return;
-        }
-
-        window.setTimeout(() => {
-          utterance.onstart?.();
-          window.setTimeout(() => utterance.onend?.(), 100);
-        }, 0);
-      },
-    };
-
-    Object.defineProperty(window, "speechSynthesis", {
+    Object.defineProperty(window, "Audio", {
       configurable: true,
-      value: fakeSpeechSynthesis,
-    });
-    Object.defineProperty(window, "SpeechSynthesisUtterance", {
-      configurable: true,
-      value: FakeSpeechSynthesisUtterance,
+      value: FakeAudio,
     });
   }, speechSupported);
 
@@ -176,6 +154,22 @@ async function markAnswerCorrect(childFrame) {
     document.querySelector("#explanation-lock").hidden = true;
     document.querySelector("#explanation").hidden = false;
   });
+}
+
+async function azureSpeechCalls(page) {
+  return page.evaluate(
+    (url) => window.__syncMock.calls.filter((call) => call.url === url),
+    azureSpeechUrl,
+  );
+}
+
+async function speechTokenCallCount(page) {
+  return page.evaluate(
+    () =>
+      window.__syncMock.calls.filter(
+        (call) => new URL(call.url).pathname === "/v1/speech-token",
+      ).length,
+  );
 }
 
 async function main() {
@@ -228,25 +222,28 @@ async function main() {
       () => document.querySelector("#kakomonn-reader-next").disabled === false,
     );
 
-    assert.deepEqual(await page.evaluate(() => window.__speechCalls[0]), {
-      text: "準備",
-      lang: "ja-JP",
-      rate: 1,
-      pitch: 1,
-      volume: 1,
-      voice: null,
+    assert.deepEqual((await azureSpeechCalls(page))[0], {
+      method: "POST",
+      url: azureSpeechUrl,
+      authorization: "Bearer test-azure-speech-token",
+      headers: {
+        Authorization: "Bearer test-azure-speech-token",
+        "Content-Type": "application/ssml+xml",
+        "X-Microsoft-OutputFormat": azureSpeechOutputFormat,
+      },
+      body: expectedSpeechSSML(
+        "問題文。これは動作確認用の問題文です.",
+        "+50%",
+      ),
     });
-    assert.deepEqual(await page.evaluate(() => window.__speechCalls[1]), {
-      text: "問題文。これは動作確認用の問題文です.",
-      lang: "ja-JP",
-      rate: 1.5,
-      pitch: 1,
-      volume: 1,
-      voice: edgeVoiceName,
-    });
+    assert.equal(await speechTokenCallCount(page), 1);
 
     await markAnswerCorrect(childFrame);
-    await page.waitForFunction(() => window.__speechCalls.length === 3);
+    await page.waitForFunction(
+      (url) =>
+        window.__syncMock.calls.filter((call) => call.url === url).length === 2,
+      azureSpeechUrl,
+    );
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
@@ -257,14 +254,21 @@ async function main() {
         document.querySelector("#kakomonn-reader-status").textContent ===
         "解説完了",
     );
-    assert.deepEqual(await page.evaluate(() => window.__speechCalls[2]), {
-      text: "解説。これは動作確認用の解説です.",
-      lang: "ja-JP",
-      rate: 1.2,
-      pitch: 1,
-      volume: 1,
-      voice: edgeVoiceName,
+    assert.deepEqual((await azureSpeechCalls(page))[1], {
+      method: "POST",
+      url: azureSpeechUrl,
+      authorization: "Bearer test-azure-speech-token",
+      headers: {
+        Authorization: "Bearer test-azure-speech-token",
+        "Content-Type": "application/ssml+xml",
+        "X-Microsoft-OutputFormat": azureSpeechOutputFormat,
+      },
+      body: expectedSpeechSSML(
+        "解説。これは動作確認用の解説です.",
+        "+20%",
+      ),
     });
+    assert.equal(await speechTokenCallCount(page), 1);
 
     await page.evaluate(() => {
       window.__syncMock.holdNextRequest = true;
@@ -385,12 +389,14 @@ async function main() {
       () => window.__syncMock.releaseHeldRequest !== null,
     );
     assert.equal(
-      await delayedSyncPage.evaluate(() => window.__speechCalls.length),
+      (await azureSpeechCalls(delayedSyncPage)).length,
       0,
     );
     await delayedSyncPage.evaluate(() => window.__syncMock.releaseHeldRequest());
     await delayedSyncPage.waitForFunction(
-      () => window.__speechCalls.length === 2,
+      (url) =>
+        window.__syncMock.calls.filter((call) => call.url === url).length === 1,
+      azureSpeechUrl,
     );
     await delayedSyncPage.waitForFunction(
       () =>
@@ -527,24 +533,27 @@ async function main() {
         "画面をタップすると読み上げます",
     );
     assert.equal(await iosPage.locator("#kakomonn-reader-start").count(), 0);
-    assert.equal(await iosPage.evaluate(() => window.__speechCalls.length), 0);
+    assert.equal((await azureSpeechCalls(iosPage)).length, 0);
     const firstAnswer = iosFrame.locator("input[name='answer']").first();
     await firstAnswer.click();
     assert.equal(await firstAnswer.isChecked(), true);
-    await iosPage.waitForFunction(() => window.__speechCalls.length === 1);
+    await iosPage.waitForFunction(
+      (url) =>
+        window.__syncMock.calls.filter((call) => call.url === url).length === 1,
+      azureSpeechUrl,
+    );
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
         "問題文完了",
     );
-    assert.deepEqual(await iosPage.evaluate(() => window.__speechCalls[0]), {
-      text: "問題文。これは動作確認用の問題文です.",
-      lang: "ja-JP",
-      rate: 1.5,
-      pitch: 1,
-      volume: 1,
-      voice: null,
-    });
+    assert.equal(
+      (await azureSpeechCalls(iosPage))[0].body,
+      expectedSpeechSSML(
+        "問題文。これは動作確認用の問題文です.",
+        "+50%",
+      ),
+    );
     await markAnswerCorrect(iosFrame);
     await iosFrame.locator("#next").click();
     await iosPage.waitForFunction(

@@ -74,11 +74,7 @@ async function preparePage(page, syncOptions = {}) {
         clear: () => store.clear(),
       },
     });
-    Object.defineProperty(window, "speechSynthesis", {
-      configurable: true,
-      value: undefined,
-    });
-    Object.defineProperty(window, "SpeechSynthesisUtterance", {
+    Object.defineProperty(window, "Audio", {
       configurable: true,
       value: undefined,
     });

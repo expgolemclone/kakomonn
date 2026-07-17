@@ -405,8 +405,8 @@
     speechInitializationInProgress = true;
     speechRunId += 1;
     const runId = speechRunId;
-    speech.cancel();
-    initializeSpeechVoice(
+    cancelActiveSpeech();
+    initializeSpeechPlayback(
       runId,
       () => {
         if (runId !== speechRunId) {
@@ -419,6 +419,8 @@
       () => {
         if (runId === speechRunId) {
           speechInitializationInProgress = false;
+          speechEnabled = false;
+          setStatus("画面をタップすると読み上げます");
         }
       }
     );
@@ -455,15 +457,15 @@
     startSpeechForCurrentPage();
   }
 
-  function activateIOSSpeechFromGesture() {
-    // iOSではspeak()までを同じユーザー操作内で同期的に実行する必要があります.
-    if (isIOS && !speechEnabled) {
+  function activateSpeechFromGesture() {
+    // 音声要素の初回play()はユーザー操作内で実行し,以後も同じ要素を再利用します.
+    if (!speechEnabled) {
       startSpeechForCurrentPage();
     }
   }
 
   function onFrameClick(event) {
-    activateIOSSpeechFromGesture();
+    activateSpeechFromGesture();
     const target = event.target;
     if (!(target instanceof frame.contentWindow.Element)) {
       return;
@@ -587,8 +589,8 @@
     }
   });
   frame.addEventListener("load", bindFrameDocument);
-  if (isIOS) {
-    document.addEventListener("click", activateIOSSpeechFromGesture, true);
+  if (speechSupported) {
+    document.addEventListener("click", activateSpeechFromGesture, true);
   }
   window.addEventListener("focus", handlePageResume);
   window.addEventListener("pageshow", handlePageResume);

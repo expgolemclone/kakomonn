@@ -5,6 +5,9 @@ const DAILY_COUNT_OBJECT_NAME = "primary";
 const MAX_HISTORY_DAYS = 31;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const OPERATION_ID_PATTERN = /^[0-9a-f]{32}$/;
+const AZURE_SPEECH_TOKEN_URL =
+  "https://japaneast.api.cognitive.microsoft.com/sts/v1.0/issueToken";
+const AZURE_SPEECH_TOKEN_TTL_SECONDS = 600;
 const RESPONSE_HEADERS = {
   "Cache-Control": "no-store",
   "Content-Type": "application/json; charset=utf-8",
@@ -435,6 +438,48 @@ function getDailyCountStub(env) {
   return env.DAILY_COUNT.get(id);
 }
 
+export async function issueSpeechToken(env, fetcher = fetch) {
+  if (
+    typeof env.AZURE_SPEECH_KEY !== "string" ||
+    env.AZURE_SPEECH_KEY.length === 0
+  ) {
+    return errorResponse("server_misconfigured", 500);
+  }
+
+  let response;
+  try {
+    response = await fetcher(AZURE_SPEECH_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        "Ocp-Apim-Subscription-Key": env.AZURE_SPEECH_KEY,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "",
+    });
+  } catch {
+    return errorResponse("speech_service_unavailable", 502);
+  }
+
+  if (!response.ok) {
+    return errorResponse(
+      response.status === 401 || response.status === 403
+        ? "server_misconfigured"
+        : "speech_service_unavailable",
+      response.status === 401 || response.status === 403 ? 500 : 502
+    );
+  }
+
+  const token = (await response.text()).trim();
+  if (!token || token.length > 8192 || /\s/.test(token)) {
+    return errorResponse("invalid_speech_response", 502);
+  }
+
+  return jsonResponse({
+    token,
+    expiresInSeconds: AZURE_SPEECH_TOKEN_TTL_SECONDS,
+  });
+}
+
 async function parseCorrectRequest(request) {
   let body;
   try {
@@ -471,60 +516,69 @@ function parseHistoryRequest(url) {
   );
 }
 
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const routes = new Map([
-      ["/v1/count", "GET"],
-      ["/v1/history", "GET"],
-      ["/v1/correct", "POST"],
-    ]);
-    const expectedMethod = routes.get(url.pathname);
-    if (expectedMethod === undefined) {
-      return errorResponse("not_found", 404);
-    }
-    if (request.method !== expectedMethod) {
-      return errorResponse("method_not_allowed", 405, {
-        Allow: expectedMethod,
-      });
-    }
+export async function handleRequest(request, env, fetcher = fetch) {
+  const url = new URL(request.url);
+  const routes = new Map([
+    ["/v1/count", "GET"],
+    ["/v1/history", "GET"],
+    ["/v1/correct", "POST"],
+    ["/v1/speech-token", "POST"],
+  ]);
+  const expectedMethod = routes.get(url.pathname);
+  if (expectedMethod === undefined) {
+    return errorResponse("not_found", 404);
+  }
+  if (request.method !== expectedMethod) {
+    return errorResponse("method_not_allowed", 405, {
+      Allow: expectedMethod,
+    });
+  }
 
-    const authorized = await isAuthorized(request, env);
-    if (authorized === null) {
-      return errorResponse("server_misconfigured", 500);
-    }
-    if (!authorized) {
-      return errorResponse("unauthorized", 401);
-    }
+  const authorized = await isAuthorized(request, env);
+  if (authorized === null) {
+    return errorResponse("server_misconfigured", 500);
+  }
+  if (!authorized) {
+    return errorResponse("unauthorized", 401);
+  }
 
-    const today = getTokyoDate();
-    const stub = getDailyCountStub(env);
-    if (url.pathname === "/v1/count") {
-      return jsonResponse(await stub.getCount(today));
-    }
-    if (url.pathname === "/v1/history") {
-      const range = parseHistoryRequest(url);
-      if (range === null) {
-        return errorResponse("invalid_request", 400);
-      }
-      return jsonResponse(await stub.getHistory(today, range.from, range.to));
-    }
+  if (url.pathname === "/v1/speech-token") {
+    return issueSpeechToken(env, fetcher);
+  }
 
-    const correct = await parseCorrectRequest(request);
-    if (correct === null) {
+  const today = getTokyoDate();
+  const stub = getDailyCountStub(env);
+  if (url.pathname === "/v1/count") {
+    return jsonResponse(await stub.getCount(today));
+  }
+  if (url.pathname === "/v1/history") {
+    const range = parseHistoryRequest(url);
+    if (range === null) {
       return errorResponse("invalid_request", 400);
     }
-    if (correct.date !== today) {
-      return jsonResponse(
-        { error: "date_changed", state: await stub.getCount(today) },
-        409
-      );
-    }
+    return jsonResponse(await stub.getHistory(today, range.from, range.to));
+  }
 
-    const result = await stub.recordCorrect(correct.date, correct.operationId);
-    if (result?.error === "date_changed") {
-      return jsonResponse(result, 409);
-    }
-    return jsonResponse(result);
+  const correct = await parseCorrectRequest(request);
+  if (correct === null) {
+    return errorResponse("invalid_request", 400);
+  }
+  if (correct.date !== today) {
+    return jsonResponse(
+      { error: "date_changed", state: await stub.getCount(today) },
+      409
+    );
+  }
+
+  const result = await stub.recordCorrect(correct.date, correct.operationId);
+  if (result?.error === "date_changed") {
+    return jsonResponse(result, 409);
+  }
+  return jsonResponse(result);
+}
+
+export default {
+  fetch(request, env) {
+    return handleRequest(request, env);
   },
 };

@@ -4,6 +4,7 @@
 // @description  問題文と解説の読み上げ, コピー, 端末間で共有する日次正解数と50問ごとの祝福を提供します.
 // @match        https://chushoks.kakomonn.com/*
 // @connect      kakomonn-count-sync.expgolem-lab.workers.dev
+// @connect      japaneast.tts.speech.microsoft.com
 // @run-at       document-end
 // @noframes
 // @grant        GM.getValue
@@ -29,19 +30,26 @@
   const PENDING_CELEBRATION_KEY = "kakomonn-reader.pending-celebration";
   const START_PARAMETER = "count50";
   const SYNC_TIMEOUT_MS = 15000;
+  const SPEECH_TIMEOUT_MS = 30000;
   const FRAME_LOAD_DELAY_MS = 900;
   const EXPLANATION_CHANGE_DELAY_MS = 700;
   const NEXT_QUESTION_RELOAD_DELAY_MS = 1200;
   const FRAME_SCROLL_RESET_DELAYS_MS = [0, 120, 600];
   const COPY_FEEDBACK_DURATION_MS = 1400;
-  const MAX_CHUNK_LENGTH = 120;
+  const MAX_CHUNK_LENGTH = 1500;
   const QUESTION_SPEECH_RATE = 1.5;
   const EXPLANATION_SPEECH_RATE = 1.2;
-  const EDGE_JAPANESE_VOICE_NAME =
-    "Microsoft Nanami Online (Natural) - Japanese (Japan)";
+  const SPEECH_TOKEN_RENEWAL_SKEW_MS = 60000;
+  const AZURE_SPEECH_URL =
+    "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
+  const AZURE_SPEECH_VOICE_NAME = "ja-JP-NanamiNeural";
+  const AZURE_SPEECH_OUTPUT_FORMAT =
+    "audio-24khz-48kbitrate-mono-mp3";
+  const SILENT_AUDIO_DATA_URL =
+    "data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
 
-  const speech = window.speechSynthesis;
-  const SpeechUtterance = window.SpeechSynthesisUtterance;
+  const speechAudio =
+    typeof window.Audio === "function" ? new window.Audio() : null;
   const isIOS =
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -49,16 +57,19 @@
     navigator.userAgent.includes("Windows NT") &&
     navigator.userAgent.includes("Edg/");
   const speechSupported =
-    typeof speech?.cancel === "function" &&
-    typeof speech?.speak === "function" &&
-    typeof speech?.getVoices === "function" &&
-    typeof SpeechUtterance === "function" &&
+    typeof speechAudio?.play === "function" &&
+    typeof speechAudio?.pause === "function" &&
+    typeof speechAudio?.canPlayType === "function" &&
+    speechAudio.canPlayType("audio/mpeg") !== "" &&
     (isIOS || isWindowsEdge);
   let speechEnabled = false;
   let speechInitializationInProgress = false;
   let speechRunId = 0;
-  let activeUtterance = null;
-  let speechVoice = null;
+  let activeSpeechRequest = null;
+  let activeSpeechAudioURL = "";
+  let azureSpeechToken = "";
+  let azureSpeechTokenExpiresAt = 0;
+  let azureSpeechTokenPromise = null;
   let frameDocument = null;
   let boundFrameDocument = null;
   let currentPageReadPending = false;

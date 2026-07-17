@@ -166,6 +166,55 @@ async function runCountCase(browser, script, result, expectedCount) {
   }
 }
 
+async function runSyncRefreshClickRaceCase(browser, script) {
+  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  try {
+    const page = await context.newPage();
+    const errors = await preparePage(page);
+    await page.addScriptTag({ content: script });
+    const childFrame = await waitForReaderFrame(page);
+    await childFrame.evaluate(
+      (html) => {
+        document.body.innerHTML = html;
+      },
+      createMockBody("correct"),
+    );
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-count").textContent ===
+        "0問,次は50問",
+    );
+
+    await page.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+      window.dispatchEvent(new Event("focus"));
+    });
+    await page.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+
+    await childFrame.locator("#next").click();
+    await page.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-count").textContent ===
+        "1問,次は50問",
+    );
+
+    const correctCalls = await page.evaluate(() =>
+      window.__syncMock.calls.filter(
+        (call) =>
+          call.method === "POST" &&
+          new URL(call.url).pathname === "/v1/correct",
+      ),
+    );
+    assert.equal(correctCalls.length, 1);
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
 async function runRetryCase(browser, script) {
   const context = await browser.newContext({ userAgent: edgeUserAgent });
   try {
@@ -751,6 +800,7 @@ async function main() {
     await runCountCase(browser, script, "correct", "1問,次は50問");
     await runCountCase(browser, script, "incorrect", "0問,次は50問");
     await runCountCase(browser, script, "unknown", "0問,次は50問");
+    await runSyncRefreshClickRaceCase(browser, script);
     await runRetryCase(browser, script);
     await runDoubleClickCase(browser, script);
     await runFrameChangeDuringSyncCase(browser, script);

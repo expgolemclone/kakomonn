@@ -175,6 +175,13 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
       (await frame.locator("#js-answer-result-box").getAttribute("class")) ?? "";
     assert.equal(resultClasses.split(/\s+/).includes(expectedResultClass), true);
 
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-next")?.disabled === false,
+      null,
+      { timeout: 15_000 },
+    );
+
     await clickNextQuestion(frame);
     console.log(JSON.stringify({ phase: "next-clicked", answerText }));
 

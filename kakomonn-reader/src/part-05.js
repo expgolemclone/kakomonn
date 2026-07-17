@@ -311,12 +311,22 @@
   }
 
   async function handleNextQuestion() {
-    if (
-      syncInProgress ||
-      navigationInProgress ||
-      nextQuestionOperationInProgress
-    ) {
+    if (navigationInProgress || nextQuestionOperationInProgress) {
       return;
+    }
+    if (syncInProgress) {
+      const activeSync = syncPromise;
+      if (activeSync === null) {
+        return;
+      }
+      await activeSync;
+      if (
+        syncInProgress ||
+        navigationInProgress ||
+        nextQuestionOperationInProgress
+      ) {
+        return;
+      }
     }
     if (!syncReady) {
       await refreshRemoteCount();

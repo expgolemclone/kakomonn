@@ -16,7 +16,7 @@ const selectors = new Map([
   ["hikakin", "main, .stage, .celebration"],
   ["study-complete", "[data-burst]"],
   ["gsap-study", ".celebrate-button"],
-  ["victory-signal", ".replay"],
+  ["victory-observatory", ".replay"],
 ]);
 
 function captureErrors(page) {
@@ -139,17 +139,21 @@ async function verifyInvalidMilestone(browser, origin) {
   }
 }
 
-const server = await startStaticServer();
+const configuredOrigin = process.env.CONGRATULATIONS_ORIGIN?.replace(/\/$/, "");
+const server = configuredOrigin === undefined ? await startStaticServer() : null;
+const origin = configuredOrigin ?? server.origin;
 const browser = await chromium.launch({ headless: true });
 try {
   for (const site of manifest.sites) {
-    await verifyEntry(browser, server.origin, site);
+    await verifyEntry(browser, origin, site);
   }
-  await verifyShell(browser, server.origin);
-  await verifyInvalidMilestone(browser, server.origin);
+  await verifyShell(browser, origin);
+  await verifyInvalidMilestone(browser, origin);
   console.log(`Congratulations browser E2E passed for ${manifest.sites.length} sites`);
 } finally {
   await browser.close();
-  await server.stop();
-  assert.equal(server.getStderr(), "");
+  if (server !== null) {
+    await server.stop();
+    assert.equal(server.getStderr(), "");
+  }
 }

@@ -1,0 +1,10 @@
+.env.local
+.vercel/
+dist/
+node_modules/
+**/node_modules/
+tests/
+preview.png
+mobile-preview.png
+**/preview.png
+**/preview-mobile.png

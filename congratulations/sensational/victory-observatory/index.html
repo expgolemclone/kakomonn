@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050505">
+  <title>Congratulations, Victory Observatory</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="stage" aria-labelledby="hero-title">
+    <div class="noise" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
+    <div class="perspective-grid" aria-hidden="true"></div>
+
+    <div class="aperture" aria-hidden="true">
+      <i class="aperture-blade aperture-blade--top"></i>
+      <i class="aperture-blade aperture-blade--right"></i>
+      <i class="aperture-blade aperture-blade--bottom"></i>
+      <i class="aperture-blade aperture-blade--left"></i>
+    </div>
+
+    <div class="spotlights" aria-hidden="true">
+      <i class="spotlight spotlight--one"></i>
+      <i class="spotlight spotlight--two"></i>
+      <i class="spotlight spotlight--three"></i>
+    </div>
+
+    <div class="arena" aria-hidden="true">
+      <div class="core-glow"></div>
+      <div class="orbit orbit--outer"></div>
+      <div class="orbit orbit--middle"></div>
+      <div class="orbit orbit--inner"></div>
+      <div class="orbit-ticks"></div>
+      <div class="core-medal">
+        <span class="core-medal__star">★</span>
+        <span class="core-medal__index">01</span>
+        <span class="core-medal__copy">VICTORY</span>
+      </div>
+    </div>
+
+    <div class="ribbon ribbon--left" aria-hidden="true"><span>YOU EARNED THIS</span></div>
+    <div class="ribbon ribbon--right" aria-hidden="true"><span>KEEP GOING</span></div>
+
+    <div class="ticker ticker--top" aria-hidden="true">
+      <div class="ticker-track">ACHIEVEMENT UNLOCKED, ACHIEVEMENT UNLOCKED, ACHIEVEMENT UNLOCKED, ACHIEVEMENT UNLOCKED,</div>
+    </div>
+
+    <section class="hero">
+      <div class="eyebrow">
+        <span class="eyebrow-code">SIGNAL, 001</span>
+        <span class="eyebrow-line"></span>
+        <span class="eyebrow-copy">THE MOMENT IS YOURS</span>
+      </div>
+
+      <h1 id="hero-title" class="title" aria-label="Congratulations!!!">
+        <span class="title-row title-row--one" data-text="CONGRA"></span>
+        <span class="title-row title-row--two" data-text="TULATIONS"></span>
+        <span class="title-row title-row--bang" data-text="!!!"></span>
+      </h1>
+
+      <div class="message-panel">
+        <div class="message-panel__mark" aria-hidden="true">
+          <span class="message-panel__check">✓</span>
+        </div>
+        <div class="message-panel__body">
+          <p class="message-panel__lead">YOU DID IT.</p>
+          <p class="message-panel__copy">積み重ねた時間も, 迷いながら進んだ一歩も, すべてがこの瞬間につながった.</p>
+        </div>
+        <p class="message-panel__edition">CELEBRATION EDITION, 2026</p>
+      </div>
+
+      <div class="controls">
+        <button class="replay" type="button" aria-label="祝福アニメーションをもう一度再生する">
+          <span class="replay-icon" aria-hidden="true">↻</span>
+          <span>REPLAY THE MOMENT</span>
+        </button>
+        <div class="signal" aria-label="celebration signal active">
+          <i class="signal-dot" aria-hidden="true"></i>
+          <span>SIGNAL ACTIVE</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="ticker ticker--bottom" aria-hidden="true">
+      <div class="ticker-track ticker-track--reverse">CONGRATULATIONS, THIS WIN IS YOURS, CONGRATULATIONS, THIS WIN IS YOURS,</div>
+    </div>
+
+    <div class="spark-layer" aria-hidden="true"></div>
+    <div class="confetti-layer" aria-hidden="true"></div>
+    <div class="flash" aria-hidden="true"></div>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

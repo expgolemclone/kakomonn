@@ -10,7 +10,7 @@ root shellは登録済みsiteを均等確率で1つ選び,全画面iframeで表�
 - `dance/hikakin`,dance形式の祝福.
 - `sensational/study-complete`,一日の学習完了を祝うGSAP体験.
 - `sensational/gsap-study`,学習の積み重ねを辿るGSAP長編.
-- `sensational/victory-signal`,editorial posterとaward ceremonyを組み合わせた演出.
+- `sensational/victory-observatory`,cinematicな観測装置とkinetic typographyを組み合わせた演出.
 
 抽選対象は`celebrations.json`へ明示します.存在しないentry,重複ID,空のmanifestはbuild errorになります.
 
@@ -36,7 +36,17 @@ Viteのmulti-page buildは`dist/`へ全siteを出力します.`npm test`はmanif
 
 ## Vercel
 
-GitHubの`expgolemclone/browser-extensions`をimportし,Root Directoryを`congratulations`,Production Branchを`main`に設定します.`vercel.json`がbuild commandとoutput directoryを固定します.
+production URLは`https://kakomonn-congratulations.vercel.app`です.Vercel projectのRoot Directoryは`congratulations`に設定し,`vercel.json`がbuild commandとoutput directoryを固定します.
+
+初回だけprojectへlinkし,以後は同じdirectoryからproductionへdeployします.
+
+```bash
+cd congratulations
+npx vercel link --yes --scope expgolemclone --project kakomonn-congratulations
+npx vercel deploy --prod
+```
+
+公開環境そのものへbrowser E2Eを実行する場合は,`CONGRATULATIONS_ORIGIN=https://kakomonn-congratulations.vercel.app`を設定して`node tests/browser.mjs`を実行します.
 
 ## 権利表記
 

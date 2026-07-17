@@ -1,4 +1,6 @@
 node_modules/
+.vercel/
+.env.local
 dist/
 preview.png
 mobile-preview.png

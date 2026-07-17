@@ -300,11 +300,49 @@ async function main() {
         "次の問題へ",
     );
 
-    await childFrame.locator("#next").click();
+    await childFrame.locator("#next").focus();
+    await page.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+    });
+    const nextQuestionButton = page.locator("#kakomonn-reader-next");
+    const nextQuestionButtonBox = await nextQuestionButton.boundingBox();
+    assert.notEqual(nextQuestionButtonBox, null);
+    await page.mouse.click(
+      nextQuestionButtonBox.x + nextQuestionButtonBox.width / 2,
+      nextQuestionButtonBox.y + nextQuestionButtonBox.height / 2,
+    );
+    await page.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+    assert.equal(await nextQuestionButton.innerText(), "正解数を同期中");
+    assert.equal(await nextQuestionButton.isDisabled(), false);
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.__syncMock.calls.filter(
+            (call) =>
+              call.method === "POST" &&
+              new URL(call.url).pathname === "/v1/correct",
+          ).length,
+      ),
+      0,
+    );
+    await page.evaluate(() => window.__syncMock.releaseHeldRequest());
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
         "1問,次は50問",
+    );
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.__syncMock.calls.filter(
+            (call) =>
+              call.method === "POST" &&
+              new URL(call.url).pathname === "/v1/correct",
+          ).length,
+      ),
+      1,
     );
 
     await page.evaluate(() => {

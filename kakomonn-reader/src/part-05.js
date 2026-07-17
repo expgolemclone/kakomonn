@@ -24,7 +24,12 @@
   function updateNextQuestionButton() {
     if (syncInProgress) {
       nextQuestionButton.textContent = "正解数を同期中";
-      nextQuestionButton.disabled = true;
+      nextQuestionButton.disabled =
+        !syncReady ||
+        navigationInProgress ||
+        nextQuestionOperationInProgress ||
+        !syncSettings.hidden ||
+        findNextQuestionControl() === null;
       return;
     }
 
@@ -511,32 +516,7 @@
   });
 
   nextQuestionButton.addEventListener("click", () => {
-    if (
-      syncInProgress ||
-      navigationInProgress ||
-      nextQuestionOperationInProgress
-    ) {
-      return;
-    }
-
-    if (!syncReady) {
-      void refreshRemoteCount();
-      return;
-    }
-
-    if (pendingCelebration !== null) {
-      void maybeContinuePendingCelebration();
-      return;
-    }
-
-    const nextControl = findNextQuestionControl();
-    if (nextControl === null) {
-      setStatus("次の問題ボタンがありません");
-      updateNextQuestionButton();
-      return;
-    }
-
-    nextControl.click();
+    void handleNextQuestion();
   });
 
   copyButton.addEventListener("click", copyReadableSections);

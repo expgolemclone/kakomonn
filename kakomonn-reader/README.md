@@ -17,6 +17,18 @@ python3 build.py
 
 `src/part-*.js`を順番に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyなどのユーザースクリプトマネージャーには, 生成されたファイルを登録してください.
 
+## Release
+
+`main`上の`src/`または`build.py`が変更されると, GitHub Actionsがテストとビルドを行い, 生成した`kakomonn-reader.user.js`をGitHub Releaseへ添付します. Releaseのタグは`kakomonn-reader-<commit SHA>`です. 生成ファイルは`.gitignore`の対象であり, リポジトリの差分には含めません.
+
+Releaseがまだ存在しない`main`のcommitを手動で公開する場合は, ワークフローを実行します. 同じcommitのReleaseは上書きしません.
+
+```bash
+gh workflow run release-kakomonn-reader.yml --ref main
+```
+
+公開されたファイルは[GitHub Releases](https://github.com/expgolemclone/browser-extensions/releases)から取得できます.
+
 ## 動作環境
 
 iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 読み上げにはブラウザのWeb Speech APIを使用します. iOSではブラウザ既定の日本語音声を利用し, WindowsではEdgeの`Microsoft Nanami Online (Natural)`を利用するためインターネット接続が必要です.

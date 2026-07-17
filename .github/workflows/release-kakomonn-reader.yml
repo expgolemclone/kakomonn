@@ -1,0 +1,78 @@
+name: Release kakomonn-reader
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "kakomonn-reader/src/**"
+      - "kakomonn-reader/build.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run tests
+        run: |
+          npm test
+          npm run test:smoke
+          node kakomonn-reader/tests/live_site_e2e_test.js
+
+  release:
+    needs: test
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Build release asset
+        run: python3 kakomonn-reader/build.py
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_tag="kakomonn-reader-${GITHUB_SHA}"
+          release_title="kakomonn-reader ${GITHUB_SHA:0:12}"
+          release_notes="Built from commit [${GITHUB_SHA}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA})."
+
+          gh release create "$release_tag" \
+            kakomonn-reader/kakomonn-reader.user.js \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$release_title" \
+            --notes "$release_notes" \
+            --latest=false

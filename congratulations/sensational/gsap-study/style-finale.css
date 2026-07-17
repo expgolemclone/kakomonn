@@ -1,0 +1,50 @@
+.exclamation { overflow: hidden; background: var(--paper); }
+.exclamation__inner { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: clamp(3rem, 8vw, 8rem); }
+.exclamation__copy { align-self: center; }
+.exclamation__eyebrow { margin: clamp(3rem, 7vw, 7rem) 0 1.5rem; font-size: 0.68rem; font-weight: 900; letter-spacing: 0.17em; color: var(--violet); }
+.exclamation-title { margin: 0; font-family: "Noto Sans CJK JP", Arial, sans-serif; font-size: clamp(4.2rem, 8.1vw, 9rem); font-weight: 950; line-height: 0.82; letter-spacing: -0.075em; }
+.exclamation-title .line { display: block; overflow: hidden; }
+.exclamation-title .line-inner { display: block; }
+.exclamation__copy > .reveal-copy { max-width: 36rem; margin: 3rem 0 0 auto; font-size: clamp(1.05rem, 1.4vw, 1.35rem); line-height: 1.65; }
+.exclamation__mark { position: relative; min-height: 50rem; display: grid; place-items: center; overflow: hidden; background: var(--acid); }
+.exclamation__stem { position: relative; z-index: 3; font-size: min(45vw, 42rem); font-weight: 950; line-height: 0.75; letter-spacing: -0.15em; }
+.exclamation__echo { position: absolute; font-size: min(45vw, 42rem); font-weight: 950; line-height: 0.75; color: transparent; -webkit-text-stroke: 1px rgba(9, 11, 8, 0.32); }
+.exclamation__echo:nth-of-type(2) { transform: translate(-13%, -9%); }
+.exclamation__echo:nth-of-type(3) { transform: translate(13%, 9%); }
+.exclamation__label { position: absolute; right: 1.2rem; bottom: 1.2rem; font-size: 0.61rem; font-weight: 900; line-height: 1.4; letter-spacing: 0.14em; }
+.applause-band { overflow: hidden; padding-block: clamp(5rem, 9vw, 9rem); border-block: 1px solid var(--ink); background: var(--orange); color: var(--ink); }
+.applause-band__row { width: max-content; font-size: clamp(5.5rem, 14vw, 15rem); font-weight: 950; line-height: 0.67; letter-spacing: -0.085em; white-space: nowrap; }
+.applause-band__row--a { transform: translateX(-8%); }
+.applause-band__row--b { margin-top: 0.28em; transform: translateX(-28%); color: transparent; -webkit-text-stroke: 2px var(--ink); }
+.finale { position: relative; min-height: 100svh; overflow: hidden; background: var(--ink); color: var(--paper); isolation: isolate; }
+.finale__inner { min-height: 100svh; display: grid; grid-template-rows: auto 1fr auto; padding-block: 1.5rem; }
+.finale__rings { position: absolute; z-index: -2; left: 50%; top: 54%; width: min(58vw, 54rem); aspect-ratio: 1; transform: translate(-50%, -50%); }
+.finale__rings i { position: absolute; border: 1px solid rgba(157, 255, 0, 0.24); border-radius: 50%; }
+.finale__rings i:nth-child(1) { inset: 0; }
+.finale__rings i:nth-child(2) { inset: 15%; }
+.finale__rings i:nth-child(3) { inset: 31%; }
+.finale__rings i:nth-child(4) { inset: 45%; background: var(--acid); border: 0; box-shadow: 0 0 8rem rgba(157, 255, 0, 0.4); }
+.finale__sparks { position: absolute; inset: 0; z-index: -1; background-image: radial-gradient(circle at 18% 23%, var(--acid) 0 2px, transparent 3px), radial-gradient(circle at 79% 21%, var(--acid) 0 1.5px, transparent 2.5px), radial-gradient(circle at 87% 71%, var(--acid) 0 2px, transparent 3px), radial-gradient(circle at 12% 78%, var(--acid) 0 1.5px, transparent 2.5px); }
+.finale__stage { position: relative; display: grid; align-content: center; justify-items: center; padding-block: 4rem; }
+.finale__lead, .finale__closing { position: relative; z-index: 3; width: min(100%, 52rem); text-align: center; }
+.finale__lead { margin-bottom: clamp(2rem, 4vw, 4rem); }
+.finale__closing { display: grid; gap: 1rem; margin-top: clamp(3rem, 6vw, 6rem); padding-bottom: clamp(8rem, 12vw, 11rem); }
+.finale__lead p, .finale__closing p { margin: 0; color: rgba(240, 239, 231, 0.78); font-size: clamp(0.95rem, 1.25vw, 1.18rem); line-height: 1.85; }
+.finale__closing .finale__congrats { color: var(--acid); font-size: clamp(1.7rem, 3vw, 3rem); font-weight: 950; line-height: 1.25; letter-spacing: -0.045em; }
+.finale__stage h2 { margin: 0; display: grid; justify-items: center; font-size: clamp(4.9rem, 14.5vw, 15rem); font-weight: 950; line-height: 0.62; letter-spacing: -0.09em; }
+.finale-word { display: flex; overflow: hidden; padding-right: 0.08em; }
+.finale-word--b { color: transparent; -webkit-text-stroke: clamp(1px, 0.15vw, 3px) var(--paper); }
+.finale-word--c { margin-top: 0.25em; color: var(--acid); text-shadow: 0 0 3.5rem rgba(157, 255, 0, 0.28); }
+.celebrate-button { position: absolute; z-index: 6; right: 5%; bottom: 8%; width: clamp(10rem, 14vw, 13.5rem); aspect-ratio: 1; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--acid); color: var(--ink); cursor: pointer; }
+.celebrate-button__label { text-align: left; font-size: 0.72rem; font-weight: 950; line-height: 1.2; letter-spacing: 0.1em; }
+.celebrate-button__icon { position: absolute; right: 24%; bottom: 23%; font-size: 1.7rem; }
+.celebrate-button__ring { position: absolute; inset: 8%; border: 1px solid rgba(9, 11, 8, 0.28); border-radius: 50%; }
+.finale footer { display: flex; justify-content: space-between; gap: 2rem; padding-top: 1.2rem; border-top: 1px solid var(--line-light); font-size: 0.6rem; font-weight: 900; letter-spacing: 0.13em; }
+.celebration-flash { position: fixed; z-index: 700; inset: 0; pointer-events: none; opacity: 0; background: var(--acid); }
+.confetti-field { position: fixed; z-index: 720; inset: 0; overflow: hidden; pointer-events: none; }
+.confetti { position: absolute; width: 0.52rem; height: 1.35rem; border: 1px solid var(--ink); will-change: transform; }
+.confetti--dot { width: 0.75rem; height: 0.75rem; border-radius: 50%; }
+.confetti--star { width: auto; height: auto; border: 0; font-size: 1.25rem; font-weight: 900; line-height: 1; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes grain-shift { 0% { transform: translate3d(0, 0, 0); } 25% { transform: translate3d(2%, -3%, 0); } 50% { transform: translate3d(-4%, 2%, 0); } 75% { transform: translate3d(3%, 4%, 0); } 100% { transform: translate3d(-2%, -2%, 0); } }
+@keyframes status-pulse { 50% { transform: scale(0.68); opacity: 0.7; } }

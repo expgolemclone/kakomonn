@@ -37,19 +37,17 @@ npm test
 
 Viteのmulti-page buildは`dist/`へ全siteを出力します.`npm test`はmanifest,全entry,desktopとmobile,共通の戻る導線をChromiumで検証します.
 
-## Vercel
+## Cloudflare
 
-production URLは`https://kakomonn-congratulations.vercel.app`です.Vercel projectのRoot Directoryは`congratulations`に設定し,`vercel.json`がbuild commandとoutput directoryを固定します.
+production URLは`https://kakomonn-congratulations.expgolem-lab.workers.dev`です.Viteの`dist/`をCloudflare Workers Static Assetsとして配信します.
 
-初回だけprojectへlinkし,以後は同じdirectoryからproductionへdeployします.
+repository rootからbuildとdeployを実行します.
 
 ```bash
-cd congratulations
-npx vercel link --yes --scope expgolemclone --project kakomonn-congratulations
-npx vercel deploy --prod
+npm run deploy:congratulations
 ```
 
-公開環境そのものへbrowser E2Eを実行する場合は,`CONGRATULATIONS_ORIGIN=https://kakomonn-congratulations.vercel.app`を設定して`node tests/browser.mjs`を実行します.
+公開環境そのものへbrowser E2Eを実行する場合は,`CONGRATULATIONS_ORIGIN=https://kakomonn-congratulations.expgolem-lab.workers.dev`を設定して`node tests/browser.mjs`を実行します.
 
 ## 権利表記
 

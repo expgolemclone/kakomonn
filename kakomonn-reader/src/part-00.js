@@ -23,7 +23,7 @@
   const SYNC_API_URL =
     "https://kakomonn-count-sync.expgolem-lab.workers.dev";
   const CONGRATULATIONS_URL =
-    "https://kakomonn-congratulations.vercel.app/";
+    "https://kakomonn-congratulations.expgolem-lab.workers.dev/";
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
   const PENDING_CORRECT_KEY = "kakomonn-reader.pending-correct";
   const PENDING_CELEBRATION_KEY = "kakomonn-reader.pending-celebration";

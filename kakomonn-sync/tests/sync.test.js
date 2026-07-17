@@ -29,6 +29,8 @@ async function resetPrimaryObject() {
   const stub = stubFor("primary");
   await runInDurableObject(stub, (_instance, durableState) => {
     durableState.storage.sql.exec("DELETE FROM processed_operations");
+    durableState.storage.sql.exec("DELETE FROM daily_history");
+    durableState.storage.sql.exec("DELETE FROM tracking_metadata");
     durableState.storage.sql.exec("DELETE FROM daily_state");
   });
 }
@@ -84,39 +86,80 @@ describe("DailyCount", () => {
     );
   });
 
-  it("migrates the capped schema without replaying its operations", async () => {
-    const stub = stubFor("legacy-migration");
+  it("migrates the current daily schema without losing state or retries", async () => {
+    const stub = stubFor("history-migration");
     await runInDurableObject(stub, (_instance, durableState) => {
-      durableState.storage.sql.exec(`
-        DROP TABLE processed_operations;
-        DROP TABLE daily_state;
-        CREATE TABLE daily_state (
-          singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-          date TEXT NOT NULL,
-          count INTEGER NOT NULL CHECK (count BETWEEN 0 AND 50)
-        );
-        CREATE TABLE processed_operations (
-          operation_id TEXT PRIMARY KEY
-        ) WITHOUT ROWID;
-      `);
+      durableState.storage.sql.exec("DROP TABLE tracking_metadata");
+      durableState.storage.sql.exec("DROP TABLE daily_history");
       durableState.storage.sql.exec(
         "INSERT INTO daily_state (singleton, date, count) VALUES (1, ?, 50)",
         "2026-07-17"
       );
       durableState.storage.sql.exec(
-        "INSERT INTO processed_operations (operation_id) VALUES (?)",
-        operationId(1)
+        `INSERT INTO processed_operations (operation_id, resulting_count)
+         VALUES (?, 50)`,
+        operationId(50)
       );
 
       initializeSchema(durableState.storage);
     });
 
-    expect(await stub.recordCorrect("2026-07-17", operationId(1))).toEqual(
-      result("2026-07-17", 50)
+    expect(await stub.recordCorrect("2026-07-17", operationId(50))).toEqual(
+      result("2026-07-17", 50, 50)
     );
-    expect(await stub.recordCorrect("2026-07-17", operationId(2))).toEqual(
+    expect(await stub.recordCorrect("2026-07-17", operationId(51))).toEqual(
       result("2026-07-17", 51)
     );
+    expect(
+      await stub.getHistory("2026-07-17", "2026-07-17", "2026-07-17")
+    ).toEqual({
+      timeZone: "Asia/Tokyo",
+      today: "2026-07-17",
+      availableFrom: "2026-07-17",
+      from: "2026-07-17",
+      to: "2026-07-17",
+      days: [{ date: "2026-07-17", count: 51 }],
+    });
+  });
+
+  it("starts migrated history today without exposing an older daily state", async () => {
+    const stub = stubFor("old-history-migration");
+    await runInDurableObject(stub, (_instance, durableState) => {
+      durableState.storage.sql.exec("DROP TABLE tracking_metadata");
+      durableState.storage.sql.exec("DROP TABLE daily_history");
+      durableState.storage.sql.exec(
+        "INSERT INTO daily_state (singleton, date, count) VALUES (1, ?, 12)",
+        "2026-07-10"
+      );
+      durableState.storage.sql.exec(
+        `INSERT INTO processed_operations (operation_id, resulting_count)
+         VALUES (?, 12)`,
+        operationId(12)
+      );
+
+      initializeSchema(durableState.storage);
+    });
+
+    expect(
+      await stub.getHistory("2026-07-18", "2026-07-10", "2026-07-18")
+    ).toEqual({
+      timeZone: "Asia/Tokyo",
+      today: "2026-07-18",
+      availableFrom: "2026-07-18",
+      from: "2026-07-10",
+      to: "2026-07-18",
+      days: [
+        { date: "2026-07-10", count: null },
+        { date: "2026-07-11", count: null },
+        { date: "2026-07-12", count: null },
+        { date: "2026-07-13", count: null },
+        { date: "2026-07-14", count: null },
+        { date: "2026-07-15", count: null },
+        { date: "2026-07-16", count: null },
+        { date: "2026-07-17", count: null },
+        { date: "2026-07-18", count: 0 },
+      ],
+    });
   });
 
   it("resets the total and idempotency keys when the date changes", async () => {
@@ -130,6 +173,29 @@ describe("DailyCount", () => {
     expect(await stub.recordCorrect("2026-07-18", id)).toEqual(
       result("2026-07-18", 1)
     );
+  });
+
+  it("archives completed days and distinguishes zero, unavailable, and future days", async () => {
+    const stub = stubFor("history");
+
+    await stub.recordCorrect("2026-07-17", operationId(1));
+    await stub.recordCorrect("2026-07-17", operationId(2));
+    expect(
+      await stub.getHistory("2026-07-19", "2026-07-16", "2026-07-20")
+    ).toEqual({
+      timeZone: "Asia/Tokyo",
+      today: "2026-07-19",
+      availableFrom: "2026-07-17",
+      from: "2026-07-16",
+      to: "2026-07-20",
+      days: [
+        { date: "2026-07-16", count: null },
+        { date: "2026-07-17", count: 2 },
+        { date: "2026-07-18", count: 0 },
+        { date: "2026-07-19", count: 0 },
+        { date: "2026-07-20", count: null },
+      ],
+    });
   });
 
   it("does not roll state back when an older request arrives late", async () => {
@@ -195,6 +261,51 @@ describe("HTTP API", () => {
     await expect(retry.json()).resolves.toEqual(
       result(initial.date, 1)
     );
+  });
+
+  it("returns an authenticated inclusive history range", async () => {
+    const countResponse = await SELF.fetch("https://example.test/v1/count", {
+      headers: AUTHORIZATION,
+    });
+    const current = await countResponse.json();
+    const response = await SELF.fetch(
+      `https://example.test/v1/history?from=${current.date}&to=${current.date}`,
+      { headers: AUTHORIZATION }
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      timeZone: "Asia/Tokyo",
+      today: current.date,
+      availableFrom: current.date,
+      from: current.date,
+      to: current.date,
+      days: [{ date: current.date, count: 0 }],
+    });
+  });
+
+  it("rejects invalid history ranges and methods", async () => {
+    const invalidRequests = [
+      "https://example.test/v1/history",
+      "https://example.test/v1/history?from=2026-02-30&to=2026-03-01",
+      "https://example.test/v1/history?from=2026-01-01&to=2026-02-01",
+      "https://example.test/v1/history?from=2026-07-01&from=2026-07-02&to=2026-07-03",
+      "https://example.test/v1/history?from=2026-07-01&to=2026-07-03&extra=1",
+    ];
+    for (const url of invalidRequests) {
+      const response = await SELF.fetch(url, { headers: AUTHORIZATION });
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: "invalid_request",
+      });
+    }
+
+    const methodResponse = await SELF.fetch(
+      "https://example.test/v1/history?from=2026-07-01&to=2026-07-07",
+      { method: "POST", headers: AUTHORIZATION }
+    );
+    expect(methodResponse.status).toBe(405);
+    expect(methodResponse.headers.get("Allow")).toBe("GET");
   });
 
   it("rejects malformed and stale correct operations", async () => {

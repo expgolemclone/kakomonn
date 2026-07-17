@@ -4,7 +4,7 @@ const PENDING_CELEBRATION_KEY = "kakomonn-reader.pending-celebration";
 const SYNC_API_ORIGIN =
   "https://kakomonn-count-sync.expgolem-lab.workers.dev";
 const CONGRATULATIONS_ORIGIN =
-  "https://kakomonn-congratulations.vercel.app";
+  "https://kakomonn-congratulations.expgolem-lab.workers.dev";
 
 async function installSyncMock(
   page,

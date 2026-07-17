@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 
 const MILESTONE_INTERVAL = 50;
 const DAILY_COUNT_OBJECT_NAME = "primary";
+const MAX_HISTORY_DAYS = 31;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const OPERATION_ID_PATTERN = /^[0-9a-f]{32}$/;
 const RESPONSE_HEADERS = {
@@ -33,6 +34,36 @@ export function getTokyoDate(date = new Date()) {
       .map((part) => [part.type, part.value])
   );
   return `${values.year}-${values.month}-${values.day}`;
+}
+
+function dateOrdinal(value) {
+  if (!DATE_PATTERN.test(value)) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    return null;
+  }
+  return Math.floor(date.getTime() / 86_400_000);
+}
+
+function isoDateFromOrdinal(ordinal) {
+  return new Date(ordinal * 86_400_000).toISOString().slice(0, 10);
+}
+
+function parseHistoryRange(from, to) {
+  const fromOrdinal = dateOrdinal(from);
+  const toOrdinal = dateOrdinal(to);
+  if (
+    fromOrdinal === null ||
+    toOrdinal === null ||
+    fromOrdinal > toOrdinal ||
+    toOrdinal - fromOrdinal + 1 > MAX_HISTORY_DAYS
+  ) {
+    return null;
+  }
+  return { from, to, fromOrdinal, toOrdinal };
 }
 
 async function secretsEqual(received, expected) {
@@ -94,7 +125,7 @@ function tableColumns(storage, tableName) {
     .map((column) => column.name);
 }
 
-function createCurrentSchema(storage) {
+function createHistorySchema(storage) {
   storage.sql.exec(`
     CREATE TABLE daily_state (
       singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -107,6 +138,14 @@ function createCurrentSchema(storage) {
         resulting_count IS NULL OR resulting_count >= 1
       )
     ) WITHOUT ROWID;
+    CREATE TABLE daily_history (
+      date TEXT PRIMARY KEY,
+      count INTEGER NOT NULL CHECK (count >= 0)
+    ) WITHOUT ROWID;
+    CREATE TABLE tracking_metadata (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      available_from TEXT NOT NULL
+    );
   `);
 }
 
@@ -119,68 +158,83 @@ function assertColumns(actual, expected, tableName) {
   }
 }
 
+function validateDailyAndOperationSchema(storage) {
+  const dailyDefinition = tableDefinition(storage, "daily_state");
+  const operationsDefinition = tableDefinition(storage, "processed_operations");
+  if (dailyDefinition === undefined || operationsDefinition === undefined) {
+    throw new Error("incomplete DailyCount schema");
+  }
+
+  assertColumns(
+    tableColumns(storage, "daily_state"),
+    ["singleton", "date", "count"],
+    "daily_state"
+  );
+  assertColumns(
+    tableColumns(storage, "processed_operations"),
+    ["operation_id", "resulting_count"],
+    "processed_operations"
+  );
+  if (!/count\s*>=\s*0/i.test(dailyDefinition)) {
+    throw new Error("unsupported daily_state schema");
+  }
+}
+
+function validateHistorySchema(storage) {
+  validateDailyAndOperationSchema(storage);
+  if (
+    tableDefinition(storage, "daily_history") === undefined ||
+    tableDefinition(storage, "tracking_metadata") === undefined
+  ) {
+    throw new Error("incomplete history schema");
+  }
+  assertColumns(
+    tableColumns(storage, "daily_history"),
+    ["date", "count"],
+    "daily_history"
+  );
+  assertColumns(
+    tableColumns(storage, "tracking_metadata"),
+    ["singleton", "available_from"],
+    "tracking_metadata"
+  );
+}
+
 export function initializeSchema(storage) {
   storage.transactionSync(() => {
-    const dailyDefinition = tableDefinition(storage, "daily_state");
-    const operationsDefinition = tableDefinition(
-      storage,
-      "processed_operations"
-    );
+    const definitions = [
+      "daily_state",
+      "processed_operations",
+      "daily_history",
+      "tracking_metadata",
+    ].map((tableName) => tableDefinition(storage, tableName));
 
-    if (dailyDefinition === undefined && operationsDefinition === undefined) {
-      createCurrentSchema(storage);
-      return;
-    }
-    if (dailyDefinition === undefined || operationsDefinition === undefined) {
-      throw new Error("incomplete DailyCount schema");
-    }
-
-    assertColumns(
-      tableColumns(storage, "daily_state"),
-      ["singleton", "date", "count"],
-      "daily_state"
-    );
-    const operationColumns = tableColumns(storage, "processed_operations");
-    if (
-      operationColumns.length === 2 &&
-      operationColumns[0] === "operation_id" &&
-      operationColumns[1] === "resulting_count" &&
-      /count\s*>=\s*0/i.test(dailyDefinition)
-    ) {
+    if (definitions.every((definition) => definition === undefined)) {
+      createHistorySchema(storage);
       return;
     }
 
-    const isLegacySchema =
-      operationColumns.length === 1 &&
-      operationColumns[0] === "operation_id" &&
-      /count\s+BETWEEN\s+0\s+AND\s+50/i.test(dailyDefinition);
-    if (!isLegacySchema) {
-      throw new Error("unsupported DailyCount schema");
+    const hasDailySchema = definitions[0] !== undefined && definitions[1] !== undefined;
+    const hasHistorySchema = definitions[2] !== undefined && definitions[3] !== undefined;
+    if (hasDailySchema && !hasHistorySchema) {
+      validateDailyAndOperationSchema(storage);
+      storage.sql.exec(`
+        CREATE TABLE daily_history (
+          date TEXT PRIMARY KEY,
+          count INTEGER NOT NULL CHECK (count >= 0)
+        ) WITHOUT ROWID;
+        CREATE TABLE tracking_metadata (
+          singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+          available_from TEXT NOT NULL
+        );
+      `);
+      return;
     }
 
-    storage.sql.exec(`
-      CREATE TABLE daily_state_next (
-        singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-        date TEXT NOT NULL,
-        count INTEGER NOT NULL CHECK (count >= 0)
-      );
-      INSERT INTO daily_state_next (singleton, date, count)
-      SELECT singleton, date, count FROM daily_state;
-
-      CREATE TABLE processed_operations_next (
-        operation_id TEXT PRIMARY KEY,
-        resulting_count INTEGER CHECK (
-          resulting_count IS NULL OR resulting_count >= 1
-        )
-      ) WITHOUT ROWID;
-      INSERT INTO processed_operations_next (operation_id, resulting_count)
-      SELECT operation_id, NULL FROM processed_operations;
-
-      DROP TABLE processed_operations;
-      DROP TABLE daily_state;
-      ALTER TABLE daily_state_next RENAME TO daily_state;
-      ALTER TABLE processed_operations_next RENAME TO processed_operations;
-    `);
+    if (!definitions.every((definition) => definition !== undefined)) {
+      throw new Error("incomplete DailyCount history schema");
+    }
+    validateHistorySchema(storage);
   });
 }
 
@@ -200,12 +254,33 @@ export class DailyCount extends DurableObject {
     });
   }
 
+  trackingStart() {
+    return this.ctx.storage.sql
+      .exec(
+        "SELECT available_from FROM tracking_metadata WHERE singleton = 1"
+      )
+      .toArray()[0]?.available_from;
+  }
+
+  ensureTrackingStart(date) {
+    const availableFrom = this.trackingStart();
+    if (availableFrom !== undefined) {
+      return availableFrom;
+    }
+    this.ctx.storage.sql.exec(
+      "INSERT INTO tracking_metadata (singleton, available_from) VALUES (1, ?)",
+      date
+    );
+    return date;
+  }
+
   ensureDate(date) {
     const existing = this.ctx.storage.sql
       .exec("SELECT date, count FROM daily_state WHERE singleton = 1")
       .toArray()[0];
 
     if (existing?.date === date) {
+      this.ensureTrackingStart(date);
       return { state: existing, stale: false };
     }
 
@@ -213,18 +288,33 @@ export class DailyCount extends DurableObject {
       return { state: existing, stale: true };
     }
 
+    const availableFrom = this.trackingStart();
+    if (existing !== undefined && availableFrom !== undefined) {
+      this.ctx.storage.sql.exec(
+        "INSERT INTO daily_history (date, count) VALUES (?, ?)",
+        existing.date,
+        existing.count
+      );
+    }
+    this.ensureTrackingStart(date);
     this.ctx.storage.sql.exec("DELETE FROM processed_operations");
-    this.ctx.storage.sql.exec(
-      `INSERT INTO daily_state (singleton, date, count)
-       VALUES (1, ?, 0)
-       ON CONFLICT (singleton) DO UPDATE SET date = excluded.date, count = 0`,
-      date
-    );
+
+    if (existing === undefined) {
+      this.ctx.storage.sql.exec(
+        "INSERT INTO daily_state (singleton, date, count) VALUES (1, ?, 0)",
+        date
+      );
+    } else {
+      this.ctx.storage.sql.exec(
+        "UPDATE daily_state SET date = ?, count = 0 WHERE singleton = 1",
+        date
+      );
+    }
     return { state: { date, count: 0 }, stale: false };
   }
 
   getCount(date) {
-    if (!DATE_PATTERN.test(date)) {
+    if (dateOrdinal(date) === null) {
       throw new TypeError("invalid date");
     }
 
@@ -233,8 +323,64 @@ export class DailyCount extends DurableObject {
     );
   }
 
+  getHistory(today, from, to) {
+    const range = parseHistoryRange(from, to);
+    if (dateOrdinal(today) === null || range === null) {
+      throw new TypeError("invalid history range");
+    }
+
+    return this.ctx.storage.transactionSync(() => {
+      const ensured = this.ensureDate(today);
+      if (ensured.stale) {
+        throw new Error("history date moved backwards");
+      }
+      const availableFrom = this.trackingStart();
+      if (availableFrom === undefined) {
+        throw new Error("tracking metadata is missing");
+      }
+
+      const counts = new Map(
+        this.ctx.storage.sql
+          .exec(
+            `SELECT date, count FROM daily_history
+             WHERE date >= ? AND date <= ?
+             ORDER BY date`,
+            from,
+            to
+          )
+          .toArray()
+          .map((row) => [row.date, row.count])
+      );
+      if (ensured.state.date >= from && ensured.state.date <= to) {
+        counts.set(ensured.state.date, ensured.state.count);
+      }
+
+      const days = [];
+      for (
+        let ordinal = range.fromOrdinal;
+        ordinal <= range.toOrdinal;
+        ordinal += 1
+      ) {
+        const date = isoDateFromOrdinal(ordinal);
+        days.push({
+          date,
+          count:
+            date < availableFrom || date > today ? null : (counts.get(date) ?? 0),
+        });
+      }
+      return {
+        timeZone: "Asia/Tokyo",
+        today,
+        availableFrom,
+        from,
+        to,
+        days,
+      };
+    });
+  }
+
   recordCorrect(date, operationId) {
-    if (!DATE_PATTERN.test(date) || !OPERATION_ID_PATTERN.test(operationId)) {
+    if (dateOrdinal(date) === null || !OPERATION_ID_PATTERN.test(operationId)) {
       throw new TypeError("invalid correct operation");
     }
 
@@ -300,7 +446,7 @@ async function parseCorrectRequest(request) {
   if (
     body === null ||
     typeof body !== "object" ||
-    !DATE_PATTERN.test(body.date) ||
+    dateOrdinal(body.date) === null ||
     !OPERATION_ID_PATTERN.test(body.operationId)
   ) {
     return null;
@@ -309,17 +455,34 @@ async function parseCorrectRequest(request) {
   return { date: body.date, operationId: body.operationId };
 }
 
+function parseHistoryRequest(url) {
+  const keys = [...url.searchParams.keys()];
+  if (
+    keys.length !== 2 ||
+    keys.some((key) => key !== "from" && key !== "to") ||
+    url.searchParams.getAll("from").length !== 1 ||
+    url.searchParams.getAll("to").length !== 1
+  ) {
+    return null;
+  }
+  return parseHistoryRange(
+    url.searchParams.get("from"),
+    url.searchParams.get("to")
+  );
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const isCountPath = url.pathname === "/v1/count";
-    const isCorrectPath = url.pathname === "/v1/correct";
-
-    if (!isCountPath && !isCorrectPath) {
+    const routes = new Map([
+      ["/v1/count", "GET"],
+      ["/v1/history", "GET"],
+      ["/v1/correct", "POST"],
+    ]);
+    const expectedMethod = routes.get(url.pathname);
+    if (expectedMethod === undefined) {
       return errorResponse("not_found", 404);
     }
-
-    const expectedMethod = isCountPath ? "GET" : "POST";
     if (request.method !== expectedMethod) {
       return errorResponse("method_not_allowed", 405, {
         Allow: expectedMethod,
@@ -336,9 +499,15 @@ export default {
 
     const today = getTokyoDate();
     const stub = getDailyCountStub(env);
-
-    if (isCountPath) {
+    if (url.pathname === "/v1/count") {
       return jsonResponse(await stub.getCount(today));
+    }
+    if (url.pathname === "/v1/history") {
+      const range = parseHistoryRequest(url);
+      if (range === null) {
+        return errorResponse("invalid_request", 400);
+      }
+      return jsonResponse(await stub.getHistory(today, range.from, range.to));
     }
 
     const correct = await parseCorrectRequest(request);
@@ -352,14 +521,10 @@ export default {
       );
     }
 
-    const result = await stub.recordCorrect(
-      correct.date,
-      correct.operationId
-    );
+    const result = await stub.recordCorrect(correct.date, correct.operationId);
     if (result?.error === "date_changed") {
       return jsonResponse(result, 409);
     }
-
     return jsonResponse(result);
   },
 };

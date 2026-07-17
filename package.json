@@ -13,9 +13,11 @@
     "test": "npm run test:userscripts && npm run test:kakomonn-sync && npm run test:congratulations",
     "test:userscripts": "npm run build && python3 kakomonn-reader/tests/build_test.py && python3 chatgpt-initial-prompt/tests/build_test.py && python3 gai/tests/build_test.py && es-check es2020 chatgpt-initial-prompt/chatgpt-initial-prompt.user.js kakomonn-reader/kakomonn-reader.user.js gai/gai.user.js && python3 tests/userscript_metadata_test.py chatgpt-initial-prompt/chatgpt-initial-prompt.user.js kakomonn-reader/kakomonn-reader.user.js gai/gai.user.js",
     "test:kakomonn-sync": "vitest run --config kakomonn-sync/vitest.config.mjs",
+    "test:kakomonn-dashboard": "node kakomonn-sync/tests/dashboard_e2e_test.js",
     "test:congratulations": "npm --prefix congratulations test",
-    "test:smoke": "node chatgpt-initial-prompt/tests/smoke_test.js && node kakomonn-reader/tests/smoke_test.js && node kakomonn-reader/tests/count_smoke_test.js && node gai/tests/smoke_test.js",
-    "deploy:kakomonn-sync": "wrangler deploy --config kakomonn-sync/wrangler.jsonc"
+    "test:smoke": "node chatgpt-initial-prompt/tests/smoke_test.js && node kakomonn-reader/tests/smoke_test.js && node kakomonn-reader/tests/count_smoke_test.js && node kakomonn-sync/tests/dashboard_e2e_test.js && node gai/tests/smoke_test.js",
+    "deploy:kakomonn-sync": "wrangler deploy --config kakomonn-sync/wrangler.jsonc",
+    "deploy:congratulations": "npm --prefix congratulations run build && wrangler deploy --config congratulations/wrangler.jsonc"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.18.6",

@@ -8,7 +8,7 @@
     "build:chatgpt-initial-prompt": "python3 chatgpt-initial-prompt/build.py",
     "build:gai": "python3 gai/build.py",
     "test": "npm run test:userscripts",
-    "test:userscripts": "npm run build && python3 chatgpt-initial-prompt/tests/build_test.py && python3 gai/tests/build_test.py && es-check es2020 chatgpt-initial-prompt/chatgpt-initial-prompt.user.js kakomonn-reader/kakomonn-reader.user.js gai/gai.user.js && python3 tests/userscript_metadata_test.py chatgpt-initial-prompt/chatgpt-initial-prompt.user.js kakomonn-reader/kakomonn-reader.user.js gai/gai.user.js",
+    "test:userscripts": "npm run build && python3 kakomonn-reader/tests/build_test.py && python3 chatgpt-initial-prompt/tests/build_test.py && python3 gai/tests/build_test.py && es-check es2020 chatgpt-initial-prompt/chatgpt-initial-prompt.user.js kakomonn-reader/kakomonn-reader.user.js gai/gai.user.js && python3 tests/userscript_metadata_test.py chatgpt-initial-prompt/chatgpt-initial-prompt.user.js kakomonn-reader/kakomonn-reader.user.js gai/gai.user.js",
     "test:smoke": "node chatgpt-initial-prompt/tests/smoke_test.js && node kakomonn-reader/tests/smoke_test.js && node kakomonn-reader/tests/count_smoke_test.js && node gai/tests/smoke_test.js"
   },
   "devDependencies": {

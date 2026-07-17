@@ -26,7 +26,7 @@ def main() -> None:
     if "// @version" in output:
         raise RuntimeError("userscript version metadata must not be added")
 
-    OUTPUT_PATH.write_text(output, encoding="utf-8")
+    OUTPUT_PATH.write_bytes(output.encode("utf-8"))
     print(OUTPUT_PATH)
 
 

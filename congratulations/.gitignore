@@ -1,4 +1,7 @@
 node_modules/
+dist/
 preview.png
 mobile-preview.png
 tests/browser-result.json
+sensational/study-complete/preview.png
+sensational/study-complete/preview-mobile.png

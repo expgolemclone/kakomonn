@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         過去問50問＋連続自動読み上げ
+// @name         過去問マイルストーン＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @description  問題文と解説の読み上げ, コピー, 端末間で共有する日次50問カウントを提供します.
+// @description  問題文と解説の読み上げ, コピー, 端末間で共有する日次正解数と50問ごとの祝福を提供します.
 // @match        https://chushoks.kakomonn.com/*
 // @connect      kakomonn-count-sync.expgolem-lab.workers.dev
 // @run-at       document-end
@@ -19,11 +19,14 @@
     return;
   }
 
-  const GOAL = 50;
+  const MILESTONE_INTERVAL = 50;
   const SYNC_API_URL =
     "https://kakomonn-count-sync.expgolem-lab.workers.dev";
+  const CONGRATULATIONS_URL =
+    "https://kakomonn-congratulations.vercel.app/";
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
   const PENDING_CORRECT_KEY = "kakomonn-reader.pending-correct";
+  const PENDING_CELEBRATION_KEY = "kakomonn-reader.pending-celebration";
   const START_PARAMETER = "count50";
   const SYNC_TIMEOUT_MS = 15000;
   const FRAME_LOAD_DELAY_MS = 900;
@@ -66,7 +69,6 @@
   let frameMutationObserver = null;
   let lastExplanationText = "";
   let currentQuestionText = "";
-  let goalCompleted = false;
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
   let allowNextQuestionClick = false;
@@ -77,6 +79,8 @@
   let syncInProgress = false;
   let syncPromise = null;
   let pendingCorrect = null;
+  let pendingCelebration = null;
+  let celebrationTransitionPromise = null;
 
   const initialURL = new URL(location.href);
   if (initialURL.searchParams.get(START_PARAMETER) === "start") {

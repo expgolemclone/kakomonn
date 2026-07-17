@@ -1,28 +1,9 @@
 import { chromium } from 'playwright';
-import { readFile } from 'node:fs/promises';
-import { resolve, dirname } from 'node:path';
+import { resolve } from 'node:path';
 
-const entry = resolve('dist/index.html');
-const distDir = dirname(entry);
-let html = await readFile(entry, 'utf8');
+import { startStaticServer } from '../../../tests/server-helper.mjs';
 
-const cssHref = html.match(/<link[^>]+href="([^"]+\.css)"[^>]*>/)?.[1];
-const scriptSrc = html.match(/<script[^>]+src="([^"]+\.js)"[^>]*><\/script>/)?.[1];
-
-if (!cssHref || !scriptSrc) {
-  throw new Error('Built CSS or JavaScript asset was not found in dist/index.html');
-}
-
-const assetPath = (path) => resolve(distDir, path.replace(/^\.\//, ''));
-const [css, javascript] = await Promise.all([
-  readFile(assetPath(cssHref), 'utf8'),
-  readFile(assetPath(scriptSrc), 'utf8'),
-]);
-
-html = html
-  .replace(/<link[^>]+href="[^"]+\.css"[^>]*>/, `<style>${css}</style>`)
-  .replace(/<script[^>]+src="[^"]+\.js"[^>]*><\/script>/, `<script type="module">${javascript}<\/script>`);
-
+const server = await startStaticServer();
 const browser = await chromium.launch({
   headless: true,
 });
@@ -34,7 +15,10 @@ async function openPage({ viewport, reducedMotion }) {
     if (message.type() === 'error') browserErrors.push(message.text());
   });
   page.on('pageerror', (error) => browserErrors.push(error.message));
-  await page.setContent(html, { waitUntil: 'load', timeout: 15000 });
+  await page.goto(`${server.origin}/sensational/study-complete/`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 15000,
+  });
   await page.waitForSelector('[data-burst]');
   await page.waitForFunction(() => document.querySelectorAll('.confetti').length === 84);
   await page.waitForFunction(() => document.querySelectorAll('.sunburst i').length === 28);
@@ -188,13 +172,17 @@ try {
   const motion = await verifyMotion();
   const desktop = await verifyStatic({
     viewport: { width: 1440, height: 1000 },
-    screenshot: 'preview.png',
+    screenshot: resolve('sensational/study-complete/preview.png'),
   });
   const mobile = await verifyStatic({
     viewport: { width: 390, height: 844 },
-    screenshot: 'preview-mobile.png',
+    screenshot: resolve('sensational/study-complete/preview-mobile.png'),
   });
   console.log(JSON.stringify({ motion, desktop, mobile }, null, 2));
 } finally {
   await browser.close();
+  await server.stop();
+  if (server.getStderr() !== '') {
+    throw new Error(server.getStderr());
+  }
 }

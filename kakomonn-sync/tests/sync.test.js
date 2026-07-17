@@ -1,12 +1,24 @@
 import { env, runInDurableObject, SELF } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import worker, { getTokyoDate } from "../src/index.js";
+import worker, { getTokyoDate, initializeSchema } from "../src/index.js";
 
 const TOKEN = "test-sync-token";
 const AUTHORIZATION = { Authorization: `Bearer ${TOKEN}` };
+const MILESTONE_INTERVAL = 50;
 
 function operationId(value) {
   return value.toString(16).padStart(32, "0");
+}
+
+function state(date, count) {
+  return { date, count, milestoneInterval: MILESTONE_INTERVAL };
+}
+
+function result(date, count, completedMilestone = null) {
+  return {
+    state: state(date, count),
+    completedMilestone,
+  };
 }
 
 function stubFor(name) {
@@ -15,9 +27,9 @@ function stubFor(name) {
 
 async function resetPrimaryObject() {
   const stub = stubFor("primary");
-  await runInDurableObject(stub, (_instance, state) => {
-    state.storage.sql.exec("DELETE FROM processed_operations");
-    state.storage.sql.exec("DELETE FROM daily_state");
+  await runInDurableObject(stub, (_instance, durableState) => {
+    durableState.storage.sql.exec("DELETE FROM processed_operations");
+    durableState.storage.sql.exec("DELETE FROM daily_state");
   });
 }
 
@@ -27,36 +39,84 @@ describe("DailyCount", () => {
   it("adds distinct operations and treats a retry as idempotent", async () => {
     const stub = stubFor("idempotency");
 
-    expect(await stub.recordCorrect("2026-07-17", operationId(1))).toEqual({
-      date: "2026-07-17",
-      count: 1,
-      goal: 50,
-    });
-    expect(await stub.recordCorrect("2026-07-17", operationId(1))).toEqual({
-      date: "2026-07-17",
-      count: 1,
-      goal: 50,
-    });
-    expect(await stub.recordCorrect("2026-07-17", operationId(2))).toEqual({
-      date: "2026-07-17",
-      count: 2,
-      goal: 50,
-    });
+    expect(await stub.recordCorrect("2026-07-17", operationId(1))).toEqual(
+      result("2026-07-17", 1)
+    );
+    expect(await stub.recordCorrect("2026-07-17", operationId(1))).toEqual(
+      result("2026-07-17", 1)
+    );
+    expect(await stub.recordCorrect("2026-07-17", operationId(2))).toEqual(
+      result("2026-07-17", 2)
+    );
   });
 
-  it("serializes concurrent additions and caps the daily total", async () => {
+  it("returns the same completed milestone when its operation is retried", async () => {
+    const stub = stubFor("milestone-retry");
+    for (let index = 1; index < 50; index += 1) {
+      await stub.recordCorrect("2026-07-17", operationId(index));
+    }
+
+    const milestoneId = operationId(50);
+    expect(await stub.recordCorrect("2026-07-17", milestoneId)).toEqual(
+      result("2026-07-17", 50, 50)
+    );
+    expect(await stub.recordCorrect("2026-07-17", milestoneId)).toEqual(
+      result("2026-07-17", 50, 50)
+    );
+  });
+
+  it("serializes concurrent additions without capping the daily total", async () => {
     const stub = stubFor("concurrency");
-    const operations = Array.from({ length: 60 }, (_value, index) =>
-      stub.recordCorrect("2026-07-17", operationId(index + 1))
+    const results = await Promise.all(
+      Array.from({ length: 150 }, (_value, index) =>
+        stub.recordCorrect("2026-07-17", operationId(index + 1))
+      )
     );
 
-    await Promise.all(operations);
+    expect(
+      results
+        .map((entry) => entry.completedMilestone)
+        .filter((milestone) => milestone !== null)
+        .sort((left, right) => left - right)
+    ).toEqual([50, 100, 150]);
+    expect(await stub.getCount("2026-07-17")).toEqual(
+      state("2026-07-17", 150)
+    );
+  });
 
-    expect(await stub.getCount("2026-07-17")).toEqual({
-      date: "2026-07-17",
-      count: 50,
-      goal: 50,
+  it("migrates the capped schema without replaying its operations", async () => {
+    const stub = stubFor("legacy-migration");
+    await runInDurableObject(stub, (_instance, durableState) => {
+      durableState.storage.sql.exec(`
+        DROP TABLE processed_operations;
+        DROP TABLE daily_state;
+        CREATE TABLE daily_state (
+          singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+          date TEXT NOT NULL,
+          count INTEGER NOT NULL CHECK (count BETWEEN 0 AND 50)
+        );
+        CREATE TABLE processed_operations (
+          operation_id TEXT PRIMARY KEY
+        ) WITHOUT ROWID;
+      `);
+      durableState.storage.sql.exec(
+        "INSERT INTO daily_state (singleton, date, count) VALUES (1, ?, 50)",
+        "2026-07-17"
+      );
+      durableState.storage.sql.exec(
+        "INSERT INTO processed_operations (operation_id) VALUES (?)",
+        operationId(1)
+      );
+
+      initializeSchema(durableState.storage);
     });
+
+    expect(await stub.recordCorrect("2026-07-17", operationId(1))).toEqual(
+      result("2026-07-17", 50)
+    );
+    expect(await stub.recordCorrect("2026-07-17", operationId(2))).toEqual(
+      result("2026-07-17", 51)
+    );
   });
 
   it("resets the total and idempotency keys when the date changes", async () => {
@@ -64,33 +124,25 @@ describe("DailyCount", () => {
     const id = operationId(1);
 
     await stub.recordCorrect("2026-07-17", id);
-    expect(await stub.getCount("2026-07-18")).toEqual({
-      date: "2026-07-18",
-      count: 0,
-      goal: 50,
-    });
-    expect(await stub.recordCorrect("2026-07-18", id)).toEqual({
-      date: "2026-07-18",
-      count: 1,
-      goal: 50,
-    });
+    expect(await stub.getCount("2026-07-18")).toEqual(
+      state("2026-07-18", 0)
+    );
+    expect(await stub.recordCorrect("2026-07-18", id)).toEqual(
+      result("2026-07-18", 1)
+    );
   });
 
   it("does not roll state back when an older request arrives late", async () => {
     const stub = stubFor("late-old-request");
 
     await stub.recordCorrect("2026-07-18", operationId(1));
-    expect(
-      await stub.recordCorrect("2026-07-17", operationId(2))
-    ).toEqual({
+    expect(await stub.recordCorrect("2026-07-17", operationId(2))).toEqual({
       error: "date_changed",
-      state: { date: "2026-07-18", count: 1, goal: 50 },
+      state: state("2026-07-18", 1),
     });
-    expect(await stub.getCount("2026-07-17")).toEqual({
-      date: "2026-07-18",
-      count: 1,
-      goal: 50,
-    });
+    expect(await stub.getCount("2026-07-17")).toEqual(
+      state("2026-07-18", 1)
+    );
   });
 });
 
@@ -132,33 +184,28 @@ describe("HTTP API", () => {
       }),
     };
 
-    const first = await SELF.fetch(
-      "https://example.test/v1/correct",
-      request
-    );
-    const retry = await SELF.fetch(
-      "https://example.test/v1/correct",
-      request
-    );
+    const first = await SELF.fetch("https://example.test/v1/correct", request);
+    const retry = await SELF.fetch("https://example.test/v1/correct", request);
 
     expect(first.status).toBe(200);
-    await expect(first.json()).resolves.toEqual({ ...initial, count: 1 });
+    await expect(first.json()).resolves.toEqual(
+      result(initial.date, 1)
+    );
     expect(retry.status).toBe(200);
-    await expect(retry.json()).resolves.toEqual({ ...initial, count: 1 });
+    await expect(retry.json()).resolves.toEqual(
+      result(initial.date, 1)
+    );
   });
 
   it("rejects malformed and stale correct operations", async () => {
-    const malformed = await SELF.fetch(
-      "https://example.test/v1/correct",
-      {
-        method: "POST",
-        headers: {
-          ...AUTHORIZATION,
-          "Content-Type": "application/json",
-        },
-        body: "{}",
-      }
-    );
+    const malformed = await SELF.fetch("https://example.test/v1/correct", {
+      method: "POST",
+      headers: {
+        ...AUTHORIZATION,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    });
     const stale = await SELF.fetch("https://example.test/v1/correct", {
       method: "POST",
       headers: {
@@ -178,7 +225,7 @@ describe("HTTP API", () => {
     expect(stale.status).toBe(409);
     expect(await stale.json()).toMatchObject({
       error: "date_changed",
-      state: { count: 0, goal: 50 },
+      state: { count: 0, milestoneInterval: 50 },
     });
   });
 });

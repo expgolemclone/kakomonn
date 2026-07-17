@@ -159,7 +159,10 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
     const frame = await getQuestionFrame(page);
     await page.locator("#kakomonn-reader-count").waitFor({ state: "visible" });
     await waitForReaderReady(page);
-    assert.equal(await page.locator("#kakomonn-reader-count").innerText(), "0/50");
+    assert.equal(
+      await page.locator("#kakomonn-reader-count").innerText(),
+      "0問,次は50問",
+    );
 
     await submitAnswer(frame, answerText);
     console.log(JSON.stringify({ phase: "answer-submitted", answerText }));
@@ -177,13 +180,18 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
 
     if (expectedCount === 1) {
       await page.waitForFunction(
-        () => document.querySelector("#kakomonn-reader-count")?.textContent === "1/50",
+        () =>
+          document.querySelector("#kakomonn-reader-count")?.textContent ===
+          "1問,次は50問",
         null,
         { timeout: 10_000 },
       );
     } else {
       await page.waitForTimeout(1_500);
-      assert.equal(await page.locator("#kakomonn-reader-count").innerText(), "0/50");
+      assert.equal(
+        await page.locator("#kakomonn-reader-count").innerText(),
+        "0問,次は50問",
+      );
     }
 
     assert.equal(await readStoredCount(page), expectedCount);

@@ -1,3 +1,5 @@
+import { gsap } from "gsap";
+
 const root = document.querySelector(".celebration");
 const status = document.querySelector("#status");
 const title = document.querySelector("#hero-title");
@@ -9,13 +11,6 @@ if (!root || !status || !title || !replayButton || !boostButton || !confettiLaye
   throw new Error("Required celebration DOM nodes are missing.");
 }
 
-if (!window.gsap) {
-  root.classList.add("is-error");
-  status.textContent = "GSAPを読み込めませんでした.依存ファイルを確認してください.";
-  throw new Error("GSAP failed to load.");
-}
-
-const { gsap } = window;
 const TITLE_TEXT = "CONGRATULATIONS!!!";
 const CONFETTI_COLORS = ["#ff5aa9", "#54d7ff", "#ffe889", "#ffffff", "#bd8cff"];
 let introTimeline;

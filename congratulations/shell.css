@@ -1,0 +1,168 @@
+:root {
+  color: #152642;
+  background: #152642;
+  font-family: "Yu Gothic UI", "Hiragino Sans", system-ui, sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-width: 320px;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+button,
+iframe {
+  font: inherit;
+}
+
+.stage,
+#celebration-frame {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#celebration-frame {
+  z-index: 1;
+  border: 0;
+  background: #fff;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+
+html[data-state="ready"] #celebration-frame {
+  opacity: 1;
+}
+
+.loading,
+.error-panel {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  z-index: 0;
+  margin: 0;
+  color: #f5f1e8;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  transform: translate(-50%, -50%);
+}
+
+.error-panel {
+  z-index: 4;
+  width: min(34rem, calc(100% - 2rem));
+  padding: 1.4rem;
+  border: 2px solid #d74336;
+  background: #f5f1e8;
+  color: #152642;
+  transform: translate(-50%, -50%) rotate(-0.5deg);
+}
+
+.error-panel h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.2rem;
+}
+
+.error-panel p {
+  margin: 0;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 0.82rem;
+}
+
+.return-ticket {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 3;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: stretch;
+  filter: drop-shadow(0 8px 22px rgb(21 38 66 / 0.28));
+}
+
+.milestone-label,
+.return-button {
+  min-height: 3.15rem;
+  border: 0;
+}
+
+.milestone-label {
+  display: grid;
+  place-items: center;
+  padding: 0.7rem 1rem;
+  border: 2px solid #152642;
+  border-right: 0;
+  background:
+    radial-gradient(circle at right center, transparent 0 5px, #f5f1e8 5.5px)
+      right center / 100% 16px repeat-y,
+    #f5f1e8;
+  color: #d74336;
+  font-family: "Arial Narrow", "Yu Gothic UI", sans-serif;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.return-button {
+  position: relative;
+  padding: 0.7rem 1.1rem;
+  border: 2px solid #152642;
+  background: #f6c84c;
+  color: #152642;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.return-button::after {
+  content: "→";
+  display: inline-block;
+  margin-left: 0.65rem;
+  transition: transform 150ms ease-out;
+}
+
+.return-button:hover::after {
+  transform: translateX(0.25rem);
+}
+
+.return-button:focus-visible {
+  outline: 4px solid #fff;
+  outline-offset: 3px;
+}
+
+html[data-state="error"] .return-ticket,
+html[data-state="error"] #celebration-frame,
+html[data-state="ready"] .loading {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .return-ticket {
+    right: max(0.6rem, env(safe-area-inset-right));
+    bottom: max(0.6rem, env(safe-area-inset-bottom));
+    left: max(0.6rem, env(safe-area-inset-left));
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  }
+
+  .milestone-label,
+  .return-button {
+    min-height: 3rem;
+    padding-inline: 0.65rem;
+    font-size: 0.78rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #celebration-frame,
+  .return-button::after {
+    transition: none;
+  }
+}

@@ -1,7 +1,10 @@
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const PENDING_CORRECT_KEY = "kakomonn-reader.pending-correct";
+const PENDING_CELEBRATION_KEY = "kakomonn-reader.pending-celebration";
 const SYNC_API_ORIGIN =
   "https://kakomonn-count-sync.expgolem-lab.workers.dev";
+const CONGRATULATIONS_ORIGIN =
+  "https://kakomonn-congratulations.vercel.app";
 
 async function installSyncMock(
   page,
@@ -11,7 +14,8 @@ async function installSyncMock(
     token = "test-sync-token",
     configured = true,
     pendingCorrect = null,
-    processedOperationIds = [],
+    pendingCelebration = null,
+    processedOperations = [],
     userscriptsPromise = false,
   } = {},
 ) {
@@ -22,10 +26,12 @@ async function installSyncMock(
       expectedToken,
       hasStoredToken,
       initialPendingCorrect,
-      initialProcessedOperationIds,
+      initialPendingCelebration,
+      initialProcessedOperations,
       returnsPromise,
       tokenKey,
       pendingKey,
+      celebrationKey,
       expectedOrigin,
     }) => {
       const values = new Map();
@@ -35,8 +41,16 @@ async function installSyncMock(
       if (initialPendingCorrect !== null) {
         values.set(pendingKey, initialPendingCorrect);
       }
+      if (initialPendingCelebration !== null) {
+        values.set(celebrationKey, initialPendingCelebration);
+      }
 
-      const processedOperations = new Set(initialProcessedOperationIds);
+      const processedOperationResults = new Map(
+        initialProcessedOperations.map(({ operationId, resultingCount }) => [
+          operationId,
+          resultingCount,
+        ])
+      );
       const mock = {
         count: initialCount,
         date: initialDate,
@@ -135,7 +149,7 @@ async function installSyncMock(
               respond(200, {
                 date: mock.date,
                 count: mock.count,
-                goal: 50,
+                milestoneInterval: 50,
               });
               return;
             }
@@ -144,7 +158,11 @@ async function installSyncMock(
               if (call.body?.date !== mock.date) {
                 respond(409, {
                   error: "date_changed",
-                  state: { date: mock.date, count: mock.count, goal: 50 },
+                  state: {
+                    date: mock.date,
+                    count: mock.count,
+                    milestoneInterval: 50,
+                  },
                 });
                 return;
               }
@@ -154,9 +172,11 @@ async function installSyncMock(
                 respond(400, { error: "invalid_request" });
                 return;
               }
-              if (!processedOperations.has(operationId) && mock.count < 50) {
-                processedOperations.add(operationId);
+              let resultingCount = processedOperationResults.get(operationId);
+              if (resultingCount === undefined) {
                 mock.count += 1;
+                resultingCount = mock.count;
+                processedOperationResults.set(operationId, resultingCount);
               }
 
               if (mock.commitThenFailNextCorrect) {
@@ -166,9 +186,15 @@ async function installSyncMock(
               }
 
               respond(200, {
-                date: mock.date,
-                count: mock.count,
-                goal: 50,
+                state: {
+                  date: mock.date,
+                  count: mock.count,
+                  milestoneInterval: 50,
+                },
+                completedMilestone:
+                  resultingCount > 0 && resultingCount % 50 === 0
+                    ? resultingCount
+                    : null,
               });
               return;
             }
@@ -202,10 +228,12 @@ async function installSyncMock(
       expectedToken: token,
       hasStoredToken: configured,
       initialPendingCorrect: pendingCorrect,
-      initialProcessedOperationIds: processedOperationIds,
+      initialPendingCelebration: pendingCelebration,
+      initialProcessedOperations: processedOperations,
       returnsPromise: userscriptsPromise,
       tokenKey: SYNC_TOKEN_KEY,
       pendingKey: PENDING_CORRECT_KEY,
+      celebrationKey: PENDING_CELEBRATION_KEY,
       expectedOrigin: SYNC_API_ORIGIN,
     },
   );
@@ -213,6 +241,8 @@ async function installSyncMock(
 
 module.exports = {
   installSyncMock,
+  CONGRATULATIONS_ORIGIN,
+  PENDING_CELEBRATION_KEY,
   PENDING_CORRECT_KEY,
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,

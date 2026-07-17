@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 
-const GOAL = 50;
+const MILESTONE_INTERVAL = 50;
 const DAILY_COUNT_OBJECT_NAME = "primary";
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const OPERATION_ID_PATTERN = /^[0-9a-f]{32}$/;
@@ -74,24 +74,129 @@ function parseStateRow(row) {
   return {
     date: row.date,
     count: row.count,
-    goal: GOAL,
+    milestoneInterval: MILESTONE_INTERVAL,
   };
+}
+
+function tableDefinition(storage, tableName) {
+  return storage.sql
+    .exec(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+      tableName
+    )
+    .toArray()[0]?.sql;
+}
+
+function tableColumns(storage, tableName) {
+  return storage.sql
+    .exec(`PRAGMA table_info(${tableName})`)
+    .toArray()
+    .map((column) => column.name);
+}
+
+function createCurrentSchema(storage) {
+  storage.sql.exec(`
+    CREATE TABLE daily_state (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      date TEXT NOT NULL,
+      count INTEGER NOT NULL CHECK (count >= 0)
+    );
+    CREATE TABLE processed_operations (
+      operation_id TEXT PRIMARY KEY,
+      resulting_count INTEGER CHECK (
+        resulting_count IS NULL OR resulting_count >= 1
+      )
+    ) WITHOUT ROWID;
+  `);
+}
+
+function assertColumns(actual, expected, tableName) {
+  if (
+    actual.length !== expected.length ||
+    actual.some((column, index) => column !== expected[index])
+  ) {
+    throw new Error(`unexpected ${tableName} schema`);
+  }
+}
+
+export function initializeSchema(storage) {
+  storage.transactionSync(() => {
+    const dailyDefinition = tableDefinition(storage, "daily_state");
+    const operationsDefinition = tableDefinition(
+      storage,
+      "processed_operations"
+    );
+
+    if (dailyDefinition === undefined && operationsDefinition === undefined) {
+      createCurrentSchema(storage);
+      return;
+    }
+    if (dailyDefinition === undefined || operationsDefinition === undefined) {
+      throw new Error("incomplete DailyCount schema");
+    }
+
+    assertColumns(
+      tableColumns(storage, "daily_state"),
+      ["singleton", "date", "count"],
+      "daily_state"
+    );
+    const operationColumns = tableColumns(storage, "processed_operations");
+    if (
+      operationColumns.length === 2 &&
+      operationColumns[0] === "operation_id" &&
+      operationColumns[1] === "resulting_count" &&
+      /count\s*>=\s*0/i.test(dailyDefinition)
+    ) {
+      return;
+    }
+
+    const isLegacySchema =
+      operationColumns.length === 1 &&
+      operationColumns[0] === "operation_id" &&
+      /count\s+BETWEEN\s+0\s+AND\s+50/i.test(dailyDefinition);
+    if (!isLegacySchema) {
+      throw new Error("unsupported DailyCount schema");
+    }
+
+    storage.sql.exec(`
+      CREATE TABLE daily_state_next (
+        singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+        date TEXT NOT NULL,
+        count INTEGER NOT NULL CHECK (count >= 0)
+      );
+      INSERT INTO daily_state_next (singleton, date, count)
+      SELECT singleton, date, count FROM daily_state;
+
+      CREATE TABLE processed_operations_next (
+        operation_id TEXT PRIMARY KEY,
+        resulting_count INTEGER CHECK (
+          resulting_count IS NULL OR resulting_count >= 1
+        )
+      ) WITHOUT ROWID;
+      INSERT INTO processed_operations_next (operation_id, resulting_count)
+      SELECT operation_id, NULL FROM processed_operations;
+
+      DROP TABLE processed_operations;
+      DROP TABLE daily_state;
+      ALTER TABLE daily_state_next RENAME TO daily_state;
+      ALTER TABLE processed_operations_next RENAME TO processed_operations;
+    `);
+  });
+}
+
+function completedMilestone(resultingCount) {
+  return Number.isSafeInteger(resultingCount) &&
+    resultingCount > 0 &&
+    resultingCount % MILESTONE_INTERVAL === 0
+    ? resultingCount
+    : null;
 }
 
 export class DailyCount extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.ctx.blockConcurrencyWhile(async () => {
-      this.ctx.storage.sql.exec(`
-        CREATE TABLE IF NOT EXISTS daily_state (
-          singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-          date TEXT NOT NULL,
-          count INTEGER NOT NULL CHECK (count BETWEEN 0 AND ${GOAL})
-        );
-        CREATE TABLE IF NOT EXISTS processed_operations (
-          operation_id TEXT PRIMARY KEY
-        ) WITHOUT ROWID;
-      `);
+      initializeSchema(this.ctx.storage);
     });
   }
 
@@ -142,34 +247,39 @@ export class DailyCount extends DurableObject {
         };
       }
 
-      const state = ensured.state;
-      if (state.count >= GOAL) {
-        return parseStateRow(state);
-      }
-
-      const inserted = this.ctx.storage.sql
+      const processed = this.ctx.storage.sql
         .exec(
-          `INSERT INTO processed_operations (operation_id)
-           VALUES (?)
-           ON CONFLICT (operation_id) DO NOTHING
-           RETURNING operation_id`,
+          `SELECT resulting_count
+           FROM processed_operations
+           WHERE operation_id = ?`,
           operationId
         )
-        .toArray();
-
-      if (inserted.length > 0) {
-        this.ctx.storage.sql.exec(
-          `UPDATE daily_state
-           SET count = MIN(?, count + 1)
-           WHERE singleton = 1`,
-          GOAL
-        );
+        .toArray()[0];
+      if (processed !== undefined) {
+        return {
+          state: parseStateRow(ensured.state),
+          completedMilestone: completedMilestone(processed.resulting_count),
+        };
       }
 
       const updated = this.ctx.storage.sql
-        .exec("SELECT date, count FROM daily_state WHERE singleton = 1")
+        .exec(
+          `UPDATE daily_state
+           SET count = count + 1
+           WHERE singleton = 1
+           RETURNING date, count`
+        )
         .toArray()[0];
-      return parseStateRow(updated);
+      this.ctx.storage.sql.exec(
+        `INSERT INTO processed_operations (operation_id, resulting_count)
+         VALUES (?, ?)`,
+        operationId,
+        updated.count
+      );
+      return {
+        state: parseStateRow(updated),
+        completedMilestone: completedMilestone(updated.count),
+      };
     });
   }
 }

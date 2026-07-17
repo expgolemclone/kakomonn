@@ -1,28 +1,58 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import assert from "node:assert/strict";
+import { access, readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL("..", import.meta.url));
-const [html, css, js] = await Promise.all([
-  readFile(resolve(root, "index.html"), "utf8"),
-  readFile(resolve(root, "styles.css"), "utf8"),
-  readFile(resolve(root, "app.js"), "utf8"),
-]);
+import {
+  parseMilestone,
+  randomIndex,
+  validateManifest,
+} from "../site-selection.js";
 
-const assertions = [
-  [html.includes("Congratulations!!!") && js.includes("CONGRATULATIONS!!!"), "title markup"],
-  [html.includes("琴葉茜 琴葉葵 © AI Inc."), "required character attribution"],
-  [html.includes("node_modules/gsap/dist/gsap.min.js"), "local GSAP dependency"],
-  [html.includes("character--akane") && html.includes("character--aoi"), "both character illustrations"],
-  [css.includes("@media (max-width: 720px)"), "responsive layout"],
-  [js.includes("gsap.timeline") && js.includes("repeat: -1"), "GSAP timelines"],
-  [js.includes("burstConfetti") && js.includes("setBoost"), "interactive celebration controls"],
-];
+const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const manifest = validateManifest(
+  JSON.parse(await readFile(resolve(projectRoot, "celebrations.json"), "utf8")),
+);
 
-for (const [passed, label] of assertions) {
-  if (!passed) {
-    throw new Error(`Smoke assertion failed: ${label}`);
-  }
+assert.equal(manifest.milestoneInterval, 50);
+assert.equal(manifest.sites.length, 5);
+assert.equal(parseMilestone("?milestone=50", 50), 50);
+assert.equal(parseMilestone("?milestone=150", 50), 150);
+assert.throws(() => parseMilestone("", 50), /positive integer/);
+assert.throws(() => parseMilestone("?milestone=51", 50), /multiple/);
+
+for (let index = 0; index < manifest.sites.length; index += 1) {
+  const values = [index];
+  const cryptoSource = {
+    getRandomValues(array) {
+      array[0] = values.shift();
+      return array;
+    },
+  };
+  assert.equal(randomIndex(manifest.sites.length, cryptoSource), index);
 }
 
-console.log(`Smoke assertions passed: ${assertions.length}`);
+const rejectionValues = [0xffff_ffff, 2];
+assert.equal(
+  randomIndex(manifest.sites.length, {
+    getRandomValues(array) {
+      array[0] = rejectionValues.shift();
+      return array;
+    },
+  }),
+  2,
+);
+
+const shellHTML = await readFile(resolve(projectRoot, "dist", "index.html"), "utf8");
+assert.match(shellHTML, /id="celebration-frame"/);
+assert.match(shellHTML, /次の50問へ/);
+
+for (const site of manifest.sites) {
+  const sourcePath = resolve(projectRoot, site.entry);
+  const outputPath = resolve(projectRoot, "dist", site.entry);
+  await Promise.all([access(sourcePath), access(outputPath)]);
+  const output = await readFile(outputPath, "utf8");
+  assert.equal(output.includes("node_modules/"), false, `${site.id} exposes node_modules`);
+}
+
+console.log(`Congratulations smoke assertions passed for ${manifest.sites.length} sites`);

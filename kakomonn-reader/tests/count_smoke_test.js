@@ -5,7 +5,9 @@ const path = require("node:path");
 
 const { chromium } = require("playwright");
 const {
+  CONGRATULATIONS_ORIGIN,
   installSyncMock,
+  PENDING_CELEBRATION_KEY,
   PENDING_CORRECT_KEY,
   SYNC_API_ORIGIN,
 } = require("./sync_mock");
@@ -40,14 +42,27 @@ function createMockBody(result) {
     <div id="js-answer-result-box"${resultClassAttribute}></div>
     <p>選択肢2は正解の選択肢となります.</p>
     <a href="#report">（訂正依頼・報告はこちら）</a>
-    <button id="next" type="button">次の問題へ</button>
+    <button id="next" type="button"
+      onclick="location.href='/questions/next'">次の問題へ</button>
   `;
 }
 
 async function preparePage(page, syncOptions = {}) {
   const errors = [];
-  page.on("pageerror", (error) => errors.push(String(error)));
-  await page.setContent("<!doctype html><html><body></body></html>");
+  page.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
+  await page.route("https://chushoks.kakomonn.com/**", (route) =>
+    route.fulfill({
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body></body></html>",
+    }),
+  );
+  await page.route(`${CONGRATULATIONS_ORIGIN}/**`, (route) =>
+    route.fulfill({
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><h1>Congratulations</h1></body></html>",
+    }),
+  );
+  await page.goto("https://chushoks.kakomonn.com/questions/current");
   await page.evaluate(() => {
     const store = new Map();
     Object.defineProperty(window, "localStorage", {
@@ -72,19 +87,28 @@ async function preparePage(page, syncOptions = {}) {
   return errors;
 }
 
+async function waitForReaderFrame(page) {
+  await page.waitForSelector("#kakomonn-reader-frame");
+  const childFrames = page
+    .frames()
+    .filter((frame) => frame !== page.mainFrame());
+  assert.equal(childFrames.length, 1);
+  const childFrame = childFrames[0];
+  await childFrame.waitForURL(
+    "https://chushoks.kakomonn.com/questions/current",
+  );
+  await childFrame.waitForLoadState("load");
+  await page.waitForTimeout(50);
+  return childFrame;
+}
+
 async function runCountCase(browser, script, result, expectedCount) {
   const context = await browser.newContext({ userAgent: edgeUserAgent });
   try {
     const page = await context.newPage();
     const errors = await preparePage(page);
     await page.addScriptTag({ content: script });
-    await page.waitForSelector("#kakomonn-reader-frame");
-
-    const childFrames = page
-      .frames()
-      .filter((frame) => frame !== page.mainFrame());
-    assert.equal(childFrames.length, 1);
-    const childFrame = childFrames[0];
+    const childFrame = await waitForReaderFrame(page);
     await childFrame.evaluate(
       (html) => {
         document.body.innerHTML = html;
@@ -95,7 +119,7 @@ async function runCountCase(browser, script, result, expectedCount) {
 
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
-      "0/50",
+      "0問,次は50問",
     );
     await childFrame.locator("#next").click();
     if (result === "unknown") {
@@ -105,12 +129,22 @@ async function runCountCase(browser, script, result, expectedCount) {
           "正誤を確認できません",
       );
     }
-    await page.waitForFunction(
-      (countText) =>
-        document.querySelector("#kakomonn-reader-count").textContent ===
-        countText,
-      expectedCount,
-    );
+    try {
+      await page.waitForFunction(
+        (countText) =>
+          document.querySelector("#kakomonn-reader-count").textContent ===
+          countText,
+        expectedCount,
+      );
+    } catch (error) {
+      error.readerState = await page.evaluate(() => ({
+        count: document.querySelector("#kakomonn-reader-count")?.textContent,
+        status: document.querySelector("#kakomonn-reader-status")?.textContent,
+        calls: JSON.stringify(window.__syncMock?.calls),
+      }));
+      error.pageErrors = errors;
+      throw error;
+    }
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
       expectedCount,
@@ -138,10 +172,7 @@ async function runRetryCase(browser, script) {
     const page = await context.newPage();
     const errors = await preparePage(page);
     await page.addScriptTag({ content: script });
-    await page.waitForSelector("#kakomonn-reader-frame");
-    const childFrame = page
-      .frames()
-      .find((candidate) => candidate !== page.mainFrame());
+    const childFrame = await waitForReaderFrame(page);
     await childFrame.evaluate(
       (html) => {
         document.body.innerHTML = html;
@@ -151,7 +182,7 @@ async function runRetryCase(browser, script) {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "0/50",
+        "0問,次は50問",
     );
     await page.evaluate(() => {
       window.__syncMock.commitThenFailNextCorrect = true;
@@ -165,14 +196,14 @@ async function runRetryCase(browser, script) {
     );
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
-      "0/50",
+      "0問,次は50問",
     );
 
     await childFrame.locator("#next").click();
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "1/50",
+        "1問,次は50問",
     );
 
     const result = await page.evaluate(() => {
@@ -202,10 +233,7 @@ async function runDoubleClickCase(browser, script) {
     const page = await context.newPage();
     const errors = await preparePage(page);
     await page.addScriptTag({ content: script });
-    await page.waitForSelector("#kakomonn-reader-frame");
-    const childFrame = page
-      .frames()
-      .find((candidate) => candidate !== page.mainFrame());
+    const childFrame = await waitForReaderFrame(page);
     await childFrame.evaluate(
       (html) => {
         document.body.innerHTML = html;
@@ -215,7 +243,7 @@ async function runDoubleClickCase(browser, script) {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "0/50",
+        "0問,次は50問",
     );
     await page.evaluate(() => {
       window.__syncMock.holdNextSetValue = true;
@@ -241,7 +269,7 @@ async function runDoubleClickCase(browser, script) {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "1/50",
+        "1問,次は50問",
     );
 
     const result = await page.evaluate(() => ({
@@ -270,10 +298,7 @@ async function runDeleteFailureCase(browser, script) {
     const page = await context.newPage();
     const errors = await preparePage(page);
     await page.addScriptTag({ content: script });
-    await page.waitForSelector("#kakomonn-reader-frame");
-    const childFrame = page
-      .frames()
-      .find((candidate) => candidate !== page.mainFrame());
+    const childFrame = await waitForReaderFrame(page);
     await childFrame.evaluate(
       (html) => {
         document.body.innerHTML = html;
@@ -283,7 +308,7 @@ async function runDeleteFailureCase(browser, script) {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "0/50",
+        "0問,次は50問",
     );
     await page.evaluate(() => {
       window.__syncMock.failNextDeleteValue = true;
@@ -300,7 +325,10 @@ async function runDeleteFailureCase(browser, script) {
       PENDING_CORRECT_KEY,
     );
     assert.match(storedPending.operationId, /^[0-9a-f]{32}$/);
-    assert.equal(await page.locator("#kakomonn-reader-count").innerText(), "1/50");
+    assert.equal(
+      await page.locator("#kakomonn-reader-count").innerText(),
+      "1問,次は50問",
+    );
 
     await childFrame.locator("#next").click();
     await page.waitForFunction(
@@ -336,10 +364,7 @@ async function runFrameChangeDuringSyncCase(browser, script) {
     const errors = await preparePage(page);
     await page.addScriptTag({ content: script });
     const frameElement = page.locator("#kakomonn-reader-frame");
-    await frameElement.waitFor({ state: "attached" });
-    const childFrame = page
-      .frames()
-      .find((candidate) => candidate !== page.mainFrame());
+    const childFrame = await waitForReaderFrame(page);
     await childFrame.evaluate(
       (html) => {
         document.body.innerHTML = html;
@@ -349,7 +374,7 @@ async function runFrameChangeDuringSyncCase(browser, script) {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "0/50",
+        "0問,次は50問",
     );
     await page.evaluate(() => {
       window.__syncMock.holdNextRequest = true;
@@ -395,10 +420,7 @@ async function runDateChangeCase(browser, script) {
     const page = await context.newPage();
     const errors = await preparePage(page);
     await page.addScriptTag({ content: script });
-    await page.waitForSelector("#kakomonn-reader-frame");
-    const childFrame = page
-      .frames()
-      .find((candidate) => candidate !== page.mainFrame());
+    const childFrame = await waitForReaderFrame(page);
     await childFrame.evaluate(
       (html) => {
         document.body.innerHTML = html;
@@ -408,7 +430,7 @@ async function runDateChangeCase(browser, script) {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "0/50",
+        "0問,次は50問",
     );
     await page.evaluate(() => {
       window.__syncMock.date = "2026-07-18";
@@ -422,7 +444,10 @@ async function runDateChangeCase(browser, script) {
         document.querySelector("#kakomonn-reader-status").textContent ===
         "前日の未同期分を破棄できません.再試行してください",
     );
-    assert.equal(await page.locator("#kakomonn-reader-count").innerText(), "4/50");
+    assert.equal(
+      await page.locator("#kakomonn-reader-count").innerText(),
+      "4問,次は50問",
+    );
     assert.notEqual(
       await page.evaluate(
         (key) => window.__getGMValue(key),
@@ -462,10 +487,7 @@ async function runReloadRetryCase(browser, script) {
     const firstPage = await context.newPage();
     const firstErrors = await preparePage(firstPage);
     await firstPage.addScriptTag({ content: script });
-    await firstPage.waitForSelector("#kakomonn-reader-frame");
-    const firstFrame = firstPage
-      .frames()
-      .find((candidate) => candidate !== firstPage.mainFrame());
+    const firstFrame = await waitForReaderFrame(firstPage);
     await firstFrame.evaluate(
       (html) => {
         document.body.innerHTML = html;
@@ -475,7 +497,7 @@ async function runReloadRetryCase(browser, script) {
     await firstPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "0/50",
+        "0問,次は50問",
     );
     await firstPage.evaluate(() => {
       window.__syncMock.commitThenFailNextCorrect = true;
@@ -503,13 +525,12 @@ async function runReloadRetryCase(browser, script) {
     const secondErrors = await preparePage(secondPage, {
       count: 1,
       pendingCorrect: restoredPending,
-      processedOperationIds: [pending.operationId],
+      processedOperations: [
+        { operationId: pending.operationId, resultingCount: 1 },
+      ],
     });
     await secondPage.addScriptTag({ content: script });
-    await secondPage.waitForSelector("#kakomonn-reader-frame");
-    const secondFrame = secondPage
-      .frames()
-      .find((candidate) => candidate !== secondPage.mainFrame());
+    const secondFrame = await waitForReaderFrame(secondPage);
     await secondFrame.evaluate(
       (html) => {
         document.body.innerHTML = html;
@@ -519,7 +540,7 @@ async function runReloadRetryCase(browser, script) {
     await secondPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "1/50",
+        "1問,次は50問",
     );
     await secondFrame.locator("#next").click();
     await secondPage.waitForFunction(
@@ -545,16 +566,122 @@ async function runReloadRetryCase(browser, script) {
   }
 }
 
-async function runGoalCase(browser, script) {
+async function runMilestoneCase(browser, script, initialCount, milestone) {
+  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  try {
+    const page = await context.newPage();
+    const errors = await preparePage(page, { count: initialCount });
+    const congratulationsRequests = [];
+    page.on("request", (request) => {
+      if (request.url().startsWith(CONGRATULATIONS_ORIGIN)) {
+        congratulationsRequests.push(request.url());
+      }
+    });
+    await page.addScriptTag({ content: script });
+    const childFrame = await waitForReaderFrame(page);
+    await childFrame.evaluate(
+      (html) => {
+        document.body.innerHTML = html;
+      },
+      createMockBody("correct"),
+    );
+    await page.waitForFunction(
+      ({ expectedCount, expectedMilestone }) =>
+        document.querySelector("#kakomonn-reader-count").textContent ===
+        `${expectedCount}問,次は${expectedMilestone}問`,
+      { expectedCount: initialCount, expectedMilestone: milestone },
+    );
+
+    await childFrame.locator("#next").click();
+    await page.waitForURL(
+      `${CONGRATULATIONS_ORIGIN}/?milestone=${milestone}`,
+    );
+    assert.deepEqual(congratulationsRequests, [
+      `${CONGRATULATIONS_ORIGIN}/?milestone=${milestone}`,
+    ]);
+
+    await page.goBack();
+    await page.waitForURL("https://chushoks.kakomonn.com/questions/next");
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
+async function runObservedMilestoneCase(browser, script) {
+  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  try {
+    const page = await context.newPage();
+    const errors = await preparePage(page, { count: 50 });
+    const congratulationsRequests = [];
+    page.on("request", (request) => {
+      if (request.url().startsWith(CONGRATULATIONS_ORIGIN)) {
+        congratulationsRequests.push(request.url());
+      }
+    });
+    await page.addScriptTag({ content: script });
+    await waitForReaderFrame(page);
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-count").textContent ===
+        "50問,次は100問",
+    );
+    await page.waitForTimeout(150);
+
+    assert.equal(
+      page.url(),
+      "https://chushoks.kakomonn.com/questions/current",
+    );
+    assert.deepEqual(congratulationsRequests, []);
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
+async function runPendingCelebrationRecoveryCase(browser, script) {
+  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  try {
+    const page = await context.newPage();
+    const errors = await preparePage(page, {
+      count: 50,
+      pendingCelebration: {
+        date: "2026-07-17",
+        milestone: 50,
+        sourcePageURL:
+          "https://chushoks.kakomonn.com/questions/current",
+      },
+    });
+    await page.addScriptTag({ content: script });
+    const childFrame = await waitForReaderFrame(page);
+    await childFrame.evaluate(
+      (html) => {
+        document.body.innerHTML = html;
+      },
+      createMockBody("correct"),
+    );
+    await childFrame.locator("#next").click();
+    await page.waitForURL(`${CONGRATULATIONS_ORIGIN}/?milestone=50`);
+
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
+async function runMilestoneStorageRetryCase(browser, script) {
   const context = await browser.newContext({ userAgent: edgeUserAgent });
   try {
     const page = await context.newPage();
     const errors = await preparePage(page, { count: 49 });
+    const congratulationsRequests = [];
+    page.on("request", (request) => {
+      if (request.url().startsWith(CONGRATULATIONS_ORIGIN)) {
+        congratulationsRequests.push(request.url());
+      }
+    });
     await page.addScriptTag({ content: script });
-    await page.waitForSelector("#kakomonn-reader-frame");
-    const childFrame = page
-      .frames()
-      .find((candidate) => candidate !== page.mainFrame());
+    const childFrame = await waitForReaderFrame(page);
     await childFrame.evaluate(
       (html) => {
         document.body.innerHTML = html;
@@ -564,22 +691,46 @@ async function runGoalCase(browser, script) {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "49/50",
+        "49問,次は50問",
     );
+    await page.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+    });
 
     await childFrame.locator("#next").click();
     await page.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+    await page.evaluate(() => {
+      window.__syncMock.failNextSetValue = true;
+      window.__syncMock.releaseHeldRequest();
+    });
+    await page.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-count").textContent ===
-        "50/50",
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "正解数を同期できません.再試行してください",
     );
 
-    assert.equal(
-      await page.locator("#kakomonn-reader-next").innerText(),
-      "50問完了",
+    const pendingCorrect = await page.evaluate(
+      (key) => window.__getGMValue(key),
+      PENDING_CORRECT_KEY,
     );
-    assert.equal(await page.locator("#kakomonn-reader-next").isDisabled(), true);
-    assert.equal(page.url().startsWith("shortcuts:"), false);
+    assert.match(pendingCorrect.operationId, /^[0-9a-f]{32}$/);
+    assert.equal(
+      await page.evaluate(
+        (key) => window.__getGMValue(key),
+        PENDING_CELEBRATION_KEY,
+      ),
+      null,
+    );
+    assert.equal(await page.evaluate(() => window.__syncMock.count), 50);
+    assert.deepEqual(congratulationsRequests, []);
+
+    await childFrame.locator("#next").click();
+    await page.waitForURL(`${CONGRATULATIONS_ORIGIN}/?milestone=50`);
+    assert.deepEqual(congratulationsRequests, [
+      `${CONGRATULATIONS_ORIGIN}/?milestone=50`,
+    ]);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
@@ -597,16 +748,21 @@ async function main() {
 
   const browser = await chromium.launch({ headless: true });
   try {
-    await runCountCase(browser, script, "correct", "1/50");
-    await runCountCase(browser, script, "incorrect", "0/50");
-    await runCountCase(browser, script, "unknown", "0/50");
+    await runCountCase(browser, script, "correct", "1問,次は50問");
+    await runCountCase(browser, script, "incorrect", "0問,次は50問");
+    await runCountCase(browser, script, "unknown", "0問,次は50問");
     await runRetryCase(browser, script);
     await runDoubleClickCase(browser, script);
     await runFrameChangeDuringSyncCase(browser, script);
     await runDeleteFailureCase(browser, script);
     await runDateChangeCase(browser, script);
     await runReloadRetryCase(browser, script);
-    await runGoalCase(browser, script);
+    await runMilestoneCase(browser, script, 49, 50);
+    await runMilestoneCase(browser, script, 99, 100);
+    await runMilestoneCase(browser, script, 149, 150);
+    await runObservedMilestoneCase(browser, script);
+    await runPendingCelebrationRecoveryCase(browser, script);
+    await runMilestoneStorageRetryCase(browser, script);
   } finally {
     await browser.close();
   }

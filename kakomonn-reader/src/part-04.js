@@ -185,13 +185,17 @@
       return;
     }
 
-    if (goalCompleted || count >= GOAL) {
-      copyButton.textContent = `${GOAL}問完了`;
+    if (pendingCelebration !== null) {
+      copyButton.textContent = "祝福を準備中";
       copyButton.disabled = true;
       return;
     }
 
-    if (navigationInProgress || !frameDocument?.body) {
+    if (
+      navigationInProgress ||
+      !frameDocument?.body ||
+      frameDocument.defaultView === null
+    ) {
       copyButton.textContent = "コピー準備中";
       copyButton.disabled = true;
       return;

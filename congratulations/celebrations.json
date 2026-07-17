@@ -1,0 +1,25 @@
+{
+  "milestoneInterval": 50,
+  "sites": [
+    {
+      "id": "kotonoha",
+      "entry": "normal/kotonoha/index.html"
+    },
+    {
+      "id": "hikakin",
+      "entry": "dance/hikakin/index.html"
+    },
+    {
+      "id": "study-complete",
+      "entry": "sensational/study-complete/index.html"
+    },
+    {
+      "id": "gsap-study",
+      "entry": "sensational/gsap-study/index.html"
+    },
+    {
+      "id": "victory-signal",
+      "entry": "sensational/victory-signal/index.html"
+    }
+  ]
+}

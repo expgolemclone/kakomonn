@@ -1,29 +1,24 @@
 # Study Complete Congratulations
 
-今日の勉強をやり切った瞬間を祝う, GSAPベースのWeb体験です.
+今日の勉強をやり切った瞬間を祝う,GSAPベースのWeb体験です.
 
-大きなCongratulationsの文字, 0から100へ到達する進捗リング, 紙吹雪, 軌道, 背景グリッド, マーキー, スクロール連動カードで, 逃げたい日にも机へ戻り, 今日の一日分を終えた達成感を表現します.
+このpageは`congratulations`直下のVite multi-page buildへ統合されています.依存packageとlockfileは上位directoryだけで管理します.
 
 ## 実行
 
 ```bash
+cd congratulations
 npm ci
-npm run dev
+npm start
 ```
 
-## 本番ビルド
+`http://127.0.0.1:4173/sensational/study-complete/`を開きます.
+
+## 検証
 
 ```bash
-npm run build
-npm run preview
-```
-
-## E2E
-
-packageで管理したChromiumを使って実行します.
-
-```bash
+cd congratulations
 npm test
 ```
 
-デスクトップとモバイルで, 進捗100, 紙吹雪, 光線, スクロール演出, 再演操作, 横方向のはみ出しがないことを確認します.
+packageで管理したPlaywrightのChromiumを使い,desktopとmobile,進捗100,紙吹雪,光線,scroll演出,再演操作,横方向のoverflowを検証します.

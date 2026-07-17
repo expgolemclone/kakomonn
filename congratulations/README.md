@@ -1,28 +1,45 @@
 # congratulations
 
-琴葉姉妹をイメージした非公式ファンメイドの祝福ページです.GSAPでタイトル,キャラクター,紙吹雪,背景,称賛メッセージを動かします.
+kakomonn-readerが当日50問ごとのmilestoneへ到達した時に表示する,静的な祝福site集です.
 
-## 実行
+root shellは登録済みsiteを均等確率で1つ選び,全画面iframeで表示します.画面下の`次の50問へ`を押すと,準備済みの次問へ戻ります.
+
+## 収録site
+
+- `normal/kotonoha`,琴葉姉妹をイメージした非公式fan-made animation.
+- `dance/hikakin`,dance形式の祝福.
+- `sensational/study-complete`,一日の学習完了を祝うGSAP体験.
+- `sensational/gsap-study`,学習の積み重ねを辿るGSAP長編.
+- `sensational/victory-signal`,editorial posterとaward ceremonyを組み合わせた演出.
+
+抽選対象は`celebrations.json`へ明示します.存在しないentry,重複ID,空のmanifestはbuild errorになります.
+
+## 開発
 
 ```bash
 cd congratulations
 npm ci
+npx playwright install chromium
 npm start
 ```
 
-ブラウザーで `http://127.0.0.1:4173` を開きます.
+`http://127.0.0.1:4173/?milestone=50`を開きます.
 
-## 検証
+## buildと検証
 
 ```bash
-npm run check
+npm run build
 npm test
 ```
 
-`npm test`は静的検査とChromiumを使うE2Eテストを実行します.
+Viteのmulti-page buildは`dist/`へ全siteを出力します.`npm test`はmanifest,全entry,desktopとmobile,共通の戻る導線をChromiumで検証します.
+
+## Vercel
+
+GitHubの`expgolemclone/browser-extensions`をimportし,Root Directoryを`congratulations`,Production Branchを`main`に設定します.`vercel.json`がbuild commandとoutput directoryを固定します.
 
 ## 権利表記
 
 琴葉茜 琴葉葵 © AI Inc.
 
-本作品は非公式のファンメイド作品です.
+該当pageは非公式のfan-made作品です.

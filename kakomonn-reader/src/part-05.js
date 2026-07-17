@@ -46,9 +46,16 @@
       return;
     }
 
-    if (goalCompleted || count >= GOAL) {
-      nextQuestionButton.textContent = `${GOAL}問完了`;
-      nextQuestionButton.disabled = true;
+    if (pendingCelebration !== null) {
+      const sourcePageActive =
+        currentFrameURL === pendingCelebration.sourcePageURL;
+      nextQuestionButton.textContent = sourcePageActive
+        ? "次の問題を準備中"
+        : "祝福を表示";
+      nextQuestionButton.disabled =
+        celebrationTransitionPromise !== null ||
+        navigationInProgress ||
+        (sourcePageActive && findNextQuestionControl() === null);
       return;
     }
 
@@ -60,15 +67,6 @@
 
     nextQuestionButton.textContent = "次の問題へ";
     nextQuestionButton.disabled = findNextQuestionControl() === null;
-  }
-
-  function completeGoal() {
-    goalCompleted = true;
-    navigationInProgress = false;
-    stopSpeech();
-    setStatus(`本日の${GOAL}問を完了`);
-    updateNextQuestionButton();
-    updateCopyButton();
   }
 
   function getCurrentAnswerResult() {
@@ -134,6 +132,85 @@
     scheduleNextQuestionReload();
   }
 
+  async function savePendingCelebration(operation, milestone) {
+    const celebration = {
+      date: operation.date,
+      milestone,
+      sourcePageURL: operation.pageURL,
+    };
+    if (!isPendingCelebration(celebration)) {
+      throw new Error("invalid pending celebration");
+    }
+
+    await GM.setValue(PENDING_CELEBRATION_KEY, celebration);
+    pendingCelebration = celebration;
+  }
+
+  function congratulationsURL(milestone) {
+    const url = new URL(CONGRATULATIONS_URL);
+    url.searchParams.set("milestone", String(milestone));
+    return url.href;
+  }
+
+  async function maybeContinuePendingCelebration() {
+    if (
+      pendingCelebration === null ||
+      !syncReady ||
+      pendingCorrect !== null ||
+      syncInProgress ||
+      nextQuestionOperationInProgress ||
+      celebrationTransitionPromise !== null
+    ) {
+      return false;
+    }
+
+    if (pendingCelebration.date !== activeCountDate) {
+      celebrationTransitionPromise = (async () => {
+        try {
+          await clearPendingCelebration();
+          setStatus("前日の祝福データを破棄しました");
+          return false;
+        } catch {
+          setStatus("前日の祝福データを破棄できません.再試行してください");
+          return false;
+        } finally {
+          celebrationTransitionPromise = null;
+          updateSyncDependentControls();
+        }
+      })();
+      return celebrationTransitionPromise;
+    }
+
+    if (currentFrameURL === pendingCelebration.sourcePageURL) {
+      if (navigationInProgress) {
+        return false;
+      }
+      proceedToNextQuestion();
+      return true;
+    }
+
+    const milestone = pendingCelebration.milestone;
+    celebrationTransitionPromise = (async () => {
+      navigationInProgress = true;
+      stopSpeech();
+      setStatus(`${milestone}問達成`);
+      updateSyncDependentControls();
+      try {
+        await clearPendingCelebration();
+        location.assign(congratulationsURL(milestone));
+        return true;
+      } catch {
+        navigationInProgress = false;
+        setStatus("祝福ページを開けません.再試行してください");
+        return false;
+      } finally {
+        celebrationTransitionPromise = null;
+        updateSyncDependentControls();
+      }
+    })();
+    return celebrationTransitionPromise;
+  }
+
   async function createPendingCorrect() {
     const operation = {
       operationId: createOperationId(),
@@ -159,16 +236,17 @@
 
     syncPromise = (async () => {
       try {
-        const state = await requestSyncState(
-          "POST",
-          "/v1/correct",
-          syncToken,
-          {
-            date: operation.date,
-            operationId: operation.operationId,
-          }
-        );
-        applyRemoteState(state);
+        const result = await requestCorrectResult(syncToken, {
+          date: operation.date,
+          operationId: operation.operationId,
+        });
+        applyRemoteState(result.state);
+        if (result.completedMilestone !== null) {
+          await savePendingCelebration(
+            operation,
+            result.completedMilestone
+          );
+        }
         await clearPendingCorrect();
         syncReady = true;
         const shouldNavigate = isOperationPageActive(
@@ -176,13 +254,15 @@
           sourceDocument
         );
 
-        if (goalCompleted) {
-          completeGoal();
-        } else if (shouldNavigate) {
+        if (shouldNavigate) {
           proceedToNextQuestion();
         } else {
           navigationInProgress = false;
-          setStatus("未完了の正解数を同期しました");
+          setStatus(
+            pendingCelebration === null
+              ? "未完了の正解数を同期しました"
+              : `${pendingCelebration.milestone}問達成.祝福を準備中`
+          );
         }
         return true;
       } catch (error) {
@@ -190,6 +270,7 @@
           applyRemoteState(error.state);
           try {
             await clearPendingCorrect();
+            await reconcilePendingDates();
           } catch {
             navigationInProgress = false;
             setStatus("前日の未同期分を破棄できません.再試行してください");
@@ -201,9 +282,7 @@
             sourceDocument
           );
 
-          if (goalCompleted) {
-            completeGoal();
-          } else if (shouldNavigate) {
+          if (shouldNavigate) {
             setStatus("前日の未同期分を破棄しました");
             proceedToNextQuestion();
           } else {
@@ -224,6 +303,7 @@
         syncInProgress = false;
         syncPromise = null;
         updateSyncDependentControls();
+        void maybeContinuePendingCelebration();
       }
     })();
 
@@ -242,12 +322,12 @@
       await refreshRemoteCount();
       return;
     }
-    if (goalCompleted || count >= GOAL) {
-      completeGoal();
-      return;
-    }
     if (pendingCorrect !== null) {
       await submitPendingCorrect();
+      return;
+    }
+    if (pendingCelebration !== null) {
+      await maybeContinuePendingCelebration();
       return;
     }
 
@@ -322,11 +402,17 @@
 
   function bindFrameDocument() {
     let nextDocument;
+    let nextURL;
 
     try {
       nextDocument = frame.contentDocument;
+      nextURL = frame.contentWindow.location.href;
     } catch {
       setStatus("ページへアクセスできません");
+      return;
+    }
+
+    if (nextURL === "about:blank" && frame.src !== "about:blank") {
       return;
     }
 
@@ -352,21 +438,27 @@
       { once: true }
     );
     observeExplanationChanges();
-    updateNextQuestionButton();
-    updateCopyButton();
 
     try {
-      currentFrameURL = frame.contentWindow.location.href;
+      currentFrameURL = nextURL;
       history.replaceState(null, "", currentFrameURL);
     } catch {
       setStatus("URLを取得できません");
       return;
     }
 
+    updateNextQuestionButton();
+    updateCopyButton();
+    void maybeContinuePendingCelebration();
+
     loadTimer = window.setTimeout(() => {
       loadTimer = null;
 
       if (!syncReady) {
+        return;
+      }
+      if (pendingCelebration !== null) {
+        void maybeContinuePendingCelebration();
         return;
       }
       if (!speechSupported) {
@@ -382,6 +474,11 @@
   startButton.addEventListener("click", () => {
     if (!syncReady) {
       void refreshRemoteCount();
+      return;
+    }
+
+    if (pendingCelebration !== null) {
+      void maybeContinuePendingCelebration();
       return;
     }
     if (!speechSupported) {
@@ -414,6 +511,11 @@
 
     if (!syncReady) {
       void refreshRemoteCount();
+      return;
+    }
+
+    if (pendingCelebration !== null) {
+      void maybeContinuePendingCelebration();
       return;
     }
 
@@ -455,7 +557,15 @@
   void initializeSync();
 
   // iframeのloadがキャッシュ等で先に完了していた場合にも対応します.
-  if (frame.contentDocument?.readyState === "complete") {
-    bindFrameDocument();
+  try {
+    if (
+      frame.contentDocument?.readyState === "complete" &&
+      (frame.contentWindow.location.href !== "about:blank" ||
+        frame.src === "about:blank")
+    ) {
+      bindFrameDocument();
+    }
+  } catch {
+    setStatus("ページへアクセスできません");
   }
 })();

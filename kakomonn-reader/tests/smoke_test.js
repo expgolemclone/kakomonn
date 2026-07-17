@@ -200,7 +200,7 @@ async function main() {
     const childFrame = await loadMockQuestion(page, script);
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
-      "0/50",
+      "0問,次は50問",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-start").isVisible(),
@@ -304,7 +304,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "1/50",
+        "1問,次は50問",
     );
 
     await page.evaluate(() => {
@@ -323,7 +323,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "7/50",
+        "7問,次は50問",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
@@ -342,7 +342,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-count").innerText(),
-      "--/50",
+      "--問,次は50問",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").fill("test-sync-token");
     await setupPage.locator("#kakomonn-reader-sync-settings-save").click();
@@ -351,7 +351,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-count").innerText(),
-      "0/50",
+      "0問,次は50問",
     );
     assert.equal(
       await setupPage.evaluate(
@@ -466,7 +466,7 @@ async function main() {
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "1/50",
+        "1問,次は50問",
     );
     await iosPage.evaluate(() => {
       window.__syncMock.count = 6;
@@ -475,7 +475,7 @@ async function main() {
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "6/50",
+        "6問,次は50問",
     );
     assert.equal(
       await iosPage.evaluate(

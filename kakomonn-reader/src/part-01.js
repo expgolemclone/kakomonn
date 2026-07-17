@@ -128,8 +128,11 @@
   );
 
   function renderCount() {
-    countBadge.textContent =
-      count === null ? `--/${GOAL}` : `${Math.min(count, GOAL)}/${GOAL}`;
+    const nextMilestone =
+      count === null
+        ? MILESTONE_INTERVAL
+        : (Math.floor(count / MILESTONE_INTERVAL) + 1) * MILESTONE_INTERVAL;
+    countBadge.textContent = `${count === null ? "--" : count}問,次は${nextMilestone}問`;
   }
 
   function setStatus(message) {
@@ -161,10 +164,22 @@
       value !== null &&
       typeof value === "object" &&
       /^\d{4}-\d{2}-\d{2}$/.test(value.date) &&
-      Number.isInteger(value.count) &&
+      Number.isSafeInteger(value.count) &&
       value.count >= 0 &&
-      value.count <= GOAL &&
-      value.goal === GOAL
+      value.milestoneInterval === MILESTONE_INTERVAL
+    );
+  }
+
+  function isCorrectResponse(value) {
+    return (
+      value !== null &&
+      typeof value === "object" &&
+      isCountState(value.state) &&
+      (value.completedMilestone === null ||
+        (Number.isSafeInteger(value.completedMilestone) &&
+          value.completedMilestone > 0 &&
+          value.completedMilestone % MILESTONE_INTERVAL === 0 &&
+          value.completedMilestone <= value.state.count))
     );
   }
 
@@ -176,6 +191,19 @@
       /^\d{4}-\d{2}-\d{2}$/.test(value.date) &&
       typeof value.pageURL === "string" &&
       value.pageURL.startsWith("https://chushoks.kakomonn.com/")
+    );
+  }
+
+  function isPendingCelebration(value) {
+    return (
+      value !== null &&
+      typeof value === "object" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(value.date) &&
+      Number.isSafeInteger(value.milestone) &&
+      value.milestone > 0 &&
+      value.milestone % MILESTONE_INTERVAL === 0 &&
+      typeof value.sourcePageURL === "string" &&
+      value.sourcePageURL.startsWith("https://chushoks.kakomonn.com/")
     );
   }
 
@@ -221,7 +249,13 @@
     });
   }
 
-  async function requestSyncState(method, path, token, body = null) {
+  async function requestSyncResponse(
+    method,
+    path,
+    token,
+    validator,
+    body = null
+  ) {
     const response = await gmXMLHttpRequest({
       method,
       url: `${SYNC_API_URL}${path}`,
@@ -234,7 +268,7 @@
     const responseBody = parseResponseJSON(response);
 
     if (response.status === 200) {
-      if (!isCountState(responseBody)) {
+      if (!validator(responseBody)) {
         throw new SyncRequestError("invalid_response", response.status);
       }
       return responseBody;
@@ -257,6 +291,25 @@
         ? responseBody.error
         : "request_failed",
       response.status
+    );
+  }
+
+  function requestCountState(token) {
+    return requestSyncResponse(
+      "GET",
+      "/v1/count",
+      token,
+      isCountState
+    );
+  }
+
+  function requestCorrectResult(token, operation) {
+    return requestSyncResponse(
+      "POST",
+      "/v1/correct",
+      token,
+      isCorrectResponse,
+      operation
     );
   }
 
@@ -283,7 +336,6 @@
 
     activeCountDate = state.date;
     count = state.count;
-    goalCompleted = count >= GOAL;
     renderCount();
   }
 
@@ -326,13 +378,25 @@
     pendingCorrect = null;
   }
 
-  async function reconcilePendingDate() {
-    if (pendingCorrect === null || pendingCorrect.date === activeCountDate) {
-      return false;
-    }
+  async function clearPendingCelebration() {
+    await GM.deleteValue(PENDING_CELEBRATION_KEY);
+    pendingCelebration = null;
+  }
 
-    await clearPendingCorrect();
-    return true;
+  async function reconcilePendingDates() {
+    let discarded = false;
+    if (pendingCorrect !== null && pendingCorrect.date !== activeCountDate) {
+      await clearPendingCorrect();
+      discarded = true;
+    }
+    if (
+      pendingCelebration !== null &&
+      pendingCelebration.date !== activeCountDate
+    ) {
+      await clearPendingCelebration();
+      discarded = true;
+    }
+    return discarded;
   }
 
   function openSyncSettings(required = false) {
@@ -377,20 +441,16 @@
       updateSyncDependentControls();
 
       try {
-        const state = await requestSyncState(
-          "GET",
-          "/v1/count",
-          syncToken
-        );
+        const state = await requestCountState(syncToken);
         applyRemoteState(state);
         syncReady = true;
 
-        if (await reconcilePendingDate()) {
+        if (await reconcilePendingDates()) {
           setStatus("前日の未同期分を破棄しました");
         } else if (pendingCorrect !== null) {
           setStatus("未完了の正解数同期があります");
-        } else if (goalCompleted) {
-          setStatus(`本日の${GOAL}問を完了`);
+        } else if (pendingCelebration !== null) {
+          setStatus(`${pendingCelebration.milestone}問達成.祝福を準備中`);
         } else if (speechEnabled) {
           setStatus("待機中");
         } else {
@@ -405,6 +465,7 @@
         syncInProgress = false;
         syncPromise = null;
         updateSyncDependentControls();
+        void maybeContinuePendingCelebration();
       }
     })();
 
@@ -432,16 +493,9 @@
 
     syncPromise = (async () => {
       try {
-        const state = await requestSyncState(
-          "GET",
-          "/v1/count",
-          candidateToken
-        );
-        const discardedPending =
-          pendingCorrect !== null && pendingCorrect.date !== state.date;
-        if (discardedPending) {
-          await clearPendingCorrect();
-        }
+        const state = await requestCountState(candidateToken);
+        activeCountDate = state.date;
+        const discardedPending = await reconcilePendingDates();
         await GM.setValue(SYNC_TOKEN_KEY, candidateToken);
 
         syncToken = candidateToken;
@@ -467,6 +521,7 @@
         syncSettingsCancelButton.disabled = false;
         syncTokenInput.disabled = false;
         updateSyncDependentControls();
+        void maybeContinuePendingCelebration();
       }
     })();
 
@@ -483,8 +538,12 @@
     }
 
     try {
-      const storedToken = await GM.getValue(SYNC_TOKEN_KEY, "");
-      const storedPending = await GM.getValue(PENDING_CORRECT_KEY, null);
+      const [storedToken, storedPending, storedCelebration] =
+        await Promise.all([
+          GM.getValue(SYNC_TOKEN_KEY, ""),
+          GM.getValue(PENDING_CORRECT_KEY, null),
+          GM.getValue(PENDING_CELEBRATION_KEY, null),
+        ]);
 
       if (typeof storedToken !== "string") {
         await GM.deleteValue(SYNC_TOKEN_KEY);
@@ -499,6 +558,17 @@
         setStatus("不正な未同期データを削除しました");
       } else {
         pendingCorrect = storedPending;
+      }
+
+      if (
+        storedCelebration !== null &&
+        !isPendingCelebration(storedCelebration)
+      ) {
+        await GM.deleteValue(PENDING_CELEBRATION_KEY);
+        pendingCelebration = null;
+        setStatus("不正な祝福データを削除しました");
+      } else {
+        pendingCelebration = storedCelebration;
       }
 
       if (!syncToken) {

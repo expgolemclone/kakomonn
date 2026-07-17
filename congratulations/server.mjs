@@ -1,10 +1,10 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { extname, resolve, sep } from "node:path";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 
-const root = fileURLToPath(new URL(".", import.meta.url));
+const root = resolve(fileURLToPath(new URL("./dist/", import.meta.url)));
 const port = Number.parseInt(process.env.PORT ?? "4173", 10);
 
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -23,11 +23,15 @@ const mimeTypes = new Map([
 const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-    const requestedPath = url.pathname === "/" ? "/index.html" : url.pathname;
-    const normalizedPath = normalize(requestedPath).replace(/^([.][.][/\\])+/, "");
-    const filePath = join(root, normalizedPath);
+    const decodedPath = decodeURIComponent(url.pathname);
+    const relativePath = decodedPath.replace(/^[/\\]+/, "");
+    const requestedPath =
+      relativePath.length === 0 || decodedPath.endsWith("/")
+        ? `${relativePath}index.html`
+        : relativePath;
+    const filePath = resolve(root, requestedPath);
 
-    if (!filePath.startsWith(root)) {
+    if (filePath !== root && !filePath.startsWith(`${root}${sep}`)) {
       response.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
       response.end("Forbidden");
       return;

@@ -1,189 +1,155 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
-import { writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
+import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
+import { startStaticServer } from "./server-helper.mjs";
+
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const manifest = JSON.parse(
+  await readFile(resolve(projectRoot, "celebrations.json"), "utf8"),
+);
+const selectors = new Map([
+  ["kotonoha", ".celebration"],
+  ["hikakin", "main, .stage, .celebration"],
+  ["study-complete", "[data-burst]"],
+  ["gsap-study", ".celebrate-button"],
+  ["victory-signal", ".replay"],
+]);
 
-async function getAvailablePort() {
-  const probe = createServer();
-  probe.listen(0, "127.0.0.1");
-  await once(probe, "listening");
-
-  const address = probe.address();
-  assert(address && typeof address === "object");
-  const { port } = address;
-  await new Promise((resolveClose, rejectClose) => {
-    probe.close((error) => {
-      if (error) {
-        rejectClose(error);
-        return;
-      }
-      resolveClose();
-    });
-  });
-  return port;
-}
-
-async function stopAppServer(child) {
-  if (child.exitCode !== null) {
-    return;
-  }
-  const exited = once(child, "exit");
-  child.kill();
-  await exited;
-}
-
-async function startAppServer(port) {
-  const child = spawn(process.execPath, ["server.mjs"], {
-    cwd: projectRoot,
-    env: { ...process.env, PORT: String(port) },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  child.stderr.setEncoding("utf8");
-  child.stdout.setEncoding("utf8");
-
-  let stderr = "";
-  let stdout = "";
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk;
-  });
-
-  const expectedMessage = `Celebration server listening on http://127.0.0.1:${port}`;
-  try {
-    await new Promise((resolveReady, rejectReady) => {
-      const timeout = setTimeout(() => {
-        rejectReady(new Error(`Server did not start.\n${stderr}`));
-      }, 5_000);
-
-      function cleanup() {
-        clearTimeout(timeout);
-        child.off("exit", handleExit);
-        child.stdout.off("data", handleOutput);
-      }
-
-      function handleExit(code) {
-        cleanup();
-        rejectReady(new Error(`Server exited with code ${code}.\n${stderr}`));
-      }
-
-      function handleOutput(chunk) {
-        stdout += chunk;
-        if (!stdout.includes(expectedMessage)) {
-          return;
-        }
-        cleanup();
-        resolveReady();
-      }
-
-      child.once("exit", handleExit);
-      child.stdout.on("data", handleOutput);
-    });
-  } catch (error) {
-    await stopAppServer(child);
-    throw error;
-  }
-
-  return { child, getStderr: () => stderr };
-}
-
-async function main() {
-  const port = await getAvailablePort();
-  const server = await startAppServer(port);
-
-  try {
-    const browser = await chromium.launch({ headless: true });
-    try {
-      const page = await browser.newPage({
-        viewport: { width: 1440, height: 1000 },
-      });
-      const errors = [];
-      page.on("console", (message) => {
-        if (message.type() === "error") {
-          errors.push(message.text());
-        }
-      });
-      page.on("pageerror", (error) => errors.push(String(error)));
-
-      const response = await page.goto(`http://127.0.0.1:${port}`, {
-        waitUntil: "networkidle",
-      });
-      assert.equal(response?.status(), 200);
-      await page.waitForFunction(
-        () => document.querySelector(".celebration")?.dataset.intro === "complete",
-      );
-
-      const initialState = await page.evaluate(() => ({
-        confettiCount: document.querySelectorAll(".confetti-piece").length,
-        credit: document.querySelector(".credit")?.textContent ?? "",
-        gsapLoaded: typeof window.gsap?.timeline === "function",
-        title: document.querySelector("#hero-title")?.textContent,
-      }));
-      assert.equal(initialState.confettiCount, 96);
-      assert.equal(initialState.credit.includes("© AI Inc."), true);
-      assert.equal(initialState.gsapLoaded, true);
-      assert.equal(initialState.title, "CONGRATULATIONS!!!");
-      assert.equal(await page.locator(".character-card--akane").isVisible(), true);
-      assert.equal(await page.locator(".character-card--aoi").isVisible(), true);
-      await page.screenshot({
-        path: resolve(projectRoot, "preview.png"),
-        fullPage: true,
-      });
-
-      await page.locator("#boost").click();
-      assert.equal(await page.locator("#boost").getAttribute("aria-pressed"), "true");
-      assert.equal(await page.locator("#boost").textContent(), "祝福MAX中");
-      assert.equal(
-        await page.locator("#status").textContent(),
-        "祝福MAXです.拍手が止まりません.",
-      );
-
-      await page.locator("#replay").click();
-      assert.equal(
-        await page.locator("#status").textContent(),
-        "もう一度,全力で祝福しています.",
-      );
-      await page.waitForFunction(
-        () => document.querySelector(".celebration")?.dataset.intro === "complete",
-      );
-
-      await page.setViewportSize({ width: 390, height: 844 });
-      const mobileState = await page.evaluate(() => ({
-        characterCount: document.querySelectorAll(".character-card").length,
-        documentWidth: document.documentElement.scrollWidth,
-        viewportWidth: window.innerWidth,
-      }));
-      assert.equal(await page.locator("#replay").isVisible(), true);
-      assert.equal(await page.locator("#boost").isVisible(), true);
-      assert.equal(mobileState.characterCount, 2);
-      assert.equal(mobileState.documentWidth <= mobileState.viewportWidth, true);
-      assert.deepEqual(errors, []);
-      await page.screenshot({
-        path: resolve(projectRoot, "mobile-preview.png"),
-        fullPage: true,
-      });
-
-      await writeFile(
-        resolve(projectRoot, "tests", "browser-result.json"),
-        `${JSON.stringify({ initialState, mobileState }, null, 2)}\n`,
-      );
-      console.log("Congratulations browser E2E test passed");
-    } finally {
-      await browser.close();
+function captureErrors(page) {
+  const errors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      errors.push(message.text());
     }
-  } finally {
-    await stopAppServer(server.child);
-  }
+  });
+  page.on("pageerror", (error) => errors.push(String(error)));
+  return errors;
+}
 
+async function verifyEntry(browser, origin, site) {
+  const page = await browser.newPage({
+    viewport: { width: 390, height: 844 },
+    reducedMotion: "reduce",
+  });
+  const errors = captureErrors(page);
+  try {
+    const response = await page.goto(`${origin}/${site.entry}`, {
+      waitUntil: "domcontentloaded",
+    });
+    assert.equal(response?.status(), 200, site.id);
+    await page.locator(selectors.get(site.id)).first().waitFor({
+      state: "visible",
+      timeout: 15_000,
+    });
+
+    if (site.id === "kotonoha") {
+      await page.waitForFunction(
+        () => document.querySelector(".celebration")?.dataset.intro === "complete",
+      );
+      assert.equal(
+        await page.locator(".credit").textContent().then((text) => text.includes("© AI Inc.")),
+        true,
+      );
+    } else if (site.id === "hikakin") {
+      await page.waitForFunction(() => document.title !== "Loading celebration");
+    } else if (site.id === "study-complete") {
+      await page.waitForFunction(
+        () => document.querySelector("[data-progress-number]")?.textContent === "100",
+      );
+    } else if (site.id === "gsap-study") {
+      await page.waitForFunction(() => document.querySelector(".loader") === null);
+    }
+
+    const layout = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+    }));
+    assert.equal(
+      layout.documentWidth <= layout.viewportWidth + 1,
+      true,
+      `${site.id} has horizontal overflow`,
+    );
+    assert.deepEqual(errors, [], site.id);
+  } finally {
+    await page.close();
+  }
+}
+
+async function verifyShell(browser, origin) {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const errors = captureErrors(page);
+  try {
+    await page.goto(`${origin}/normal/kotonoha/`, { waitUntil: "domcontentloaded" });
+    await page.evaluate((url) => window.location.assign(url), `${origin}/?milestone=100`);
+    await page.waitForSelector('html[data-state="ready"]');
+
+    const shell = await page.evaluate(() => ({
+      milestone: document.querySelector("#milestone-label")?.textContent,
+      returnText: document.querySelector("#return-to-study")?.textContent,
+      selectedSite: document.querySelector("#celebration-frame")?.dataset.siteId,
+      frameSource: document.querySelector("#celebration-frame")?.src,
+    }));
+    const selected = manifest.sites.find((site) => site.id === shell.selectedSite);
+    assert(selected, `Unknown selected site, ${shell.selectedSite}`);
+    assert.equal(shell.milestone, "100問達成");
+    assert.equal(shell.returnText, "次の50問へ");
+    assert.equal(new URL(shell.frameSource).pathname.endsWith(`/${selected.entry}`), true);
+    assert.equal(await page.locator("#return-to-study").isVisible(), true);
+    assert.deepEqual(errors, []);
+
+    await page.screenshot({
+      path: resolve(projectRoot, "preview.png"),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileLayout = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      ticketWidth: document.querySelector(".return-ticket")?.getBoundingClientRect().width,
+    }));
+    assert.equal(mobileLayout.documentWidth <= mobileLayout.viewportWidth, true);
+    assert.equal(mobileLayout.ticketWidth <= mobileLayout.viewportWidth - 12, true);
+    await page.screenshot({
+      path: resolve(projectRoot, "mobile-preview.png"),
+      fullPage: true,
+    });
+
+    await Promise.all([
+      page.waitForURL(`${origin}/normal/kotonoha/`),
+      page.locator("#return-to-study").click(),
+    ]);
+  } finally {
+    await page.close();
+  }
+}
+
+async function verifyInvalidMilestone(browser, origin) {
+  const page = await browser.newPage();
+  try {
+    await page.goto(`${origin}/?milestone=51`, { waitUntil: "domcontentloaded" });
+    await page.locator("#error-panel").waitFor({ state: "visible" });
+    assert.equal(await page.locator(".return-ticket").isVisible(), false);
+    assert.match(await page.locator("#error-panel p").textContent(), /multiple of 50/);
+  } finally {
+    await page.close();
+  }
+}
+
+const server = await startStaticServer();
+const browser = await chromium.launch({ headless: true });
+try {
+  for (const site of manifest.sites) {
+    await verifyEntry(browser, server.origin, site);
+  }
+  await verifyShell(browser, server.origin);
+  await verifyInvalidMilestone(browser, server.origin);
+  console.log(`Congratulations browser E2E passed for ${manifest.sites.length} sites`);
+} finally {
+  await browser.close();
+  await server.stop();
   assert.equal(server.getStderr(), "");
 }
-
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});

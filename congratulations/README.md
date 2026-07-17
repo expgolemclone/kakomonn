@@ -6,7 +6,7 @@
 
 ```bash
 cd congratulations
-npm ci
+npm install
 npm start
 ```
 

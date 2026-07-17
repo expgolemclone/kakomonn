@@ -17,6 +17,7 @@ const selectors = new Map([
   ["study-complete", "[data-burst]"],
   ["gsap-study", ".celebrate-button"],
   ["victory-observatory", ".replay"],
+  ["imura-rally", ".stage"],
 ]);
 
 function captureErrors(page) {
@@ -62,6 +63,10 @@ async function verifyEntry(browser, origin, site) {
       );
     } else if (site.id === "gsap-study") {
       await page.waitForFunction(() => document.querySelector(".loader") === null);
+    } else if (site.id === "imura-rally") {
+      await page.waitForFunction(
+        () => document.querySelector("#stage")?.dataset.ready === "true",
+      );
     }
 
     const layout = await page.evaluate(() => ({

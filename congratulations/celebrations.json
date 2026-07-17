@@ -20,6 +20,10 @@
     {
       "id": "victory-observatory",
       "entry": "sensational/victory-observatory/index.html"
+    },
+    {
+      "id": "imura-rally",
+      "entry": "sensational/imura-rally/index.html"
     }
   ]
 }

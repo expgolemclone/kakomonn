@@ -1,4 +1,5 @@
 - E2Eテストを通過してからpushすること.
+- `congratulations`を変更した場合は,push後にPlaywrightで`https://kakomonn-congratulations.vercel.app`を開き,期待する主要要素が表示され,page errorが発生していないことを確認すること. 正常表示を確認できない場合は,作業を完了せず,原因を修正すること.
 
 ## 典型的な失敗を避けるための注意点
 

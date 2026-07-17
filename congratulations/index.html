@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="琴葉姉妹が全力で祝うGSAP製Congratulationsページ">
+    <title>Congratulations!!!</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="celebration" aria-labelledby="hero-title">
+      <div class="aurora" aria-hidden="true"></div>
+      <div class="grid" aria-hidden="true"></div>
+      <div class="spotlight spotlight--left" aria-hidden="true"></div>
+      <div class="spotlight spotlight--right" aria-hidden="true"></div>
+      <div class="rings" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div id="confetti" class="confetti" aria-hidden="true"></div>
+
+      <section class="hero">
+        <p class="eyebrow">THIS MOMENT IS YOURS</p>
+        <h1 id="hero-title" class="hero-title" aria-label="Congratulations!!!"></h1>
+        <p class="hero-copy">とんでもなく最高です.あなたがやり切った瞬間を,琴葉姉妹が全力で称賛します.</p>
+      </section>
+
+      <section class="stage" aria-label="琴葉姉妹の祝福アニメーション">
+        <div class="speech speech--one">ほんまにようやった!!!</div>
+        <div class="speech speech--two">すごい.最高だよ!!!</div>
+        <div class="speech speech--three">天才やん!!!</div>
+        <div class="speech speech--four">あなたの勝ち!!!</div>
+
+        <article class="character-card character-card--akane" aria-label="琴葉茜">
+          <div class="character-shadow" aria-hidden="true"></div>
+          <svg class="character character--akane" viewBox="0 0 360 520" role="img" aria-labelledby="akane-title akane-desc">
+            <title id="akane-title">琴葉茜をイメージした祝福イラスト</title>
+            <desc id="akane-desc">桃色の髪と赤い衣装のキャラクターが両手を上げて踊っています.</desc>
+            <defs>
+              <linearGradient id="akaneHair" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#fff1f7"/>
+                <stop offset="0.38" stop-color="#ff9fca"/>
+                <stop offset="1" stop-color="#ef4f93"/>
+              </linearGradient>
+              <linearGradient id="akaneDress" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#fd729d"/>
+                <stop offset="1" stop-color="#7f173f"/>
+              </linearGradient>
+              <filter id="akaneGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="8" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <g filter="url(#akaneGlow)">
+              <path d="M102 177 C55 202 30 265 56 330 C75 378 55 434 23 474 C92 497 151 478 175 430 C197 480 254 502 329 477 C293 433 280 377 301 329 C327 270 298 204 254 178 Z" fill="url(#akaneHair)" opacity="0.9"/>
+              <path d="M112 246 C73 271 63 360 80 472 L281 472 C300 359 287 270 248 246 Z" fill="url(#akaneDress)" stroke="#3a0a22" stroke-width="8"/>
+              <path d="M128 279 L94 462 M232 279 L267 462" stroke="#ffbed5" stroke-width="14" stroke-linecap="round" opacity="0.8"/>
+              <path d="M136 229 C129 269 141 294 180 300 C219 294 231 268 224 229 Z" fill="#fff3ee"/>
+              <circle cx="180" cy="168" r="78" fill="#fff5f1" stroke="#50263b" stroke-width="8"/>
+              <path d="M103 167 C95 88 136 48 183 48 C238 48 273 87 255 179 C236 133 219 113 187 97 C162 123 137 141 103 167 Z" fill="url(#akaneHair)" stroke="#50263b" stroke-width="8"/>
+              <path d="M112 158 C84 241 111 294 139 307 C123 239 134 177 159 121 Z" fill="url(#akaneHair)" stroke="#50263b" stroke-width="8"/>
+              <path d="M248 155 C279 238 252 294 224 306 C239 238 226 174 201 119 Z" fill="url(#akaneHair)" stroke="#50263b" stroke-width="8"/>
+              <ellipse cx="151" cy="173" rx="13" ry="18" fill="#e62864"/>
+              <ellipse cx="209" cy="173" rx="13" ry="18" fill="#e62864"/>
+              <circle cx="155" cy="168" r="4" fill="#fff"/>
+              <circle cx="213" cy="168" r="4" fill="#fff"/>
+              <path d="M155 207 Q180 226 205 207" fill="none" stroke="#9e2f52" stroke-width="7" stroke-linecap="round"/>
+              <path d="M139 263 Q179 316 221 263" fill="#f8d8e6" stroke="#54152e" stroke-width="8"/>
+              <circle cx="180" cy="279" r="18" fill="#e82d65" stroke="#54152e" stroke-width="7"/>
+              <g class="arm arm--left">
+                <path d="M120 285 C76 258 55 222 45 177" fill="none" stroke="#6c1738" stroke-width="34" stroke-linecap="round"/>
+                <path d="M45 177 C31 157 28 133 38 111" fill="none" stroke="#fff0ea" stroke-width="28" stroke-linecap="round"/>
+                <path d="M29 111 l-18 -21 M38 108 l-3 -29 M47 113 l14 -23" stroke="#fff0ea" stroke-width="12" stroke-linecap="round"/>
+              </g>
+              <g class="arm arm--right">
+                <path d="M241 285 C286 260 307 222 317 178" fill="none" stroke="#6c1738" stroke-width="34" stroke-linecap="round"/>
+                <path d="M317 178 C330 157 334 135 323 111" fill="none" stroke="#fff0ea" stroke-width="28" stroke-linecap="round"/>
+                <path d="M332 111 l18 -21 M323 108 l3 -29 M314 113 l-14 -23" stroke="#fff0ea" stroke-width="12" stroke-linecap="round"/>
+              </g>
+              <path d="M132 89 C105 71 105 35 137 28 C155 24 170 35 180 52 C190 35 205 24 223 28 C255 35 255 72 228 89 C206 103 194 103 180 99 C164 103 152 103 132 89 Z" fill="#ff5d96" stroke="#54152e" stroke-width="8"/>
+            </g>
+          </svg>
+          <p class="character-name">AKANE</p>
+        </article>
+
+        <article class="character-card character-card--aoi" aria-label="琴葉葵">
+          <div class="character-shadow" aria-hidden="true"></div>
+          <svg class="character character--aoi" viewBox="0 0 360 520" role="img" aria-labelledby="aoi-title aoi-desc">
+            <title id="aoi-title">琴葉葵をイメージした祝福イラスト</title>
+            <desc id="aoi-desc">水色の髪と青い衣装のキャラクターが両手を上げて踊っています.</desc>
+            <defs>
+              <linearGradient id="aoiHair" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#effcff"/>
+                <stop offset="0.38" stop-color="#8ce8ff"/>
+                <stop offset="1" stop-color="#2aa7e8"/>
+              </linearGradient>
+              <linearGradient id="aoiDress" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#7eddfc"/>
+                <stop offset="1" stop-color="#14577f"/>
+              </linearGradient>
+              <filter id="aoiGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="8" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <g filter="url(#aoiGlow)">
+              <path d="M102 177 C55 202 30 265 56 330 C75 378 55 434 23 474 C92 497 151 478 175 430 C197 480 254 502 329 477 C293 433 280 377 301 329 C327 270 298 204 254 178 Z" fill="url(#aoiHair)" opacity="0.92"/>
+              <path d="M112 246 C73 271 63 360 80 472 L281 472 C300 359 287 270 248 246 Z" fill="url(#aoiDress)" stroke="#0b2b42" stroke-width="8"/>
+              <path d="M128 279 L94 462 M232 279 L267 462" stroke="#c8f5ff" stroke-width="14" stroke-linecap="round" opacity="0.85"/>
+              <path d="M136 229 C129 269 141 294 180 300 C219 294 231 268 224 229 Z" fill="#fff3ee"/>
+              <circle cx="180" cy="168" r="78" fill="#fff5f1" stroke="#163747" stroke-width="8"/>
+              <path d="M103 167 C95 88 136 48 183 48 C238 48 273 87 255 179 C236 133 219 113 187 97 C162 123 137 141 103 167 Z" fill="url(#aoiHair)" stroke="#163747" stroke-width="8"/>
+              <path d="M112 158 C84 241 111 294 139 307 C123 239 134 177 159 121 Z" fill="url(#aoiHair)" stroke="#163747" stroke-width="8"/>
+              <path d="M248 155 C279 238 252 294 224 306 C239 238 226 174 201 119 Z" fill="url(#aoiHair)" stroke="#163747" stroke-width="8"/>
+              <ellipse cx="151" cy="173" rx="13" ry="18" fill="#1677bb"/>
+              <ellipse cx="209" cy="173" rx="13" ry="18" fill="#1677bb"/>
+              <circle cx="155" cy="168" r="4" fill="#fff"/>
+              <circle cx="213" cy="168" r="4" fill="#fff"/>
+              <path d="M155 207 Q180 226 205 207" fill="none" stroke="#386d86" stroke-width="7" stroke-linecap="round"/>
+              <path d="M139 263 Q179 316 221 263" fill="#d9f4fb" stroke="#12384f" stroke-width="8"/>
+              <circle cx="180" cy="279" r="18" fill="#2aa7e8" stroke="#12384f" stroke-width="7"/>
+              <g class="arm arm--left">
+                <path d="M120 285 C76 258 55 222 45 177" fill="none" stroke="#185f86" stroke-width="34" stroke-linecap="round"/>
+                <path d="M45 177 C31 157 28 133 38 111" fill="none" stroke="#fff0ea" stroke-width="28" stroke-linecap="round"/>
+                <path d="M29 111 l-18 -21 M38 108 l-3 -29 M47 113 l14 -23" stroke="#fff0ea" stroke-width="12" stroke-linecap="round"/>
+              </g>
+              <g class="arm arm--right">
+                <path d="M241 285 C286 260 307 222 317 178" fill="none" stroke="#185f86" stroke-width="34" stroke-linecap="round"/>
+                <path d="M317 178 C330 157 334 135 323 111" fill="none" stroke="#fff0ea" stroke-width="28" stroke-linecap="round"/>
+                <path d="M332 111 l18 -21 M323 108 l3 -29 M314 113 l-14 -23" stroke="#fff0ea" stroke-width="12" stroke-linecap="round"/>
+              </g>
+              <path d="M132 89 C105 71 105 35 137 28 C155 24 170 35 180 52 C190 35 205 24 223 28 C255 35 255 72 228 89 C206 103 194 103 180 99 C164 103 152 103 132 89 Z" fill="#48caf4" stroke="#12384f" stroke-width="8"/>
+            </g>
+          </svg>
+          <p class="character-name">AOI</p>
+        </article>
+      </section>
+
+      <section class="praise-stream" aria-label="称賛メッセージ">
+        <div class="praise-track">
+          <span>BRILLIANT</span><span>最高</span><span>WELL DONE</span><span>天才</span><span>UNSTOPPABLE</span><span>拍手喝采</span>
+          <span>BRILLIANT</span><span>最高</span><span>WELL DONE</span><span>天才</span><span>UNSTOPPABLE</span><span>拍手喝采</span>
+        </div>
+      </section>
+
+      <div class="controls" aria-label="アニメーション操作">
+        <button id="replay" class="button button--primary" type="button">もう一回祝う</button>
+        <button id="boost" class="button button--ghost" type="button" aria-pressed="false">祝福MAX</button>
+      </div>
+
+      <p class="credit">琴葉茜 琴葉葵 © AI Inc.  本ページは非公式のファンメイド作品です.</p>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </main>
+
+    <script src="./node_modules/gsap/dist/gsap.min.js"></script>
+    <script defer src="./app.js"></script>
+  </body>
+</html>

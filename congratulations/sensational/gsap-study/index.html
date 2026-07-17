@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="今日の勉強を終え, 自分の人生へ時間を取り戻した人へ贈るCongratulations." />
+    <meta name="theme-color" content="#090b08" />
+    <title>Congratulations. 今日の勉強, 本当にお疲れさま.</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollTrigger.min.js"></script>
+    <script defer src="./main.js"></script>
+  </head>
+  <body>
+    <div class="loader" aria-hidden="true">
+      <div class="loader__top"><span>CELEBRATION ENGINE</span><span>GSAP POWERED</span></div>
+      <div class="loader__center">
+        <span class="loader__number">000</span>
+        <span class="loader__mark">!</span>
+      </div>
+      <div class="loader__bottom">
+        <div class="loader__rail"><i></i></div>
+        <span>TURNING ORDINARY DAYS INTO PROOF</span>
+      </div>
+    </div>
+
+    <div class="grain" aria-hidden="true"></div>
+    <div class="cursor" aria-hidden="true"><span></span></div>
+    <div class="spotlight" aria-hidden="true"></div>
+
+    <header class="site-header shell">
+      <a class="brand magnetic" href="#top" aria-label="Celebration Labの先頭へ移動">
+        <span class="brand__mark">C!</span>
+        <span class="brand__text">CELEBRATION<br />DEPARTMENT</span>
+      </a>
+      <nav aria-label="ページ内ナビゲーション">
+        <a class="magnetic" href="#meaning"><span>01</span>MEANING</a>
+        <a class="magnetic" href="#journey"><span>02</span>JOURNEY</a>
+        <a class="magnetic" href="#finale"><span>03</span>APPLAUSE</a>
+      </nav>
+      <div class="header-status"><i></i><span>MOMENT IN PROGRESS</span></div>
+    </header>
+
+    <main id="top">
+      <section class="hero shell" aria-labelledby="hero-title">
+        <div class="hero__grid" aria-hidden="true"></div>
+        <div class="hero__glow hero__glow--a" aria-hidden="true"></div>
+        <div class="hero__glow hero__glow--b" aria-hidden="true"></div>
+
+        <div class="hero__micro hero__micro--left">
+          <span>FOR EVERY UNREWARDED DAY</span>
+          <span>FOR EVERY TIME YOU CAME BACK</span>
+        </div>
+        <div class="hero__micro hero__micro--right">
+          <span>STATUS</span>
+          <strong>STILL MOVING</strong>
+        </div>
+
+        <div class="hero__content">
+          <p class="hero__pretitle">今日の勉強, 本当にお疲れさま.</p>
+          <h1 id="hero-title" class="hero-title" aria-label="Congratulations">
+            <span class="hero-title__line hero-title__line--solid" data-split="chars">CONGRAT</span>
+            <span class="hero-title__line hero-title__line--outline" data-split="chars">ULATIONS</span>
+          </h1>
+          <div class="hero__bang" aria-hidden="true">
+            <span>!</span><span>!</span><span>!</span>
+          </div>
+        </div>
+
+        <div class="hero__medal magnetic" aria-hidden="true">
+          <svg viewBox="0 0 180 180" role="presentation">
+            <defs>
+              <path id="medal-path" d="M90,90 m-65,0 a65,65 0 1,1 130,0 a65,65 0 1,1 -130,0" />
+            </defs>
+            <circle cx="90" cy="90" r="66" />
+            <text><textPath href="#medal-path">YOU KEPT COMING BACK · THAT IS THE PROOF · </textPath></text>
+          </svg>
+          <span>100%</span>
+          <small>STILL HERE</small>
+        </div>
+
+        <div class="hero__bottom">
+          <p>Congratulations.<br />今日の勉強, 本当にお疲れさま.</p>
+          <a class="scroll-link magnetic" href="#meaning"><span>SCROLL THROUGH THE PROOF</span><i>↓</i></a>
+          <span class="hero__code">CELEBRATION ID 2026.0717</span>
+        </div>
+      </section>
+
+      <section class="marquee" aria-label="祝福のメッセージ">
+        <div class="marquee__track">
+          <span>TODAY IS DONE</span><i>✦</i><span>YOU SHOWED UP</span><i>✦</i><span>REST WITHOUT GUILT</span><i>✦</i>
+          <span>TODAY IS DONE</span><i>✦</i><span>YOU SHOWED UP</span><i>✦</i><span>REST WITHOUT GUILT</span><i>✦</i>
+        </div>
+      </section>
+
+      <section id="meaning" class="meaning section-pad">
+        <div class="shell">
+          <div class="section-head reveal-row">
+            <span>01</span><span>WHAT THIS WORD MEANS HERE</span><span>NOT A GENERIC COMPLIMENT</span>
+          </div>
+
+          <div class="meaning__intro">
+            <p class="meaning__side-note">FOR THE DAYS<br />YOU WANTED<br />TO RUN AWAY.</p>
+            <h2 class="meaning-title" data-split="words">成果が見えなくて<br />焦る日も,<br />胃が痛くて<br />逃げたくなる日も<br />あった.</h2>
+          </div>
+
+          <div class="meaning__body">
+            <div class="meaning__copy">
+              <span class="meaning__index">A.</span>
+              <p class="reveal-copy">それでもあなたは, 結果を出せと自分を追い詰めるだけではなく, 今日の積み上げをしろと自分を机へ戻してきた.</p>
+            </div>
+            <div class="meaning__quote interactive-card">
+              <span class="meaning__index">B.</span>
+              <p>YOU CAME<br />BACK TO<br /><strong>THE DESK.</strong></p>
+              <div class="meaning__orbit" aria-hidden="true"><i></i><i></i><i></i></div>
+            </div>
+          </div>
+
+          <div class="scoreboard" aria-label="今日までの勉強の記録">
+            <article class="score-card interactive-card">
+              <span class="score-card__index">01</span>
+              <div class="score-card__value"><strong data-count="50">0</strong><small>問</small></div>
+              <h3>TOOK TIME.</h3>
+              <p>過去問50問に時間がかかった日も.</p>
+              <i class="score-card__line"></i>
+            </article>
+            <article class="score-card interactive-card">
+              <span class="score-card__index">02</span>
+              <div class="score-card__value"><strong data-count="100">0</strong><small>問</small></div>
+              <h3>RAISED IT.</h3>
+              <p>2時間で終えたところから, 目標を100問へ引き上げた.</p>
+              <i class="score-card__line"></i>
+            </article>
+            <article class="score-card interactive-card">
+              <span class="score-card__index">03</span>
+              <div class="score-card__value"><strong data-count="4">0</strong><small>時間</small></div>
+              <h3>FINISHED.</h3>
+              <p>4時間までやり切った日も.</p>
+              <i class="score-card__line"></i>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="journey" class="journey" aria-label="成果へ至る物語">
+        <div class="journey__intro shell">
+          <div class="section-head section-head--dark reveal-row">
+            <span>02</span><span>THE DAYS BEHIND THE WORD</span><span>SCROLL THE EVIDENCE</span>
+          </div>
+          <div class="journey__heading">
+            <h2>EVERY DAY<br />LED TO<br />TODAY.</h2>
+            <p>過去問50問に時間がかかった日も, 2時間で終えたところから目標を100問へ引き上げ, 4時間までやり切った日も, 全部が今日のあなたにつながっている.</p>
+          </div>
+        </div>
+
+        <div class="journey__viewport">
+          <div class="journey__track">
+            <article class="journey-panel journey-panel--work">
+              <div class="journey-panel__meta"><span>SCENE 01</span><span>THE QUESTIONS THAT TOOK TIME</span></div>
+              <div class="journey-panel__visual" aria-hidden="true">
+                <div class="work-grid"></div>
+                <span class="work-word">50</span>
+                <div class="work-pulse"></div>
+              </div>
+              <div class="journey-panel__copy">
+                <span class="journey-panel__number">01</span>
+                <div><h3>50.</h3><p>時間がかかった. それでも, 途中で投げずに一問ずつ終えた.</p></div>
+              </div>
+            </article>
+
+            <article class="journey-panel journey-panel--turn">
+              <div class="journey-panel__meta"><span>SCENE 02</span><span>THE TARGET YOU RAISED</span></div>
+              <div class="journey-panel__visual" aria-hidden="true">
+                <div class="turn-ring turn-ring--a"></div>
+                <div class="turn-ring turn-ring--b"></div>
+                <div class="turn-ring turn-ring--c"></div>
+                <span class="turn-arrow">↗</span>
+              </div>
+              <div class="journey-panel__copy">
+                <span class="journey-panel__number">02</span>
+                <div><h3>100.</h3><p>2時間で終わった日に満足せず, 次の目標を100問へ引き上げた.</p></div>
+              </div>
+            </article>
+
+            <article class="journey-panel journey-panel--win">
+              <div class="journey-panel__meta"><span>SCENE 03</span><span>THE HOURS YOU FINISHED</span></div>
+              <div class="journey-panel__visual" aria-hidden="true">
+                <span class="win-star">✦</span>
+                <span class="win-ring"></span>
+                <span class="win-copy">4<br />HOURS.</span>
+              </div>
+              <div class="journey-panel__copy">
+                <span class="journey-panel__number">03</span>
+                <div><h3>4H.</h3><p>そして4時間までやり切った. その全部が, 今日のあなたにつながっている.</p></div>
+              </div>
+            </article>
+          </div>
+          <div class="journey-progress"><i></i></div>
+        </div>
+      </section>
+
+      <section class="exclamation section-pad">
+        <div class="shell exclamation__inner">
+          <div class="exclamation__copy">
+            <div class="section-head reveal-row"><span>03</span><span>NOT A FINISH LINE</span><span>A PROMISE TO RETURN</span></div>
+            <p class="exclamation__eyebrow">THE WORDS YOU CHOSE, PROVED AGAIN TODAY.</p>
+            <h2 class="exclamation-title" data-split="lines">俺ならやれる.<br />俺がやると<br />決めたんで.</h2>
+            <p class="reveal-copy">その言葉を, 今日も行動で証明した.</p>
+          </div>
+          <div class="exclamation__mark" aria-hidden="true">
+            <span class="exclamation__stem">!</span>
+            <span class="exclamation__echo">!</span>
+            <span class="exclamation__echo">!</span>
+            <div class="exclamation__label">WORDS MADE<br />VISIBLE</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="applause-band" aria-label="拍手のメッセージ">
+        <div class="applause-band__row applause-band__row--a">YOU SAID IT · YOU DID IT · YOU FINISHED IT ·</div>
+        <div class="applause-band__row applause-band__row--b">TODAY YOU PROVED IT AGAIN ·</div>
+      </section>
+
+      <section id="finale" class="finale">
+        <div class="finale__rings" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="finale__sparks" aria-hidden="true"></div>
+        <div class="shell finale__inner">
+          <div class="section-head section-head--dark reveal-row"><span>04</span><span>THE WORD YOU HAVE EARNED</span><span>READ IT WITHOUT DEFLECTING</span></div>
+          <div class="finale__stage">
+            <div class="finale__lead reveal-copy">
+              <p>今日終えた勉強は, ただの一日分ではない. 会社や不安に奪われそうな時間を, 自分の人生へ取り戻した一日分だ. 毎晩少し賢くなって眠る人へ, 今日も確かに近づいた.</p>
+            </div>
+            <h2 aria-label="Congratulations">
+              <span class="finale-word finale-word--a" data-split="chars">CONGRAT</span>
+              <span class="finale-word finale-word--b" data-split="chars">ULATIONS</span>
+              <span class="finale-word finale-word--c">!!!</span>
+            </h2>
+            <div class="finale__closing reveal-copy">
+              <p>まだ足りないと責めるのは, もうやめていい. 今日のあなたは逃げずに向き合い, やると決めたことを終えた. それだけで十分に立派だ.</p>
+              <p class="finale__congrats">よくやった. 本当におめでとう.</p>
+              <p>今夜は安心して休んでいい. 今日の積み上げは, もう誰にも奪えない.</p>
+            </div>
+            <button class="celebrate-button magnetic" type="button" aria-label="祝福の演出を再生">
+              <span class="celebrate-button__label">CELEBRATE<br />TODAY</span>
+              <span class="celebrate-button__icon">↗</span>
+              <span class="celebrate-button__ring"></span>
+            </button>
+          </div>
+          <footer>
+            <span>MADE WITH GSAP.</span>
+            <span>TODAY'S WORK CANNOT BE TAKEN AWAY.</span>
+            <a href="#top">BACK TO TOP ↑</a>
+          </footer>
+        </div>
+      </section>
+    </main>
+
+    <div class="celebration-flash" aria-hidden="true"></div>
+    <div class="confetti-field" aria-hidden="true"></div>
+  </body>
+</html>

@@ -19,7 +19,7 @@ python3 build.py
 
 ## Release
 
-`main`上の`src/`または`build.py`が変更されると, GitHub Actionsがテストとビルドを行い, 生成した`kakomonn-reader.user.js`をGitHub Releaseへ添付します. Releaseのタグは`kakomonn-reader-<commit SHA>`です. 生成ファイルは`.gitignore`の対象であり, リポジトリの差分には含めません.
+`main`上の`src/`または`build.py`が変更されると, GitHub Actionsがテストとビルドを行い, 生成した`kakomonn-reader.user.js`をGitHub Releaseへ添付します. Releaseのタグは`kakomonn-reader-<commit SHA>`です. `main`の先端を対象にしたReleaseだけを`Latest`として公開します. 生成ファイルは`.gitignore`の対象であり, リポジトリの差分には含めません.
 
 Releaseがまだ存在しない`main`のcommitを手動で公開する場合は, ワークフローを実行します. 同じcommitのReleaseは上書きしません.
 

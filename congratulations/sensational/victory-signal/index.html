@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2ff4f">
+  <title>Congratulations, Victory Signal</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="stage" aria-labelledby="hero-title">
+    <div class="curtain curtain--left" aria-hidden="true"></div>
+    <div class="curtain curtain--right" aria-hidden="true"></div>
+
+    <div class="paper-grid" aria-hidden="true"></div>
+    <div class="sun-disc" aria-hidden="true"></div>
+    <div class="sun-ring sun-ring--one" aria-hidden="true"></div>
+    <div class="sun-ring sun-ring--two" aria-hidden="true"></div>
+    <div class="burst" aria-hidden="true"></div>
+
+    <div class="edge-copy edge-copy--left" aria-hidden="true">VICTORY, VICTORY, VICTORY, VICTORY</div>
+    <div class="edge-copy edge-copy--right" aria-hidden="true">YOU EARNED THIS, YOU EARNED THIS</div>
+
+    <section class="hero">
+      <div class="topline">
+        <span class="topline-index">NO. 001</span>
+        <span class="topline-rule"></span>
+        <span class="topline-copy">OFFICIAL VICTORY NOTICE</span>
+      </div>
+
+      <div class="title-wrap">
+        <h1 id="hero-title" class="title" aria-label="Congratulations!!!">
+          <span class="title-row" data-text="CONGRATU"></span>
+          <span class="title-row title-row--accent" data-text="LATIONS!!!"></span>
+        </h1>
+
+        <div class="seal" aria-hidden="true">
+          <div class="seal-orbit">THIS WIN IS YOURS, KEEP GOING,</div>
+          <div class="seal-core">
+            <span class="seal-star">★</span>
+            <span class="seal-word">WIN</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="statement">
+        <p class="statement-lead">YOU DID IT.</p>
+        <p class="statement-copy">積み重ねたすべてが, 今日の結果につながった.</p>
+      </div>
+
+      <div class="footer-row">
+        <button class="replay" type="button" aria-label="祝福アニメーションをもう一度再生する">
+          <span class="replay-dot" aria-hidden="true"></span>
+          <span>PLAY IT AGAIN</span>
+        </button>
+        <p class="date-mark">CELEBRATION EDITION, 2026</p>
+      </div>
+    </section>
+
+    <div class="confetti-layer" aria-hidden="true"></div>
+    <div class="flash" aria-hidden="true"></div>
+  </main>
+
+  <script src="vendor/gsap-lite.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

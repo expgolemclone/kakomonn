@@ -38,7 +38,6 @@
   nextQuestionButton.type = "button";
   nextQuestionButton.textContent = "次の問題へ";
   nextQuestionButton.setAttribute("aria-label", "次の問題へ移動");
-  nextQuestionButton.hidden = true;
   nextQuestionButton.disabled = true;
 
   const copyButton = document.createElement("button");
@@ -46,18 +45,7 @@
   copyButton.type = "button";
   copyButton.textContent = "回答後にコピー";
   copyButton.setAttribute("aria-label", "問題文と解説をコピー");
-  copyButton.hidden = true;
   copyButton.disabled = true;
-
-  const startWrap = document.createElement("div");
-  startWrap.id = "kakomonn-reader-start-wrap";
-
-  const startButton = document.createElement("button");
-  startButton.id = "kakomonn-reader-start";
-  startButton.type = "button";
-  startButton.textContent = "正解数を同期中";
-  startButton.disabled = true;
-  startWrap.appendChild(startButton);
 
   const syncSettings = document.createElement("div");
   syncSettings.id = "kakomonn-reader-sync-settings";
@@ -121,7 +109,6 @@
   document.body.replaceChildren(
     shell,
     controls,
-    startWrap,
     copyButton,
     nextQuestionButton,
     syncSettings
@@ -339,36 +326,9 @@
     renderCount();
   }
 
-  function updateStartButton() {
-    if (syncInProgress) {
-      startButton.textContent = "正解数を同期中";
-      startButton.disabled = true;
-      return;
-    }
-    if (!syncToken) {
-      startButton.textContent = "同期設定が必要";
-      startButton.disabled = true;
-      return;
-    }
-    if (!syncReady) {
-      startButton.textContent = "同期を再試行";
-      startButton.disabled = false;
-      return;
-    }
-    if (!speechSupported) {
-      startButton.textContent = "読み上げ非対応";
-      startButton.disabled = true;
-      return;
-    }
-
-    startButton.textContent = "読み上げを開始";
-    startButton.disabled = false;
-  }
-
   function updateSyncDependentControls() {
     syncSettingsButton.disabled =
       syncInProgress || nextQuestionOperationInProgress;
-    updateStartButton();
     updateNextQuestionButton();
     updateCopyButton();
   }
@@ -451,10 +411,8 @@
           setStatus("未完了の正解数同期があります");
         } else if (pendingCelebration !== null) {
           setStatus(`${pendingCelebration.milestone}問達成.祝福を準備中`);
-        } else if (speechEnabled) {
-          setStatus("待機中");
         } else {
-          setStatus("開始ボタンを押してください");
+          setStatus("待機中");
         }
         return true;
       } catch (error) {
@@ -466,6 +424,7 @@
         syncPromise = null;
         updateSyncDependentControls();
         void maybeContinuePendingCelebration();
+        processCurrentPageSpeech();
       }
     })();
 
@@ -522,6 +481,7 @@
         syncTokenInput.disabled = false;
         updateSyncDependentControls();
         void maybeContinuePendingCelebration();
+        processCurrentPageSpeech();
       }
     })();
 
@@ -530,7 +490,7 @@
 
   async function initializeSync() {
     renderCount();
-    updateStartButton();
+    updateSyncDependentControls();
 
     if (!userscriptAPIAvailable()) {
       setStatus("ユーザースクリプトの同期APIを利用できません");
@@ -599,6 +559,10 @@
   }
 
   function stopSpeech() {
+    if (speechInitializationInProgress) {
+      speechInitializationInProgress = false;
+      speechEnabled = false;
+    }
     speechRunId += 1;
     activeUtterance = null;
     if (speechSupported) {

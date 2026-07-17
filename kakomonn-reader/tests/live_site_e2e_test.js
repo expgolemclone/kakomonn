@@ -18,13 +18,9 @@ async function getQuestionFrame(page) {
 
 async function waitForReaderReady(page) {
   await page.waitForFunction(
-    () => {
-      const status = document.querySelector("#kakomonn-reader-status")?.textContent;
-      return (
-        status === "読み上げ非対応" ||
-        status === "開始ボタンを押してください"
-      );
-    },
+    () =>
+      document.querySelector("#kakomonn-reader-status")?.textContent ===
+      "読み上げ非対応",
     null,
     { timeout: 15_000 },
   );

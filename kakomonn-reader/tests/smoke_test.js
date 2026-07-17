@@ -203,12 +203,17 @@ async function main() {
       "0問,次は50問",
     );
     assert.equal(
-      await page.locator("#kakomonn-reader-start").isVisible(),
+      await page.locator("#kakomonn-reader-start").count(),
+      0,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-next").isVisible(),
       true,
     );
-
-    await page.locator("#kakomonn-reader-start").click();
-    await page.waitForSelector("#kakomonn-reader-next", { state: "visible" });
+    assert.equal(
+      await page.locator("#kakomonn-reader-copy").isVisible(),
+      true,
+    );
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
@@ -370,6 +375,35 @@ async function main() {
 
     assert.deepEqual(errors, []);
 
+    const delayedSyncPage = await context.newPage();
+    const delayedSyncErrors = await preparePage(delayedSyncPage, true);
+    await delayedSyncPage.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+    });
+    await loadMockQuestion(delayedSyncPage, script);
+    await delayedSyncPage.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+    assert.equal(
+      await delayedSyncPage.evaluate(() => window.__speechCalls.length),
+      0,
+    );
+    await delayedSyncPage.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await delayedSyncPage.waitForFunction(
+      () => window.__speechCalls.length === 2,
+    );
+    await delayedSyncPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "問題文完了",
+    );
+    assert.equal(
+      await delayedSyncPage.locator("#kakomonn-reader-start").count(),
+      0,
+    );
+    assert.deepEqual(delayedSyncErrors, []);
+    await delayedSyncPage.close();
+
     const setupPage = await context.newPage();
     const setupErrors = await preparePage(setupPage, false, {
       configured: false,
@@ -435,8 +469,12 @@ async function main() {
       null,
     );
     assert.equal(
-      await failedSetupPage.locator("#kakomonn-reader-start").innerText(),
-      "同期設定が必要",
+      await failedSetupPage.locator("#kakomonn-reader-start").count(),
+      0,
+    );
+    assert.equal(
+      await failedSetupPage.locator("#kakomonn-reader-next").isVisible(),
+      true,
     );
     assert.deepEqual(failedSetupErrors, []);
     await failedSetupPage.close();
@@ -444,19 +482,18 @@ async function main() {
     const unsupportedPage = await context.newPage();
     const unsupportedErrors = await preparePage(unsupportedPage, false);
     await unsupportedPage.addScriptTag({ content: script });
-    await unsupportedPage.waitForSelector("#kakomonn-reader-start");
-    assert.equal(
-      await unsupportedPage.locator("#kakomonn-reader-start").innerText(),
-      "読み上げ非対応",
-    );
-    assert.equal(
-      await unsupportedPage.locator("#kakomonn-reader-start").isDisabled(),
-      true,
-    );
     await unsupportedPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
         "読み上げ非対応",
+    );
+    assert.equal(
+      await unsupportedPage.locator("#kakomonn-reader-start").count(),
+      0,
+    );
+    assert.equal(
+      await unsupportedPage.locator("#kakomonn-reader-next").isVisible(),
+      true,
     );
     assert.deepEqual(unsupportedErrors, []);
 
@@ -466,14 +503,14 @@ async function main() {
     const chromePage = await chromeContext.newPage();
     const chromeErrors = await preparePage(chromePage, true);
     await chromePage.addScriptTag({ content: script });
-    await chromePage.waitForSelector("#kakomonn-reader-start");
-    assert.equal(
-      await chromePage.locator("#kakomonn-reader-start").innerText(),
-      "読み上げ非対応",
+    await chromePage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "読み上げ非対応",
     );
     assert.equal(
-      await chromePage.locator("#kakomonn-reader-start").isDisabled(),
-      true,
+      await chromePage.locator("#kakomonn-reader-start").count(),
+      0,
     );
     assert.deepEqual(chromeErrors, []);
     await chromeContext.close();
@@ -484,7 +521,16 @@ async function main() {
       userscriptsPromise: true,
     });
     const iosFrame = await loadMockQuestion(iosPage, script);
-    await iosPage.locator("#kakomonn-reader-start").click();
+    await iosPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "画面をタップすると読み上げます",
+    );
+    assert.equal(await iosPage.locator("#kakomonn-reader-start").count(), 0);
+    assert.equal(await iosPage.evaluate(() => window.__speechCalls.length), 0);
+    const firstAnswer = iosFrame.locator("input[name='answer']").first();
+    await firstAnswer.click();
+    assert.equal(await firstAnswer.isChecked(), true);
     await iosPage.waitForFunction(() => window.__speechCalls.length === 1);
     await iosPage.waitForFunction(
       () =>

@@ -55,11 +55,13 @@
     typeof SpeechUtterance === "function" &&
     (isIOS || isWindowsEdge);
   let speechEnabled = false;
+  let speechInitializationInProgress = false;
   let speechRunId = 0;
   let activeUtterance = null;
   let speechVoice = null;
   let frameDocument = null;
   let boundFrameDocument = null;
+  let currentPageReadPending = false;
   let currentFrameURL = location.href;
   let loadTimer = null;
   let explanationTimer = null;
@@ -205,39 +207,6 @@
     #kakomonn-reader-copy:disabled {
       background: rgba(90, 90, 90, 0.78);
       opacity: 0.72;
-    }
-
-    #kakomonn-reader-start-wrap {
-      position: fixed;
-      inset: 0;
-      z-index: 2147483647;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      padding:
-        24px
-        20px
-        calc(28px + env(safe-area-inset-bottom));
-      box-sizing: border-box;
-      background: rgba(0, 0, 0, 0.12);
-      pointer-events: none;
-    }
-
-    #kakomonn-reader-start {
-      width: min(520px, 100%);
-      min-height: 58px;
-      border: 0;
-      border-radius: 18px;
-      background: #1473e6;
-      color: #fff;
-      font-size: 19px;
-      font-weight: 800;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
-      pointer-events: auto;
-    }
-
-    #kakomonn-reader-start:disabled {
-      background: rgba(90, 90, 90, 0.90);
     }
 
     #kakomonn-reader-sync-settings {

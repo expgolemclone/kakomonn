@@ -374,7 +374,96 @@
     await submitPendingCorrect();
   }
 
+  function readPendingCurrentPage() {
+    if (
+      !speechEnabled ||
+      !currentPageReadPending ||
+      !syncReady ||
+      syncInProgress ||
+      pendingCelebration !== null
+    ) {
+      return;
+    }
+
+    currentPageReadPending = false;
+    readCurrentPage();
+  }
+
+  function startSpeechForCurrentPage() {
+    if (
+      speechEnabled ||
+      speechInitializationInProgress ||
+      !speechSupported ||
+      !currentPageReadPending ||
+      !syncReady ||
+      syncInProgress ||
+      pendingCelebration !== null
+    ) {
+      return false;
+    }
+
+    speechInitializationInProgress = true;
+    speechRunId += 1;
+    const runId = speechRunId;
+    speech.cancel();
+    initializeSpeechVoice(
+      runId,
+      () => {
+        if (runId !== speechRunId) {
+          return;
+        }
+        speechInitializationInProgress = false;
+        speechEnabled = true;
+        readPendingCurrentPage();
+      },
+      () => {
+        if (runId === speechRunId) {
+          speechInitializationInProgress = false;
+        }
+      }
+    );
+    return true;
+  }
+
+  function processCurrentPageSpeech() {
+    if (
+      !currentPageReadPending ||
+      !syncReady ||
+      syncInProgress ||
+      pendingCelebration !== null
+    ) {
+      return;
+    }
+
+    if (!speechSupported) {
+      currentPageReadPending = false;
+      setStatus("読み上げ非対応");
+      return;
+    }
+    if (speechInitializationInProgress) {
+      return;
+    }
+    if (speechEnabled) {
+      readPendingCurrentPage();
+      return;
+    }
+    if (isIOS) {
+      setStatus("画面をタップすると読み上げます");
+      return;
+    }
+
+    startSpeechForCurrentPage();
+  }
+
+  function activateIOSSpeechFromGesture() {
+    // iOSではspeak()までを同じユーザー操作内で同期的に実行する必要があります.
+    if (isIOS && !speechEnabled) {
+      startSpeechForCurrentPage();
+    }
+  }
+
   function onFrameClick(event) {
+    activateIOSSpeechFromGesture();
     const target = event.target;
     if (!(target instanceof frame.contentWindow.Element)) {
       return;
@@ -411,6 +500,7 @@
     clearCopyFeedbackTimer();
     frameMutationObserver?.disconnect();
     frameMutationObserver = null;
+    currentPageReadPending = false;
     lastExplanationText = "";
     currentQuestionText = "";
   }
@@ -468,52 +558,14 @@
 
     loadTimer = window.setTimeout(() => {
       loadTimer = null;
-
-      if (!syncReady) {
-        return;
-      }
+      currentPageReadPending = true;
       if (pendingCelebration !== null) {
         void maybeContinuePendingCelebration();
         return;
       }
-      if (!speechSupported) {
-        setStatus("読み上げ非対応");
-      } else if (speechEnabled) {
-        readCurrentPage();
-      } else {
-        setStatus("開始ボタンを押してください");
-      }
+      processCurrentPageSpeech();
     }, FRAME_LOAD_DELAY_MS);
   }
-
-  startButton.addEventListener("click", () => {
-    if (!syncReady) {
-      void refreshRemoteCount();
-      return;
-    }
-
-    if (pendingCelebration !== null) {
-      void maybeContinuePendingCelebration();
-      return;
-    }
-    if (!speechSupported) {
-      setStatus("読み上げ非対応");
-      return;
-    }
-
-    speechEnabled = true;
-    startWrap.remove();
-    nextQuestionButton.hidden = false;
-    copyButton.hidden = false;
-    updateNextQuestionButton();
-    updateCopyButton();
-
-    // iOSでは初回の発話をユーザー操作の中で直接開始する必要があります.
-    speech.cancel();
-    speechRunId += 1;
-    const runId = speechRunId;
-    initializeSpeechVoice(runId, readCurrentPage);
-  });
 
   nextQuestionButton.addEventListener("click", () => {
     void handleNextQuestion();
@@ -535,6 +587,9 @@
     }
   });
   frame.addEventListener("load", bindFrameDocument);
+  if (isIOS) {
+    document.addEventListener("click", activateIOSSpeechFromGesture, true);
+  }
   window.addEventListener("focus", handlePageResume);
   window.addEventListener("pageshow", handlePageResume);
   document.addEventListener("visibilitychange", () => {

@@ -4,7 +4,7 @@
 
 ## 機能
 
-- 問題文と解説の連続読み上げ.
+- 問題文と解説の自動連続読み上げ.
 - 正解した問題だけを対象にした日次累計. 値は`kakomonn-sync`へ保存され,Win11 EdgeとiPhone Safariで共有されます.同期Workerのrootでは週と月の日別推移も確認できます.
 - 問題文と解説のクリップボードへのコピー.
 - 50,100,150問のように50問進むごとに,ランダムな祝福ページを表示します. 祝福ページから戻ると,準備済みの次の問題を再開します.
@@ -31,7 +31,7 @@ gh workflow run release-kakomonn-reader.yml --ref main
 
 ## 動作環境
 
-iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 読み上げにはブラウザのWeb Speech APIを使用します. iOSではブラウザ既定の日本語音声を利用し, WindowsではEdgeの`Microsoft Nanami Online (Natural)`を利用するためインターネット接続が必要です.
+iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 読み上げにはブラウザのWeb Speech APIを使用します. Windows Edgeでは,同期と問題ページの準備が完了すると自動で読み上げを開始します. iOSではWebKitの制約により,準備完了後の最初の画面タップで読み上げを開始し,以降の問題は自動で読み上げます. iOSではブラウザ既定の日本語音声を利用し,WindowsではEdgeの`Microsoft Nanami Online (Natural)`を利用するためインターネット接続が必要です.
 
 ## 正解数の同期設定
 

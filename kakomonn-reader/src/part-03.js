@@ -173,7 +173,7 @@
     );
   }
 
-  function initializeSpeechVoice(runId, onReady) {
+  function initializeSpeechVoice(runId, onReady, onUnavailable) {
     if (!isWindowsEdge) {
       onReady();
       return;
@@ -200,6 +200,7 @@
       speechVoice = findRequiredSpeechVoice();
       if (speechVoice === null) {
         setStatus("日本語音声を利用できません");
+        onUnavailable();
         return;
       }
 

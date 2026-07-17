@@ -1,0 +1,17 @@
+{
+  "name": "congratulations-gsap",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node tests/smoke.mjs && node tests/browser.mjs",
+    "check": "node --check app.js && node --check server.mjs && node --check tests/smoke.mjs && node --check tests/browser.mjs"
+  },
+  "dependencies": {
+    "gsap": "3.15.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "24.15.0"
+  }
+}

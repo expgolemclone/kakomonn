@@ -161,7 +161,7 @@
     return chunks;
   }
 
-  function initializeSpeechPlayback(runId, onReady, onUnavailable) {
+  function initializeIOSSpeechPlayback(runId, onReady, onUnavailable) {
     setStatus("音声準備中");
     speechAudio.src = SILENT_AUDIO_DATA_URL;
 
@@ -189,6 +189,86 @@
           onUnavailable();
         }
       });
+  }
+
+  function selectEdgeSpeechVoice() {
+    let voices;
+    try {
+      voices = edgeSpeechSynthesis.getVoices();
+    } catch {
+      return null;
+    }
+
+    if (voices.length === 0) {
+      return undefined;
+    }
+
+    return voices.find(
+      (voice) =>
+        voice.name === EDGE_SPEECH_VOICE_NAME &&
+        voice.lang.toLowerCase() === "ja-jp" &&
+        voice.localService === true
+    );
+  }
+
+  function initializeEdgeSpeechPlayback(runId, onReady, onUnavailable) {
+    setStatus("音声準備中");
+
+    const resolveVoice = () => {
+      const voice = selectEdgeSpeechVoice();
+      if (voice === undefined) {
+        return false;
+      }
+
+      cancelEdgeSpeechVoiceLoad?.();
+      if (runId !== speechRunId) {
+        return true;
+      }
+      if (voice === null) {
+        onUnavailable();
+        return true;
+      }
+
+      edgeSpeechVoice = voice;
+      onReady();
+      return true;
+    };
+
+    if (resolveVoice()) {
+      return;
+    }
+
+    const handleVoicesChanged = () => {
+      resolveVoice();
+    };
+    const timeout = window.setTimeout(() => {
+      cancelEdgeSpeechVoiceLoad?.();
+      if (runId === speechRunId) {
+        onUnavailable();
+      }
+    }, EDGE_SPEECH_VOICE_LOAD_TIMEOUT_MS);
+    cancelEdgeSpeechVoiceLoad = () => {
+      clearTimeout(timeout);
+      edgeSpeechSynthesis.removeEventListener(
+        "voiceschanged",
+        handleVoicesChanged
+      );
+      cancelEdgeSpeechVoiceLoad = null;
+    };
+    edgeSpeechSynthesis.addEventListener(
+      "voiceschanged",
+      handleVoicesChanged
+    );
+    resolveVoice();
+  }
+
+  function initializeSpeechPlayback(runId, onReady, onUnavailable) {
+    if (isIOS) {
+      initializeIOSSpeechPlayback(runId, onReady, onUnavailable);
+      return;
+    }
+
+    initializeEdgeSpeechPlayback(runId, onReady, onUnavailable);
   }
 
   function escapeSpeechText(text) {
@@ -249,7 +329,7 @@
     return result;
   }
 
-  function speechErrorMessage(error) {
+  function azureSpeechErrorMessage(error) {
     if (error?.code === "server_misconfigured") {
       return "音声APIが設定されていません";
     }
@@ -283,21 +363,143 @@
     }
   }
 
+  function clearActiveEdgeSpeech() {
+    if (activeEdgeSpeechUtterance === null) {
+      return;
+    }
+
+    activeEdgeSpeechUtterance.onstart = null;
+    activeEdgeSpeechUtterance.onend = null;
+    activeEdgeSpeechUtterance.onerror = null;
+    activeEdgeSpeechUtterance = null;
+    edgeSpeechSynthesis.cancel();
+  }
+
   function cancelActiveSpeech() {
+    cancelEdgeSpeechVoiceLoad?.();
     activeSpeechRequest?.abort();
     activeSpeechRequest = null;
     clearActiveSpeechAudio();
+    clearActiveEdgeSpeech();
   }
 
-  async function speakChunks(chunks, runId, label, rate, index = 0) {
+  function completeSpeechChunks(runId, label) {
+    if (runId !== speechRunId) {
+      return;
+    }
+
+    activeSpeechRequest = null;
+    stopButton.style.display = "none";
+    setStatus(`${label}完了`);
+  }
+
+  function failEdgeSpeech(runId, errorCode = "") {
+    if (runId !== speechRunId) {
+      return;
+    }
+
+    if (activeEdgeSpeechUtterance !== null) {
+      activeEdgeSpeechUtterance.onstart = null;
+      activeEdgeSpeechUtterance.onend = null;
+      activeEdgeSpeechUtterance.onerror = null;
+    }
+    activeEdgeSpeechUtterance = null;
+    edgeSpeechSynthesis.cancel();
+    stopButton.style.display = "none";
+    speechEnabled = false;
+    if (errorCode === "not-allowed" || errorCode === "NotAllowedError") {
+      currentPageReadPending = true;
+      setStatus("画面をクリックすると読み上げます");
+      return;
+    }
+
+    currentPageReadPending = false;
+    setStatus("Edgeのローカル音声を再生できません");
+  }
+
+  function speakEdgeSpeechChunks(chunks, runId, label, rate, index = 0) {
     if (runId !== speechRunId) {
       return;
     }
 
     if (index >= chunks.length) {
-      activeSpeechRequest = null;
+      completeSpeechChunks(runId, label);
+      return;
+    }
+
+    if (edgeSpeechVoice === null) {
+      speechEnabled = false;
+      speechUnavailable = true;
+      currentPageReadPending = false;
       stopButton.style.display = "none";
-      setStatus(`${label}完了`);
+      setStatus("Edgeのローカル日本語音声が見つかりません");
+      return;
+    }
+
+    let utterance;
+    try {
+      utterance = new window.SpeechSynthesisUtterance(chunks[index]);
+      utterance.voice = edgeSpeechVoice;
+      utterance.lang = "ja-JP";
+      utterance.rate = rate;
+    } catch (error) {
+      failEdgeSpeech(runId, error?.name);
+      return;
+    }
+
+    utterance.onstart = () => {
+      if (
+        runId === speechRunId &&
+        activeEdgeSpeechUtterance === utterance
+      ) {
+        setStatus(`${label} ${index + 1}/${chunks.length}`);
+        stopButton.style.display = "block";
+      }
+    };
+    utterance.onend = () => {
+      if (
+        runId !== speechRunId ||
+        activeEdgeSpeechUtterance !== utterance
+      ) {
+        return;
+      }
+
+      activeEdgeSpeechUtterance = null;
+      utterance.onstart = null;
+      utterance.onend = null;
+      utterance.onerror = null;
+      speakEdgeSpeechChunks(chunks, runId, label, rate, index + 1);
+    };
+    utterance.onerror = (event) => {
+      if (
+        runId === speechRunId &&
+        activeEdgeSpeechUtterance === utterance
+      ) {
+        failEdgeSpeech(runId, event.error);
+      }
+    };
+
+    activeEdgeSpeechUtterance = utterance;
+    try {
+      edgeSpeechSynthesis.speak(utterance);
+    } catch (error) {
+      failEdgeSpeech(runId, error?.name);
+    }
+  }
+
+  async function speakAzureSpeechChunks(
+    chunks,
+    runId,
+    label,
+    rate,
+    index = 0
+  ) {
+    if (runId !== speechRunId) {
+      return;
+    }
+
+    if (index >= chunks.length) {
+      completeSpeechChunks(runId, label);
       return;
     }
 
@@ -317,7 +519,7 @@
       if (runId === speechRunId && error?.code !== "request_aborted") {
         activeSpeechRequest = null;
         stopButton.style.display = "none";
-        setStatus(speechErrorMessage(error));
+        setStatus(azureSpeechErrorMessage(error));
       }
       return;
     }
@@ -341,7 +543,7 @@
     speechAudio.onended = () => {
       if (runId === speechRunId) {
         clearActiveSpeechAudio();
-        void speakChunks(chunks, runId, label, rate, index + 1);
+        void speakAzureSpeechChunks(chunks, runId, label, rate, index + 1);
       }
     };
 
@@ -383,7 +585,12 @@
     const runId = speechRunId;
     cancelActiveSpeech();
     setStatus(`${label}準備中`);
-    void speakChunks(chunks, runId, label, rate);
+    if (isWindowsEdge) {
+      speakEdgeSpeechChunks(chunks, runId, label, rate);
+      return;
+    }
+
+    void speakAzureSpeechChunks(chunks, runId, label, rate);
   }
 
   function readCurrentPage() {

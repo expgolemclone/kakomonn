@@ -78,6 +78,14 @@ async function preparePage(page, syncOptions = {}) {
       configurable: true,
       value: undefined,
     });
+    Object.defineProperty(window, "speechSynthesis", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(window, "SpeechSynthesisUtterance", {
+      configurable: true,
+      value: undefined,
+    });
   });
   await installSyncMock(page, syncOptions);
   return errors;

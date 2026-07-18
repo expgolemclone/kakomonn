@@ -72,6 +72,22 @@ async function preparePage(page, speechSupported, syncOptions = {}) {
       },
     });
     window.__copiedTexts = [];
+    window.__readerStatusHistory = [];
+    const recordReaderStatus = () => {
+      const status = document.querySelector(
+        "#kakomonn-reader-status",
+      )?.textContent;
+      const history = window.__readerStatusHistory;
+      if (status && history[history.length - 1] !== status) {
+        history.push(status);
+      }
+    };
+    window.__readerStatusObserver = new MutationObserver(recordReaderStatus);
+    window.__readerStatusObserver.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
@@ -210,13 +226,9 @@ async function main() {
     );
     await page.waitForFunction(
       () =>
+        window.__readerStatusHistory.includes("問題文 1/1") &&
         document.querySelector("#kakomonn-reader-status").textContent ===
-        "問題文 1/1",
-    );
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "問題文完了",
+          "問題文完了",
     );
     await page.waitForFunction(
       () => document.querySelector("#kakomonn-reader-next").disabled === false,
@@ -246,13 +258,9 @@ async function main() {
     );
     await page.waitForFunction(
       () =>
+        window.__readerStatusHistory.includes("解説 1/1") &&
         document.querySelector("#kakomonn-reader-status").textContent ===
-        "解説 1/1",
-    );
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "解説完了",
+          "解説完了",
     );
     assert.deepEqual((await azureSpeechCalls(page))[1], {
       method: "POST",

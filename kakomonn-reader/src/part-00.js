@@ -31,59 +31,44 @@
   const START_PARAMETER = "count50";
   const SYNC_TIMEOUT_MS = 15000;
   const SPEECH_TIMEOUT_MS = 30000;
-  const EDGE_SPEECH_VOICE_LOAD_TIMEOUT_MS = 5000;
   const FRAME_LOAD_DELAY_MS = 900;
   const EXPLANATION_CHANGE_DELAY_MS = 700;
   const NEXT_QUESTION_RELOAD_DELAY_MS = 1200;
   const FRAME_SCROLL_RESET_DELAYS_MS = [0, 120, 600];
   const COPY_FEEDBACK_DURATION_MS = 1400;
   const MAX_CHUNK_LENGTH = 1500;
-  const QUESTION_SPEECH_RATE = 1.8;
-  const EXPLANATION_SPEECH_RATE = 1.5;
+  const QUESTION_SPEECH_RATE = 2.0;
+  const EXPLANATION_SPEECH_RATE = 1.7;
   const SPEECH_TOKEN_RENEWAL_SKEW_MS = 60000;
   const AZURE_SPEECH_URL =
     "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
   const AZURE_SPEECH_VOICE_NAME = "ja-JP-NanamiNeural";
   const AZURE_SPEECH_OUTPUT_FORMAT =
     "audio-24khz-48kbitrate-mono-mp3";
-  const EDGE_SPEECH_VOICE_NAME =
-    "Microsoft Ayumi - Japanese (Japan)";
   const SILENT_AUDIO_DATA_URL =
     "data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
+  const SPEECH_GESTURE_STATUS =
+    "画面をクリックまたはタップすると読み上げます";
 
+  const speechAudio =
+    typeof window.Audio === "function" ? new window.Audio() : null;
   const isIOS =
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const isWindowsEdge =
     navigator.userAgent.includes("Windows NT") &&
     navigator.userAgent.includes("Edg/");
-  const speechAudio =
-    isIOS && typeof window.Audio === "function" ? new window.Audio() : null;
-  const edgeSpeechSynthesis = isWindowsEdge ? window.speechSynthesis : null;
-  const azureSpeechSupported =
-    isIOS &&
+  const speechSupported =
     typeof speechAudio?.play === "function" &&
     typeof speechAudio?.pause === "function" &&
     typeof speechAudio?.canPlayType === "function" &&
-    speechAudio.canPlayType("audio/mpeg") !== "";
-  const edgeSpeechSupported =
-    isWindowsEdge &&
-    typeof window.SpeechSynthesisUtterance === "function" &&
-    typeof edgeSpeechSynthesis?.getVoices === "function" &&
-    typeof edgeSpeechSynthesis?.speak === "function" &&
-    typeof edgeSpeechSynthesis?.cancel === "function" &&
-    typeof edgeSpeechSynthesis?.addEventListener === "function" &&
-    typeof edgeSpeechSynthesis?.removeEventListener === "function";
-  const speechSupported = azureSpeechSupported || edgeSpeechSupported;
+    speechAudio.canPlayType("audio/mpeg") !== "" &&
+    (isIOS || isWindowsEdge);
   let speechEnabled = false;
-  let speechUnavailable = false;
   let speechInitializationInProgress = false;
   let speechRunId = 0;
   let activeSpeechRequest = null;
   let activeSpeechAudioURL = "";
-  let activeEdgeSpeechUtterance = null;
-  let cancelEdgeSpeechVoiceLoad = null;
-  let edgeSpeechVoice = null;
   let azureSpeechToken = "";
   let azureSpeechTokenExpiresAt = 0;
   let azureSpeechTokenPromise = null;

@@ -28,7 +28,6 @@ const azureSpeechUrl =
   "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
 const azureSpeechVoiceName = "ja-JP-NanamiNeural";
 const azureSpeechOutputFormat = "audio-24khz-48kbitrate-mono-mp3";
-const edgeSpeechVoiceName = "Microsoft Ayumi - Japanese (Japan)";
 
 function expectedSpeechSSML(text, rate) {
   return (
@@ -61,19 +60,8 @@ async function preparePage(page, speechMode, syncOptions = {}) {
   page.on("pageerror", (error) => errors.push(String(error)));
 
   await page.setContent("<!doctype html><html><body></body></html>");
-  await page.evaluate(({ mode, voiceName }) => {
-    if (
-      ![
-        "none",
-        "edge",
-        "edge-delayed-voice",
-        "edge-empty-voices",
-        "edge-gesture-required",
-        "edge-missing-voice",
-        "edge-no-web-speech",
-        "ios",
-      ].includes(mode)
-    ) {
+  await page.evaluate((mode) => {
+    if (!["none", "audio", "audio-gesture-required"].includes(mode)) {
       throw new Error(`unknown speech mode: ${mode}`);
     }
 
@@ -113,6 +101,8 @@ async function preparePage(page, speechMode, syncOptions = {}) {
       },
     });
 
+    let gestureRequired = mode === "audio-gesture-required";
+
     class FakeAudio {
       constructor() {
         this.src = "";
@@ -131,6 +121,10 @@ async function preparePage(page, speechMode, syncOptions = {}) {
 
       play() {
         if (this.src.startsWith("data:audio/wav")) {
+          if (gestureRequired) {
+            gestureRequired = false;
+            return Promise.reject(new Error("mock gesture required"));
+          }
           return Promise.resolve();
         }
         window.setTimeout(() => {
@@ -141,181 +135,19 @@ async function preparePage(page, speechMode, syncOptions = {}) {
       }
     }
 
-    window.__edgeSpeechCalls = [];
-
     if (mode === "none") {
       Object.defineProperty(window, "Audio", {
         configurable: true,
         value: undefined,
       });
-      Object.defineProperty(window, "speechSynthesis", {
-        configurable: true,
-        value: undefined,
-      });
-      Object.defineProperty(window, "SpeechSynthesisUtterance", {
-        configurable: true,
-        value: undefined,
-      });
       return;
     }
-
-    if (mode === "edge-no-web-speech") {
-      Object.defineProperty(window, "Audio", {
-        configurable: true,
-        value: FakeAudio,
-      });
-      Object.defineProperty(window, "speechSynthesis", {
-        configurable: true,
-        value: undefined,
-      });
-      Object.defineProperty(window, "SpeechSynthesisUtterance", {
-        configurable: true,
-        value: undefined,
-      });
-      return;
-    }
-
-    if (
-      mode === "edge" ||
-      mode === "edge-delayed-voice" ||
-      mode === "edge-empty-voices" ||
-      mode === "edge-gesture-required" ||
-      mode === "edge-missing-voice"
-    ) {
-      class FakeSpeechSynthesisUtterance {
-        constructor(text) {
-          this.text = text;
-          this.voice = null;
-          this.lang = "";
-          this.rate = 1;
-          this.onstart = null;
-          this.onend = null;
-          this.onerror = null;
-        }
-      }
-
-      const createVoice = (name, localService, isDefault) => ({
-        name,
-        lang: "ja-JP",
-        voiceURI: name,
-        localService,
-        default: isDefault,
-      });
-      const voices =
-        mode === "edge-missing-voice"
-          ? [
-              createVoice(
-                "Microsoft Haruka - Japanese (Japan)",
-                true,
-                true,
-              ),
-              createVoice(voiceName, false, false),
-            ]
-          : [
-              createVoice(
-                "Microsoft Haruka - Japanese (Japan)",
-                true,
-                true,
-              ),
-              createVoice(voiceName, true, false),
-            ];
-      let activeUtterance = null;
-      let voicesReady = mode !== "edge-delayed-voice";
-      const voicesNeverLoad = mode === "edge-empty-voices";
-      let voiceLoadScheduled = false;
-      let gestureRequired = mode === "edge-gesture-required";
-      const listeners = new Set();
-      const synthesis = {
-        getVoices() {
-          if (voicesNeverLoad) {
-            return [];
-          }
-          if (!voicesReady && !voiceLoadScheduled) {
-            voiceLoadScheduled = true;
-            window.setTimeout(() => {
-              voicesReady = true;
-              for (const listener of [...listeners]) {
-                listener();
-              }
-            }, 50);
-          }
-          return voicesReady ? voices : [];
-        },
-        speak(utterance) {
-          activeUtterance = utterance;
-          if (gestureRequired) {
-            gestureRequired = false;
-            window.setTimeout(() => {
-              if (activeUtterance === utterance) {
-                utterance.onerror?.({ error: "not-allowed" });
-              }
-            }, 0);
-            return;
-          }
-          window.__edgeSpeechCalls.push({
-            text: utterance.text,
-            voiceName: utterance.voice?.name ?? "",
-            voiceURI: utterance.voice?.voiceURI ?? "",
-            lang: utterance.lang,
-            rate: utterance.rate,
-          });
-          window.setTimeout(() => {
-            if (activeUtterance !== utterance) {
-              return;
-            }
-            utterance.onstart?.();
-            window.setTimeout(() => {
-              if (activeUtterance !== utterance) {
-                return;
-              }
-              activeUtterance = null;
-              utterance.onend?.();
-            }, 100);
-          }, 0);
-        },
-        cancel() {
-          activeUtterance = null;
-        },
-        addEventListener(type, listener) {
-          if (type === "voiceschanged") {
-            listeners.add(listener);
-          }
-        },
-        removeEventListener(type, listener) {
-          if (type === "voiceschanged") {
-            listeners.delete(listener);
-          }
-        },
-      };
-      Object.defineProperty(window, "Audio", {
-        configurable: true,
-        value: FakeAudio,
-      });
-      Object.defineProperty(window, "speechSynthesis", {
-        configurable: true,
-        value: synthesis,
-      });
-      Object.defineProperty(window, "SpeechSynthesisUtterance", {
-        configurable: true,
-        value: FakeSpeechSynthesisUtterance,
-      });
-      return;
-    }
-
-    Object.defineProperty(window, "speechSynthesis", {
-      configurable: true,
-      value: undefined,
-    });
-    Object.defineProperty(window, "SpeechSynthesisUtterance", {
-      configurable: true,
-      value: undefined,
-    });
 
     Object.defineProperty(window, "Audio", {
       configurable: true,
       value: FakeAudio,
     });
-  }, { mode: speechMode, voiceName: edgeSpeechVoiceName });
+  }, speechMode);
 
   await installSyncMock(page, syncOptions);
 
@@ -357,10 +189,6 @@ async function azureSpeechCalls(page) {
   );
 }
 
-async function edgeSpeechCalls(page) {
-  return page.evaluate(() => window.__edgeSpeechCalls);
-}
-
 async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
@@ -383,12 +211,15 @@ async function main() {
     script.includes(`// @connect      ${new URL(SYNC_API_ORIGIN).host}`),
     true,
   );
+  assert.equal(script.includes("speechSynthesis"), false);
+  assert.equal(script.includes("SpeechSynthesisUtterance"), false);
+  assert.equal(script.includes("Microsoft Ayumi"), false);
 
   const browser = await chromium.launch({ headless: true });
   try {
     const context = await browser.newContext({ userAgent: edgeUserAgent });
     const page = await context.newPage();
-    const errors = await preparePage(page, "edge");
+    const errors = await preparePage(page, "audio");
     const childFrame = await loadMockQuestion(page, script);
     assert.equal(await page.evaluate(() => typeof window.Audio), "function");
     assert.equal(
@@ -417,19 +248,27 @@ async function main() {
       () => document.querySelector("#kakomonn-reader-next").disabled === false,
     );
 
-    assert.deepEqual((await edgeSpeechCalls(page))[0], {
-      text: "問題文。これは動作確認用の問題文です.",
-      voiceName: edgeSpeechVoiceName,
-      voiceURI: edgeSpeechVoiceName,
-      lang: "ja-JP",
-      rate: 1.8,
+    assert.deepEqual((await azureSpeechCalls(page))[0], {
+      method: "POST",
+      url: azureSpeechUrl,
+      authorization: "Bearer test-azure-speech-token",
+      headers: {
+        Authorization: "Bearer test-azure-speech-token",
+        "Content-Type": "application/ssml+xml",
+        "X-Microsoft-OutputFormat": azureSpeechOutputFormat,
+      },
+      body: expectedSpeechSSML(
+        "問題文。これは動作確認用の問題文です.",
+        "+100%",
+      ),
     });
-    assert.equal((await azureSpeechCalls(page)).length, 0);
-    assert.equal(await speechTokenCallCount(page), 0);
+    assert.equal(await speechTokenCallCount(page), 1);
 
     await markAnswerCorrect(childFrame);
     await page.waitForFunction(
-      () => window.__edgeSpeechCalls.length === 2,
+      (url) =>
+        window.__syncMock.calls.filter((call) => call.url === url).length === 2,
+      azureSpeechUrl,
     );
     await page.waitForFunction(
       () =>
@@ -437,15 +276,14 @@ async function main() {
         document.querySelector("#kakomonn-reader-status").textContent ===
           "解説完了",
     );
-    assert.deepEqual((await edgeSpeechCalls(page))[1], {
-      text: "解説。これは動作確認用の解説です.",
-      voiceName: edgeSpeechVoiceName,
-      voiceURI: edgeSpeechVoiceName,
-      lang: "ja-JP",
-      rate: 1.5,
-    });
-    assert.equal((await azureSpeechCalls(page)).length, 0);
-    assert.equal(await speechTokenCallCount(page), 0);
+    assert.equal(
+      (await azureSpeechCalls(page))[1].body,
+      expectedSpeechSSML(
+        "解説。これは動作確認用の解説です.",
+        "+70%",
+      ),
+    );
+    assert.equal(await speechTokenCallCount(page), 1);
 
     await page.evaluate(() => {
       window.__syncMock.holdNextRequest = true;
@@ -559,33 +397,39 @@ async function main() {
     const gestureRetryPage = await context.newPage();
     const gestureRetryErrors = await preparePage(
       gestureRetryPage,
-      "edge-gesture-required",
+      "audio-gesture-required",
     );
     const gestureRetryFrame = await loadMockQuestion(gestureRetryPage, script);
     await gestureRetryPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
-        "画面をクリックすると読み上げます",
+        "画面をクリックまたはタップすると読み上げます",
     );
-    assert.equal((await edgeSpeechCalls(gestureRetryPage)).length, 0);
     assert.equal((await azureSpeechCalls(gestureRetryPage)).length, 0);
     assert.equal(await speechTokenCallCount(gestureRetryPage), 0);
     await gestureRetryFrame.locator("input[name='answer']").first().click();
     await gestureRetryPage.waitForFunction(
-      () =>
-        window.__edgeSpeechCalls.length === 1 &&
+      (url) =>
+        window.__syncMock.calls.filter((call) => call.url === url).length === 1 &&
         document.querySelector("#kakomonn-reader-status").textContent ===
           "問題文完了",
+      azureSpeechUrl,
     );
-    assert.equal((await azureSpeechCalls(gestureRetryPage)).length, 0);
-    assert.equal(await speechTokenCallCount(gestureRetryPage), 0);
+    assert.equal(
+      (await azureSpeechCalls(gestureRetryPage))[0].body,
+      expectedSpeechSSML(
+        "問題文。これは動作確認用の問題文です.",
+        "+100%",
+      ),
+    );
+    assert.equal(await speechTokenCallCount(gestureRetryPage), 1);
     assert.deepEqual(gestureRetryErrors, []);
     await gestureRetryPage.close();
 
     const delayedSyncPage = await context.newPage();
     const delayedSyncErrors = await preparePage(
       delayedSyncPage,
-      "edge-delayed-voice",
+      "audio",
     );
     await delayedSyncPage.evaluate(() => {
       window.__syncMock.holdNextRequest = true;
@@ -594,15 +438,13 @@ async function main() {
     await delayedSyncPage.waitForFunction(
       () => window.__syncMock.releaseHeldRequest !== null,
     );
-    assert.equal(
-      (await edgeSpeechCalls(delayedSyncPage)).length,
-      0,
-    );
     assert.equal((await azureSpeechCalls(delayedSyncPage)).length, 0);
     assert.equal(await speechTokenCallCount(delayedSyncPage), 0);
     await delayedSyncPage.evaluate(() => window.__syncMock.releaseHeldRequest());
     await delayedSyncPage.waitForFunction(
-      () => window.__edgeSpeechCalls.length === 1,
+      (url) =>
+        window.__syncMock.calls.filter((call) => call.url === url).length === 1,
+      azureSpeechUrl,
     );
     await delayedSyncPage.waitForFunction(
       () =>
@@ -613,8 +455,8 @@ async function main() {
       await delayedSyncPage.locator("#kakomonn-reader-start").count(),
       0,
     );
-    assert.equal((await azureSpeechCalls(delayedSyncPage)).length, 0);
-    assert.equal(await speechTokenCallCount(delayedSyncPage), 0);
+    assert.equal((await azureSpeechCalls(delayedSyncPage)).length, 1);
+    assert.equal(await speechTokenCallCount(delayedSyncPage), 1);
     assert.deepEqual(delayedSyncErrors, []);
     await delayedSyncPage.close();
 
@@ -696,7 +538,7 @@ async function main() {
     const unsupportedPage = await context.newPage();
     const unsupportedErrors = await preparePage(
       unsupportedPage,
-      "edge-no-web-speech",
+      "none",
     );
     await unsupportedPage.addScriptTag({ content: script });
     await unsupportedPage.waitForFunction(
@@ -714,9 +556,8 @@ async function main() {
     );
     assert.equal(
       await unsupportedPage.evaluate(() => typeof window.Audio),
-      "function",
+      "undefined",
     );
-    assert.equal((await edgeSpeechCalls(unsupportedPage)).length, 0);
     assert.equal((await azureSpeechCalls(unsupportedPage)).length, 0);
     assert.equal(await speechTokenCallCount(unsupportedPage), 0);
     assert.deepEqual(unsupportedErrors, []);
@@ -725,7 +566,7 @@ async function main() {
       userAgent: chromeUserAgent,
     });
     const chromePage = await chromeContext.newPage();
-    const chromeErrors = await preparePage(chromePage, "edge");
+    const chromeErrors = await preparePage(chromePage, "audio");
     await chromePage.addScriptTag({ content: script });
     await chromePage.waitForFunction(
       () =>
@@ -739,50 +580,16 @@ async function main() {
     assert.deepEqual(chromeErrors, []);
     await chromeContext.close();
 
-    const missingVoicePage = await context.newPage();
-    const missingVoiceErrors = await preparePage(
-      missingVoicePage,
-      "edge-missing-voice",
-    );
-    await missingVoicePage.addScriptTag({ content: script });
-    await missingVoicePage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "Edgeのローカル日本語音声が見つかりません",
-    );
-    assert.equal((await edgeSpeechCalls(missingVoicePage)).length, 0);
-    assert.equal((await azureSpeechCalls(missingVoicePage)).length, 0);
-    assert.equal(await speechTokenCallCount(missingVoicePage), 0);
-    assert.deepEqual(missingVoiceErrors, []);
-    await missingVoicePage.close();
-
-    const emptyVoicesPage = await context.newPage();
-    const emptyVoicesErrors = await preparePage(
-      emptyVoicesPage,
-      "edge-empty-voices",
-    );
-    await emptyVoicesPage.addScriptTag({ content: script });
-    await emptyVoicesPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "Edgeのローカル日本語音声が見つかりません",
-    );
-    assert.equal((await edgeSpeechCalls(emptyVoicesPage)).length, 0);
-    assert.equal((await azureSpeechCalls(emptyVoicesPage)).length, 0);
-    assert.equal(await speechTokenCallCount(emptyVoicesPage), 0);
-    assert.deepEqual(emptyVoicesErrors, []);
-    await emptyVoicesPage.close();
-
     const iosContext = await browser.newContext({ userAgent: iosUserAgent });
     const iosPage = await iosContext.newPage();
-    const iosErrors = await preparePage(iosPage, "ios", {
+    const iosErrors = await preparePage(iosPage, "audio", {
       userscriptsPromise: true,
     });
     const iosFrame = await loadMockQuestion(iosPage, script);
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
-        "画面をタップすると読み上げます",
+        "画面をクリックまたはタップすると読み上げます",
     );
     assert.equal(await iosPage.locator("#kakomonn-reader-start").count(), 0);
     assert.equal((await azureSpeechCalls(iosPage)).length, 0);
@@ -810,7 +617,7 @@ async function main() {
       },
       body: expectedSpeechSSML(
         "問題文。これは動作確認用の問題文です.",
-        "+80%",
+        "+100%",
       ),
     });
     assert.equal(await speechTokenCallCount(iosPage), 1);
@@ -829,7 +636,7 @@ async function main() {
       (await azureSpeechCalls(iosPage))[1].body,
       expectedSpeechSSML(
         "解説。これは動作確認用の解説です.",
-        "+50%",
+        "+70%",
       ),
     );
     assert.equal(await speechTokenCallCount(iosPage), 1);

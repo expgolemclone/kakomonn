@@ -392,7 +392,6 @@
   function startSpeechForCurrentPage() {
     if (
       speechEnabled ||
-      speechUnavailable ||
       speechInitializationInProgress ||
       !speechSupported ||
       !currentPageReadPending ||
@@ -414,7 +413,6 @@
           return;
         }
         speechInitializationInProgress = false;
-        speechUnavailable = false;
         speechEnabled = true;
         readPendingCurrentPage();
       },
@@ -422,13 +420,7 @@
         if (runId === speechRunId) {
           speechInitializationInProgress = false;
           speechEnabled = false;
-          if (isIOS) {
-            setStatus("画面をタップすると読み上げます");
-          } else {
-            speechUnavailable = true;
-            currentPageReadPending = false;
-            setStatus("Edgeのローカル日本語音声が見つかりません");
-          }
+          setStatus(SPEECH_GESTURE_STATUS);
         }
       }
     );
@@ -440,8 +432,7 @@
       !currentPageReadPending ||
       !syncReady ||
       syncInProgress ||
-      pendingCelebration !== null ||
-      speechUnavailable
+      pendingCelebration !== null
     ) {
       return;
     }
@@ -459,7 +450,7 @@
       return;
     }
     if (isIOS) {
-      setStatus("画面をタップすると読み上げます");
+      setStatus(SPEECH_GESTURE_STATUS);
       return;
     }
 

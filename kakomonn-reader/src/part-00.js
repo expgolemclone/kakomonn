@@ -37,8 +37,8 @@
   const FRAME_SCROLL_RESET_DELAYS_MS = [0, 120, 600];
   const COPY_FEEDBACK_DURATION_MS = 1400;
   const MAX_CHUNK_LENGTH = 1500;
-  const QUESTION_SPEECH_RATE = 1.5;
-  const EXPLANATION_SPEECH_RATE = 1.2;
+  const QUESTION_SPEECH_RATE = 1.8;
+  const EXPLANATION_SPEECH_RATE = 1.5;
   const SPEECH_TOKEN_RENEWAL_SKEW_MS = 60000;
   const AZURE_SPEECH_URL =
     "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";

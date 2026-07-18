@@ -245,7 +245,7 @@ async function main() {
       },
       body: expectedSpeechSSML(
         "問題文。これは動作確認用の問題文です.",
-        "+50%",
+        "+80%",
       ),
     });
     assert.equal(await speechTokenCallCount(page), 1);
@@ -273,7 +273,7 @@ async function main() {
       },
       body: expectedSpeechSSML(
         "解説。これは動作確認用の解説です.",
-        "+20%",
+        "+50%",
       ),
     });
     assert.equal(await speechTokenCallCount(page), 1);
@@ -559,7 +559,7 @@ async function main() {
       (await azureSpeechCalls(iosPage))[0].body,
       expectedSpeechSSML(
         "問題文。これは動作確認用の問題文です.",
-        "+50%",
+        "+80%",
       ),
     );
     await markAnswerCorrect(iosFrame);

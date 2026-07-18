@@ -77,7 +77,7 @@ html[data-state="ready"] #celebration-frame {
   font-size: 0.82rem;
 }
 
-.return-ticket {
+.study-log-ticket {
   position: fixed;
   right: max(1rem, env(safe-area-inset-right));
   bottom: max(1rem, env(safe-area-inset-bottom));
@@ -89,7 +89,7 @@ html[data-state="ready"] #celebration-frame {
 }
 
 .milestone-label,
-.return-button {
+.study-log-button {
   min-height: 3.15rem;
   border: 0;
 }
@@ -112,7 +112,7 @@ html[data-state="ready"] #celebration-frame {
   white-space: nowrap;
 }
 
-.return-button {
+.study-log-button {
   position: relative;
   padding: 0.7rem 1.1rem;
   border: 2px solid #152642;
@@ -122,30 +122,30 @@ html[data-state="ready"] #celebration-frame {
   cursor: pointer;
 }
 
-.return-button::after {
+.study-log-button::after {
   content: "→";
   display: inline-block;
   margin-left: 0.65rem;
   transition: transform 150ms ease-out;
 }
 
-.return-button:hover::after {
+.study-log-button:hover::after {
   transform: translateX(0.25rem);
 }
 
-.return-button:focus-visible {
+.study-log-button:focus-visible {
   outline: 4px solid #fff;
   outline-offset: 3px;
 }
 
-html[data-state="error"] .return-ticket,
+html[data-state="error"] .study-log-ticket,
 html[data-state="error"] #celebration-frame,
 html[data-state="ready"] .loading {
   display: none;
 }
 
 @media (max-width: 560px) {
-  .return-ticket {
+  .study-log-ticket {
     right: max(0.6rem, env(safe-area-inset-right));
     bottom: max(0.6rem, env(safe-area-inset-bottom));
     left: max(0.6rem, env(safe-area-inset-left));
@@ -153,7 +153,7 @@ html[data-state="ready"] .loading {
   }
 
   .milestone-label,
-  .return-button {
+  .study-log-button {
     min-height: 3rem;
     padding-inline: 0.65rem;
     font-size: 0.78rem;
@@ -162,7 +162,7 @@ html[data-state="ready"] .loading {
 
 @media (prefers-reduced-motion: reduce) {
   #celebration-frame,
-  .return-button::after {
+  .study-log-button::after {
     transition: none;
   }
 }

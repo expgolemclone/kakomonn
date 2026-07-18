@@ -2,7 +2,7 @@
 
 kakomonn-readerが当日50問ごとのmilestoneへ到達した時に表示する,静的な祝福site集です.
 
-root shellは登録済みsiteを均等確率で1つ選び,全画面iframeで表示します.画面下の`次の50問へ`を押すと,準備済みの次問へ戻ります.
+root shellは登録済みsiteを均等確率で1つ選び,全画面iframeで表示します.画面下の`週間の記録を見る`を押すと,同期Workerの今週の学習ログを同じtabで開きます.学習ログから戻ると,準備済みの次問へ戻ります.
 
 ## 収録site
 
@@ -35,7 +35,7 @@ npm run build
 npm test
 ```
 
-Viteのmulti-page buildは`dist/`へ全siteを出力します.`npm test`はmanifest,全entry,desktopとmobile,共通の戻る導線をChromiumで検証します.
+Viteのmulti-page buildは`dist/`へ全siteを出力します.`npm test`はmanifest,全entry,desktopとmobile,共通の学習ログ導線をChromiumで検証します.
 
 ## Cloudflare
 

@@ -8,6 +8,8 @@ import { chromium } from "playwright";
 import { startStaticServer } from "./server-helper.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const STUDY_LOG_URL =
+  "https://kakomonn-count-sync.expgolem-lab.workers.dev/";
 const manifest = JSON.parse(
   await readFile(resolve(projectRoot, "celebrations.json"), "utf8"),
 );
@@ -88,22 +90,28 @@ async function verifyShell(browser, origin) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = captureErrors(page);
   try {
+    await page.route(`${STUDY_LOG_URL}**`, (route) =>
+      route.fulfill({
+        contentType: "text/html; charset=utf-8",
+        body: "<!doctype html><html><body><h1>過去問 学習ログ</h1></body></html>",
+      }),
+    );
     await page.goto(`${origin}/normal/kotonoha/`, { waitUntil: "domcontentloaded" });
     await page.evaluate((url) => window.location.assign(url), `${origin}/?milestone=100`);
     await page.waitForSelector('html[data-state="ready"]');
 
     const shell = await page.evaluate(() => ({
       milestone: document.querySelector("#milestone-label")?.textContent,
-      returnText: document.querySelector("#return-to-study")?.textContent,
+      studyLogText: document.querySelector("#open-study-log")?.textContent,
       selectedSite: document.querySelector("#celebration-frame")?.dataset.siteId,
       frameSource: document.querySelector("#celebration-frame")?.src,
     }));
     const selected = manifest.sites.find((site) => site.id === shell.selectedSite);
     assert(selected, `Unknown selected site, ${shell.selectedSite}`);
     assert.equal(shell.milestone, "100問達成");
-    assert.equal(shell.returnText, "次の50問へ");
+    assert.equal(shell.studyLogText, "週間の記録を見る");
     assert.equal(new URL(shell.frameSource).pathname.endsWith(`/${selected.entry}`), true);
-    assert.equal(await page.locator("#return-to-study").isVisible(), true);
+    assert.equal(await page.locator("#open-study-log").isVisible(), true);
     assert.deepEqual(errors, []);
 
     await page.screenshot({
@@ -114,7 +122,7 @@ async function verifyShell(browser, origin) {
     const mobileLayout = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: window.innerWidth,
-      ticketWidth: document.querySelector(".return-ticket")?.getBoundingClientRect().width,
+      ticketWidth: document.querySelector(".study-log-ticket")?.getBoundingClientRect().width,
     }));
     assert.equal(mobileLayout.documentWidth <= mobileLayout.viewportWidth, true);
     assert.equal(mobileLayout.ticketWidth <= mobileLayout.viewportWidth - 12, true);
@@ -124,8 +132,14 @@ async function verifyShell(browser, origin) {
     });
 
     await Promise.all([
+      page.waitForURL(STUDY_LOG_URL),
+      page.locator("#open-study-log").click(),
+    ]);
+    assert.equal(await page.locator("h1").textContent(), "過去問 学習ログ");
+
+    await Promise.all([
       page.waitForURL(`${origin}/normal/kotonoha/`),
-      page.locator("#return-to-study").click(),
+      page.goBack(),
     ]);
   } finally {
     await page.close();
@@ -137,7 +151,7 @@ async function verifyInvalidMilestone(browser, origin) {
   try {
     await page.goto(`${origin}/?milestone=51`, { waitUntil: "domcontentloaded" });
     await page.locator("#error-panel").waitFor({ state: "visible" });
-    assert.equal(await page.locator(".return-ticket").isVisible(), false);
+    assert.equal(await page.locator(".study-log-ticket").isVisible(), false);
     assert.match(await page.locator("#error-panel p").textContent(), /multiple of 50/);
   } finally {
     await page.close();

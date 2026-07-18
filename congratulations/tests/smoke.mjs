@@ -45,7 +45,8 @@ assert.equal(
 
 const shellHTML = await readFile(resolve(projectRoot, "dist", "index.html"), "utf8");
 assert.match(shellHTML, /id="celebration-frame"/);
-assert.match(shellHTML, /次の50問へ/);
+assert.match(shellHTML, /id="open-study-log"/);
+assert.match(shellHTML, /週間の記録を見る/);
 
 for (const site of manifest.sites) {
   const sourcePath = resolve(projectRoot, site.entry);

@@ -5,13 +5,16 @@ import {
   validateManifest,
 } from "./site-selection.js";
 
+const STUDY_LOG_URL =
+  "https://kakomonn-count-sync.expgolem-lab.workers.dev/";
+
 const frame = document.querySelector("#celebration-frame");
 const milestoneLabel = document.querySelector("#milestone-label");
-const returnButton = document.querySelector("#return-to-study");
+const studyLogButton = document.querySelector("#open-study-log");
 const loading = document.querySelector("#loading");
 const errorPanel = document.querySelector("#error-panel");
 
-if (!frame || !milestoneLabel || !returnButton || !loading || !errorPanel) {
+if (!frame || !milestoneLabel || !studyLogButton || !loading || !errorPanel) {
   throw new Error("Required celebration shell nodes are missing.");
 }
 
@@ -42,8 +45,8 @@ try {
     { once: true },
   );
 
-  returnButton.addEventListener("click", () => {
-    window.history.back();
+  studyLogButton.addEventListener("click", () => {
+    window.location.replace(STUDY_LOG_URL);
   });
 } catch (error) {
   renderError(error);

@@ -23,7 +23,7 @@
 
   function updateNextQuestionButton() {
     if (syncInProgress) {
-      nextQuestionButton.textContent = "正解数を同期中";
+      nextQuestionButton.textContent = "学習記録を同期中";
       nextQuestionButton.disabled =
         !syncReady ||
         navigationInProgress ||
@@ -34,7 +34,7 @@
     }
 
     if (nextQuestionOperationInProgress) {
-      nextQuestionButton.textContent = "正解情報を処理中";
+      nextQuestionButton.textContent = "解答記録を処理中";
       nextQuestionButton.disabled = true;
       return;
     }
@@ -45,7 +45,7 @@
       return;
     }
 
-    if (pendingCorrect !== null) {
+    if (pendingAnswer !== null) {
       nextQuestionButton.textContent = "同期を再試行";
       nextQuestionButton.disabled = findNextQuestionControl() === null;
       return;
@@ -161,7 +161,7 @@
     if (
       pendingCelebration === null ||
       !syncReady ||
-      pendingCorrect !== null ||
+      pendingAnswer !== null ||
       syncInProgress ||
       nextQuestionOperationInProgress ||
       celebrationTransitionPromise !== null
@@ -216,34 +216,39 @@
     return celebrationTransitionPromise;
   }
 
-  async function createPendingCorrect() {
+  async function createPendingAnswer(result) {
     const operation = {
       operationId: createOperationId(),
       date: activeCountDate,
       pageURL: currentFrameURL,
+      result,
     };
-    await GM.setValue(PENDING_CORRECT_KEY, operation);
-    pendingCorrect = operation;
+    if (!isPendingAnswer(operation)) {
+      throw new Error("invalid pending answer");
+    }
+    await GM.setValue(PENDING_ANSWER_KEY, operation);
+    pendingAnswer = operation;
   }
 
-  async function submitPendingCorrect() {
-    if (pendingCorrect === null || syncPromise !== null) {
+  async function submitPendingAnswer() {
+    if (pendingAnswer === null || syncPromise !== null) {
       return;
     }
 
     nextQuestionOperationInProgress = true;
-    const operation = pendingCorrect;
+    const operation = pendingAnswer;
     const sourceDocument = frameDocument;
     navigationInProgress = true;
     syncInProgress = true;
-    setStatus("正解数を同期中");
+    setStatus("学習記録を同期中");
     updateSyncDependentControls();
 
     syncPromise = (async () => {
       try {
-        const result = await requestCorrectResult(syncToken, {
+        const result = await requestAnswerResult(syncToken, {
           date: operation.date,
           operationId: operation.operationId,
+          result: operation.result,
         });
         applyRemoteState(result.state);
         if (result.completedMilestone !== null) {
@@ -252,7 +257,7 @@
             result.completedMilestone
           );
         }
-        await clearPendingCorrect();
+        await clearPendingAnswer();
         syncReady = true;
         const shouldNavigate = isOperationPageActive(
           operation,
@@ -265,16 +270,16 @@
           navigationInProgress = false;
           setStatus(
             pendingCelebration === null
-              ? "未完了の正解数を同期しました"
+              ? "未完了の解答記録を同期しました"
               : `${pendingCelebration.milestone}問達成.祝福を準備中`
           );
         }
         return true;
       } catch (error) {
-        if (error?.code === "date_changed" && isCountState(error.state)) {
+        if (error?.code === "date_changed" && isSyncState(error.state)) {
           applyRemoteState(error.state);
           try {
-            await clearPendingCorrect();
+            await clearPendingAnswer();
             await reconcilePendingDates();
           } catch {
             navigationInProgress = false;
@@ -334,11 +339,11 @@
       }
     }
     if (!syncReady) {
-      await refreshRemoteCount();
+      await refreshRemoteState();
       return;
     }
-    if (pendingCorrect !== null) {
-      await submitPendingCorrect();
+    if (pendingAnswer !== null) {
+      await submitPendingAnswer();
       return;
     }
     if (pendingCelebration !== null) {
@@ -352,26 +357,21 @@
       updateNextQuestionButton();
       return;
     }
-    if (answerResult === "incorrect") {
-      proceedToNextQuestion();
-      return;
-    }
-
     nextQuestionOperationInProgress = true;
     navigationInProgress = true;
-    setStatus("正解情報を保存中");
+    setStatus("解答記録を保存中");
     updateSyncDependentControls();
     try {
-      await createPendingCorrect();
+      await createPendingAnswer(answerResult);
     } catch {
       nextQuestionOperationInProgress = false;
       navigationInProgress = false;
-      setStatus("未同期の正解情報を保存できません");
+      setStatus("未同期の解答記録を保存できません");
       updateSyncDependentControls();
       return;
     }
 
-    await submitPendingCorrect();
+    await submitPendingAnswer();
   }
 
   function readPendingCurrentPage() {

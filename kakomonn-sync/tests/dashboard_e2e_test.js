@@ -13,13 +13,22 @@ const wranglerBin = resolve(projectRoot, "node_modules", "wrangler", "bin", "wra
 const configPath = resolve(projectRoot, "kakomonn-sync", "wrangler.jsonc");
 const token = "test-dashboard-token";
 const today = "2026-07-18";
-const availableFrom = "2026-07-01";
-const counts = new Map([
+const availableFrom = {
+  correct: "2026-07-01",
+  answered: "2026-07-15",
+};
+const correctCounts = new Map([
   ["2026-07-13", 2],
   ["2026-07-15", 4],
   ["2026-07-16", 6],
   ["2026-07-17", 8],
   ["2026-07-18", 10],
+]);
+const answeredCounts = new Map([
+  ["2026-07-15", 6],
+  ["2026-07-16", 9],
+  ["2026-07-17", 11],
+  ["2026-07-18", 14],
 ]);
 
 function productionWorker() {
@@ -158,8 +167,16 @@ function historyResponse(url) {
     const date = dateFromOrdinal(ordinal);
     days.push({
       date,
-      count:
-        date < availableFrom || date > today ? null : (counts.get(date) ?? 0),
+      counts: {
+        correct:
+          date < availableFrom.correct || date > today
+            ? null
+            : (correctCounts.get(date) ?? 0),
+        answered:
+          date < availableFrom.answered || date > today
+            ? null
+            : (answeredCounts.get(date) ?? 0),
+      },
     });
   }
   return {
@@ -191,7 +208,7 @@ async function main() {
   });
   page.on("pageerror", (error) => browserErrors.push(String(error)));
 
-  await page.route(`${worker.origin}/v1/**`, async (route) => {
+  await page.route(`${worker.origin}/v2/**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const authorization = request.headers().authorization ?? "";
@@ -204,15 +221,19 @@ async function main() {
       });
       return;
     }
-    if (url.pathname === "/v1/count") {
+    if (url.pathname === "/v2/state") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ date: today, count: 10, milestoneInterval: 50 }),
+        body: JSON.stringify({
+          date: today,
+          counts: { correct: 10, answered: 14 },
+          milestoneInterval: 50,
+        }),
       });
       return;
     }
-    if (url.pathname === "/v1/history") {
+    if (url.pathname === "/v2/history") {
       if (failNextHistory) {
         failNextHistory = false;
         await route.fulfill({
@@ -248,10 +269,18 @@ async function main() {
     await page.locator("#dashboard").waitFor({ state: "visible" });
     assert.equal(await page.locator("#period-title").textContent(), "2026年7月13日 - 19日");
     assert.equal(await page.locator("#total-count").textContent(), "30");
+    assert.equal(await page.locator("#total-answered").textContent(), "40");
     assert.equal(await page.locator("#average-count").textContent(), "5.0");
+    assert.equal(await page.locator("#average-answered").textContent(), "10.0");
     assert.equal(await page.locator("#bar-chart .bar-slot").count(), 7);
     assert.equal(await page.locator(".today-marker").textContent(), "今日");
-    assert.match(await page.locator("#day-detail").textContent(), /2026年7月18日 土曜日, 10問/);
+    assert.match(
+      await page.locator("#day-detail").textContent(),
+      /2026年7月18日 土曜日, 正解10問, 解答14問/
+    );
+    assert.equal(await page.locator(".bar-fill-correct").count(), 6);
+    assert.equal(await page.locator(".bar-fill-answered").count(), 4);
+    assert.equal(await page.locator(".chart-legend").getAttribute("aria-label"), "graphの凡例");
     assert.equal(
       await page.locator(".bar-fill").first().evaluate((element) =>
         getComputedStyle(element).animationName
@@ -278,7 +307,9 @@ async function main() {
     );
     assert.equal(await page.locator("#bar-chart .bar-slot").count(), 31);
     assert.equal(await page.locator("#total-count").textContent(), "30");
+    assert.equal(await page.locator("#total-answered").textContent(), "40");
     assert.equal(await page.locator("#average-count").textContent(), "1.7");
+    assert.equal(await page.locator("#average-answered").textContent(), "10.0");
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForFunction(
@@ -329,7 +360,7 @@ async function main() {
       await page.evaluate(() => localStorage.getItem("kakomonn-dashboard.sync-token")),
       null
     );
-    assert.equal(apiCalls.every((call) => call.pathname.startsWith("/v1/")), true);
+    assert.equal(apiCalls.every((call) => call.pathname.startsWith("/v2/")), true);
     assert.equal(
       apiCalls.some((call) => call.authorization === `Bearer ${token}`),
       true

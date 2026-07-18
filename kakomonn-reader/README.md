@@ -5,7 +5,7 @@
 ## 機能
 
 - 問題文と解説の自動連続読み上げ.
-- 正解した問題だけを対象にした日次累計. 値は`kakomonn-sync`へ保存され,Win11 EdgeとiPhone Safariで共有されます.同期Workerのrootでは週と月の日別推移も確認できます.
+- 正解数と解答数の日次累計. 値は`kakomonn-sync`へ保存され,Win11 EdgeとiPhone Safariで共有されます.同期Workerのrootでは正解数を主指標,解答数を参考指標にした週と月の日別推移も確認できます.
 - 問題文と解説のクリップボードへのコピー.
 - 50,100,150問のように50問進むごとに,ランダムな祝福ページを表示します.祝福ページから今週の学習ログを開き,そこから戻ると準備済みの次の問題を再開します.
 
@@ -33,15 +33,15 @@ gh workflow run release-kakomonn-reader.yml --ref main
 
 iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 両端末ともAzure Speechの`ja-JP-NanamiNeural`を使用し,短期tokenの取得後はAzureから音声を直接受信します. Windows Edgeでは同期と問題ページの準備が完了すると自動で読み上げを開始します. ブラウザが自動再生を拒否した場合とiOSでは,準備完了後の最初の画面クリックまたはタップで読み上げを開始し,以降の問題は自動で読み上げます. 読み上げにはインターネット接続が必要です.
 
-## 正解数の同期設定
+## 学習記録の同期設定
 
 読み上げを利用する場合は,先に[`kakomonn-sync`](../kakomonn-sync/README.md)へAzure Speech F0のkeyを設定してCloudflareへデプロイし,生成されたAPI URLを`src/part-00.js`の`SYNC_API_URL`と`@connect`へ設定してビルドします. Speech resourceは,音声endpointと同じ`Japan East`に作成します.
 
 初回起動時に同期トークンの入力画面が開きます.Win11とiPhoneへ,Worker Secretの`SYNC_TOKEN`と同じ値を入力してください.トークンは各ユーザースクリプトマネージャーの専用ストレージへ保存され,対象サイトの`localStorage`には保存されません.
 
-正解時の同期に失敗した場合は次問へ進まず,同じ操作IDで再試行します.通信が復旧した後に`同期を再試行`を押してください.同じ操作の再送は二重加算されません.
+正解と不正解のどちらでも,解答記録の同期に失敗した場合は次問へ進まず,同じ操作IDで再試行します.通信が復旧した後に`同期を再試行`を押してください.同じ操作の再送は二重加算されません.
 
-祝福は,50問の区切りへ到達させた操作を送信した端末だけに表示されます.別端末が同期によって50,100,150問を観測しただけでは表示されません.祝福サイトはCloudflare Workers Static Assetsへ公開した`CONGRATULATIONS_URL`を使用します.
+祝福は,正解数が50問の区切りへ到達した操作を送信した端末だけに表示されます.別端末が同期によって50,100,150問を観測しただけでは表示されません.祝福サイトはCloudflare Workers Static Assetsへ公開した`CONGRATULATIONS_URL`を使用します.
 
 ## バージョン管理
 

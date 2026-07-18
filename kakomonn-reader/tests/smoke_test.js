@@ -59,7 +59,13 @@ async function preparePage(page, speechMode, syncOptions = {}) {
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
 
-  await page.setContent("<!doctype html><html><body></body></html>");
+  await page.route("https://chushoks.kakomonn.com/**", (route) =>
+    route.fulfill({
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body></body></html>",
+    }),
+  );
+  await page.goto("https://chushoks.kakomonn.com/questions/current");
   await page.evaluate((mode) => {
     if (!["none", "audio", "audio-gesture-required"].includes(mode)) {
       throw new Error(`unknown speech mode: ${mode}`);
@@ -193,7 +199,7 @@ async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v1/speech-token",
+        (call) => new URL(call.url).pathname === "/v2/speech-token",
       ).length,
   );
 }
@@ -305,7 +311,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
-        "正解数を同期できません.再試行してください",
+        "学習記録を同期できません.再試行してください",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-copy").innerText(),
@@ -338,7 +344,7 @@ async function main() {
     await page.waitForFunction(
       () => window.__syncMock.releaseHeldRequest !== null,
     );
-    assert.equal(await nextQuestionButton.innerText(), "正解数を同期中");
+    assert.equal(await nextQuestionButton.innerText(), "学習記録を同期中");
     assert.equal(await nextQuestionButton.isDisabled(), false);
     assert.equal(
       await page.evaluate(
@@ -346,24 +352,37 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v1/correct",
+              new URL(call.url).pathname === "/v2/answers",
           ).length,
       ),
       0,
     );
     await page.evaluate(() => window.__syncMock.releaseHeldRequest());
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-count").textContent ===
-        "1問,次は50問",
-    );
+    try {
+      await page.waitForFunction(
+        () =>
+          document.querySelector("#kakomonn-reader-count").textContent ===
+          "1問,次は50問",
+      );
+    } catch (error) {
+      error.readerState = await page.evaluate(() => ({
+        count: document.querySelector("#kakomonn-reader-count")?.textContent,
+        status: document.querySelector("#kakomonn-reader-status")?.textContent,
+        calls: window.__syncMock.calls,
+        server: {
+          correct: window.__syncMock.count,
+          answered: window.__syncMock.answeredCount,
+        },
+      }));
+      throw error;
+    }
     assert.equal(
       await page.evaluate(
         () =>
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v1/correct",
+              new URL(call.url).pathname === "/v2/answers",
           ).length,
       ),
       1,
@@ -371,6 +390,7 @@ async function main() {
 
     await page.evaluate(() => {
       window.__syncMock.count = 7;
+      window.__syncMock.answeredCount = 7;
       window.__syncMock.holdNextRequest = true;
       window.dispatchEvent(new Event("focus"));
     });
@@ -511,7 +531,7 @@ async function main() {
     await failedSetupPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-sync-settings-error")
-          .textContent === "正解数を同期できません.",
+          .textContent === "学習記録を同期できません.",
     );
     assert.equal(
       await failedSetupPage.locator("#kakomonn-reader-sync-settings").isVisible(),
@@ -648,6 +668,7 @@ async function main() {
     );
     await iosPage.evaluate(() => {
       window.__syncMock.count = 6;
+      window.__syncMock.answeredCount = 6;
       window.dispatchEvent(new Event("focus"));
     });
     await iosPage.waitForFunction(
@@ -661,7 +682,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v1/correct",
+              new URL(call.url).pathname === "/v2/answers",
           ).length,
       ),
       1,

@@ -5,6 +5,7 @@ const DAILY_COUNT_OBJECT_NAME = "primary";
 const MAX_HISTORY_DAYS = 31;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const OPERATION_ID_PATTERN = /^[0-9a-f]{32}$/;
+const ANSWER_RESULTS = new Set(["correct", "incorrect"]);
 const AZURE_SPEECH_TOKEN_URL =
   "https://japaneast.api.cognitive.microsoft.com/sts/v1.0/issueToken";
 const AZURE_SPEECH_TOKEN_TTL_SECONDS = 600;
@@ -53,6 +54,10 @@ function dateOrdinal(value) {
 
 function isoDateFromOrdinal(ordinal) {
   return new Date(ordinal * 86_400_000).toISOString().slice(0, 10);
+}
+
+function nextDate(value) {
+  return isoDateFromOrdinal(dateOrdinal(value) + 1);
 }
 
 function parseHistoryRange(from, to) {
@@ -104,10 +109,14 @@ async function isAuthorized(request, env) {
   return secretsEqual(authorization.slice(prefix.length), env.SYNC_TOKEN);
 }
 
-function parseStateRow(row) {
+function parseStateRow(row, availability) {
   return {
     date: row.date,
-    count: row.count,
+    counts: {
+      correct: row.correct_count,
+      answered:
+        row.date < availability.answered ? null : row.answered_count,
+    },
     milestoneInterval: MILESTONE_INTERVAL,
   };
 }
@@ -128,30 +137,6 @@ function tableColumns(storage, tableName) {
     .map((column) => column.name);
 }
 
-function createHistorySchema(storage) {
-  storage.sql.exec(`
-    CREATE TABLE daily_state (
-      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-      date TEXT NOT NULL,
-      count INTEGER NOT NULL CHECK (count >= 0)
-    );
-    CREATE TABLE processed_operations (
-      operation_id TEXT PRIMARY KEY,
-      resulting_count INTEGER CHECK (
-        resulting_count IS NULL OR resulting_count >= 1
-      )
-    ) WITHOUT ROWID;
-    CREATE TABLE daily_history (
-      date TEXT PRIMARY KEY,
-      count INTEGER NOT NULL CHECK (count >= 0)
-    ) WITHOUT ROWID;
-    CREATE TABLE tracking_metadata (
-      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-      available_from TEXT NOT NULL
-    );
-  `);
-}
-
 function assertColumns(actual, expected, tableName) {
   if (
     actual.length !== expected.length ||
@@ -161,17 +146,49 @@ function assertColumns(actual, expected, tableName) {
   }
 }
 
-function validateDailyAndOperationSchema(storage) {
+function createLearningLogSchema(storage) {
+  storage.sql.exec(`
+    CREATE TABLE daily_state (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      date TEXT NOT NULL,
+      correct_count INTEGER NOT NULL CHECK (correct_count >= 0),
+      answered_count INTEGER NOT NULL CHECK (
+        answered_count >= correct_count
+      )
+    );
+    CREATE TABLE processed_answers (
+      operation_id TEXT PRIMARY KEY,
+      result TEXT NOT NULL CHECK (result IN ('correct', 'incorrect')),
+      completed_milestone INTEGER CHECK (
+        completed_milestone IS NULL OR completed_milestone >= 1
+      )
+    ) WITHOUT ROWID;
+    CREATE TABLE daily_history (
+      date TEXT PRIMARY KEY,
+      correct_count INTEGER NOT NULL CHECK (correct_count >= 0),
+      answered_count INTEGER CHECK (
+        answered_count IS NULL OR answered_count >= correct_count
+      )
+    ) WITHOUT ROWID;
+    CREATE TABLE tracking_metadata (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      correct_available_from TEXT,
+      answered_available_from TEXT
+    );
+  `);
+}
+
+function validateLegacyDailySchema(storage) {
   const dailyDefinition = tableDefinition(storage, "daily_state");
   const operationsDefinition = tableDefinition(storage, "processed_operations");
   if (dailyDefinition === undefined || operationsDefinition === undefined) {
-    throw new Error("incomplete DailyCount schema");
+    throw new Error("incomplete legacy DailyCount schema");
   }
 
   assertColumns(
     tableColumns(storage, "daily_state"),
     ["singleton", "date", "count"],
-    "daily_state"
+    "legacy daily_state"
   );
   assertColumns(
     tableColumns(storage, "processed_operations"),
@@ -179,65 +196,202 @@ function validateDailyAndOperationSchema(storage) {
     "processed_operations"
   );
   if (!/count\s*>=\s*0/i.test(dailyDefinition)) {
-    throw new Error("unsupported daily_state schema");
+    throw new Error("unsupported legacy daily_state schema");
   }
 }
 
-function validateHistorySchema(storage) {
-  validateDailyAndOperationSchema(storage);
+function validateLegacyHistorySchema(storage) {
+  validateLegacyDailySchema(storage);
   if (
     tableDefinition(storage, "daily_history") === undefined ||
     tableDefinition(storage, "tracking_metadata") === undefined
   ) {
-    throw new Error("incomplete history schema");
+    throw new Error("incomplete legacy history schema");
   }
   assertColumns(
     tableColumns(storage, "daily_history"),
     ["date", "count"],
-    "daily_history"
+    "legacy daily_history"
   );
   assertColumns(
     tableColumns(storage, "tracking_metadata"),
     ["singleton", "available_from"],
+    "legacy tracking_metadata"
+  );
+}
+
+function validateLearningLogSchema(storage) {
+  const tableNames = [
+    "daily_state",
+    "processed_answers",
+    "daily_history",
+    "tracking_metadata",
+  ];
+  if (tableNames.some((name) => tableDefinition(storage, name) === undefined)) {
+    throw new Error("incomplete learning log schema");
+  }
+
+  assertColumns(
+    tableColumns(storage, "daily_state"),
+    ["singleton", "date", "correct_count", "answered_count"],
+    "daily_state"
+  );
+  assertColumns(
+    tableColumns(storage, "processed_answers"),
+    ["operation_id", "result", "completed_milestone"],
+    "processed_answers"
+  );
+  assertColumns(
+    tableColumns(storage, "daily_history"),
+    ["date", "correct_count", "answered_count"],
+    "daily_history"
+  );
+  assertColumns(
+    tableColumns(storage, "tracking_metadata"),
+    ["singleton", "correct_available_from", "answered_available_from"],
     "tracking_metadata"
   );
+
+  const dailyDefinition = tableDefinition(storage, "daily_state");
+  if (
+    !/correct_count\s*>=\s*0/i.test(dailyDefinition) ||
+    !/answered_count\s*>=\s*correct_count/i.test(dailyDefinition)
+  ) {
+    throw new Error("unsupported daily_state schema");
+  }
+}
+
+function migrateLegacySchema(storage, hasHistory) {
+  validateLegacyDailySchema(storage);
+  if (hasHistory) {
+    validateLegacyHistorySchema(storage);
+  }
+
+  storage.sql.exec("ALTER TABLE daily_state RENAME TO legacy_daily_state");
+  storage.sql.exec(
+    "ALTER TABLE processed_operations RENAME TO legacy_processed_operations"
+  );
+  if (hasHistory) {
+    storage.sql.exec(
+      "ALTER TABLE daily_history RENAME TO legacy_daily_history"
+    );
+    storage.sql.exec(
+      "ALTER TABLE tracking_metadata RENAME TO legacy_tracking_metadata"
+    );
+  }
+
+  createLearningLogSchema(storage);
+  storage.sql.exec(`
+    INSERT INTO daily_state (
+      singleton,
+      date,
+      correct_count,
+      answered_count
+    )
+    SELECT singleton, date, count, count
+    FROM legacy_daily_state;
+
+    INSERT INTO processed_answers (
+      operation_id,
+      result,
+      completed_milestone
+    )
+    SELECT
+      operation_id,
+      'correct',
+      CASE
+        WHEN resulting_count > 0
+          AND resulting_count % ${MILESTONE_INTERVAL} = 0
+        THEN resulting_count
+        ELSE NULL
+      END
+    FROM legacy_processed_operations;
+  `);
+
+  if (hasHistory) {
+    storage.sql.exec(`
+      INSERT INTO daily_history (date, correct_count, answered_count)
+      SELECT date, count, NULL
+      FROM legacy_daily_history;
+
+      INSERT INTO tracking_metadata (
+        singleton,
+        correct_available_from,
+        answered_available_from
+      )
+      SELECT singleton, available_from, NULL
+      FROM legacy_tracking_metadata;
+
+      INSERT OR IGNORE INTO tracking_metadata (
+        singleton,
+        correct_available_from,
+        answered_available_from
+      ) VALUES (1, NULL, NULL);
+    `);
+  } else {
+    storage.sql.exec(`
+      INSERT INTO tracking_metadata (
+        singleton,
+        correct_available_from,
+        answered_available_from
+      ) VALUES (1, NULL, NULL);
+    `);
+  }
+
+  storage.sql.exec("DROP TABLE legacy_processed_operations");
+  storage.sql.exec("DROP TABLE legacy_daily_state");
+  if (hasHistory) {
+    storage.sql.exec("DROP TABLE legacy_tracking_metadata");
+    storage.sql.exec("DROP TABLE legacy_daily_history");
+  }
 }
 
 export function initializeSchema(storage) {
   storage.transactionSync(() => {
-    const definitions = [
+    const newTableNames = [
       "daily_state",
-      "processed_operations",
+      "processed_answers",
       "daily_history",
       "tracking_metadata",
-    ].map((tableName) => tableDefinition(storage, tableName));
+    ];
+    const legacyOperations = tableDefinition(storage, "processed_operations");
+    const newDefinitions = newTableNames.map((name) =>
+      tableDefinition(storage, name)
+    );
 
-    if (definitions.every((definition) => definition === undefined)) {
-      createHistorySchema(storage);
+    if (
+      legacyOperations === undefined &&
+      newDefinitions.every((definition) => definition === undefined)
+    ) {
+      createLearningLogSchema(storage);
       return;
     }
 
-    const hasDailySchema = definitions[0] !== undefined && definitions[1] !== undefined;
-    const hasHistorySchema = definitions[2] !== undefined && definitions[3] !== undefined;
-    if (hasDailySchema && !hasHistorySchema) {
-      validateDailyAndOperationSchema(storage);
-      storage.sql.exec(`
-        CREATE TABLE daily_history (
-          date TEXT PRIMARY KEY,
-          count INTEGER NOT NULL CHECK (count >= 0)
-        ) WITHOUT ROWID;
-        CREATE TABLE tracking_metadata (
-          singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-          available_from TEXT NOT NULL
-        );
-      `);
+    if (
+      legacyOperations === undefined &&
+      newDefinitions.every((definition) => definition !== undefined)
+    ) {
+      validateLearningLogSchema(storage);
       return;
     }
 
-    if (!definitions.every((definition) => definition !== undefined)) {
-      throw new Error("incomplete DailyCount history schema");
+    const hasLegacyDaily =
+      legacyOperations !== undefined && newDefinitions[0] !== undefined;
+    const hasLegacyHistory =
+      newDefinitions[2] !== undefined && newDefinitions[3] !== undefined;
+    const hasNewAnswers = newDefinitions[1] !== undefined;
+    if (
+      hasLegacyDaily &&
+      !hasNewAnswers &&
+      (hasLegacyHistory ||
+        (newDefinitions[2] === undefined && newDefinitions[3] === undefined))
+    ) {
+      migrateLegacySchema(storage, hasLegacyHistory);
+      validateLearningLogSchema(storage);
+      return;
     }
-    validateHistorySchema(storage);
+
+    throw new Error("unexpected DailyCount schema");
   });
 }
 
@@ -257,73 +411,121 @@ export class DailyCount extends DurableObject {
     });
   }
 
-  trackingStart() {
-    return this.ctx.storage.sql
+  trackingAvailability() {
+    const row = this.ctx.storage.sql
       .exec(
-        "SELECT available_from FROM tracking_metadata WHERE singleton = 1"
+        `SELECT correct_available_from, answered_available_from
+         FROM tracking_metadata
+         WHERE singleton = 1`
       )
-      .toArray()[0]?.available_from;
+      .toArray()[0];
+    return row === undefined
+      ? undefined
+      : {
+          correct: row.correct_available_from,
+          answered: row.answered_available_from,
+        };
   }
 
-  ensureTrackingStart(date) {
-    const availableFrom = this.trackingStart();
-    if (availableFrom !== undefined) {
-      return availableFrom;
+  ensureTrackingAvailability(date) {
+    const existing = this.trackingAvailability();
+    if (existing === undefined) {
+      this.ctx.storage.sql.exec(
+        `INSERT INTO tracking_metadata (
+           singleton,
+           correct_available_from,
+           answered_available_from
+         ) VALUES (1, ?, ?)`,
+        date,
+        date
+      );
+      return { correct: date, answered: date };
     }
-    this.ctx.storage.sql.exec(
-      "INSERT INTO tracking_metadata (singleton, available_from) VALUES (1, ?)",
-      date
-    );
-    return date;
+
+    const availability = {
+      correct: existing.correct ?? date,
+      answered: existing.answered ?? nextDate(date),
+    };
+    if (existing.correct === null || existing.answered === null) {
+      this.ctx.storage.sql.exec(
+        `UPDATE tracking_metadata
+         SET correct_available_from = ?, answered_available_from = ?
+         WHERE singleton = 1`,
+        availability.correct,
+        availability.answered
+      );
+    }
+    return availability;
   }
 
   ensureDate(date) {
+    const availability = this.ensureTrackingAvailability(date);
     const existing = this.ctx.storage.sql
-      .exec("SELECT date, count FROM daily_state WHERE singleton = 1")
+      .exec(
+        `SELECT date, correct_count, answered_count
+         FROM daily_state
+         WHERE singleton = 1`
+      )
       .toArray()[0];
 
     if (existing?.date === date) {
-      this.ensureTrackingStart(date);
-      return { state: existing, stale: false };
+      return { state: existing, stale: false, availability };
     }
 
     if (existing?.date > date) {
-      return { state: existing, stale: true };
+      return { state: existing, stale: true, availability };
     }
 
-    const availableFrom = this.trackingStart();
-    if (existing !== undefined && availableFrom !== undefined) {
+    if (existing !== undefined && existing.date >= availability.correct) {
       this.ctx.storage.sql.exec(
-        "INSERT INTO daily_history (date, count) VALUES (?, ?)",
+        `INSERT INTO daily_history (
+           date,
+           correct_count,
+           answered_count
+         ) VALUES (?, ?, ?)`,
         existing.date,
-        existing.count
+        existing.correct_count,
+        existing.date < availability.answered
+          ? null
+          : existing.answered_count
       );
     }
-    this.ensureTrackingStart(date);
-    this.ctx.storage.sql.exec("DELETE FROM processed_operations");
+    this.ctx.storage.sql.exec("DELETE FROM processed_answers");
 
     if (existing === undefined) {
       this.ctx.storage.sql.exec(
-        "INSERT INTO daily_state (singleton, date, count) VALUES (1, ?, 0)",
+        `INSERT INTO daily_state (
+           singleton,
+           date,
+           correct_count,
+           answered_count
+         ) VALUES (1, ?, 0, 0)`,
         date
       );
     } else {
       this.ctx.storage.sql.exec(
-        "UPDATE daily_state SET date = ?, count = 0 WHERE singleton = 1",
+        `UPDATE daily_state
+         SET date = ?, correct_count = 0, answered_count = 0
+         WHERE singleton = 1`,
         date
       );
     }
-    return { state: { date, count: 0 }, stale: false };
+    return {
+      state: { date, correct_count: 0, answered_count: 0 },
+      stale: false,
+      availability,
+    };
   }
 
-  getCount(date) {
+  getState(date) {
     if (dateOrdinal(date) === null) {
       throw new TypeError("invalid date");
     }
 
-    return this.ctx.storage.transactionSync(() =>
-      parseStateRow(this.ensureDate(date).state)
-    );
+    return this.ctx.storage.transactionSync(() => {
+      const ensured = this.ensureDate(date);
+      return parseStateRow(ensured.state, ensured.availability);
+    });
   }
 
   getHistory(today, from, to) {
@@ -337,25 +539,23 @@ export class DailyCount extends DurableObject {
       if (ensured.stale) {
         throw new Error("history date moved backwards");
       }
-      const availableFrom = this.trackingStart();
-      if (availableFrom === undefined) {
-        throw new Error("tracking metadata is missing");
-      }
+      const availability = ensured.availability;
 
       const counts = new Map(
         this.ctx.storage.sql
           .exec(
-            `SELECT date, count FROM daily_history
+            `SELECT date, correct_count, answered_count
+             FROM daily_history
              WHERE date >= ? AND date <= ?
              ORDER BY date`,
             from,
             to
           )
           .toArray()
-          .map((row) => [row.date, row.count])
+          .map((row) => [row.date, row])
       );
       if (ensured.state.date >= from && ensured.state.date <= to) {
-        counts.set(ensured.state.date, ensured.state.count);
+        counts.set(ensured.state.date, ensured.state);
       }
 
       const days = [];
@@ -365,16 +565,25 @@ export class DailyCount extends DurableObject {
         ordinal += 1
       ) {
         const date = isoDateFromOrdinal(ordinal);
+        const row = counts.get(date);
         days.push({
           date,
-          count:
-            date < availableFrom || date > today ? null : (counts.get(date) ?? 0),
+          counts: {
+            correct:
+              date < availability.correct || date > today
+                ? null
+                : (row?.correct_count ?? 0),
+            answered:
+              date < availability.answered || date > today
+                ? null
+                : (row?.answered_count ?? 0),
+          },
         });
       }
       return {
         timeZone: "Asia/Tokyo",
         today,
-        availableFrom,
+        availableFrom: availability,
         from,
         to,
         days,
@@ -382,9 +591,13 @@ export class DailyCount extends DurableObject {
     });
   }
 
-  recordCorrect(date, operationId) {
-    if (dateOrdinal(date) === null || !OPERATION_ID_PATTERN.test(operationId)) {
-      throw new TypeError("invalid correct operation");
+  recordAnswer(date, operationId, result) {
+    if (
+      dateOrdinal(date) === null ||
+      !OPERATION_ID_PATTERN.test(operationId) ||
+      !ANSWER_RESULTS.has(result)
+    ) {
+      throw new TypeError("invalid answer operation");
     }
 
     return this.ctx.storage.transactionSync(() => {
@@ -392,42 +605,58 @@ export class DailyCount extends DurableObject {
       if (ensured.stale) {
         return {
           error: "date_changed",
-          state: parseStateRow(ensured.state),
+          state: parseStateRow(ensured.state, ensured.availability),
         };
       }
 
       const processed = this.ctx.storage.sql
         .exec(
-          `SELECT resulting_count
-           FROM processed_operations
+          `SELECT result, completed_milestone
+           FROM processed_answers
            WHERE operation_id = ?`,
           operationId
         )
         .toArray()[0];
       if (processed !== undefined) {
+        if (processed.result !== result) {
+          return {
+            error: "operation_conflict",
+            state: parseStateRow(ensured.state, ensured.availability),
+          };
+        }
         return {
-          state: parseStateRow(ensured.state),
-          completedMilestone: completedMilestone(processed.resulting_count),
+          state: parseStateRow(ensured.state, ensured.availability),
+          completedMilestone: processed.completed_milestone,
         };
       }
 
+      const correctIncrement = result === "correct" ? 1 : 0;
       const updated = this.ctx.storage.sql
         .exec(
           `UPDATE daily_state
-           SET count = count + 1
+           SET
+             correct_count = correct_count + ?,
+             answered_count = answered_count + 1
            WHERE singleton = 1
-           RETURNING date, count`
+           RETURNING date, correct_count, answered_count`,
+          correctIncrement
         )
         .toArray()[0];
+      const milestone =
+        result === "correct" ? completedMilestone(updated.correct_count) : null;
       this.ctx.storage.sql.exec(
-        `INSERT INTO processed_operations (operation_id, resulting_count)
-         VALUES (?, ?)`,
+        `INSERT INTO processed_answers (
+           operation_id,
+           result,
+           completed_milestone
+         ) VALUES (?, ?, ?)`,
         operationId,
-        updated.count
+        result,
+        milestone
       );
       return {
-        state: parseStateRow(updated),
-        completedMilestone: completedMilestone(updated.count),
+        state: parseStateRow(updated, ensured.availability),
+        completedMilestone: milestone,
       };
     });
   }
@@ -480,7 +709,7 @@ export async function issueSpeechToken(env, fetcher = fetch) {
   });
 }
 
-async function parseCorrectRequest(request) {
+async function parseAnswerRequest(request) {
   let body;
   try {
     body = await request.json();
@@ -488,16 +717,27 @@ async function parseCorrectRequest(request) {
     return null;
   }
 
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return null;
+  }
+  const keys = Object.keys(body).sort();
   if (
-    body === null ||
-    typeof body !== "object" ||
+    keys.length !== 3 ||
+    keys[0] !== "date" ||
+    keys[1] !== "operationId" ||
+    keys[2] !== "result" ||
     dateOrdinal(body.date) === null ||
-    !OPERATION_ID_PATTERN.test(body.operationId)
+    !OPERATION_ID_PATTERN.test(body.operationId) ||
+    !ANSWER_RESULTS.has(body.result)
   ) {
     return null;
   }
 
-  return { date: body.date, operationId: body.operationId };
+  return {
+    date: body.date,
+    operationId: body.operationId,
+    result: body.result,
+  };
 }
 
 function parseHistoryRequest(url) {
@@ -519,10 +759,10 @@ function parseHistoryRequest(url) {
 export async function handleRequest(request, env, fetcher = fetch) {
   const url = new URL(request.url);
   const routes = new Map([
-    ["/v1/count", "GET"],
-    ["/v1/history", "GET"],
-    ["/v1/correct", "POST"],
-    ["/v1/speech-token", "POST"],
+    ["/v2/state", "GET"],
+    ["/v2/history", "GET"],
+    ["/v2/answers", "POST"],
+    ["/v2/speech-token", "POST"],
   ]);
   const expectedMethod = routes.get(url.pathname);
   if (expectedMethod === undefined) {
@@ -542,16 +782,16 @@ export async function handleRequest(request, env, fetcher = fetch) {
     return errorResponse("unauthorized", 401);
   }
 
-  if (url.pathname === "/v1/speech-token") {
+  if (url.pathname === "/v2/speech-token") {
     return issueSpeechToken(env, fetcher);
   }
 
   const today = getTokyoDate();
   const stub = getDailyCountStub(env);
-  if (url.pathname === "/v1/count") {
-    return jsonResponse(await stub.getCount(today));
+  if (url.pathname === "/v2/state") {
+    return jsonResponse(await stub.getState(today));
   }
-  if (url.pathname === "/v1/history") {
+  if (url.pathname === "/v2/history") {
     const range = parseHistoryRequest(url);
     if (range === null) {
       return errorResponse("invalid_request", 400);
@@ -559,19 +799,26 @@ export async function handleRequest(request, env, fetcher = fetch) {
     return jsonResponse(await stub.getHistory(today, range.from, range.to));
   }
 
-  const correct = await parseCorrectRequest(request);
-  if (correct === null) {
+  const answer = await parseAnswerRequest(request);
+  if (answer === null) {
     return errorResponse("invalid_request", 400);
   }
-  if (correct.date !== today) {
+  if (answer.date !== today) {
     return jsonResponse(
-      { error: "date_changed", state: await stub.getCount(today) },
+      { error: "date_changed", state: await stub.getState(today) },
       409
     );
   }
 
-  const result = await stub.recordCorrect(correct.date, correct.operationId);
-  if (result?.error === "date_changed") {
+  const result = await stub.recordAnswer(
+    answer.date,
+    answer.operationId,
+    answer.result
+  );
+  if (
+    result?.error === "date_changed" ||
+    result?.error === "operation_conflict"
+  ) {
     return jsonResponse(result, 409);
   }
   return jsonResponse(result);

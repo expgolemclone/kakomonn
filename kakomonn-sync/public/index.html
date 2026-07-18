@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#eef5f5">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="description" content="中小企業診断士試験の過去問正解数を週と月で振り返る学習ログ">
+    <meta name="description" content="中小企業診断士試験の過去問正解数と解答数を週と月で振り返る学習ログ">
     <title>過去問 学習ログ</title>
     <link rel="stylesheet" href="/styles.css">
     <script type="module" src="/app.js"></script>
@@ -25,7 +25,7 @@
       <main>
         <section id="auth-panel" class="auth-panel" aria-labelledby="auth-title">
           <p class="section-label">最初の設定</p>
-          <h2 id="auth-title">正解記録を開く</h2>
+          <h2 id="auth-title">学習記録を開く</h2>
           <p class="auth-description">
             過去問readerで使っている同期tokenを入力します. tokenはこのbrowserだけに保存します.
           </p>
@@ -65,12 +65,26 @@
 
           <dl class="period-summary" aria-label="選択期間の集計">
             <div>
-              <dt>合計</dt>
-              <dd><span id="total-count">--</span><small>問</small></dd>
+              <dt>合計(問)</dt>
+              <dd>
+                <span class="summary-primary">
+                  <strong id="total-count">--</strong><small>正解</small>
+                </span>
+                <span class="summary-reference">
+                  <strong id="total-answered">--</strong><small>解答</small>
+                </span>
+              </dd>
             </div>
             <div>
-              <dt>1日平均</dt>
-              <dd><span id="average-count">--</span><small>問</small></dd>
+              <dt>1日平均(問)</dt>
+              <dd>
+                <span class="summary-primary">
+                  <strong id="average-count">--</strong><small>正解</small>
+                </span>
+                <span class="summary-reference">
+                  <strong id="average-answered">--</strong><small>解答</small>
+                </span>
+              </dd>
             </div>
             <div class="summary-note">
               <dt>集計期間</dt>
@@ -79,8 +93,14 @@
           </dl>
 
           <figure class="chart-figure" aria-labelledby="chart-caption">
-            <figcaption id="chart-caption">日ごとの正解数</figcaption>
-            <div id="chart-scroller" class="chart-scroller" tabindex="0" aria-label="正解数graph">
+            <figcaption id="chart-caption">
+              <span>日ごとの学習記録</span>
+              <span class="chart-legend" aria-label="graphの凡例">
+                <span><i class="legend-correct" aria-hidden="true"></i>正解</span>
+                <span><i class="legend-answered" aria-hidden="true"></i>解答</span>
+              </span>
+            </figcaption>
+            <div id="chart-scroller" class="chart-scroller" tabindex="0" aria-label="正解数と解答数graph">
               <div id="chart-frame" class="chart-frame">
                 <div class="scale" aria-hidden="true">
                   <span id="scale-maximum">--</span>
@@ -95,7 +115,7 @@
             </div>
             <p id="day-detail" class="day-detail" aria-live="polite"></p>
             <p id="empty-message" class="empty-message" hidden>
-              この期間はまだ0問です. 過去問で正解すると, ここに棒が立ちます.
+              この期間はまだ解答記録がありません. 過去問を解くと, ここに棒が立ちます.
             </p>
           </figure>
           <p id="dashboard-status" class="dashboard-status" role="status" aria-live="polite"></p>
@@ -103,14 +123,14 @@
 
         <section id="load-error" class="error-panel" aria-labelledby="error-title" hidden>
           <p class="section-label">読込みerror</p>
-          <h2 id="error-title">正解記録を表示できません</h2>
+          <h2 id="error-title">学習記録を表示できません</h2>
           <p id="error-message"></p>
           <button id="retry-button" class="primary-button" type="button">再読み込み</button>
         </section>
       </main>
 
       <footer>
-        <p>正解数は日本時間で記録します.</p>
+        <p>正解数と解答数は日本時間で記録します.</p>
       </footer>
     </div>
 

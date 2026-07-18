@@ -174,7 +174,7 @@
 
   function updateCopyButton() {
     if (nextQuestionOperationInProgress) {
-      copyButton.textContent = "正解情報を処理中";
+      copyButton.textContent = "解答記録を処理中";
       copyButton.disabled = true;
       return;
     }

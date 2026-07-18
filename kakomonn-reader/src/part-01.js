@@ -29,7 +29,7 @@
   syncSettingsButton.id = "kakomonn-reader-sync-settings-button";
   syncSettingsButton.type = "button";
   syncSettingsButton.textContent = "同期設定";
-  syncSettingsButton.setAttribute("aria-label", "正解数の同期設定を開く");
+  syncSettingsButton.setAttribute("aria-label", "学習記録の同期設定を開く");
 
   controls.append(statusBadge, countBadge, stopButton, syncSettingsButton);
 
@@ -62,7 +62,7 @@
 
   const syncSettingsTitle = document.createElement("h2");
   syncSettingsTitle.id = "kakomonn-reader-sync-settings-title";
-  syncSettingsTitle.textContent = "正解数の同期設定";
+  syncSettingsTitle.textContent = "学習記録の同期設定";
 
   const syncSettingsDescription = document.createElement("p");
   syncSettingsDescription.id = "kakomonn-reader-sync-settings-description";
@@ -116,10 +116,12 @@
 
   function renderCount() {
     const nextMilestone =
-      count === null
+      correctCount === null
         ? MILESTONE_INTERVAL
-        : (Math.floor(count / MILESTONE_INTERVAL) + 1) * MILESTONE_INTERVAL;
-    countBadge.textContent = `${count === null ? "--" : count}問,次は${nextMilestone}問`;
+        :
+          (Math.floor(correctCount / MILESTONE_INTERVAL) + 1) *
+          MILESTONE_INTERVAL;
+    countBadge.textContent = `${correctCount === null ? "--" : correctCount}問,次は${nextMilestone}問`;
   }
 
   function setStatus(message) {
@@ -146,27 +148,32 @@
     );
   }
 
-  function isCountState(value) {
+  function isSyncState(value) {
     return (
       value !== null &&
       typeof value === "object" &&
       /^\d{4}-\d{2}-\d{2}$/.test(value.date) &&
-      Number.isSafeInteger(value.count) &&
-      value.count >= 0 &&
+      value.counts !== null &&
+      typeof value.counts === "object" &&
+      Number.isSafeInteger(value.counts.correct) &&
+      value.counts.correct >= 0 &&
+      (value.counts.answered === null ||
+        (Number.isSafeInteger(value.counts.answered) &&
+          value.counts.answered >= value.counts.correct)) &&
       value.milestoneInterval === MILESTONE_INTERVAL
     );
   }
 
-  function isCorrectResponse(value) {
+  function isAnswerResponse(value) {
     return (
       value !== null &&
       typeof value === "object" &&
-      isCountState(value.state) &&
+      isSyncState(value.state) &&
       (value.completedMilestone === null ||
         (Number.isSafeInteger(value.completedMilestone) &&
           value.completedMilestone > 0 &&
           value.completedMilestone % MILESTONE_INTERVAL === 0 &&
-          value.completedMilestone <= value.state.count))
+          value.completedMilestone <= value.state.counts.correct))
     );
   }
 
@@ -182,7 +189,7 @@
     );
   }
 
-  function isPendingCorrect(value) {
+  function isLegacyPendingCorrect(value) {
     return (
       value !== null &&
       typeof value === "object" &&
@@ -190,6 +197,13 @@
       /^\d{4}-\d{2}-\d{2}$/.test(value.date) &&
       typeof value.pageURL === "string" &&
       value.pageURL.startsWith("https://chushoks.kakomonn.com/")
+    );
+  }
+
+  function isPendingAnswer(value) {
+    return (
+      isLegacyPendingCorrect(value) &&
+      (value.result === "correct" || value.result === "incorrect")
     );
   }
 
@@ -282,7 +296,7 @@
     if (
       response.status === 409 &&
       responseBody?.error === "date_changed" &&
-      isCountState(responseBody.state)
+      isSyncState(responseBody.state)
     ) {
       throw new SyncRequestError(
         "date_changed",
@@ -299,21 +313,21 @@
     );
   }
 
-  function requestCountState(token) {
+  function requestSyncState(token) {
     return requestSyncResponse(
       "GET",
-      "/v1/count",
+      "/v2/state",
       token,
-      isCountState
+      isSyncState
     );
   }
 
-  function requestCorrectResult(token, operation) {
+  function requestAnswerResult(token, operation) {
     return requestSyncResponse(
       "POST",
-      "/v1/correct",
+      "/v2/answers",
       token,
-      isCorrectResponse,
+      isAnswerResponse,
       operation
     );
   }
@@ -321,7 +335,7 @@
   function requestSpeechTokenResult(token) {
     return requestSyncResponse(
       "POST",
-      "/v1/speech-token",
+      "/v2/speech-token",
       token,
       isSpeechTokenResponse
     );
@@ -362,7 +376,7 @@
       return "同期トークンが正しくありません";
     }
     if (error?.code === "request_timeout") {
-      return "正解数の同期がタイムアウトしました";
+      return "学習記録の同期がタイムアウトしました";
     }
     if (error?.code === "invalid_response") {
       return "同期APIの応答が不正です";
@@ -370,16 +384,16 @@
     if (error?.code === "server_misconfigured") {
       return "同期APIが設定されていません";
     }
-    return "正解数を同期できません";
+    return "学習記録を同期できません";
   }
 
   function applyRemoteState(state) {
-    if (!isCountState(state)) {
+    if (!isSyncState(state)) {
       throw new SyncRequestError("invalid_response");
     }
 
     activeCountDate = state.date;
-    count = state.count;
+    correctCount = state.counts.correct;
     renderCount();
   }
 
@@ -390,9 +404,9 @@
     updateCopyButton();
   }
 
-  async function clearPendingCorrect() {
-    await GM.deleteValue(PENDING_CORRECT_KEY);
-    pendingCorrect = null;
+  async function clearPendingAnswer() {
+    await GM.deleteValue(PENDING_ANSWER_KEY);
+    pendingAnswer = null;
   }
 
   async function clearPendingCelebration() {
@@ -402,8 +416,8 @@
 
   async function reconcilePendingDates() {
     let discarded = false;
-    if (pendingCorrect !== null && pendingCorrect.date !== activeCountDate) {
-      await clearPendingCorrect();
+    if (pendingAnswer !== null && pendingAnswer.date !== activeCountDate) {
+      await clearPendingAnswer();
       discarded = true;
     }
     if (
@@ -438,7 +452,7 @@
     syncSettingsError.textContent = "";
   }
 
-  async function refreshRemoteCount() {
+  async function refreshRemoteState() {
     if (syncPromise !== null) {
       return syncPromise;
     }
@@ -454,18 +468,18 @@
 
     syncPromise = (async () => {
       syncInProgress = true;
-      setStatus("正解数を同期中");
+      setStatus("学習記録を同期中");
       updateSyncDependentControls();
 
       try {
-        const state = await requestCountState(syncToken);
+        const state = await requestSyncState(syncToken);
         applyRemoteState(state);
         syncReady = true;
 
         if (await reconcilePendingDates()) {
           setStatus("前日の未同期分を破棄しました");
-        } else if (pendingCorrect !== null) {
-          setStatus("未完了の正解数同期があります");
+        } else if (pendingAnswer !== null) {
+          setStatus("未完了の解答同期があります");
         } else if (pendingCelebration !== null) {
           setStatus(`${pendingCelebration.milestone}問達成.祝福を準備中`);
         } else {
@@ -509,7 +523,7 @@
 
     syncPromise = (async () => {
       try {
-        const state = await requestCountState(candidateToken);
+        const state = await requestSyncState(candidateToken);
         activeCountDate = state.date;
         const discardedPending = await reconcilePendingDates();
         await GM.setValue(SYNC_TOKEN_KEY, candidateToken);
@@ -524,7 +538,7 @@
         setStatus(
           discardedPending
             ? "前日の未同期分を破棄しました"
-            : "正解数を同期しました"
+            : "学習記録を同期しました"
         );
         return true;
       } catch (error) {
@@ -546,6 +560,52 @@
     return syncPromise;
   }
 
+  function samePendingOperation(answer, legacyCorrect) {
+    return (
+      answer.result === "correct" &&
+      answer.operationId === legacyCorrect.operationId &&
+      answer.date === legacyCorrect.date &&
+      answer.pageURL === legacyCorrect.pageURL
+    );
+  }
+
+  async function restorePendingAnswer(storedAnswer, storedLegacyCorrect) {
+    let answer = storedAnswer;
+    let legacyCorrect = storedLegacyCorrect;
+    let discardedInvalid = false;
+
+    if (answer !== null && !isPendingAnswer(answer)) {
+      await GM.deleteValue(PENDING_ANSWER_KEY);
+      answer = null;
+      discardedInvalid = true;
+    }
+    if (legacyCorrect !== null && !isLegacyPendingCorrect(legacyCorrect)) {
+      await GM.deleteValue(LEGACY_PENDING_CORRECT_KEY);
+      legacyCorrect = null;
+      discardedInvalid = true;
+    }
+
+    if (answer !== null && legacyCorrect !== null) {
+      if (!samePendingOperation(answer, legacyCorrect)) {
+        throw new Error("conflicting pending answer data");
+      }
+      await GM.deleteValue(LEGACY_PENDING_CORRECT_KEY);
+      legacyCorrect = null;
+    }
+
+    if (answer === null && legacyCorrect !== null) {
+      answer = { ...legacyCorrect, result: "correct" };
+      if (!isPendingAnswer(answer)) {
+        throw new Error("invalid migrated pending answer");
+      }
+      await GM.setValue(PENDING_ANSWER_KEY, answer);
+      await GM.deleteValue(LEGACY_PENDING_CORRECT_KEY);
+    }
+
+    pendingAnswer = answer;
+    return discardedInvalid;
+  }
+
   async function initializeSync() {
     renderCount();
     updateSyncDependentControls();
@@ -556,10 +616,16 @@
     }
 
     try {
-      const [storedToken, storedPending, storedCelebration] =
+      const [
+        storedToken,
+        storedPendingAnswer,
+        storedLegacyCorrect,
+        storedCelebration,
+      ] =
         await Promise.all([
           GM.getValue(SYNC_TOKEN_KEY, ""),
-          GM.getValue(PENDING_CORRECT_KEY, null),
+          GM.getValue(PENDING_ANSWER_KEY, null),
+          GM.getValue(LEGACY_PENDING_CORRECT_KEY, null),
           GM.getValue(PENDING_CELEBRATION_KEY, null),
         ]);
 
@@ -572,12 +638,10 @@
         clearAzureSpeechToken();
       }
 
-      if (storedPending !== null && !isPendingCorrect(storedPending)) {
-        await GM.deleteValue(PENDING_CORRECT_KEY);
-        pendingCorrect = null;
+      if (
+        await restorePendingAnswer(storedPendingAnswer, storedLegacyCorrect)
+      ) {
         setStatus("不正な未同期データを削除しました");
-      } else {
-        pendingCorrect = storedPending;
       }
 
       if (
@@ -599,7 +663,7 @@
         return;
       }
 
-      await refreshRemoteCount();
+      await refreshRemoteState();
     } catch {
       syncReady = false;
       setStatus("同期設定を読み込めません");
@@ -614,7 +678,7 @@
       !nextQuestionOperationInProgress &&
       syncSettings.hidden
     ) {
-      void refreshRemoteCount();
+      void refreshRemoteState();
     }
   }
 

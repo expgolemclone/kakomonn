@@ -15,7 +15,7 @@ const manifest = validateManifest(
 );
 
 assert.equal(manifest.milestoneInterval, 50);
-assert.equal(manifest.sites.length, 3);
+assert.equal(manifest.sites.length, 6);
 assert.equal(parseMilestone("?milestone=50", 50), 50);
 assert.equal(parseMilestone("?milestone=150", 50), 150);
 assert.throws(() => parseMilestone("", 50), /positive integer/);

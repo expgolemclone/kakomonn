@@ -18,9 +18,13 @@ const selectors = new Map([
   ["hikakin", "main, .stage, .celebration"],
   ["study-complete", "[data-burst]"],
   ["gsap-study", ".celebrate-button"],
-  ["victory-observatory", ".replay"],
   ["imura-rally", ".stage"],
 ]);
+
+const retiredPaths = [
+  "/sensational/victory-observatory",
+  "/sensational/victory-observatory/",
+];
 
 function captureErrors(page) {
   const errors = [];
@@ -158,6 +162,20 @@ async function verifyInvalidMilestone(browser, origin) {
   }
 }
 
+async function verifyRetiredEntries(browser, origin) {
+  const page = await browser.newPage();
+  try {
+    for (const path of retiredPaths) {
+      const response = await page.goto(`${origin}${path}`, {
+        waitUntil: "domcontentloaded",
+      });
+      assert.equal(response?.status(), 404, path);
+    }
+  } finally {
+    await page.close();
+  }
+}
+
 const configuredOrigin = process.env.CONGRATULATIONS_ORIGIN?.replace(/\/$/, "");
 const server = configuredOrigin === undefined ? await startStaticServer() : null;
 const origin = configuredOrigin ?? server.origin;
@@ -166,6 +184,7 @@ try {
   for (const site of manifest.sites) {
     await verifyEntry(browser, origin, site);
   }
+  await verifyRetiredEntries(browser, origin);
   await verifyShell(browser, origin);
   await verifyInvalidMilestone(browser, origin);
   console.log(`Congratulations browser E2E passed for ${manifest.sites.length} sites`);

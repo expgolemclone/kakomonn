@@ -10,7 +10,6 @@ root shellは登録済みsiteを均等確率で1つ選び,全画面iframeで表�
 - `dance/hikakin`,dance形式の祝福.
 - `sensational/study-complete`,一日の学習完了を祝うGSAP体験.
 - `sensational/gsap-study`,学習の積み重ねを辿るGSAP長編.
-- `sensational/victory-observatory`,cinematicな観測装置とkinetic typographyを組み合わせた演出.
 - `sensational/imura-rally`,投資家風の創作characterと上昇chartによるGSAP演出.
 
 抽選対象は`celebrations.json`へ明示します.存在しないentry,重複ID,空のmanifestはbuild errorになります.
@@ -28,7 +27,7 @@ npm start
 
 `http://127.0.0.1:4173/?milestone=50`を開きます.
 
-登録済みの全siteと共通shellをデザイン確認する場合は,次のcommandを実行します.Vite開発serverとPlaywright Chromiumが起動し,1つのwindowへ7個のtabを開きます.編集内容はHMRで反映され,browserを閉じるか`Ctrl+C`を入力するとserverも終了します.
+登録済みの全siteと共通shellをデザイン確認する場合は,次のcommandを実行します.Vite開発serverとPlaywright Chromiumが起動し,1つのwindowへ6個のtabを開きます.編集内容はHMRで反映され,browserを閉じるか`Ctrl+C`を入力するとserverも終了します.
 
 ```bash
 npm run preview:all

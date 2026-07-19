@@ -7,8 +7,9 @@
     "start": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "preview:all": "node scripts/open-previews.mjs",
     "test": "npm run check && npm run build && node tests/smoke.mjs && node tests/browser.mjs && node sensational/study-complete/scripts/verify.mjs",
-    "check": "node --check router.js && node --check site-selection.js && node --check vite.config.js && node --check server.mjs && node --check tests/smoke.mjs && node --check tests/browser.mjs"
+    "check": "node --check router.js && node --check site-selection.js && node --check vite.config.js && node --check server.mjs && node --check scripts/open-previews.mjs && node --check tests/smoke.mjs && node --check tests/browser.mjs"
   },
   "dependencies": {
     "gsap": "3.15.0"

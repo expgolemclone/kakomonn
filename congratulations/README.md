@@ -28,6 +28,12 @@ npm start
 
 `http://127.0.0.1:4173/?milestone=50`を開きます.
 
+登録済みの全siteと共通shellをデザイン確認する場合は,次のcommandを実行します.Vite開発serverとPlaywright Chromiumが起動し,1つのwindowへ7個のtabを開きます.編集内容はHMRで反映され,browserを閉じるか`Ctrl+C`を入力するとserverも終了します.
+
+```bash
+npm run preview:all
+```
+
 ## buildと検証
 
 ```bash

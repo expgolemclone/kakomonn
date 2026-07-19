@@ -8,6 +8,7 @@ import {
   randomIndex,
   validateManifest,
 } from "../site-selection.js";
+import { createPreviewTargets } from "../scripts/open-previews.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = validateManifest(
@@ -20,6 +21,20 @@ assert.equal(parseMilestone("?milestone=50", 50), 50);
 assert.equal(parseMilestone("?milestone=150", 50), 150);
 assert.throws(() => parseMilestone("", 50), /positive integer/);
 assert.throws(() => parseMilestone("?milestone=51", 50), /multiple/);
+
+const previewOrigin = "http://127.0.0.1:4173/";
+const previewTargets = createPreviewTargets(manifest, previewOrigin);
+assert.deepEqual(previewTargets, [
+  { id: "shell", url: `${previewOrigin}?milestone=50` },
+  ...manifest.sites.map((site) => ({
+    id: site.id,
+    url: `${previewOrigin}${site.entry}`,
+  })),
+]);
+assert.equal(
+  new Set(previewTargets.map((target) => target.url)).size,
+  manifest.sites.length + 1,
+);
 
 for (let index = 0; index < manifest.sites.length; index += 1) {
   const values = [index];

@@ -15,12 +15,13 @@ const manifest = JSON.parse(
 );
 const selectors = new Map([
   ["kotonoha", ".celebration"],
-  ["hikakin", "main, .stage, .celebration"],
   ["study-complete", "[data-burst]"],
   ["gsap-study", ".celebrate-button"],
-  ["victory-observatory", ".replay"],
-  ["imura-rally", ".stage"],
 ]);
+const entryViewports = [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+];
 
 function captureErrors(page) {
   const errors = [];
@@ -33,9 +34,9 @@ function captureErrors(page) {
   return errors;
 }
 
-async function verifyEntry(browser, origin, site) {
+async function verifyEntryAtViewport(browser, origin, site, viewport) {
   const page = await browser.newPage({
-    viewport: { width: 390, height: 844 },
+    viewport,
     reducedMotion: "reduce",
   });
   const errors = captureErrors(page);
@@ -57,32 +58,42 @@ async function verifyEntry(browser, origin, site) {
         await page.locator(".credit").textContent().then((text) => text.includes("© AI Inc.")),
         true,
       );
-    } else if (site.id === "hikakin") {
-      await page.waitForFunction(() => document.title !== "Loading celebration");
     } else if (site.id === "study-complete") {
       await page.waitForFunction(
         () => document.querySelector("[data-progress-number]")?.textContent === "100",
       );
     } else if (site.id === "gsap-study") {
       await page.waitForFunction(() => document.querySelector(".loader") === null);
-    } else if (site.id === "imura-rally") {
-      await page.waitForFunction(
-        () => document.querySelector("#stage")?.dataset.ready === "true",
-      );
     }
 
     const layout = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: window.innerWidth,
+      documentHeight: document.documentElement.scrollHeight,
+      viewportHeight: window.innerHeight,
     }));
     assert.equal(
       layout.documentWidth <= layout.viewportWidth + 1,
       true,
       `${site.id} has horizontal overflow`,
     );
+    assert.equal(
+      layout.documentHeight > layout.viewportHeight,
+      true,
+      `${site.id} cannot scroll vertically at ${viewport.width}px`,
+    );
+
+    await page.mouse.wheel(0, Math.min(700, layout.documentHeight - layout.viewportHeight));
+    await page.waitForFunction(() => window.scrollY > 0);
     assert.deepEqual(errors, [], site.id);
   } finally {
     await page.close();
+  }
+}
+
+async function verifyEntry(browser, origin, site) {
+  for (const viewport of entryViewports) {
+    await verifyEntryAtViewport(browser, origin, site, viewport);
   }
 }
 

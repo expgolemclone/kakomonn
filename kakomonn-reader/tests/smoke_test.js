@@ -52,7 +52,8 @@ const mockBody = `
   <p id="explanation-lock">解説は問題に回答すると<br>表示されます。</p>
   <p id="explanation" hidden>これは動作確認用の解説です.</p>
   <a href="#report">（訂正依頼・報告はこちら）</a>
-  <button id="next" type="button">次の問題へ</button>
+  <button id="scroll-next" type="button">次の問題へ</button>
+  <a id="next" href="/questions/86957">次の問題（問5）へ</a>
 `;
 
 async function preparePage(page, speechMode, syncOptions = {}) {
@@ -600,7 +601,13 @@ async function main() {
     assert.deepEqual(chromeErrors, []);
     await chromeContext.close();
 
-    const iosContext = await browser.newContext({ userAgent: iosUserAgent });
+    const iosContext = await browser.newContext({
+      userAgent: iosUserAgent,
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 3,
+      hasTouch: true,
+      isMobile: true,
+    });
     const iosPage = await iosContext.newPage();
     const iosErrors = await preparePage(iosPage, "audio", {
       userscriptsPromise: true,
@@ -660,7 +667,10 @@ async function main() {
       ),
     );
     assert.equal(await speechTokenCallCount(iosPage), 1);
-    await iosFrame.locator("#next").click();
+    await iosPage.locator("#kakomonn-reader-next").tap();
+    await iosFrame.waitForURL(
+      "https://chushoks.kakomonn.com/questions/86957",
+    );
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===

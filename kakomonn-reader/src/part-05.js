@@ -1,26 +1,3 @@
-      nextQuestionReloadTimer = null;
-
-      if (
-        !navigationInProgress ||
-        frameDocument !== sourceDocument ||
-        !frame.contentWindow
-      ) {
-        return;
-      }
-
-      setStatus("次の問題を再読込中");
-
-      try {
-        resetFrameScrollToTop(sourceDocument);
-        frame.contentWindow.location.reload();
-      } catch {
-        navigationInProgress = false;
-        setStatus("次の問題を再読込できません");
-        updateSyncDependentControls();
-      }
-    }, NEXT_QUESTION_RELOAD_DELAY_MS);
-  }
-
   function updateNextQuestionButton() {
     if (syncInProgress) {
       nextQuestionButton.textContent = "学習記録を同期中";
@@ -29,7 +6,7 @@
         navigationInProgress ||
         nextQuestionOperationInProgress ||
         !syncSettings.hidden ||
-        findNextQuestionControl() === null;
+        findNextQuestionURL() === null;
       return;
     }
 
@@ -47,7 +24,7 @@
 
     if (pendingAnswer !== null) {
       nextQuestionButton.textContent = "同期を再試行";
-      nextQuestionButton.disabled = findNextQuestionControl() === null;
+      nextQuestionButton.disabled = findNextQuestionURL() === null;
       return;
     }
 
@@ -60,7 +37,7 @@
       nextQuestionButton.disabled =
         celebrationTransitionPromise !== null ||
         navigationInProgress ||
-        (sourcePageActive && findNextQuestionControl() === null);
+        (sourcePageActive && findNextQuestionURL() === null);
       return;
     }
 
@@ -71,7 +48,7 @@
     }
 
     nextQuestionButton.textContent = "次の問題へ";
-    nextQuestionButton.disabled = findNextQuestionControl() === null;
+    nextQuestionButton.disabled = findNextQuestionURL() === null;
   }
 
   function getCurrentAnswerResult() {
@@ -114,10 +91,10 @@
   }
 
   function proceedToNextQuestion() {
-    const nextControl = findNextQuestionControl();
-    if (nextControl === null) {
+    const nextURL = findNextQuestionURL();
+    if (nextURL === null) {
       navigationInProgress = false;
-      setStatus("次の問題ボタンがありません");
+      setStatus("次の問題リンクがありません");
       updateNextQuestionButton();
       return;
     }
@@ -128,13 +105,13 @@
     updateNextQuestionButton();
     updateCopyButton();
 
-    allowNextQuestionClick = true;
     try {
-      nextControl.click();
-    } finally {
-      allowNextQuestionClick = false;
+      frame.contentWindow.location.assign(nextURL);
+    } catch {
+      navigationInProgress = false;
+      setStatus("次の問題へ移動できません");
+      updateSyncDependentControls();
     }
-    scheduleNextQuestionReload();
   }
 
   async function savePendingCelebration(operation, milestone) {
@@ -471,13 +448,8 @@
       return;
     }
 
-    const control = target.closest(
-      "a, button, input[type='button'], input[type='submit']"
-    );
-    if (!control || !isNextQuestionLabel(normalizeControlLabel(control))) {
-      return;
-    }
-    if (allowNextQuestionClick) {
+    const link = target.closest("a[href]");
+    if (!link || getNextQuestionURL(link) === null) {
       return;
     }
 
@@ -497,7 +469,6 @@
       explanationTimer = null;
     }
 
-    clearNextQuestionReloadTimer();
     clearFrameScrollResetTimers();
     clearCopyFeedbackTimer();
     frameMutationObserver?.disconnect();
@@ -539,11 +510,6 @@
     frameDocument = nextDocument;
     scheduleFrameScrollReset(frameDocument);
     frame.contentWindow.addEventListener("click", onFrameClick, true);
-    frame.contentWindow.addEventListener(
-      "pagehide",
-      clearNextQuestionReloadTimer,
-      { once: true }
-    );
     observeExplanationChanges();
 
     try {

@@ -82,26 +82,38 @@
     );
   }
 
-  function findNextQuestionControl() {
+  function getNextQuestionURL(link) {
+    const url = new URL(link.href);
+    if (
+      !isNextQuestionLabel(normalizeControlLabel(link)) ||
+      link.getAttribute("aria-disabled") === "true" ||
+      url.origin !== location.origin ||
+      !/^\/questions\/\d+$/.test(url.pathname) ||
+      url.search !== "" ||
+      url.hash !== "" ||
+      url.href === currentFrameURL
+    ) {
+      return null;
+    }
+
+    return url.href;
+  }
+
+  function findNextQuestionURL() {
     if (!frameDocument?.body) {
       return null;
     }
 
-    const controls = frameDocument.querySelectorAll(
-      "a, button, input[type='button'], input[type='submit']"
-    );
+    const links = frameDocument.querySelectorAll("a[href]");
 
-    for (const control of controls) {
-      if (!isVisibleElement(control)) {
+    for (const link of links) {
+      if (!isVisibleElement(link)) {
         continue;
       }
 
-      if (control.matches(":disabled") || control.getAttribute("aria-disabled") === "true") {
-        continue;
-      }
-
-      if (isNextQuestionLabel(normalizeControlLabel(control))) {
-        return control;
+      const nextURL = getNextQuestionURL(link);
+      if (nextURL !== null) {
+        return nextURL;
       }
     }
 
@@ -243,18 +255,3 @@
       updateCopyButton();
     }
   }
-
-  function clearNextQuestionReloadTimer() {
-    if (nextQuestionReloadTimer === null) {
-      return;
-    }
-
-    clearTimeout(nextQuestionReloadTimer);
-    nextQuestionReloadTimer = null;
-  }
-
-  function scheduleNextQuestionReload() {
-    clearNextQuestionReloadTimer();
-    const sourceDocument = frameDocument;
-
-    nextQuestionReloadTimer = window.setTimeout(() => {

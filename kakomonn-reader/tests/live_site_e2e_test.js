@@ -59,51 +59,33 @@ async function submitAnswer(frame, answerText) {
   );
 }
 
-async function clickNextQuestion(frame) {
-  const clickedControl = await frame.locator("body").evaluate((body) => {
-    const view = body.ownerDocument.defaultView;
-    const isVisible = (element) => {
-      const style = view.getComputedStyle(element);
-      return (
-        style.display !== "none" &&
-        style.visibility !== "hidden" &&
-        style.opacity !== "0" &&
-        element.getClientRects().length > 0
-      );
-    };
-    const normalize = (value) => value.replace(/\s+/g, "").trim();
-    const nextQuestionControl = [
-      ...body.querySelectorAll(
-        "a, button, input[type='button'], input[type='submit']",
-      ),
-    ]
-      .filter(isVisible)
-      .find((candidate) => {
-        const label = normalize(
-          candidate.innerText ||
-            candidate.textContent ||
-            candidate.value ||
-            candidate.getAttribute("aria-label") ||
-            "",
-        );
-        return label === "次の問題へ" || /^次の問題[（(]問\d+[）)]へ$/.test(label);
-      });
+async function clickNextQuestion(page, frame) {
+  const initialFrameUrl = await frame.locator("body").evaluate(() => location.href);
+  assert.equal(
+    await frame
+      .getByRole("button", { name: "次の問題へ", exact: true })
+      .innerText(),
+    "次の問題へ",
+  );
 
-    if (nextQuestionControl === undefined) {
-      return null;
-    }
-
-    const descriptor = {
-      tag: nextQuestionControl.tagName,
-      id: nextQuestionControl.id,
-      className: nextQuestionControl.className,
-      label: normalize(nextQuestionControl.innerText),
-    };
-    nextQuestionControl.click();
-    return descriptor;
-  });
-  assert.notEqual(clickedControl, null, "visible next-question control was not found");
-  console.log(JSON.stringify({ phase: "next-control", clickedControl }));
+  await page.locator("#kakomonn-reader-next").click();
+  await page.waitForFunction(
+    (expectedUrl) =>
+      document.querySelector("#kakomonn-reader-frame")?.contentWindow.location
+        .href === expectedUrl,
+    "https://chushoks.kakomonn.com/questions/86957",
+  );
+  const nextFrameUrl = await frame
+    .locator("body")
+    .evaluate(() => location.href);
+  assert.notEqual(nextFrameUrl, initialFrameUrl);
+  console.log(
+    JSON.stringify({
+      phase: "next-navigation",
+      initialFrameUrl,
+      nextFrameUrl,
+    }),
+  );
 }
 
 async function readStoredCount(page) {
@@ -178,7 +160,7 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
       { timeout: 15_000 },
     );
 
-    await clickNextQuestion(frame);
+    await clickNextQuestion(page, frame);
     console.log(JSON.stringify({ phase: "next-clicked", answerText }));
 
     if (expectedCount === 1) {

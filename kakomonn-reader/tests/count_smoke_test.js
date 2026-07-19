@@ -15,6 +15,7 @@ const {
 
 const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
+const nextQuestionUrl = "https://chushoks.kakomonn.com/questions/86957";
 const edgeUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) " +
@@ -43,8 +44,8 @@ function createMockBody(result) {
     <div id="js-answer-result-box"${resultClassAttribute}></div>
     <p>選択肢2は正解の選択肢となります.</p>
     <a href="#report">（訂正依頼・報告はこちら）</a>
-    <button id="next" type="button"
-      onclick="location.href='/questions/next'">次の問題へ</button>
+    <button id="scroll-next" type="button">次の問題へ</button>
+    <a id="next" href="${nextQuestionUrl}">次の問題（問5）へ</a>
   `;
 }
 
@@ -750,7 +751,7 @@ async function runMilestoneCase(browser, script, initialCount, milestone) {
     ]);
 
     await page.goBack();
-    await page.waitForURL("https://chushoks.kakomonn.com/questions/next");
+    await page.waitForURL(nextQuestionUrl);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();

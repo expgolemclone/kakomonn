@@ -34,7 +34,6 @@
   const SPEECH_TIMEOUT_MS = 30000;
   const FRAME_LOAD_DELAY_MS = 900;
   const EXPLANATION_CHANGE_DELAY_MS = 700;
-  const NEXT_QUESTION_RELOAD_DELAY_MS = 1200;
   const FRAME_SCROLL_RESET_DELAYS_MS = [0, 120, 600];
   const COPY_FEEDBACK_DURATION_MS = 1400;
   const MAX_CHUNK_LENGTH = 1500;
@@ -79,7 +78,6 @@
   let currentFrameURL = location.href;
   let loadTimer = null;
   let explanationTimer = null;
-  let nextQuestionReloadTimer = null;
   let frameScrollResetTimers = [];
   let copyFeedbackTimer = null;
   let frameMutationObserver = null;
@@ -87,7 +85,6 @@
   let currentQuestionText = "";
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
-  let allowNextQuestionClick = false;
   let correctCount = null;
   let activeCountDate = "";
   let syncToken = "";

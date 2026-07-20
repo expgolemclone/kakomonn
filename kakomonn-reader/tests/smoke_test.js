@@ -173,6 +173,10 @@ async function loadMockQuestion(page, script) {
   await childFrame.evaluate(
     (html) => {
       document.body.innerHTML = html;
+      Object.defineProperty(document.querySelector("#next"), "getClientRects", {
+        configurable: true,
+        value: () => [],
+      });
     },
     mockBody,
   );
@@ -251,8 +255,9 @@ async function main() {
         document.querySelector("#kakomonn-reader-status").textContent ===
           "問題文完了",
     );
-    await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-next").disabled === false,
+    assert.equal(
+      await page.locator("#kakomonn-reader-next").isDisabled(),
+      true,
     );
 
     assert.deepEqual((await azureSpeechCalls(page))[0], {
@@ -272,6 +277,9 @@ async function main() {
     assert.equal(await speechTokenCallCount(page), 1);
 
     await markAnswerCorrect(childFrame);
+    await page.waitForFunction(
+      () => document.querySelector("#kakomonn-reader-next").disabled === false,
+    );
     await page.waitForFunction(
       (url) =>
         window.__syncMock.calls.filter((call) => call.url === url).length === 2,

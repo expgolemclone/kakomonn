@@ -7,6 +7,7 @@ const { installSyncMock } = require("./sync_mock");
 const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const questionUrl = "https://chushoks.kakomonn.com/questions/86956";
+const readerReadyTimeout = 30_000;
 
 async function getQuestionFrame(page) {
   await page.locator("#kakomonn-reader-frame").waitFor({ state: "attached" });
@@ -22,7 +23,7 @@ async function waitForReaderReady(page) {
       document.querySelector("#kakomonn-reader-status")?.textContent ===
       "読み上げ非対応",
     null,
-    { timeout: 15_000 },
+    { timeout: readerReadyTimeout },
   );
 }
 

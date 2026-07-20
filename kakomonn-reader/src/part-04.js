@@ -105,19 +105,16 @@
     }
 
     const links = frameDocument.querySelectorAll("a[href]");
+    const nextURLs = new Set();
 
     for (const link of links) {
-      if (!isVisibleElement(link)) {
-        continue;
-      }
-
       const nextURL = getNextQuestionURL(link);
       if (nextURL !== null) {
-        return nextURL;
+        nextURLs.add(nextURL);
       }
     }
 
-    return null;
+    return nextURLs.size === 1 ? nextURLs.values().next().value : null;
   }
 
   function clearFrameScrollResetTimers() {

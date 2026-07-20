@@ -56,3 +56,7 @@ npm ci
 npm test
 npm run test:smoke
 ```
+
+`npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます. Playwright WebKitはSafariそのものではないため,Release workflowではmacOS上のiOS 26 Simulatorを起動し,Appium XCUITest driverでMobile Safariのfixture E2Eと実サイトE2Eを実行します. このテストは,ネイティブコンテキストで一意に取得したボタンへのXCTest clickが信頼済みのclick eventを発生させること,解答記録を同期すること,iframeとbrowser URLが次問へ移動することを検証します. 両方が通過するまでReleaseは作成されません.
+
+既存ReleaseをMobile Safariで再検証する場合は,GitHub Actionsの`Diagnose kakomonn-reader on iOS Safari`を実行し,`release_tag`へ対象tagを入力します. 失敗時は固定ボタンの状態,次問候補,iframe URL,screenshot,AppiumとXCUITestの診断logがartifactへ保存されます.

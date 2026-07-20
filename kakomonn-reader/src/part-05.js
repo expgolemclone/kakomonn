@@ -1,3 +1,9 @@
+  function answeredQuestionHasNextURL() {
+    return (
+      getCurrentAnswerResult() !== "unknown" && findNextQuestionURL() !== null
+    );
+  }
+
   function updateNextQuestionButton() {
     if (syncInProgress) {
       nextQuestionButton.textContent = "学習記録を同期中";
@@ -6,7 +12,7 @@
         navigationInProgress ||
         nextQuestionOperationInProgress ||
         !syncSettings.hidden ||
-        findNextQuestionURL() === null;
+        !answeredQuestionHasNextURL();
       return;
     }
 
@@ -48,7 +54,7 @@
     }
 
     nextQuestionButton.textContent = "次の問題へ";
-    nextQuestionButton.disabled = findNextQuestionURL() === null;
+    nextQuestionButton.disabled = !answeredQuestionHasNextURL();
   }
 
   function getCurrentAnswerResult() {
@@ -106,7 +112,7 @@
     updateCopyButton();
 
     try {
-      frame.contentWindow.location.assign(nextURL);
+      frame.src = nextURL;
     } catch {
       navigationInProgress = false;
       setStatus("次の問題へ移動できません");
@@ -441,6 +447,14 @@
     }
   }
 
+  function onNextQuestionPointerUp(event) {
+    if (event.pointerType !== "touch") {
+      return;
+    }
+    event.preventDefault();
+    void handleNextQuestion();
+  }
+
   function onFrameClick(event) {
     activateSpeechFromGesture();
     const target = event.target;
@@ -535,6 +549,7 @@
     }, FRAME_LOAD_DELAY_MS);
   }
 
+  nextQuestionButton.addEventListener("pointerup", onNextQuestionPointerUp);
   nextQuestionButton.addEventListener("click", () => {
     void handleNextQuestion();
   });

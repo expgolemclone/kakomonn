@@ -1,0 +1,71 @@
+name: Diagnose kakomonn-reader on iOS Safari
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing kakomonn-reader release tag, or blank for source
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  ios-safari:
+    runs-on: macos-26
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Download released userscript
+        if: inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          gh release download "$RELEASE_TAG" \
+            --pattern kakomonn-reader.user.js \
+            --dir kakomonn-reader/release-under-test
+          echo "KAKOMONN_READER_SCRIPT_PATH=$GITHUB_WORKSPACE/kakomonn-reader/release-under-test/kakomonn-reader.user.js" >> "$GITHUB_ENV"
+
+      - name: Boot iOS 26 simulator
+        run: |
+          device_udid="$(node kakomonn-reader/tests/select_ios_simulator.js)"
+          xcrun simctl shutdown all
+          xcrun simctl boot "$device_udid"
+          xcrun simctl bootstatus "$device_udid" -b
+          open -a Simulator --args -CurrentDeviceUDID "$device_udid"
+          echo "IOS_SAFARI_DEVICE_UDID=$device_udid" >> "$GITHUB_ENV"
+
+      - name: Run iOS Safari E2E
+        run: npm run test:kakomonn-ios-safari
+
+      - name: Upload iOS Safari diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: kakomonn-ios-safari-diagnostics
+          path: |
+            kakomonn-reader/test-results/
+          if-no-files-found: ignore
+
+      - name: Shut down iOS simulator
+        if: always()
+        run: |
+          if [[ -n "${IOS_SAFARI_DEVICE_UDID:-}" ]]; then
+            xcrun simctl shutdown "$IOS_SAFARI_DEVICE_UDID"
+          fi

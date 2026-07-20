@@ -4,6 +4,7 @@
 ## 典型的な失敗を避けるための注意点
 
 - VCS操作にはgitではなくjjを使うこと.
+- Windowsローカルで完結できるbuild,test,release,deployにGitHub Actionsを使わないこと. リポジトリ内のscriptと実行手順を用意すること. ActionsはWindowsで代替できないOS固有検証などに限定すること.
 - remoteの変更を取り込むときは, `main@origin`だけでなく, `jj bookmark list --all`で全remote bookmarkを確認すること. agent用bookmarkにだけ存在するcommitも統合対象から漏らさないこと.
 - remoteが更新され続ける作業では, 統合前, テスト前, push直前に`jj git fetch --remote origin`を実行すること. fetch後に新しいcommitが入った場合は, 統合と関連テストをやり直すこと.
 - fetchによって`main`がconflictしたときは, 片方を捨てて解消しないこと. 全remote系列を統合したrevisionを作り, `jj bookmark set main -r <revision>`で解消すること.

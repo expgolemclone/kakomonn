@@ -16,7 +16,7 @@ const manifest = validateManifest(
 );
 
 assert.equal(manifest.milestoneInterval, 50);
-assert.equal(manifest.sites.length, 5);
+assert.equal(manifest.sites.length, 4);
 assert.equal(parseMilestone("?milestone=50", 50), 50);
 assert.equal(parseMilestone("?milestone=150", 50), 150);
 assert.throws(() => parseMilestone("", 50), /positive integer/);
@@ -49,7 +49,7 @@ for (let index = 0; index < manifest.sites.length; index += 1) {
 
 const rejectionValues = [0xffff_ffff, 2];
 assert.equal(
-  randomIndex(manifest.sites.length, {
+  randomIndex(3, {
     getRandomValues(array) {
       array[0] = rejectionValues.shift();
       return array;

@@ -17,11 +17,12 @@ const selectors = new Map([
   ["kotonoha", ".celebration"],
   ["hikakin", "main, .stage, .celebration"],
   ["study-complete", "[data-burst]"],
-  ["gsap-study", ".celebrate-button"],
   ["imura-rally", ".stage"],
 ]);
 
 const retiredPaths = [
+  "/sensational/gsap-study",
+  "/sensational/gsap-study/",
   "/sensational/victory-observatory",
   "/sensational/victory-observatory/",
 ];
@@ -67,8 +68,6 @@ async function verifyEntry(browser, origin, site) {
       await page.waitForFunction(
         () => document.querySelector("[data-progress-number]")?.textContent === "100",
       );
-    } else if (site.id === "gsap-study") {
-      await page.waitForFunction(() => document.querySelector(".loader") === null);
     } else if (site.id === "imura-rally") {
       await page.waitForFunction(
         () => document.querySelector("#stage")?.dataset.ready === "true",

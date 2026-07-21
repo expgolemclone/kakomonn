@@ -7,7 +7,7 @@ const { webkit } = require("playwright");
 const { installSyncMock } = require("./sync_mock");
 
 const projectRoot = path.resolve(__dirname, "..");
-const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
+const defaultScriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const currentQuestionURL = "https://chushoks.kakomonn.com/questions/86956";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
 const iosUserAgent =
@@ -29,10 +29,16 @@ const fixtureBody = `
 `;
 
 async function main() {
-  execFileSync("python3", ["build.py"], {
-    cwd: projectRoot,
-    stdio: "inherit",
-  });
+  const configuredScriptPath = process.env.KAKOMONN_READER_SCRIPT_PATH;
+  if (!configuredScriptPath) {
+    execFileSync("python3", ["build.py"], {
+      cwd: projectRoot,
+      stdio: "inherit",
+    });
+  }
+  const scriptPath = configuredScriptPath
+    ? path.resolve(configuredScriptPath)
+    : defaultScriptPath;
   const script = fs.readFileSync(scriptPath, "utf8");
   const browser = await webkit.launch({ headless: true });
 
@@ -50,7 +56,10 @@ async function main() {
     await page.route("https://chushoks.kakomonn.com/**", (route) =>
       route.fulfill({
         contentType: "text/html; charset=utf-8",
-        body: "<!doctype html><html><body></body></html>",
+        body:
+          "<!doctype html><html><head>" +
+          '<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">' +
+          "</head><body></body></html>",
       }),
     );
     await page.goto(currentQuestionURL);
@@ -115,7 +124,41 @@ async function main() {
       };
     });
     assert.equal(hitTest.targetId, "kakomonn-reader-next", hitTest);
-    await nextButton.dispatchEvent("pointerup", { pointerType: "touch" });
+    await page.evaluate(() => {
+      window.__nextButtonInputEvents = [];
+      for (const eventName of ["pointerup", "click"]) {
+        document.addEventListener(
+          eventName,
+          (event) => {
+            window.__nextButtonInputEvents.push({
+              type: event.type,
+              targetId: event.target?.id || null,
+              targetTag: event.target?.tagName || null,
+              isTrusted: event.isTrusted,
+              pointerType: event.pointerType || null,
+            });
+          },
+          true,
+        );
+      }
+    });
+    await page.touchscreen.tap(
+      hitTest.buttonRect.left + hitTest.buttonRect.width / 2,
+      hitTest.buttonRect.top + hitTest.buttonRect.height / 2,
+    );
+    await page.waitForTimeout(250);
+    const inputEvents = await page.evaluate(
+      () => window.__nextButtonInputEvents,
+    );
+    assert.ok(
+      inputEvents.some(
+        (event) =>
+          event.type === "click" &&
+          event.targetId === "kakomonn-reader-next" &&
+          event.isTrusted === true,
+      ),
+      JSON.stringify({ hitTest, inputEvents }),
+    );
     await childFrame.waitForURL(nextQuestionURL);
     await page.waitForFunction(
       () =>

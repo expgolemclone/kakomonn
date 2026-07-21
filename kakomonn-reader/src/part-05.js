@@ -447,14 +447,6 @@
     }
   }
 
-  function onNextQuestionPointerUp(event) {
-    if (event.pointerType !== "touch") {
-      return;
-    }
-    event.preventDefault();
-    void handleNextQuestion();
-  }
-
   function onFrameClick(event) {
     activateSpeechFromGesture();
     const target = event.target;
@@ -549,7 +541,6 @@
     }, FRAME_LOAD_DELAY_MS);
   }
 
-  nextQuestionButton.addEventListener("pointerup", onNextQuestionPointerUp);
   nextQuestionButton.addEventListener("click", () => {
     void handleNextQuestion();
   });

@@ -121,10 +121,6 @@
     }
 
     #kakomonn-reader-frame {
-      position: absolute;
-      inset: 0;
-      z-index: 0;
-      display: block;
       width: 100%;
       height: 100%;
       border: 0;
@@ -194,6 +190,9 @@
       padding: 0 18px;
       box-shadow: 0 6px 22px rgba(0, 0, 0, 0.30);
       pointer-events: auto;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
       -webkit-tap-highlight-color: transparent;
     }
 

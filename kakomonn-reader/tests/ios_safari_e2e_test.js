@@ -6,6 +6,7 @@ const { setTimeout: delay } = require("node:timers/promises");
 
 const { Builder, By, Capabilities } = require("selenium-webdriver");
 const { Command } = require("selenium-webdriver/lib/command");
+const { Origin, Pointer } = require("selenium-webdriver/lib/input");
 const {
   createSyncMockConfiguration,
   installSyncMockInWindow,
@@ -366,13 +367,25 @@ async function tapElementNatively(driver, accessibilityLabel) {
       );
     }
     const target = elements[0];
+    const rect = await target.getRect();
+    const x = Math.floor(rect.x + rect.width / 2);
+    const y = Math.floor(rect.y + rect.height / 2);
     console.log(
       `native tap target: ${JSON.stringify({
         accessibilityLabel,
-        rect: await target.getRect(),
+        rect,
+        coordinate: { x, y },
       })}`,
     );
-    await target.click();
+    const finger = new Pointer("native touch finger", Pointer.Type.TOUCH);
+    const actions = driver.actions({ async: true });
+    actions.insert(
+      finger,
+      finger.move({ duration: 0, origin: Origin.VIEWPORT, x, y }),
+      finger.press(),
+      finger.release(),
+    );
+    await actions.perform();
     await delay(750);
   } finally {
     await setAppiumContext(driver, webContext);
@@ -405,12 +418,11 @@ async function assertNavigationCompleted(driver) {
   assert.ok(
     inputEvents.some(
       (event) =>
-        event.type === "pointerup" &&
+        event.type === "click" &&
         event.targetId === "kakomonn-reader-next" &&
-        event.isTrusted === true &&
-        event.pointerType === "touch",
+        event.isTrusted === true,
     ),
-    `native tap did not produce a trusted touch pointerup: ${JSON.stringify(
+    `native coordinate tap did not produce a trusted click: ${JSON.stringify(
       inputEvents,
     )}`,
   );

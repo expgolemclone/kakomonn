@@ -88,7 +88,7 @@
       !isNextQuestionLabel(normalizeControlLabel(link)) ||
       link.getAttribute("aria-disabled") === "true" ||
       url.origin !== location.origin ||
-      !/^\/questions\/\d+$/.test(url.pathname) ||
+      !/^\/questions\/(?:\d+|next\/\d+)$/.test(url.pathname) ||
       url.search !== "" ||
       url.hash !== "" ||
       url.href === currentFrameURL

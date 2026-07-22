@@ -233,20 +233,33 @@
 
   function gmXMLHttpRequest(details) {
     let abortRequest = () => {};
+    let rejectRequest = () => {};
     const promise = new Promise((resolve, reject) => {
       let settled = false;
-      const resolveOnce = (response) => {
-        if (!settled) {
-          settled = true;
-          resolve(response);
+      let timeoutTimer = null;
+      const settleOnce = (callback) => {
+        if (settled) {
+          return;
         }
+        settled = true;
+        if (timeoutTimer !== null) {
+          window.clearTimeout(timeoutTimer);
+          timeoutTimer = null;
+        }
+        callback();
+      };
+      const resolveOnce = (response) => {
+        settleOnce(() => resolve(response));
       };
       const rejectOnce = (code) => {
-        if (!settled) {
-          settled = true;
-          reject(new SyncRequestError(code));
-        }
+        settleOnce(() => reject(new SyncRequestError(code)));
       };
+      rejectRequest = rejectOnce;
+
+      timeoutTimer = window.setTimeout(() => {
+        rejectOnce("request_timeout");
+        abortRequest();
+      }, details.timeout ?? SYNC_TIMEOUT_MS);
 
       try {
         const request = GM.xmlHttpRequest({
@@ -267,7 +280,10 @@
         rejectOnce("network_error");
       }
     });
-    promise.abort = () => abortRequest();
+    promise.abort = () => {
+      rejectRequest("request_aborted");
+      abortRequest();
+    };
     return promise;
   }
 

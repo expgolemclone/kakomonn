@@ -53,7 +53,7 @@ const mockBody = `
   <p id="explanation" hidden>これは動作確認用の解説です.</p>
   <a href="#report">（訂正依頼・報告はこちら）</a>
   <button id="scroll-next" type="button">次の問題へ</button>
-  <a id="next" href="/questions/86957">次の問題（問5）へ</a>
+  <a id="next" href="/questions/next/45125">次の問題（問5）へ</a>
 `;
 
 async function preparePage(page, speechMode, syncOptions = {}) {
@@ -326,6 +326,38 @@ async function main() {
       ),
     );
     assert.equal(await speechTokenCallCount(page), 1);
+
+    await page.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+      window.dispatchEvent(new Event("focus"));
+    });
+    await page.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "学習記録の同期がタイムアウトしました.再試行してください",
+      null,
+      { timeout: 20_000 },
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-next").innerText(),
+      "同期を再試行",
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-next").isDisabled(),
+      false,
+    );
+    await page.evaluate(() => {
+      window.__syncMock.releaseHeldRequest();
+      window.dispatchEvent(new Event("focus"));
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-next").textContent ===
+        "次の問題へ",
+    );
 
     await page.evaluate(() => {
       window.__syncMock.holdNextRequest = true;
@@ -704,7 +736,7 @@ async function main() {
     assert.equal(await speechTokenCallCount(iosPage), 1);
     await iosPage.locator("#kakomonn-reader-next").tap();
     await iosFrame.waitForURL(
-      "https://chushoks.kakomonn.com/questions/86957",
+      "https://chushoks.kakomonn.com/questions/next/45125",
     );
     await iosPage.waitForFunction(
       () =>

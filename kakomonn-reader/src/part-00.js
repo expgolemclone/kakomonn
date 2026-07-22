@@ -104,6 +104,15 @@
 
   const style = document.createElement("style");
   style.textContent = `
+    :root {
+      --kakomonn-reader-controls-height: calc(
+        56px + env(safe-area-inset-top)
+      );
+      --kakomonn-reader-actions-height: calc(
+        76px + env(safe-area-inset-bottom)
+      );
+    }
+
     html, body {
       width: 100% !important;
       height: 100% !important;
@@ -115,7 +124,10 @@
 
     #kakomonn-reader-shell {
       position: fixed;
-      inset: 0;
+      top: var(--kakomonn-reader-controls-height);
+      right: 0;
+      bottom: var(--kakomonn-reader-actions-height);
+      left: 0;
       z-index: 2147483000;
       background: #fff;
     }
@@ -129,12 +141,18 @@
 
     #kakomonn-reader-controls {
       position: fixed;
-      right: 12px;
-      top: calc(12px + env(safe-area-inset-top));
+      top: 0;
+      right: 0;
+      left: 0;
       z-index: 2147483647;
       display: flex;
       align-items: center;
+      justify-content: flex-end;
       gap: 8px;
+      height: var(--kakomonn-reader-controls-height);
+      padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+      box-sizing: border-box;
+      background: #111;
       pointer-events: none;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     }
@@ -155,9 +173,15 @@
     }
 
     #kakomonn-reader-status {
-      max-width: 52vw;
+      flex: 1 1 auto;
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #kakomonn-reader-count {
+      flex: 0 0 auto;
       white-space: nowrap;
     }
 
@@ -176,13 +200,32 @@
       opacity: 0.55;
     }
 
+    #kakomonn-reader-actions {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      height: var(--kakomonn-reader-actions-height);
+      padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+      box-sizing: border-box;
+      background: #111;
+      pointer-events: none;
+    }
+
     #kakomonn-reader-next,
     #kakomonn-reader-copy {
-      position: fixed;
-      right: 14px;
-      z-index: 2147483647;
-      min-width: 138px;
+      position: static;
+      flex: 0 1 240px;
+      min-width: 160px;
+      max-width: 240px;
+      min-height: 54px;
       border: 0;
+      border-radius: 17px;
       color: #fff;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       font-weight: 800;
@@ -197,17 +240,11 @@
     }
 
     #kakomonn-reader-next {
-      bottom: calc(16px + env(safe-area-inset-bottom));
-      min-height: 54px;
-      border-radius: 17px;
       background: #1473e6;
       font-size: 17px;
     }
 
     #kakomonn-reader-copy {
-      bottom: calc(80px + env(safe-area-inset-bottom));
-      min-height: 44px;
-      border-radius: 15px;
       background: #2f855a;
       font-size: 14px;
     }
@@ -221,6 +258,39 @@
     #kakomonn-reader-copy:disabled {
       background: rgba(90, 90, 90, 0.78);
       opacity: 0.72;
+    }
+
+    @media (max-width: 620px) {
+      #kakomonn-reader-controls {
+        gap: 4px;
+        padding-right: 6px;
+        padding-left: 6px;
+      }
+
+      #kakomonn-reader-count,
+      #kakomonn-reader-status,
+      #kakomonn-reader-stop,
+      #kakomonn-reader-sync-settings-button {
+        padding-right: 8px;
+        padding-left: 8px;
+        font-size: 11px;
+      }
+
+      #kakomonn-reader-actions {
+        gap: 8px;
+        padding-right: 8px;
+        padding-left: 8px;
+      }
+
+      #kakomonn-reader-next,
+      #kakomonn-reader-copy {
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: none;
+        padding-right: 10px;
+        padding-left: 10px;
+        font-size: 14px;
+      }
     }
 
     #kakomonn-reader-sync-settings {

@@ -1,32 +1,16 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
-const { chromium, webkit } = require("playwright");
+const { spawn } = require("node:child_process");
 
-const projectRoot = path.resolve(__dirname, "..");
-const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const syncApiOrigin =
   "https://kakomonn-count-sync.expgolem-lab.workers.dev";
-const syncTokenKey = "kakomonn-reader.sync-token";
-const pendingAnswerKey = "kakomonn-reader.pending-answer";
 const currentQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const nextQuestionUrl = "https://chushoks.kakomonn.com/questions/86957";
-const incorrectAnswerText = "GDPは、フローとストックの混合概念である。";
-const iosUserAgent =
-  "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) " +
-  "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 " +
-  "Mobile/15E148 Safari/604.1";
-
-function readBrowserName() {
-  const browserArgument = process.argv[2] ?? "--browser=chromium";
-  if (browserArgument === "--browser=chromium") {
-    return "chromium";
-  }
-  if (browserArgument === "--browser=webkit") {
-    return "webkit";
-  }
-  throw new Error("Usage: live_sync_e2e_test.js [--browser=chromium|webkit]");
-}
+const correctAnswerText = "輸入の減少は、GDPを増加させる。";
+const requestTimeoutMs = 30_000;
+const browserApprovalTimeoutMs = 120_000;
 
 function readSyncToken() {
   const token = process.env.KAKOMONN_SYNC_TOKEN ?? "";
@@ -36,6 +20,54 @@ function readSyncToken() {
     );
   }
   return token;
+}
+
+function defaultEdgeUserDataDir() {
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA;
+    if (!localAppData) {
+      throw new Error("LOCALAPPDATA is not set");
+    }
+    return path.join(localAppData, "Microsoft", "Edge", "User Data");
+  }
+  if (process.platform === "darwin") {
+    return path.join(
+      os.homedir(),
+      "Library",
+      "Application Support",
+      "Microsoft Edge",
+    );
+  }
+  return path.join(os.homedir(), ".config", "microsoft-edge");
+}
+
+function readEdgeUserDataDir() {
+  const userDataDir = path.resolve(
+    process.env.KAKOMONN_EDGE_USER_DATA_DIR ?? defaultEdgeUserDataDir(),
+  );
+  const activePortPath = path.join(userDataDir, "DevToolsActivePort");
+  if (!fs.existsSync(activePortPath)) {
+    throw new Error(
+      `Remote debugging is not active. Enable it at edge://inspect/#remote-debugging before running the E2E. Missing: ${activePortPath}`,
+    );
+  }
+  return userDataDir;
+}
+
+function chromeDevToolsMcpEntry() {
+  const packageMain = require.resolve("chrome-devtools-mcp");
+  const packageRoot = path.resolve(path.dirname(packageMain), "..", "..");
+  const entry = path.join(
+    packageRoot,
+    "build",
+    "src",
+    "bin",
+    "chrome-devtools-mcp.js",
+  );
+  if (!fs.existsSync(entry)) {
+    throw new Error(`chrome-devtools-mcp entry was not found: ${entry}`);
+  }
+  return entry;
 }
 
 function assertSyncState(state) {
@@ -56,396 +88,443 @@ async function requestSyncState(token) {
   return assertSyncState(await response.json());
 }
 
-async function installRealUserscriptApi(page, token) {
-  await page.exposeFunction("__kakomonnRealRequest", async (request) => {
-    const response = await fetch(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body: request.data,
-      signal: AbortSignal.timeout(request.timeout),
-    });
-    const responseHeaders = [...response.headers.entries()]
-      .map(([name, value]) => `${name}: ${value}`)
-      .join("\r\n");
-    if (request.responseType === "arraybuffer") {
-      return {
-        responseBytes: [...new Uint8Array(await response.arrayBuffer())],
-        responseHeaders,
-        status: response.status,
-      };
-    }
-    return {
-      responseText: await response.text(),
-      responseHeaders,
-      status: response.status,
-    };
-  });
-
-  await page.evaluate(
-    ({ storedToken, tokenKey }) => {
-      const values = new Map([[tokenKey, storedToken]]);
-      const calls = [];
-      window.__kakomonnRealGM = {
-        calls,
-        readValue(key) {
-          return values.has(key) ? structuredClone(values.get(key)) : null;
-        },
-      };
-      window.GM = {
-        async getValue(key, defaultValue) {
-          return values.has(key)
-            ? structuredClone(values.get(key))
-            : defaultValue;
-        },
-        async setValue(key, value) {
-          values.set(key, structuredClone(value));
-        },
-        async deleteValue(key) {
-          values.delete(key);
-        },
-        xmlHttpRequest(details) {
-          const contentType = details.headers?.["Content-Type"] ?? "";
-          const call = {
-            body:
-              details.data === undefined
-                ? null
-                : contentType === "application/json"
-                  ? JSON.parse(details.data)
-                  : details.data,
-            method: details.method,
-            status: null,
-            url: details.url,
-          };
-          calls.push(call);
-          let aborted = false;
-          const request = window
-            .__kakomonnRealRequest({
-              data: details.data,
-              headers: details.headers,
-              method: details.method,
-              responseType: details.responseType,
-              timeout: details.timeout,
-              url: details.url,
-            })
-            .then(
-              (response) => {
-                call.status = response.status;
-                if (Array.isArray(response.responseBytes)) {
-                  response.response = new Uint8Array(
-                    response.responseBytes,
-                  ).buffer;
-                  delete response.responseBytes;
-                }
-                if (aborted) {
-                  details.onabort?.({});
-                  return response;
-                }
-                details.onload?.(response);
-                return response;
-              },
-              (error) => {
-                if (aborted) {
-                  details.onabort?.({});
-                } else if (error?.name === "TimeoutError") {
-                  details.ontimeout?.({});
-                } else {
-                  details.onerror?.({});
-                }
-                throw error;
-              },
-            );
-          request.abort = () => {
-            aborted = true;
-          };
-          return request;
-        },
-      };
-    },
-    { storedToken: token, tokenKey: syncTokenKey },
-  );
+function nextMilestone(correctCount) {
+  return (Math.floor(correctCount / 50) + 1) * 50;
 }
 
-async function blockThirdPartyAds(context) {
-  await context.route("**/*", async (route) => {
-    const hostname = new URL(route.request().url()).hostname;
-    if (
-      hostname.endsWith(".googlesyndication.com") ||
-      hostname.endsWith(".doubleclick.net") ||
-      hostname === "googletagmanager.com" ||
-      hostname.endsWith(".googletagmanager.com") ||
-      hostname === "anymind360.com" ||
-      hostname.endsWith(".anymind360.com")
-    ) {
-      await route.abort();
-      return;
-    }
-    await route.continue();
-  });
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function activateControl(control, hasTouch) {
-  if (hasTouch) {
-    await control.tap({ force: true });
-    return;
-  }
-  await control.click({ force: true });
-}
-
-async function submitIncorrectAnswer(frame, hasTouch) {
-  const normalize = (value) => value.replace(/\s+/g, "").trim();
-  const choices = await frame.locator(".problem_detail ul.list > li").allInnerTexts();
-  const choiceIndex = choices.findIndex(
-    (choice) => normalize(choice) === normalize(incorrectAnswerText),
-  );
-  assert.notEqual(choiceIndex, -1);
-  const answerInput = frame
-    .locator(".problem_detail ul.check input[name='intAnswerData']")
-    .nth(choiceIndex);
-  await activateControl(
-    frame.locator(".problem_detail ul.check > li > label").nth(choiceIndex),
-    hasTouch,
-  );
-  assert.equal(await answerInput.isChecked(), true);
-  await activateControl(frame.locator("#send_exam_btn"), hasTouch);
-  await frame.getByText("残念...", { exact: true }).waitFor({
-    state: "visible",
-    timeout: 15_000,
-  });
-}
-
-async function readDiagnostics(page, pageErrors) {
-  return page.evaluate(
-    ({ errors, pendingKey }) => {
-      const frame = document.querySelector("#kakomonn-reader-frame");
-      const frameDocument = frame?.contentDocument;
-      return {
-        answerResultClass:
-          frameDocument?.querySelector("#js-answer-result-box")?.className ??
-          null,
-        button: (() => {
-          const button = document.querySelector("#kakomonn-reader-next");
-          return button
-            ? { disabled: button.disabled, text: button.textContent }
-            : null;
-        })(),
-        calls: (window.__kakomonnRealGM?.calls ?? []).map((call) => ({
-          body:
-            new URL(call.url).origin ===
-            "https://kakomonn-count-sync.expgolem-lab.workers.dev"
-              ? call.body
-              : null,
-          method: call.method,
-          origin: new URL(call.url).origin,
-          path: new URL(call.url).pathname,
-          status: call.status,
-        })),
-        errors,
-        frameUrl: frame?.contentWindow.location.href ?? null,
-        inputEvents: window.__kakomonnNextInputEvents ?? [],
-        nextCandidates: frameDocument
-          ? [...frameDocument.querySelectorAll("a[href]")]
-              .filter((link) => /次の問題/.test(link.textContent ?? ""))
-              .map((link) => ({ href: link.href, text: link.textContent }))
-          : [],
-        pendingAnswer:
-          window.__kakomonnRealGM?.readValue(pendingKey) ?? null,
-        status: document.querySelector("#kakomonn-reader-status")?.textContent,
-        syncSettingsHidden:
-          document.querySelector("#kakomonn-reader-sync-settings")?.hidden ??
-          null,
-        topUrl: location.href,
-      };
-    },
-    { errors: pageErrors, pendingKey: pendingAnswerKey },
-  );
-}
-
-async function runLiveSyncCase(
-  browser,
-  script,
-  token,
-  initialState,
-  { contextOptions, hasTouch, readyStatus },
-) {
-  const context = await browser.newContext(contextOptions);
-  await blockThirdPartyAds(context);
-  const page = await context.newPage();
-  const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(String(error)));
-
-  try {
-    const response = await page.goto(currentQuestionUrl, {
-      waitUntil: "domcontentloaded",
-      timeout: 60_000,
-    });
-    assert.equal(response?.ok(), true);
-    await page.getByText("解答する", { exact: true }).waitFor({
-      state: "visible",
-    });
-    await installRealUserscriptApi(page, token);
-    await page.evaluate((source) => (0, eval)(source), script);
-
-    const frame = page.locator("#kakomonn-reader-frame").contentFrame();
-    await frame.getByText("解答する", { exact: true }).waitFor({
-      state: "visible",
-    });
-    await page.waitForFunction(
-      (expectedCount) =>
-        document.querySelector("#kakomonn-reader-count")?.textContent ===
-        `${expectedCount}問,次は50問`,
-      initialState.counts.correct,
-      { timeout: 30_000 },
+class McpClient {
+  constructor(userDataDir) {
+    this.nextId = 1;
+    this.pending = new Map();
+    this.stdoutBuffer = "";
+    this.stderr = "";
+    this.process = spawn(
+      process.execPath,
+      [
+        chromeDevToolsMcpEntry(),
+        "--autoConnect",
+        `--user-data-dir=${userDataDir}`,
+        "--no-usage-statistics",
+        "--no-performance-crux",
+      ],
+      { stdio: ["pipe", "pipe", "pipe"] },
     );
-    await page.waitForFunction(
-      (expectedStatus) =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        expectedStatus,
-      readyStatus,
-      { timeout: 30_000 },
-    );
-
-    await submitIncorrectAnswer(frame, hasTouch);
-    await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-next")?.disabled === false,
-      null,
-      { timeout: 15_000 },
-    );
-    await page.evaluate(() => {
-      window.__kakomonnNextInputEvents = [];
-      for (const eventName of ["touchend", "pointerup", "click"]) {
-        document.addEventListener(
-          eventName,
-          (event) => {
-            window.__kakomonnNextInputEvents.push({
-              isTrusted: event.isTrusted,
-              pointerType: event.pointerType ?? null,
-              targetId: event.target?.id ?? null,
-              type: event.type,
-            });
-          },
-          true,
-        );
+    this.process.stdout.on("data", (chunk) => this.onStdout(chunk));
+    this.process.stderr.on("data", (chunk) => {
+      this.stderr += chunk.toString();
+      if (this.stderr.length > 16_000) {
+        this.stderr = this.stderr.slice(-16_000);
       }
     });
-    await activateControl(page.locator("#kakomonn-reader-next"), hasTouch);
-    await page.waitForFunction(
-      (expectedUrl) =>
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow.location
-          .href === expectedUrl,
-      nextQuestionUrl,
-      { timeout: 30_000 },
-    );
-    await page.waitForFunction(
-      (expectedUrl) => location.href === expectedUrl,
-      nextQuestionUrl,
-      { timeout: 30_000 },
-    );
-
-    const state = await page.evaluate((pendingKey) => {
-      const answerCalls = window.__kakomonnRealGM.calls.filter(
-        (call) =>
-          call.method === "POST" &&
-          new URL(call.url).pathname === "/v2/answers",
+    this.process.once("exit", (code, signal) => {
+      const error = new Error(
+        `chrome-devtools-mcp exited before completion: code=${code}, signal=${signal}\n${this.stderr}`,
       );
-      return {
-        answerCalls,
-        count: document.querySelector("#kakomonn-reader-count")?.textContent,
-        frameUrl: document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          .location.href,
-        inputEvents: window.__kakomonnNextInputEvents,
-        pendingAnswer: window.__kakomonnRealGM.readValue(pendingKey),
-        status: document.querySelector("#kakomonn-reader-status")?.textContent,
-        topUrl: location.href,
-      };
-    }, pendingAnswerKey);
-    assert.equal(state.answerCalls.length, 1);
-    assert.equal(state.answerCalls[0].status, 200);
-    assert.equal(state.answerCalls[0].body.result, "incorrect");
-    assert.match(state.answerCalls[0].body.operationId, /^[0-9a-f]{32}$/);
-    assert.equal(state.pendingAnswer, null);
-    assert.equal(state.frameUrl, nextQuestionUrl);
-    assert.equal(state.topUrl, nextQuestionUrl);
-    assert.equal(state.count, `${initialState.counts.correct}問,次は50問`);
-    const expectedInputType = hasTouch ? "pointerup" : "click";
-    assert.equal(
-      state.inputEvents.some(
-        (event) =>
-          event.type === expectedInputType &&
-          event.targetId === "kakomonn-reader-next" &&
-          event.isTrusted &&
-          (!hasTouch || event.pointerType === "touch"),
-      ),
-      true,
-    );
-    assert.deepEqual(pageErrors, []);
-    return state;
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        diagnostics: await readDiagnostics(page, pageErrors).catch(
-          (diagnosticError) => ({ error: String(diagnosticError) }),
-        ),
-        failure: String(error),
-      }),
-    );
-    throw error;
-  } finally {
-    await context.close();
+      for (const request of this.pending.values()) {
+        clearTimeout(request.timer);
+        request.reject(error);
+      }
+      this.pending.clear();
+    });
   }
+
+  onStdout(chunk) {
+    this.stdoutBuffer += chunk.toString();
+    for (;;) {
+      const newline = this.stdoutBuffer.indexOf("\n");
+      if (newline < 0) {
+        return;
+      }
+      const line = this.stdoutBuffer.slice(0, newline).trim();
+      this.stdoutBuffer = this.stdoutBuffer.slice(newline + 1);
+      if (!line.startsWith("{")) {
+        continue;
+      }
+      let message;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (message.id === undefined || !this.pending.has(message.id)) {
+        continue;
+      }
+      const request = this.pending.get(message.id);
+      this.pending.delete(message.id);
+      clearTimeout(request.timer);
+      if (message.error) {
+        request.reject(new Error(JSON.stringify(message.error)));
+      } else {
+        request.resolve(message.result);
+      }
+    }
+  }
+
+  request(method, params, timeoutMs = requestTimeoutMs) {
+    const id = this.nextId++;
+    const promise = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(
+          new Error(
+            `MCP request timed out: ${method}\n${this.stderr.slice(-4000)}`,
+          ),
+        );
+      }, timeoutMs);
+      this.pending.set(id, { reject, resolve, timer });
+    });
+    this.process.stdin.write(
+      `${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`,
+    );
+    return promise;
+  }
+
+  notify(method, params) {
+    this.process.stdin.write(
+      `${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`,
+    );
+  }
+
+  async initialize() {
+    await this.request("initialize", {
+      protocolVersion: "2025-03-26",
+      capabilities: {},
+      clientInfo: { name: "kakomonn-live-e2e", version: "1.0.0" },
+    });
+    this.notify("notifications/initialized", {});
+  }
+
+  async tool(name, args = {}, timeoutMs = requestTimeoutMs) {
+    const result = await this.request(
+      "tools/call",
+      { name, arguments: args },
+      timeoutMs,
+    );
+    if (result.isError) {
+      throw new Error(toolText(result));
+    }
+    return result;
+  }
+
+  close() {
+    this.process.stdin.end();
+    this.process.kill();
+  }
+}
+
+function toolText(result) {
+  return (result.content ?? [])
+    .filter((item) => item.type === "text")
+    .map((item) => item.text)
+    .join("\n");
+}
+
+function parseEvaluation(result) {
+  const text = toolText(result);
+  const fenced = text.match(/```json\s*([\s\S]*?)\s*```/);
+  if (!fenced) {
+    throw new Error(`Evaluation did not return JSON: ${text}`);
+  }
+  return JSON.parse(fenced[1]);
+}
+
+function findUid(snapshot, role, accessibleName) {
+  const expected = `${role} ${JSON.stringify(accessibleName)}`;
+  for (const line of snapshot.split("\n")) {
+    if (!line.includes(expected)) {
+      continue;
+    }
+    const match = line.match(/uid=(\S+)/);
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
+function findChoiceLabelUid(snapshot, choiceNumber) {
+  const lines = snapshot.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const label = lines[index].match(/uid=(\S+) LabelText/);
+    if (!label) {
+      continue;
+    }
+    const descendants = lines
+      .slice(index + 1, index + 7)
+      .join("\n");
+    if (descendants.includes(`StaticText ${JSON.stringify(choiceNumber)}`)) {
+      return label[1];
+    }
+  }
+  return null;
+}
+
+function selectedPageId(pageList, url) {
+  for (const line of pageList.split("\n")) {
+    if (!line.includes(url) || !line.includes("[selected]")) {
+      continue;
+    }
+    const match = line.match(/^\s*(\d+):/);
+    if (match) {
+      return Number(match[1]);
+    }
+  }
+  return null;
+}
+
+async function evaluate(mcp, functionDeclaration) {
+  return parseEvaluation(
+    await mcp.tool("evaluate_script", { function: functionDeclaration }),
+  );
+}
+
+async function snapshot(mcp, verbose = false) {
+  return toolText(await mcp.tool("take_snapshot", { verbose }));
+}
+
+async function waitUntil(description, callback, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastValue;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      lastValue = await callback();
+      if (lastValue) {
+        return lastValue;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(500);
+  }
+  throw new Error(
+    `Timed out waiting for ${description}. Last value: ${JSON.stringify(lastValue)}. Last error: ${String(lastError ?? "none")}`,
+  );
+}
+
+async function readReaderState(mcp) {
+  return evaluate(
+    mcp,
+    `() => {
+      const frame = document.querySelector("#kakomonn-reader-frame");
+      const next = document.querySelector("#kakomonn-reader-next");
+      const settings = document.querySelector("#kakomonn-reader-sync-settings");
+      const settingsButton = document.querySelector("#kakomonn-reader-sync-settings-button");
+      return {
+        actionsPresent: Boolean(document.querySelector("#kakomonn-reader-actions")),
+        count: document.querySelector("#kakomonn-reader-count")?.textContent ?? null,
+        frameURL: frame?.contentWindow?.location?.href ?? null,
+        nextDisabled: next?.disabled ?? null,
+        nextText: next?.textContent ?? null,
+        outerURL: location.href,
+        settingsButtonDisabled: settingsButton?.disabled ?? null,
+        settingsHidden: settings?.hidden ?? null,
+        status: document.querySelector("#kakomonn-reader-status")?.textContent ?? null
+      };
+    }`,
+  );
+}
+
+async function configureSyncToken(mcp, token, baseline) {
+  const ready = await waitUntil(
+    "the installed Tampermonkey userscript",
+    async () => {
+      const state = await readReaderState(mcp);
+      return state.actionsPresent && state.frameURL ? state : null;
+    },
+    60_000,
+  );
+  assert.equal(ready.outerURL, currentQuestionUrl);
+  assert.equal(ready.frameURL, currentQuestionUrl);
+
+  let currentSnapshot = await snapshot(mcp);
+  let tokenInput = findUid(currentSnapshot, "textbox", "同期トークン");
+  if (!tokenInput) {
+    await waitUntil("the enabled sync settings button", async () => {
+      const state = await readReaderState(mcp);
+      return state.settingsButtonDisabled === false ? state : null;
+    });
+    currentSnapshot = await snapshot(mcp);
+    const settingsButton = findUid(
+      currentSnapshot,
+      "button",
+      "学習記録の同期設定を開く",
+    );
+    assert.notEqual(settingsButton, null, currentSnapshot);
+    await mcp.tool("click", { uid: settingsButton });
+    currentSnapshot = await snapshot(mcp);
+    tokenInput = findUid(currentSnapshot, "textbox", "同期トークン");
+  }
+
+  const saveButton = findUid(currentSnapshot, "button", "確認して保存");
+  assert.notEqual(tokenInput, null, currentSnapshot);
+  assert.notEqual(saveButton, null, currentSnapshot);
+  await mcp.tool("fill", { uid: tokenInput, value: token });
+  await mcp.tool("click", { uid: saveButton });
+
+  const expectedCount = `${baseline.counts.correct}問,次は${nextMilestone(
+    baseline.counts.correct,
+  )}問`;
+  return waitUntil("the production sync baseline", async () => {
+    const state = await readReaderState(mcp);
+    return state.settingsHidden && state.count === expectedCount ? state : null;
+  });
+}
+
+async function submitCorrectAnswer(mcp) {
+  const verboseSnapshot = await snapshot(mcp, true);
+  assert.equal(verboseSnapshot.includes(correctAnswerText), true);
+  const choice = findChoiceLabelUid(verboseSnapshot, "5");
+  assert.notEqual(choice, null, verboseSnapshot);
+  await mcp.tool("click", { uid: choice });
+
+  const selected = await evaluate(
+    mcp,
+    `() => document
+      .querySelector("#kakomonn-reader-frame")
+      .contentDocument
+      .querySelector('input[name="intAnswerData"][value="5"]')
+      .checked`,
+  );
+  assert.equal(selected, true, "The visible answer 5 control was not selected");
+
+  const answerSnapshot = await snapshot(mcp);
+  const answerButton = findUid(answerSnapshot, "button", "解答する");
+  assert.notEqual(answerButton, null, answerSnapshot);
+  await mcp.tool("click", { uid: answerButton });
+
+  await waitUntil("the real site correct result", async () =>
+    evaluate(
+      mcp,
+      `() => document
+        .querySelector("#kakomonn-reader-frame")
+        .contentDocument
+        .querySelector("#js-answer-result-box")
+        ?.classList.contains("is-correct") === true`,
+    ),
+  );
+}
+
+async function clickNextQuestion(mcp, expectedCorrectCount) {
+  await waitUntil("the enabled next question button", async () => {
+    const state = await readReaderState(mcp);
+    return state.nextDisabled === false && state.nextText === "次の問題へ"
+      ? state
+      : null;
+  });
+  const nextSnapshot = await snapshot(mcp);
+  const nextButton = findUid(nextSnapshot, "button", "次の問題へ移動");
+  assert.notEqual(nextButton, null, nextSnapshot);
+
+  const hitTest = await evaluate(
+    mcp,
+    `() => {
+      const button = document.querySelector("#kakomonn-reader-next");
+      const rect = button.getBoundingClientRect();
+      const target = document.elementFromPoint(
+        rect.left + rect.width / 2,
+        rect.top + rect.height / 2
+      );
+      return { targetId: target?.id ?? null };
+    }`,
+  );
+  assert.equal(hitTest.targetId, "kakomonn-reader-next", JSON.stringify(hitTest));
+  await mcp.tool("click", { uid: nextButton });
+
+  const expectedCount = `${expectedCorrectCount}問,次は${nextMilestone(
+    expectedCorrectCount,
+  )}問`;
+  return waitUntil("question 86957 and the incremented count", async () => {
+    const state = await readReaderState(mcp);
+    return state.outerURL === nextQuestionUrl &&
+      state.frameURL === nextQuestionUrl &&
+      state.count === expectedCount
+      ? state
+      : null;
+  });
+}
+
+async function writeFailureDiagnostics(mcp) {
+  const screenshotPath = path.join(
+    os.tmpdir(),
+    `kakomonn-live-e2e-${Date.now()}.png`,
+  );
+  const diagnostics = await readReaderState(mcp).catch((error) => ({
+    error: String(error),
+  }));
+  await mcp
+    .tool(
+      "take_screenshot",
+      { format: "png", fullPage: false, filePath: screenshotPath },
+      60_000,
+    )
+    .catch(() => null);
+  console.error(JSON.stringify({ diagnostics, screenshotPath }));
 }
 
 async function main() {
-  const browserName = readBrowserName();
   const token = readSyncToken();
-  const script = fs.readFileSync(scriptPath, "utf8");
-  const initialState = await requestSyncState(token);
-  const browserType = browserName === "webkit" ? webkit : chromium;
-  const browser = await browserType.launch({ headless: true });
-  const browserOptions =
-    browserName === "webkit"
-      ? {
-          contextOptions: {
-            deviceScaleFactor: 3,
-            hasTouch: true,
-            isMobile: true,
-            userAgent: iosUserAgent,
-            viewport: { height: 844, width: 390 },
-          },
-          hasTouch: true,
-          readyStatus: "画面をクリックまたはタップすると読み上げます",
-        }
-      : {
-          contextOptions: {},
-          hasTouch: false,
-          readyStatus: "読み上げ非対応",
-        };
-  let browserState;
-  try {
-    browserState = await runLiveSyncCase(
-      browser,
-      script,
-      token,
-      initialState,
-      browserOptions,
+  const userDataDir = readEdgeUserDataDir();
+  const baseline = await requestSyncState(token);
+  if ((baseline.counts.correct + 1) % baseline.milestoneInterval === 0) {
+    throw new Error(
+      "The next correct answer reaches a milestone. Run the milestone flow separately before this navigation E2E.",
     );
-  } finally {
-    await browser.close();
   }
 
-  const finalState = await requestSyncState(token);
-  assert.equal(finalState.date, initialState.date);
-  assert.equal(finalState.counts.correct, initialState.counts.correct);
-  assert.equal(finalState.counts.answered, initialState.counts.answered + 1);
-  console.log(
-    JSON.stringify({
-      answeredAfter: finalState.counts.answered,
-      answeredBefore: initialState.counts.answered,
-      browser: browserName,
-      correct: finalState.counts.correct,
-      frameUrl: browserState.frameUrl,
-      status: "passed",
-    }),
-  );
+  const mcp = new McpClient(userDataDir);
+  let pageId = null;
+  try {
+    await mcp.initialize();
+    console.error(
+      "Edgeにリモートデバッグの承認が表示された場合は,許可してください.",
+    );
+    await mcp.tool("list_pages", {}, browserApprovalTimeoutMs);
+    const opened = toolText(
+      await mcp.tool(
+        "new_page",
+        { url: currentQuestionUrl, timeout: 60_000 },
+        75_000,
+      ),
+    );
+    pageId = selectedPageId(opened, currentQuestionUrl);
+    assert.notEqual(pageId, null, opened);
+
+    const configuredState = await configureSyncToken(mcp, token, baseline);
+    assert.equal(configuredState.count, `${baseline.counts.correct}問,次は${nextMilestone(baseline.counts.correct)}問`);
+    await submitCorrectAnswer(mcp);
+    const browserState = await clickNextQuestion(
+      mcp,
+      baseline.counts.correct + 1,
+    );
+    const finalState = await requestSyncState(token);
+    assert.equal(finalState.date, baseline.date);
+    assert.equal(finalState.counts.correct, baseline.counts.correct + 1);
+    assert.equal(finalState.counts.answered, baseline.counts.answered + 1);
+    console.log(
+      JSON.stringify({
+        answeredAfter: finalState.counts.answered,
+        answeredBefore: baseline.counts.answered,
+        browser: "Microsoft Edge with Tampermonkey",
+        correctAfter: finalState.counts.correct,
+        correctBefore: baseline.counts.correct,
+        frameUrl: browserState.frameURL,
+        status: "passed",
+      }),
+    );
+  } catch (error) {
+    await writeFailureDiagnostics(mcp).catch(() => null);
+    throw error;
+  } finally {
+    if (pageId !== null) {
+      await mcp.tool("close_page", { pageId }).catch(() => null);
+    }
+    mcp.close();
+  }
 }
 
 main().catch((error) => {

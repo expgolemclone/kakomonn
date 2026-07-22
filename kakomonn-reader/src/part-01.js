@@ -47,6 +47,10 @@
   copyButton.setAttribute("aria-label", "問題文と解説をコピー");
   copyButton.disabled = true;
 
+  const actions = document.createElement("div");
+  actions.id = "kakomonn-reader-actions";
+  actions.append(copyButton, nextQuestionButton);
+
   const syncSettings = document.createElement("div");
   syncSettings.id = "kakomonn-reader-sync-settings";
   syncSettings.hidden = true;
@@ -109,8 +113,7 @@
   document.body.replaceChildren(
     shell,
     controls,
-    copyButton,
-    nextQuestionButton,
+    actions,
     syncSettings
   );
 

@@ -249,6 +249,33 @@ async function main() {
       await page.locator("#kakomonn-reader-copy").isVisible(),
       true,
     );
+    const readerLayout = await page.evaluate(() => {
+      const controls = document
+        .querySelector("#kakomonn-reader-controls")
+        .getBoundingClientRect();
+      const frame = document
+        .querySelector("#kakomonn-reader-frame")
+        .getBoundingClientRect();
+      const actions = document
+        .querySelector("#kakomonn-reader-actions")
+        .getBoundingClientRect();
+      return {
+        actionsTop: actions.top,
+        controlsBottom: controls.bottom,
+        frameBottom: frame.bottom,
+        frameTop: frame.top,
+      };
+    });
+    assert.equal(
+      readerLayout.frameTop >= readerLayout.controlsBottom,
+      true,
+      JSON.stringify(readerLayout),
+    );
+    assert.equal(
+      readerLayout.frameBottom <= readerLayout.actionsTop,
+      true,
+      JSON.stringify(readerLayout),
+    );
     await page.waitForFunction(
       () =>
         window.__readerStatusHistory.includes("問題文 1/1") &&

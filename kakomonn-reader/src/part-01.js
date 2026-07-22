@@ -2,6 +2,8 @@
 
   const shell = document.createElement("div");
   shell.id = "kakomonn-reader-shell";
+  shell.dataset.buildFingerprint = BUILD_FINGERPRINT;
+  shell.dataset.scriptHandler = SCRIPT_HANDLER;
 
   const frame = document.createElement("iframe");
   frame.id = "kakomonn-reader-frame";

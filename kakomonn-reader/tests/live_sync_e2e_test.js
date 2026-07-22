@@ -1,16 +1,69 @@
 const assert = require("node:assert/strict");
+const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 
+const userscriptPath = path.resolve(
+  __dirname,
+  "..",
+  "kakomonn-reader.user.js",
+);
 const syncApiOrigin =
   "https://kakomonn-count-sync.expgolem-lab.workers.dev";
 const currentQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const nextQuestionUrl = "https://chushoks.kakomonn.com/questions/86957";
 const correctAnswerText = "輸入の減少は、GDPを増加させる。";
+const expectedMarkdownHeading =
+  "# 中小企業診断士試験 令和7年度（2025年） 問4（経済学・経済政策 問4）";
 const requestTimeoutMs = 30_000;
 const browserApprovalTimeoutMs = 120_000;
+const edgeViewport = { height: 900, width: 1440 };
+const buildFingerprintPattern =
+  /const BUILD_FINGERPRINT = "([0-9a-f]{64})";/g;
+
+function extractBuildFingerprint(userscript) {
+  const matches = [...userscript.matchAll(buildFingerprintPattern)];
+  if (matches.length !== 1) {
+    throw new Error(
+      `Built userscript must contain exactly one build fingerprint: found ${matches.length}`,
+    );
+  }
+  return matches[0][1];
+}
+
+function readExpectedBuildFingerprint() {
+  if (!fs.existsSync(userscriptPath)) {
+    throw new Error(
+      `Built userscript was not found. Run the build first: ${userscriptPath}`,
+    );
+  }
+  return extractBuildFingerprint(fs.readFileSync(userscriptPath, "utf8"));
+}
+
+function assertRuntimeIdentity(state, expectedBuildFingerprint) {
+  assert.equal(
+    typeof state.userAgent,
+    "string",
+    "The connected browser did not expose a user agent",
+  );
+  assert.match(
+    state.userAgent,
+    /\bEdg\/\d+/,
+    "The remote-debugging target must be Microsoft Edge",
+  );
+  assert.equal(
+    state.scriptHandler,
+    "Tampermonkey",
+    "The userscript must be injected by Tampermonkey",
+  );
+  assert.equal(
+    state.buildFingerprint,
+    expectedBuildFingerprint,
+    "The installed Tampermonkey userscript is stale. Save the latest kakomonn-reader.user.js in Tampermonkey and rerun the test",
+  );
+}
 
 function readSyncToken() {
   const token = process.env.KAKOMONN_SYNC_TOKEN ?? "";
@@ -22,15 +75,76 @@ function readSyncToken() {
   return token;
 }
 
-function defaultEdgeUserDataDir() {
-  if (process.platform === "win32") {
-    const localAppData = process.env.LOCALAPPDATA;
+function windowsPowerShellExecutable() {
+  if (process.platform !== "win32") {
+    throw new Error("The real clipboard E2E requires Windows");
+  }
+  const systemRoot = process.env.SystemRoot;
+  if (!systemRoot) {
+    throw new Error("SystemRoot is not set");
+  }
+  const executable = path.join(
+    systemRoot,
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
+  );
+  if (!fs.existsSync(executable)) {
+    throw new Error(`Windows PowerShell was not found: ${executable}`);
+  }
+  return executable;
+}
+
+function runClipboardPowerShell(command, environment = {}) {
+  const childEnvironment = { ...process.env, ...environment };
+  delete childEnvironment.KAKOMONN_SYNC_TOKEN;
+  const result = spawnSync(
+    windowsPowerShellExecutable(),
+    ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command],
+    {
+      encoding: "utf8",
+      env: childEnvironment,
+      maxBuffer: 2 * 1024 * 1024,
+      windowsHide: true,
+    },
+  );
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `Windows clipboard command failed: ${result.stderr.trim()}`,
+    );
+  }
+  return result.stdout.replace(/\r\n/g, "\n").trimEnd();
+}
+
+function prepareClipboardNonce() {
+  const nonce = `kakomonn-live-e2e-${randomUUID()}`;
+  runClipboardPowerShell(
+    "Set-Clipboard -Value $env:KAKOMONN_E2E_CLIPBOARD_NONCE",
+    { KAKOMONN_E2E_CLIPBOARD_NONCE: nonce },
+  );
+  return nonce;
+}
+
+function readWindowsClipboard() {
+  return runClipboardPowerShell("Get-Clipboard -Raw");
+}
+
+function defaultEdgeUserDataDir(
+  environment = process.env,
+  platform = process.platform,
+) {
+  if (platform === "win32") {
+    const localAppData = environment.LOCALAPPDATA;
     if (!localAppData) {
       throw new Error("LOCALAPPDATA is not set");
     }
     return path.join(localAppData, "Microsoft", "Edge", "User Data");
   }
-  if (process.platform === "darwin") {
+  if (platform === "darwin") {
     return path.join(
       os.homedir(),
       "Library",
@@ -41,12 +155,38 @@ function defaultEdgeUserDataDir() {
   return path.join(os.homedir(), ".config", "microsoft-edge");
 }
 
-function readEdgeUserDataDir() {
-  const userDataDir = path.resolve(
-    process.env.KAKOMONN_EDGE_USER_DATA_DIR ?? defaultEdgeUserDataDir(),
+function isSameOrDescendantPath(parentPath, candidatePath) {
+  const relative = path.relative(parentPath, candidatePath);
+  return (
+    relative === "" ||
+    (!relative.startsWith(`..${path.sep}`) &&
+      relative !== ".." &&
+      !path.isAbsolute(relative))
   );
+}
+
+function readEdgeUserDataDir({
+  environment = process.env,
+  existsSync = fs.existsSync,
+  platform = process.platform,
+} = {}) {
+  const configuredPath = environment.KAKOMONN_EDGE_USER_DATA_DIR ?? "";
+  if (!configuredPath.trim()) {
+    throw new Error(
+      "KAKOMONN_EDGE_USER_DATA_DIR must point to a dedicated Edge E2E user data directory",
+    );
+  }
+  const userDataDir = path.resolve(configuredPath);
+  const standardUserDataDir = path.resolve(
+    defaultEdgeUserDataDir(environment, platform),
+  );
+  if (isSameOrDescendantPath(standardUserDataDir, userDataDir)) {
+    throw new Error(
+      "KAKOMONN_EDGE_USER_DATA_DIR must be outside the standard Edge user data directory",
+    );
+  }
   const activePortPath = path.join(userDataDir, "DevToolsActivePort");
-  if (!fs.existsSync(activePortPath)) {
+  if (!existsSync(activePortPath)) {
     throw new Error(
       `Remote debugging is not active. Enable it at edge://inspect/#remote-debugging before running the E2E. Missing: ${activePortPath}`,
     );
@@ -310,26 +450,35 @@ async function readReaderState(mcp) {
   return evaluate(
     mcp,
     `() => {
+      const shell = document.querySelector("#kakomonn-reader-shell");
       const frame = document.querySelector("#kakomonn-reader-frame");
       const next = document.querySelector("#kakomonn-reader-next");
       const settings = document.querySelector("#kakomonn-reader-sync-settings");
       const settingsButton = document.querySelector("#kakomonn-reader-sync-settings-button");
       return {
         actionsPresent: Boolean(document.querySelector("#kakomonn-reader-actions")),
+        buildFingerprint: shell?.dataset.buildFingerprint ?? null,
         count: document.querySelector("#kakomonn-reader-count")?.textContent ?? null,
         frameURL: frame?.contentWindow?.location?.href ?? null,
         nextDisabled: next?.disabled ?? null,
         nextText: next?.textContent ?? null,
         outerURL: location.href,
+        scriptHandler: shell?.dataset.scriptHandler ?? null,
         settingsButtonDisabled: settingsButton?.disabled ?? null,
         settingsHidden: settings?.hidden ?? null,
-        status: document.querySelector("#kakomonn-reader-status")?.textContent ?? null
+        status: document.querySelector("#kakomonn-reader-status")?.textContent ?? null,
+        userAgent: navigator.userAgent
       };
     }`,
   );
 }
 
-async function configureSyncToken(mcp, token, baseline) {
+async function configureSyncToken(
+  mcp,
+  token,
+  baseline,
+  expectedBuildFingerprint,
+) {
   const ready = await waitUntil(
     "the installed Tampermonkey userscript",
     async () => {
@@ -340,6 +489,7 @@ async function configureSyncToken(mcp, token, baseline) {
   );
   assert.equal(ready.outerURL, currentQuestionUrl);
   assert.equal(ready.frameURL, currentQuestionUrl);
+  assertRuntimeIdentity(ready, expectedBuildFingerprint);
 
   let currentSnapshot = await snapshot(mcp);
   let tokenInput = findUid(currentSnapshot, "textbox", "同期トークン");
@@ -376,6 +526,75 @@ async function configureSyncToken(mcp, token, baseline) {
 }
 
 async function submitCorrectAnswer(mcp) {
+  const clickTarget = await evaluate(
+    mcp,
+    `async () => {
+      const frame = window.document
+        .querySelector("#kakomonn-reader-frame");
+      const frameWindow = frame.contentWindow;
+      const document = frame.contentDocument;
+      const input = document
+        .querySelector('input[name="intAnswerData"][value="5"]');
+      const label = input?.closest("label");
+      if (!label) {
+        return { hittable: false, innerTarget: null, outerTarget: null };
+      }
+      const initialRect = label.getBoundingClientRect();
+      const desiredCenters = [
+        frame.clientHeight - initialRect.height / 2 - 14,
+        frame.clientHeight * 0.75,
+        frame.clientHeight * 0.5
+      ];
+      let result = {
+        hittable: false,
+        innerTarget: null,
+        outerTarget: null
+      };
+      for (const desiredCenter of desiredCenters) {
+        const beforeScroll = label.getBoundingClientRect();
+        frameWindow.scrollTo({
+          top:
+            frameWindow.scrollY +
+            beforeScroll.top +
+            beforeScroll.height / 2 -
+            desiredCenter,
+          behavior: "instant"
+        });
+        await new Promise((resolve) =>
+          frameWindow.requestAnimationFrame(() =>
+            frameWindow.requestAnimationFrame(resolve)
+          )
+        );
+        const rect = label.getBoundingClientRect();
+        const innerTarget = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2
+        );
+        const frameRect = frame.getBoundingClientRect();
+        const outerTarget = window.document.elementFromPoint(
+          frameRect.left + rect.left + rect.width / 2,
+          frameRect.top + rect.top + rect.height / 2
+        );
+        result = {
+          hittable:
+            (innerTarget === label || label.contains(innerTarget)) &&
+            outerTarget === frame,
+          innerTarget: innerTarget?.tagName ?? null,
+          outerTarget: outerTarget?.tagName ?? null
+        };
+        if (result.hittable) {
+          return result;
+        }
+      }
+      return result;
+    }`,
+  );
+  assert.equal(
+    clickTarget.hittable,
+    true,
+    `The visible answer 5 label is obscured: ${JSON.stringify(clickTarget)}`,
+  );
+
   const verboseSnapshot = await snapshot(mcp, true);
   assert.equal(verboseSnapshot.includes(correctAnswerText), true);
   const choice = findChoiceLabelUid(verboseSnapshot, "5");
@@ -407,6 +626,43 @@ async function submitCorrectAnswer(mcp) {
         ?.classList.contains("is-correct") === true`,
     ),
   );
+}
+
+async function copyMarkdownInRealEdge(mcp) {
+  const clipboardNonce = prepareClipboardNonce();
+  await waitUntil("the ready Markdown copy button", async () =>
+    evaluate(
+      mcp,
+      `() => {
+        const button = document.querySelector("#kakomonn-reader-copy");
+        return button?.disabled === false &&
+          button.textContent === "Markdownをコピー";
+      }`,
+    ),
+  );
+  const copySnapshot = await snapshot(mcp);
+  const copyButton = findUid(
+    copySnapshot,
+    "button",
+    "問題文と解説をMarkdownでコピー",
+  );
+  assert.notEqual(copyButton, null, copySnapshot);
+  await mcp.tool("click", { uid: copyButton });
+  await waitUntil("the successful real clipboard copy", async () =>
+    evaluate(
+      mcp,
+      `() => document
+        .querySelector("#kakomonn-reader-copy")
+        ?.textContent === "コピー済み"`,
+    ),
+  );
+
+  const copiedMarkdown = readWindowsClipboard();
+  assert.notEqual(copiedMarkdown, clipboardNonce);
+  assert.equal(copiedMarkdown.includes(clipboardNonce), false);
+  assert.equal(copiedMarkdown.split("\n")[0], expectedMarkdownHeading);
+  assert.equal(copiedMarkdown.includes(correctAnswerText), true);
+  assert.match(copiedMarkdown, /^## 解説$/m);
 }
 
 async function clickNextQuestion(mcp, expectedCorrectCount) {
@@ -469,6 +725,7 @@ async function writeFailureDiagnostics(mcp) {
 async function main() {
   const token = readSyncToken();
   const userDataDir = readEdgeUserDataDir();
+  const expectedBuildFingerprint = readExpectedBuildFingerprint();
   const baseline = await requestSyncState(token);
   if ((baseline.counts.correct + 1) % baseline.milestoneInterval === 0) {
     throw new Error(
@@ -493,10 +750,25 @@ async function main() {
     );
     pageId = selectedPageId(opened, currentQuestionUrl);
     assert.notEqual(pageId, null, opened);
+    await mcp.tool("resize_page", edgeViewport);
+    const viewport = await evaluate(
+      mcp,
+      `() => ({
+        height: window.innerHeight,
+        width: window.innerWidth
+      })`,
+    );
+    assert.deepEqual(viewport, edgeViewport);
 
-    const configuredState = await configureSyncToken(mcp, token, baseline);
+    const configuredState = await configureSyncToken(
+      mcp,
+      token,
+      baseline,
+      expectedBuildFingerprint,
+    );
     assert.equal(configuredState.count, `${baseline.counts.correct}問,次は${nextMilestone(baseline.counts.correct)}問`);
     await submitCorrectAnswer(mcp);
+    await copyMarkdownInRealEdge(mcp);
     const browserState = await clickNextQuestion(
       mcp,
       baseline.counts.correct + 1,
@@ -512,7 +784,9 @@ async function main() {
         browser: "Microsoft Edge with Tampermonkey",
         correctAfter: finalState.counts.correct,
         correctBefore: baseline.counts.correct,
+        buildFingerprint: expectedBuildFingerprint,
         frameUrl: browserState.frameURL,
+        markdownHeading: expectedMarkdownHeading,
         status: "passed",
       }),
     );
@@ -527,7 +801,17 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+module.exports = {
+  McpClient,
+  assertRuntimeIdentity,
+  extractBuildFingerprint,
+  readEdgeUserDataDir,
+  toolText,
+};
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

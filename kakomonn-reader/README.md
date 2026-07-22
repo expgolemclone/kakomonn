@@ -27,7 +27,9 @@ Windowsローカルから,同期済みの`main`先端をGitHub Releaseへ公開�
 npm run release:kakomonn-reader
 ```
 
-このcommandはlockfileどおりに依存関係をinstallし, `npm test`, smoke test, live-site E2EをWindowsで実行します. すべての検証後にmainが変わっていないことを再確認し,生成した`kakomonn-reader.user.js`を公開します.
+このcommandはlockfileどおりに依存関係をinstallし,local test,smoke test,live-site E2E,実Edgeと実Tampermonkeyと本番同期Workerを使うlive E2Eを含む`npm test`をWindowsで実行します. すべての検証後にmainが変わっていないことを再確認し,生成した`kakomonn-reader.user.js`を公開します.
+
+release前に専用のuser data directoryでEdgeを起動し,そのprofileだけにTampermonkeyをinstallします. 最新の`kakomonn-reader.user.js`を保存し, `edge://inspect/#remote-debugging`でリモートデバッグを有効にして, `KAKOMONN_SYNC_TOKEN`へ本番Workerのtokenを設定します. 専用profileを示す`KAKOMONN_EDGE_USER_DATA_DIR`を含め,いずれかが欠けている場合やTampermonkeyへ保存したbuildがmainと一致しない場合は,releaseを作成せず終了します. 通常利用するEdge user data directoryとその配下は拒否します.
 
 Releaseのtagは`kakomonn-reader-<commit SHA>`,titleは`kakomonn-reader <先頭12文字のSHA>`です.同期済みの`main`先端だけを`Latest`として公開し,生成fileはrepositoryの差分へ含めません. 作業内容とmainの不一致,localとoriginまたはGitHub上のmainの不一致,local検証の失敗,検証中のmain更新,同一tagの既存Releaseのいずれかを検出した場合は公開せず終了します. 原因を解消して同じcommandを最初から実行してください. skip,force,任意revisionを指定するoptionはありません.
 
@@ -53,21 +55,29 @@ iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 両�
 
 ## 動作確認
 
-リポジトリのルートで依存関係をインストールし, TampermonkeyメタデータとES2020構文を検証します.
+リポジトリのルートで依存関係をインストールし,最新userscriptを生成します.
 
 ```bash
 npm ci
-npm test
-npm run test:smoke
+npm ci --prefix congratulations
+npm run build:kakomonn-reader
 ```
 
-実サイト, 実Tampermonkey, デプロイ済みの同期Workerを一続きで確認する場合は, Edgeへ最新の`kakomonn-reader.user.js`を保存し, `edge://inspect/#remote-debugging`でリモートデバッグを有効にしてから次のcommandを実行します. `KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. このE2EはEdgeの通常clickで正解を1件送信し, 本番の正解数と解答数を1件ずつ増やし, 外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
+通常利用するEdge profileは使用しません. 次のcommandで専用のuser data directoryを指定してEdgeを起動し,そのprofileだけにTampermonkeyをinstallして,生成された`kakomonn-reader.user.js`を保存します.
+
+```powershell
+$env:KAKOMONN_EDGE_USER_DATA_DIR = Join-Path $env:LOCALAPPDATA 'kakomonn-edge-e2e'
+$edgeExecutable = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'
+Start-Process -FilePath $edgeExecutable -ArgumentList "--user-data-dir=$env:KAKOMONN_EDGE_USER_DATA_DIR",'edge://inspect/#remote-debugging'
+```
+
+専用profileの`edge://inspect/#remote-debugging`でリモートデバッグを有効にしてから次の完全testを実行します. `KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ,ES2020構文,local smoke test,実サイトE2Eに続けて,専用profileの実Edge,実Tampermonkey,デプロイ済みの同期Workerを一続きで検証します. 最後のE2EはTampermonkeyへ保存されたbuild fingerprintが生成fileと一致することを確認してから,Edgeの通常clickで正解を1件送信し,問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに,本番の正解数と解答数を1件ずつ増やし,外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
 
 ```powershell
 $env:KAKOMONN_SYNC_TOKEN='<SYNC_TOKEN>'
-npm run test:kakomonn-live-sync
+npm test
 ```
 
-Edgeのuser data directoryを標準path以外に置いている場合だけ, `KAKOMONN_EDGE_USER_DATA_DIR`へそのdirectoryを設定します. 初回接続時にEdgeがリモートデバッグの承認を表示した場合は,許可します.
+`KAKOMONN_EDGE_USER_DATA_DIR`は必須です. 通常利用するEdge user data directoryとその配下は使用できません. 初回接続時に専用profileのEdgeがリモートデバッグの承認を表示した場合は,許可します.
 
-`npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます. release commandはこれらのlocal testと実サイトE2EをWindows上で完結させます.
+`npm run test:kakomonn-live-sync`で最後のlive E2Eだけを再実行できますが,build,local test,smoke test,live-site E2Eを含む完全な完了条件は`npm test`です. live-sync E2Eをskipまたはforce通過させるoptionはありません. `npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます.

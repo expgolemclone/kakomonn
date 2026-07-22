@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -10,6 +11,9 @@ const SHA = "a".repeat(40);
 const OTHER_SHA = "b".repeat(40);
 const REPOSITORY = "expgolemclone/browser-extensions";
 const REPOSITORY_URL = `https://github.com/${REPOSITORY}`;
+const packageJson = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+);
 
 function valueAt(values, index) {
   return values[Math.min(index, values.length - 1)];
@@ -88,7 +92,6 @@ function releaseOptions(fake, overrides = {}) {
   return {
     runCommand: fake.runCommand,
     logger: () => {},
-    nodeExecutable: "node.exe",
     ...overrides,
   };
 }
@@ -130,7 +133,20 @@ test("uses Windows command wrappers without a shell", () => {
   );
 });
 
-test("publishes the synchronized main only after every local validation", async () => {
+test("makes live Edge and production sync the final npm test gates", () => {
+  assert.deepEqual(packageJson.scripts.test.split(" && "), [
+    "npm run test:local",
+    "npm run test:smoke",
+    "npm run test:kakomonn-live-site",
+    "npm run test:kakomonn-live-sync",
+  ]);
+  assert.match(
+    packageJson.scripts["test:kakomonn-live-sync"],
+    /node kakomonn-reader\/tests\/live_sync_e2e_test\.js$/,
+  );
+});
+
+test("publishes the synchronized main only after the complete test suite", async () => {
   const fake = createFakeRunner();
   const result = await runRelease(releaseOptions(fake));
 
@@ -168,17 +184,12 @@ test("publishes the synchronized main only after every local validation", async 
     "ci",
     "ci --prefix congratulations",
     "test",
-    "run test:smoke",
     "run build:kakomonn-reader",
   ]);
-  const liveSiteCall = findCall(
-    fake.calls,
-    "node.exe",
-    "kakomonn-reader/tests/live_site_e2e_test.js",
-  );
-  assert.notEqual(liveSiteCall, undefined);
   assert.equal(
-    fake.calls.indexOf(liveSiteCall) < fake.calls.indexOf(releaseCall),
+    fake.calls.findIndex(
+      (call) => call.command === "npm" && call.args[0] === "test",
+    ) < fake.calls.indexOf(releaseCall),
     true,
   );
 });

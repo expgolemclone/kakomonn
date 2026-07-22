@@ -202,7 +202,6 @@ function assertReleaseState(runCommand, expectedSha = null) {
 export async function runRelease({
   runCommand = createCommandRunner(),
   logger = console.log,
-  nodeExecutable = process.execPath,
 } = {}) {
   logger("Checking release prerequisites and synchronized main state");
   runCommand("jj", ["--version"]);
@@ -218,10 +217,8 @@ export async function runRelease({
   runCommand("npm", ["ci"]);
   runCommand("npm", ["ci", "--prefix", "congratulations"]);
 
-  logger("Running Windows-compatible tests and E2E");
+  logger("Running the complete Windows test suite and live E2E");
   runCommand("npm", ["test"]);
-  runCommand("npm", ["run", "test:smoke"]);
-  runCommand(nodeExecutable, ["kakomonn-reader/tests/live_site_e2e_test.js"]);
 
   logger("Building the release asset");
   runCommand("npm", ["run", "build:kakomonn-reader"]);

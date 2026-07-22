@@ -11,6 +11,7 @@
 // @grant        GM.setValue
 // @grant        GM.deleteValue
 // @grant        GM.xmlHttpRequest
+// @grant        GM_info
 // ==/UserScript==
 
 (async () => {
@@ -21,6 +22,12 @@
   }
 
   const MILESTONE_INTERVAL = 50;
+  const BUILD_FINGERPRINT = "__KAKOMONN_READER_BUILD_FINGERPRINT__";
+  const SCRIPT_HANDLER =
+    typeof GM_info === "object" &&
+    typeof GM_info.scriptHandler === "string"
+      ? GM_info.scriptHandler
+      : "";
   const SYNC_API_URL =
     "https://kakomonn-count-sync.expgolem-lab.workers.dev";
   const CONGRATULATIONS_URL =

@@ -2,18 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  IOS_RUN_NAME_PREFIX,
-  IOS_WORKFLOW_FILE,
   createCommandRunner,
   runRelease,
 } from "../scripts/release-kakomonn-reader.mjs";
 
 const SHA = "a".repeat(40);
 const OTHER_SHA = "b".repeat(40);
-const VALIDATION_ID = "11111111-2222-4333-8444-555555555555";
 const REPOSITORY = "expgolemclone/browser-extensions";
 const REPOSITORY_URL = `https://github.com/${REPOSITORY}`;
-const RUN_TITLE = `${IOS_RUN_NAME_PREFIX} ${SHA} [${VALIDATION_ID}]`;
 
 function valueAt(values, index) {
   return values[Math.min(index, values.length - 1)];
@@ -25,26 +21,13 @@ function createFakeRunner({
   originShas = [SHA],
   githubShas = [SHA],
   remoteList = `origin ${REPOSITORY_URL}.git`,
-  runLists = [
-    [
-      {
-        databaseId: 73,
-        displayTitle: RUN_TITLE,
-        status: "queued",
-        conclusion: "",
-        url: "https://github.com/example/actions/runs/73",
-      },
-    ],
-  ],
   failNpmTest = false,
-  failWorkflowWatch = false,
   failReleaseCreate = false,
 } = {}) {
   const calls = [];
   let mainIndex = 0;
   let originIndex = 0;
   let githubIndex = 0;
-  let runListIndex = 0;
 
   function runCommand(command, args = [], options = {}) {
     calls.push({ command, args: [...args], options: { ...options } });
@@ -85,19 +68,9 @@ function createFakeRunner({
       githubIndex += 1;
       return value;
     }
-    if (command === "gh" && args[0] === "run" && args[1] === "list") {
-      const value = valueAt(runLists, runListIndex);
-      runListIndex += 1;
-      return JSON.stringify(value);
-    }
     if (command === "npm" && args.length === 1 && args[0] === "test") {
       if (failNpmTest) {
         throw new Error("npm test failed");
-      }
-    }
-    if (command === "gh" && args[0] === "run" && args[1] === "watch") {
-      if (failWorkflowWatch) {
-        throw new Error("iOS workflow failed");
       }
     }
     if (command === "gh" && args[0] === "release" && args[1] === "create") {
@@ -114,12 +87,8 @@ function createFakeRunner({
 function releaseOptions(fake, overrides = {}) {
   return {
     runCommand: fake.runCommand,
-    randomUUIDFn: () => VALIDATION_ID,
-    sleep: async () => {},
     logger: () => {},
     nodeExecutable: "node.exe",
-    discoveryAttempts: 3,
-    discoveryIntervalMs: 0,
     ...overrides,
   };
 }
@@ -161,7 +130,7 @@ test("uses Windows command wrappers without a shell", () => {
   );
 });
 
-test("publishes the synchronized main only after every validation", async () => {
+test("publishes the synchronized main only after every local validation", async () => {
   const fake = createFakeRunner();
   const result = await runRelease(releaseOptions(fake));
 
@@ -172,23 +141,8 @@ test("publishes the synchronized main only after every validation", async () => 
     `${REPOSITORY_URL}.git`,
   );
 
-  const dispatchCall = findCall(fake.calls, "gh", "workflow", "run");
-  assert.deepEqual(dispatchCall.args, [
-    "workflow",
-    "run",
-    IOS_WORKFLOW_FILE,
-    "--ref",
-    "main",
-    "--raw-field",
-    `commit_sha=${SHA}`,
-    "--raw-field",
-    `validation_id=${VALIDATION_ID}`,
-    "--repo",
-    REPOSITORY,
-  ]);
-
-  const watchCall = findCall(fake.calls, "gh", "run", "watch");
-  assert.equal(watchCall.args[2], "73");
+  assert.equal(findCall(fake.calls, "gh", "workflow"), undefined);
+  assert.equal(findCall(fake.calls, "gh", "run"), undefined);
 
   const releaseCall = findCall(fake.calls, "gh", "release", "create");
   assert.deepEqual(releaseCall.args, [
@@ -217,6 +171,16 @@ test("publishes the synchronized main only after every validation", async () => 
     "run test:smoke",
     "run build:kakomonn-reader",
   ]);
+  const liveSiteCall = findCall(
+    fake.calls,
+    "node.exe",
+    "kakomonn-reader/tests/live_site_e2e_test.js",
+  );
+  assert.notEqual(liveSiteCall, undefined);
+  assert.equal(
+    fake.calls.indexOf(liveSiteCall) < fake.calls.indexOf(releaseCall),
+    true,
+  );
 });
 
 test("rejects working copy content that differs from main", async () => {
@@ -236,7 +200,7 @@ test("rejects local main that differs from origin", async () => {
     runRelease(releaseOptions(fake)),
     /does not match main@origin/,
   );
-  assert.equal(findCall(fake.calls, "gh", "workflow", "run"), undefined);
+  assert.equal(findCall(fake.calls, "gh", "release", "create"), undefined);
 });
 
 test("rejects a repository without exactly one origin", async () => {
@@ -246,7 +210,7 @@ test("rejects a repository without exactly one origin", async () => {
     runRelease(releaseOptions(fake)),
     /Exactly one origin remote is required/,
   );
-  assert.equal(findCall(fake.calls, "gh", "workflow", "run"), undefined);
+  assert.equal(findCall(fake.calls, "gh", "release", "create"), undefined);
 });
 
 test("rejects GitHub main that differs from synchronized jj main", async () => {
@@ -256,57 +220,17 @@ test("rejects GitHub main that differs from synchronized jj main", async () => {
     runRelease(releaseOptions(fake)),
     /GitHub main .* does not match local main/,
   );
-  assert.equal(findCall(fake.calls, "gh", "workflow", "run"), undefined);
-});
-
-test("does not dispatch iOS validation after a local test failure", async () => {
-  const fake = createFakeRunner({ failNpmTest: true });
-
-  await assert.rejects(runRelease(releaseOptions(fake)), /npm test failed/);
-  assert.equal(findCall(fake.calls, "gh", "workflow", "run"), undefined);
-});
-
-test("ignores stale runs and watches only the validation UUID match", async () => {
-  const staleRun = {
-    databaseId: 12,
-    displayTitle: `${IOS_RUN_NAME_PREFIX} ${SHA} [stale]`,
-    status: "completed",
-    conclusion: "success",
-    url: "https://github.com/example/actions/runs/12",
-  };
-  const exactRun = {
-    databaseId: 88,
-    displayTitle: RUN_TITLE,
-    status: "queued",
-    conclusion: "",
-    url: "https://github.com/example/actions/runs/88",
-  };
-  const fake = createFakeRunner({ runLists: [[staleRun], [staleRun, exactRun]] });
-  let sleepCount = 0;
-
-  await runRelease(
-    releaseOptions(fake, {
-      sleep: async () => {
-        sleepCount += 1;
-      },
-    }),
-  );
-
-  assert.equal(sleepCount, 1);
-  assert.equal(findCall(fake.calls, "gh", "run", "watch").args[2], "88");
-});
-
-test("does not publish after iOS validation fails", async () => {
-  const fake = createFakeRunner({ failWorkflowWatch: true });
-
-  await assert.rejects(
-    runRelease(releaseOptions(fake)),
-    /iOS workflow failed/,
-  );
   assert.equal(findCall(fake.calls, "gh", "release", "create"), undefined);
 });
 
-test("does not publish when main moves during iOS validation", async () => {
+test("does not publish after a local test failure", async () => {
+  const fake = createFakeRunner({ failNpmTest: true });
+
+  await assert.rejects(runRelease(releaseOptions(fake)), /npm test failed/);
+  assert.equal(findCall(fake.calls, "gh", "release", "create"), undefined);
+});
+
+test("does not publish when main moves during local validation", async () => {
   const fake = createFakeRunner({
     mainShas: [SHA, OTHER_SHA],
     originShas: [SHA, OTHER_SHA],

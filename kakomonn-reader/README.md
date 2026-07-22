@@ -19,7 +19,7 @@ python3 build.py
 
 ## Release
 
-Windowsローカルから,同期済みの`main`先端をGitHub Releaseへ公開します. Node.js 22.12以上, Python 3, jj, GitHub CLIを用意し, `gh auth login`を完了してください. iOS Safari検証にGitHub-hosted macOS runnerを使うため, GitHub ActionsのBillingとspending limitもrunnerを起動できる状態にします.
+Windowsローカルから,同期済みの`main`先端をGitHub Releaseへ公開します. Node.js 22.12以上, Python 3, jj, GitHub CLIを用意し, `gh auth login`を完了してください.
 
 変更をjjで`main`へ統合してoriginへpushした後,repository rootで次の1commandを実行します.
 
@@ -27,9 +27,9 @@ Windowsローカルから,同期済みの`main`先端をGitHub Releaseへ公開�
 npm run release:kakomonn-reader
 ```
 
-このcommandはlockfileどおりに依存関係をinstallし, `npm test`, smoke test, live-site E2EをWindowsで実行します. 続いて対象commit SHAをGitHub Actionsへ渡し, macOS上のiOS 26 SimulatorでMobile Safari E2Eが成功するまで待ちます. すべての検証後にmainが変わっていないことを再確認し,生成した`kakomonn-reader.user.js`を公開します.
+このcommandはlockfileどおりに依存関係をinstallし, `npm test`, smoke test, live-site E2EをWindowsで実行します. すべての検証後にmainが変わっていないことを再確認し,生成した`kakomonn-reader.user.js`を公開します.
 
-Releaseのtagは`kakomonn-reader-<commit SHA>`,titleは`kakomonn-reader <先頭12文字のSHA>`です.同期済みの`main`先端だけを`Latest`として公開し,生成fileはrepositoryの差分へ含めません. 作業内容とmainの不一致,localとoriginまたはGitHub上のmainの不一致,iOS検証の失敗,Billingによるrunner拒否,検証中のmain更新,同一tagの既存Releaseのいずれかを検出した場合は公開せず終了します. 原因を解消して同じcommandを最初から実行してください. skip,force,任意revisionを指定するoptionはありません.
+Releaseのtagは`kakomonn-reader-<commit SHA>`,titleは`kakomonn-reader <先頭12文字のSHA>`です.同期済みの`main`先端だけを`Latest`として公開し,生成fileはrepositoryの差分へ含めません. 作業内容とmainの不一致,localとoriginまたはGitHub上のmainの不一致,local検証の失敗,検証中のmain更新,同一tagの既存Releaseのいずれかを検出した場合は公開せず終了します. 原因を解消して同じcommandを最初から実行してください. skip,force,任意revisionを指定するoptionはありません.
 
 公開されたファイルは[GitHub Releases](https://github.com/expgolemclone/browser-extensions/releases)から取得できます.
 
@@ -70,4 +70,4 @@ npm run test:kakomonn-live-sync
 
 Edgeのuser data directoryを標準path以外に置いている場合だけ, `KAKOMONN_EDGE_USER_DATA_DIR`へそのdirectoryを設定します. 初回接続時にEdgeがリモートデバッグの承認を表示した場合は,許可します.
 
-`npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます. Playwright WebKitはSafariそのものではないため,release commandはWindowsで代替できない検証だけをGitHub Actionsへ委譲します. 指定commitをmacOS上でbuildし,iOS 26 SimulatorとAppium XCUITest driverでMobile Safariのfixture E2Eと実サイトE2Eを実行します. このtestは,ネイティブ座標tapが信頼済みのtouch `pointerup`を発生させること,解答記録を同期すること,iframeとbrowser URLが次問へ移動することを検証します. 失敗時は固定buttonの状態,次問候補,iframe URL,screenshot,AppiumとXCUITestの診断logをartifactへ保存し,Releaseは作成しません.
+`npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます. release commandはこれらのlocal testと実サイトE2EをWindows上で完結させます.

@@ -1,18 +1,11 @@
-import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
-
-export const IOS_WORKFLOW_FILE = "validate-kakomonn-reader-ios-safari.yml";
-export const IOS_RUN_NAME_PREFIX = "Validate kakomonn-reader iOS";
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
 const RELEASE_ASSET = "kakomonn-reader/kakomonn-reader.user.js";
-const DISCOVERY_ATTEMPTS = 60;
-const DISCOVERY_INTERVAL_MS = 2_000;
 const WINDOWS_CMD_SAFE_PATTERN = /^[A-Za-z0-9_./:@=-]+$/;
 const WINDOWS_WRAPPER_COMMANDS = new Set(["jj", "npm"]);
 
@@ -206,79 +199,10 @@ function assertReleaseState(runCommand, expectedSha = null) {
   return { mainSha, repository };
 }
 
-function workflowRunTitle(commitSha, validationId) {
-  return `${IOS_RUN_NAME_PREFIX} ${commitSha} [${validationId}]`;
-}
-
-async function findWorkflowRun({
-  runCommand,
-  repository,
-  commitSha,
-  validationId,
-  sleep,
-  attempts,
-  intervalMs,
-}) {
-  const expectedTitle = workflowRunTitle(commitSha, validationId);
-
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const runs = parseJson(
-      runCommand(
-        "gh",
-        [
-          "run",
-          "list",
-          "--workflow",
-          IOS_WORKFLOW_FILE,
-          "--branch",
-          "main",
-          "--event",
-          "workflow_dispatch",
-          "--limit",
-          "50",
-          "--json",
-          "databaseId,displayTitle,status,conclusion,url",
-          "--repo",
-          repository,
-        ],
-        { capture: true },
-      ),
-      "gh run list",
-    );
-    if (!Array.isArray(runs)) {
-      throw new ReleaseError("gh run list did not return an array");
-    }
-
-    const matches = runs.filter((run) => run.displayTitle === expectedTitle);
-    if (matches.length > 1) {
-      throw new ReleaseError(`Multiple workflow runs matched ${expectedTitle}`);
-    }
-    if (matches.length === 1) {
-      const [match] = matches;
-      if (!Number.isInteger(match.databaseId)) {
-        throw new ReleaseError(`Workflow run ${expectedTitle} has no database ID`);
-      }
-      return match;
-    }
-
-    if (attempt + 1 < attempts) {
-      await sleep(intervalMs);
-    }
-  }
-
-  throw new ReleaseError(
-    `Workflow run ${expectedTitle} did not appear within ${(attempts * intervalMs) / 1_000} seconds`,
-  );
-}
-
 export async function runRelease({
   runCommand = createCommandRunner(),
-  randomUUIDFn = randomUUID,
-  sleep = delay,
   logger = console.log,
   nodeExecutable = process.execPath,
-  discoveryAttempts = DISCOVERY_ATTEMPTS,
-  discoveryIntervalMs = DISCOVERY_INTERVAL_MS,
 } = {}) {
   logger("Checking release prerequisites and synchronized main state");
   runCommand("jj", ["--version"]);
@@ -298,42 +222,6 @@ export async function runRelease({
   runCommand("npm", ["test"]);
   runCommand("npm", ["run", "test:smoke"]);
   runCommand(nodeExecutable, ["kakomonn-reader/tests/live_site_e2e_test.js"]);
-
-  const validationId = randomUUIDFn();
-  logger(`Dispatching iOS Safari validation ${validationId}`);
-  runCommand("gh", [
-    "workflow",
-    "run",
-    IOS_WORKFLOW_FILE,
-    "--ref",
-    "main",
-    "--raw-field",
-    `commit_sha=${commitSha}`,
-    "--raw-field",
-    `validation_id=${validationId}`,
-    "--repo",
-    repository.nameWithOwner,
-  ]);
-
-  const workflowRun = await findWorkflowRun({
-    runCommand,
-    repository: repository.nameWithOwner,
-    commitSha,
-    validationId,
-    sleep,
-    attempts: discoveryAttempts,
-    intervalMs: discoveryIntervalMs,
-  });
-  logger(`Waiting for ${workflowRun.url}`);
-  runCommand("gh", [
-    "run",
-    "watch",
-    String(workflowRun.databaseId),
-    "--compact",
-    "--exit-status",
-    "--repo",
-    repository.nameWithOwner,
-  ]);
 
   logger("Building the release asset");
   runCommand("npm", ["run", "build:kakomonn-reader"]);
@@ -365,7 +253,7 @@ export async function runRelease({
   ]);
 
   logger(`Published ${tagName}`);
-  return { commitSha, tagName, validationId, workflowRun };
+  return { commitSha, tagName };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === SCRIPT_PATH) {

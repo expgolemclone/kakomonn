@@ -418,11 +418,12 @@ async function assertNavigationCompleted(driver) {
   assert.ok(
     inputEvents.some(
       (event) =>
-        event.type === "click" &&
+        event.type === "pointerup" &&
         event.targetId === "kakomonn-reader-next" &&
-        event.isTrusted === true,
+        event.isTrusted === true &&
+        event.pointerType === "touch",
     ),
-    `native coordinate tap did not produce a trusted click: ${JSON.stringify(
+    `native coordinate tap did not produce a trusted touch pointerup: ${JSON.stringify(
       inputEvents,
     )}`,
   );

@@ -17,11 +17,14 @@ async function getQuestionFrame(page) {
   return frame;
 }
 
-async function waitForReaderReady(page) {
+async function waitForSyncReady(page) {
   await page.waitForFunction(
-    () =>
-      document.querySelector("#kakomonn-reader-status")?.textContent ===
-      "読み上げ非対応",
+    () => {
+      const status = document.querySelector(
+        "#kakomonn-reader-status",
+      )?.textContent;
+      return status === "待機中" || status === "読み上げ非対応";
+    },
     null,
     { timeout: readerReadyTimeout },
   );
@@ -99,6 +102,8 @@ async function blockThirdPartyAds(context) {
     const isAdRequest =
       hostname.endsWith(".googlesyndication.com") ||
       hostname.endsWith(".doubleclick.net") ||
+      hostname === "googletagmanager.com" ||
+      hostname.endsWith(".googletagmanager.com") ||
       hostname === "anymind360.com" ||
       hostname.endsWith(".anymind360.com");
 
@@ -137,7 +142,7 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
     console.log(JSON.stringify({ phase: "script-injected", answerText }));
     const frame = await getQuestionFrame(page);
     await page.locator("#kakomonn-reader-count").waitFor({ state: "visible" });
-    await waitForReaderReady(page);
+    await waitForSyncReady(page);
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
       "0問,次は50問",

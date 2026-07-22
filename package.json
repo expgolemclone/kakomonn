@@ -19,6 +19,8 @@
     "test:smoke": "node chatgpt-initial-prompt/tests/smoke_test.js && node kakomonn-reader/tests/smoke_test.js && node kakomonn-reader/tests/count_smoke_test.js && node kakomonn-reader/tests/webkit_smoke_test.js && node kakomonn-sync/tests/dashboard_e2e_test.js && node gai/tests/smoke_test.js",
     "test:kakomonn-webkit": "node kakomonn-reader/tests/webkit_smoke_test.js",
     "test:kakomonn-ios-safari": "node kakomonn-reader/tests/ios_safari_e2e_test.js",
+    "test:kakomonn-live-sync": "node kakomonn-reader/tests/live_sync_e2e_test.js",
+    "test:kakomonn-live-sync-webkit": "node kakomonn-reader/tests/live_sync_e2e_test.js --browser=webkit",
     "release:kakomonn-reader": "node scripts/release-kakomonn-reader.mjs",
     "deploy:kakomonn-sync": "wrangler deploy --config kakomonn-sync/wrangler.jsonc",
     "deploy:congratulations": "npm --prefix congratulations run build && wrangler deploy --config congratulations/wrangler.jsonc"

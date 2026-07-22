@@ -142,10 +142,7 @@ async function main() {
         );
       }
     });
-    await page.touchscreen.tap(
-      hitTest.buttonRect.left + hitTest.buttonRect.width / 2,
-      hitTest.buttonRect.top + hitTest.buttonRect.height / 2,
-    );
+    await nextButton.tap({ force: true });
     await page.waitForTimeout(250);
     const inputEvents = await page.evaluate(
       () => window.__nextButtonInputEvents,
@@ -153,9 +150,10 @@ async function main() {
     assert.ok(
       inputEvents.some(
         (event) =>
-          event.type === "click" &&
+          event.type === "pointerup" &&
           event.targetId === "kakomonn-reader-next" &&
-          event.isTrusted === true,
+          event.isTrusted === true &&
+          event.pointerType === "touch",
       ),
       JSON.stringify({ hitTest, inputEvents }),
     );

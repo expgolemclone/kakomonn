@@ -61,4 +61,11 @@ npm test
 npm run test:smoke
 ```
 
-`npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます. Playwright WebKitはSafariそのものではないため,release commandはWindowsで代替できない検証だけをGitHub Actionsへ委譲します. 指定commitをmacOS上でbuildし,iOS 26 SimulatorとAppium XCUITest driverでMobile Safariのfixture E2Eと実サイトE2Eを実行します. このtestは,ネイティブコンテキストで一意に取得したbuttonへのXCTest clickが信頼済みのclick eventを発生させること,解答記録を同期すること,iframeとbrowser URLが次問へ移動することを検証します. 失敗時は固定buttonの状態,次問候補,iframe URL,screenshot,AppiumとXCUITestの診断logをartifactへ保存し,Releaseは作成しません.
+実サイトとデプロイ済みの同期Workerを一続きで確認する場合は, 次のcommandを実行します. `KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. このE2Eは実サイトで不正解を1件送信し, 本番の解答数を1件増やしてから次の問題へのtouch遷移を確認します.
+
+```powershell
+$env:KAKOMONN_SYNC_TOKEN='<SYNC_TOKEN>'
+npm run test:kakomonn-live-sync-webkit
+```
+
+`npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます. Playwright WebKitはSafariそのものではないため,release commandはWindowsで代替できない検証だけをGitHub Actionsへ委譲します. 指定commitをmacOS上でbuildし,iOS 26 SimulatorとAppium XCUITest driverでMobile Safariのfixture E2Eと実サイトE2Eを実行します. このtestは,ネイティブ座標tapが信頼済みのtouch `pointerup`を発生させること,解答記録を同期すること,iframeとbrowser URLが次問へ移動することを検証します. 失敗時は固定buttonの状態,次問候補,iframe URL,screenshot,AppiumとXCUITestの診断logをartifactへ保存し,Releaseは作成しません.

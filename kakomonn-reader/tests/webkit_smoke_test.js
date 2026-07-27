@@ -16,17 +16,127 @@ const iosUserAgent =
   "Mobile/15E148 Safari/604.1";
 
 const fixtureBody = `
-  <div id="meta">中小企業診断士試験 令和7年度 第4問</div>
-  <p>WebKit動作確認用の問題文です.</p>
+  <div class="problem_detail">
+    <p class="when">
+      中小企業診断士試験 令和2年度（2020年） 問19（経済学・経済政策 問19）
+      <span><a href="#report">（訂正依頼・報告はこちら）</a></span>
+    </p>
+    <div class="ttl">
+      WebKit動作確認用の問題文です.<br>
+      記号 *強調* と &lt;タグ&gt;を含みます.
+    </div>
+    <div class="zoomin">
+      <img
+        src="https://cdn.example.test/webkit-question.png"
+        alt="問題文の画像"
+      >
+    </div>
+    <ul class="list">
+      <li><div>選択肢1</div></li>
+      <li><div>選択肢2</div></li>
+    </ul>
+    <ul class="check">
+      <li><label><input type="radio" name="answer">1</label></li>
+      <li><label><input type="radio" name="answer">2</label></li>
+    </ul>
+    <button type="button">解答する</button>
+  </div>
   <div id="js-answer-result-box"></div>
   <h2>この過去問の解説</h2>
-  <p id="explanation-lock">解説は問題に回答すると表示されます.</p>
-  <p id="explanation" hidden>WebKit動作確認用の解説です.</p>
+  <div id="js-commentary-wrap">
+    <div class="item">
+      <p class="none_text" id="explanation-lock">
+        解説は問題に回答すると表示されます。
+      </p>
+      <p class="num"><span>01</span></p>
+      <div class="text" id="explanation" hidden>
+        <div class="expound-top">
+          <p>WebKit動作確認用の解説です.</p>
+          <figure>
+            <img
+              src="https://cdn.example.test/webkit-explanation-1.png"
+              alt="解説図"
+            >
+          </figure>
+        </div>
+      </div>
+    </div>
+    <div class="advertisement-label">Advertisement</div>
+    <div class="advertisement-box"></div>
+    <div class="item">
+      <p class="none_text">
+        解説は問題に回答すると表示されます。
+      </p>
+      <p class="num"><span>02</span></p>
+      <div class="text" hidden>
+        <div class="expound-top">
+          <p>WebKit二つ目の解説です.</p>
+          <figure>
+            <img src="https://cdn.example.test/webkit-explanation-2.png">
+          </figure>
+          <figure>
+            <img
+              src="https://cdn.example.test/webkit-explanation-1.png"
+              alt="重複画像"
+            >
+          </figure>
+          <table>
+            <tr><th>式</th><th>単位</th></tr>
+            <tr>
+              <td>Y<sub>0</sub></td>
+              <td>1,000m<sup>2</sup></td>
+            </tr>
+          </table>
+          <p>Markdown記号 * と [ ] を含みます.</p>
+          <p>---<br>===<br>~~取消~~</p>
+        </div>
+      </div>
+    </div>
+  </div>
   <button type="button">次の問題へ</button>
   <p class="next">
     <a id="next" href="${nextQuestionURL}">次の問題（問5）へ</a>
   </p>
 `;
+
+const expectedCopiedMarkdown = `# 中小企業診断士試験 令和2年度（2020年） 問19（経済学・経済政策 問19）
+
+## 問題文
+
+WebKit動作確認用の問題文です.
+
+記号 \\*強調\\* と &lt;タグ&gt;を含みます.
+
+![問題文の画像](https://cdn.example.test/webkit-question.png)
+
+### 選択肢
+
+- 選択肢1
+- 選択肢2
+
+## 解説
+
+### 解説 01
+
+WebKit動作確認用の解説です.
+
+![解説図](https://cdn.example.test/webkit-explanation-1.png)
+
+### 解説 02
+
+WebKit二つ目の解説です.
+
+![解説画像 1](https://cdn.example.test/webkit-explanation-2.png)
+
+| 式 | 単位 |
+| --- | --- |
+| Y<sub>0</sub> | 1,000m<sup>2</sup> |
+
+Markdown記号 \\* と \\[ \\] を含みます.
+
+\\---
+\\===
+\\~\\~取消\\~\\~`;
 
 async function main() {
   const configuredScriptPath = process.env.KAKOMONN_READER_SCRIPT_PATH;
@@ -68,6 +178,19 @@ async function main() {
         configurable: true,
         value: undefined,
       });
+      window.__copiedTexts = [];
+      window.__clipboardWriteFails = false;
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: {
+          async writeText(value) {
+            if (window.__clipboardWriteFails) {
+              throw new Error("mock clipboard write failed");
+            }
+            window.__copiedTexts.push(value);
+          },
+        },
+      });
     });
     await installSyncMock(page, { userscriptsPromise: true });
     await page.addScriptTag({ content: script });
@@ -91,19 +214,81 @@ async function main() {
     );
 
     const nextButton = page.locator("#kakomonn-reader-next");
+    const copyButton = page.locator("#kakomonn-reader-copy");
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy")?.textContent ===
+        "回答後にコピー",
+    );
     assert.equal(await nextButton.innerText(), "次の問題へ");
     assert.equal(await nextButton.isDisabled(), true);
+    assert.equal(await copyButton.innerText(), "回答後にコピー");
+    assert.equal(await copyButton.isDisabled(), true);
+    assert.equal(await page.evaluate(() => window.__copiedTexts.length), 0);
 
     await childFrame.evaluate(() => {
       document
         .querySelector("#js-answer-result-box")
         .classList.add("is-correct");
-      document.querySelector("#explanation-lock").hidden = true;
-      document.querySelector("#explanation").hidden = false;
+      for (const lock of document.querySelectorAll(
+        "#js-commentary-wrap > .item > .none_text"
+      )) {
+        lock.hidden = true;
+      }
+      for (const explanation of document.querySelectorAll(
+        "#js-commentary-wrap > .item > .text"
+      )) {
+        explanation.hidden = false;
+      }
     });
     await page.waitForFunction(
       () => document.querySelector("#kakomonn-reader-next")?.disabled === false,
     );
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy")?.textContent ===
+          "Markdownをコピー",
+    );
+    await copyButton.tap();
+    assert.equal(
+      await page.evaluate(() => window.__copiedTexts[0]),
+      expectedCopiedMarkdown,
+    );
+    assert.equal(
+      (await page.evaluate(() => window.__copiedTexts[0])).split(
+        "https://cdn.example.test/webkit-explanation-1.png"
+      ).length - 1,
+      1,
+    );
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy")?.textContent ===
+        "Markdownをコピー",
+      null,
+      { timeout: 5_000 },
+    );
+    await page.evaluate(() => {
+      window.__clipboardWriteFails = true;
+    });
+    await copyButton.tap();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "クリップボードへコピーできません",
+    );
+    assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
+    await page.evaluate(() => {
+      window.__clipboardWriteFails = false;
+    });
+    await childFrame.evaluate(() => {
+      document.querySelector(".problem_detail > .ttl").remove();
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy")?.textContent ===
+        "コピー対象を取得不可",
+    );
+    assert.equal(await copyButton.isDisabled(), true);
 
     const hitTest = await nextButton.evaluate((button) => {
       const rect = button.getBoundingClientRect();

@@ -39,22 +39,117 @@ function expectedSpeechSSML(text, rate) {
 }
 
 const mockBody = `
-  <div id="meta">中小企業診断士試験 令和6年度 第1問</div>
-  <p>これは動作確認用の問題文です.</p>
-  <div><label><input type="radio" name="answer">選択肢1</label></div>
-  <div><label><input type="radio" name="answer">選択肢2</label></div>
-  <button type="button">解答する</button>
+  <div hidden>
+    <img src="https://cdn.example.test/question.png" alt="拡大表示の重複画像">
+  </div>
+  <div class="problem_detail">
+    <p class="when">
+      中小企業診断士試験 令和2年度（2020年） 問19（経済学・経済政策 問19）
+      <span><a href="#report">（訂正依頼・報告はこちら）</a></span>
+    </p>
+    <div class="ttl">
+      これは動作確認用の問題文です.<br>
+      これは改行後の問題文です.
+    </div>
+    <div class="zoomin">
+      <img
+        src="https://cdn.example.test/question.png"
+        alt="問題文の画像"
+      >
+    </div>
+    <ul class="list">
+      <li><div>選択肢1</div></li>
+      <li><div>選択肢2</div></li>
+    </ul>
+    <ul class="check">
+      <li><label><input type="radio" name="answer">1</label></li>
+      <li><label><input type="radio" name="answer">2</label></li>
+    </ul>
+    <button type="button">解答する</button>
+  </div>
   <p id="correct-result" hidden>正解！素晴らしいです</p>
   <p id="incorrect-result" hidden>残念...</p>
   <h2>この過去問の解説</h2>
   <div>解答結果</div>
   <div id="js-answer-result-box"></div>
-  <p id="explanation-lock">解説は問題に回答すると<br>表示されます。</p>
-  <p id="explanation" hidden>これは動作確認用の解説です.</p>
+  <div id="js-commentary-wrap">
+    <div class="item">
+      <p class="none_text" id="explanation-lock">
+        解説は問題に回答すると<br>表示されます。
+      </p>
+      <p class="num"><span>01</span></p>
+      <div class="text" id="explanation" hidden>
+        <div class="expound-top">
+          <p>これは動作確認用の解説です.</p>
+          <figure>
+            <img
+              src="https://cdn.example.test/explanation-1.png"
+              alt="解説図"
+            >
+          </figure>
+        </div>
+      </div>
+      <div class="reference">
+        <div>参考になった数1</div>
+        <button type="button">参考になった</button>
+      </div>
+    </div>
+    <div class="advertisement-label">Advertisement</div>
+    <div class="advertisement-box"></div>
+    <div class="item">
+      <p class="none_text">
+        解説は問題に回答すると<br>表示されます。
+      </p>
+      <p class="num"><span>02</span></p>
+      <div class="text" hidden>
+        <div class="expound-top">
+          <p>これは二つ目の解説です.</p>
+          <figure>
+            <img src="https://cdn.example.test/explanation-2.png">
+          </figure>
+          <figure>
+            <img
+              src="https://cdn.example.test/explanation-1.png"
+              alt="重複する解説図"
+            >
+          </figure>
+        </div>
+      </div>
+    </div>
+  </div>
   <a href="#report">（訂正依頼・報告はこちら）</a>
   <button id="scroll-next" type="button">次の問題へ</button>
   <a id="next" href="/questions/next/45125">次の問題（問5）へ</a>
 `;
+
+const expectedCopiedMarkdown = `# 中小企業診断士試験 令和2年度（2020年） 問19（経済学・経済政策 問19）
+
+## 問題文
+
+これは動作確認用の問題文です.
+
+これは改行後の問題文です.
+
+![問題文の画像](https://cdn.example.test/question.png)
+
+### 選択肢
+
+- 選択肢1
+- 選択肢2
+
+## 解説
+
+### 解説 01
+
+これは動作確認用の解説です.
+
+![解説図](https://cdn.example.test/explanation-1.png)
+
+### 解説 02
+
+これは二つ目の解説です.
+
+![解説画像 1](https://cdn.example.test/explanation-2.png)`;
 
 async function preparePage(page, speechMode, syncOptions = {}) {
   const errors = [];
@@ -83,6 +178,7 @@ async function preparePage(page, speechMode, syncOptions = {}) {
       },
     });
     window.__copiedTexts = [];
+    window.__clipboardWriteFails = false;
     window.__readerStatusHistory = [];
     const recordReaderStatus = () => {
       const status = document.querySelector(
@@ -103,6 +199,9 @@ async function preparePage(page, speechMode, syncOptions = {}) {
       configurable: true,
       value: {
         async writeText(value) {
+          if (window.__clipboardWriteFails) {
+            throw new Error("mock clipboard write failed");
+          }
           window.__copiedTexts.push(value);
         },
       },
@@ -188,8 +287,16 @@ async function markAnswerCorrect(childFrame) {
   await childFrame.evaluate(() => {
     document.querySelector("#correct-result").hidden = false;
     document.querySelector("#js-answer-result-box").classList.add("is-correct");
-    document.querySelector("#explanation-lock").hidden = true;
-    document.querySelector("#explanation").hidden = false;
+    for (const lock of document.querySelectorAll(
+      "#js-commentary-wrap > .item > .none_text"
+    )) {
+      lock.hidden = true;
+    }
+    for (const explanation of document.querySelectorAll(
+      "#js-commentary-wrap > .item > .text"
+    )) {
+      explanation.hidden = false;
+    }
   });
 }
 
@@ -297,11 +404,20 @@ async function main() {
         "X-Microsoft-OutputFormat": azureSpeechOutputFormat,
       },
       body: expectedSpeechSSML(
-        "問題文。これは動作確認用の問題文です.",
+        "問題文。これは動作確認用の問題文です.。これは改行後の問題文です.。選択肢1。選択肢2",
         "+100%",
       ),
     });
     assert.equal(await speechTokenCallCount(page), 1);
+    assert.equal(
+      await page.locator("#kakomonn-reader-copy").innerText(),
+      "回答後にコピー",
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-copy").isDisabled(),
+      true,
+    );
+    assert.equal(await page.evaluate(() => window.__copiedTexts.length), 0);
 
     await markAnswerCorrect(childFrame);
     await page.waitForFunction(
@@ -321,7 +437,7 @@ async function main() {
     assert.equal(
       (await azureSpeechCalls(page))[1].body,
       expectedSpeechSSML(
-        "解説。これは動作確認用の解説です.",
+        "解説。これは動作確認用の解説です.。これは二つ目の解説です.",
         "+70%",
       ),
     );
@@ -369,7 +485,7 @@ async function main() {
     );
     assert.equal(
       await page.locator("#kakomonn-reader-copy").innerText(),
-      "問題・解説をコピー",
+      "Markdownをコピー",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-copy").isDisabled(),
@@ -383,7 +499,7 @@ async function main() {
     );
     assert.equal(
       await page.locator("#kakomonn-reader-copy").innerText(),
-      "問題・解説をコピー",
+      "Markdownをコピー",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-copy").isDisabled(),
@@ -391,6 +507,41 @@ async function main() {
     );
     await page.locator("#kakomonn-reader-copy").click();
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
+    assert.equal(
+      await page.evaluate(() => window.__copiedTexts[0]),
+      expectedCopiedMarkdown,
+    );
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy").textContent ===
+        "Markdownをコピー",
+      null,
+      { timeout: 5_000 },
+    );
+    await page.evaluate(() => {
+      window.__clipboardWriteFails = true;
+    });
+    await page.locator("#kakomonn-reader-copy").click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "クリップボードへコピーできません",
+    );
+    assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
+    await page.evaluate(() => {
+      window.__clipboardWriteFails = false;
+    });
+    await childFrame.evaluate(() => {
+      document
+        .querySelectorAll("#js-commentary-wrap > .item")[1]
+        .querySelector(".text")
+        .remove();
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy").textContent ===
+        "コピー対象を取得不可",
+    );
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.waitForFunction(
       () =>
@@ -506,7 +657,7 @@ async function main() {
     assert.equal(
       (await azureSpeechCalls(gestureRetryPage))[0].body,
       expectedSpeechSSML(
-        "問題文。これは動作確認用の問題文です.",
+        "問題文。これは動作確認用の問題文です.。これは改行後の問題文です.。選択肢1。選択肢2",
         "+100%",
       ),
     );
@@ -710,7 +861,7 @@ async function main() {
         "X-Microsoft-OutputFormat": azureSpeechOutputFormat,
       },
       body: expectedSpeechSSML(
-        "問題文。これは動作確認用の問題文です.",
+        "問題文。これは動作確認用の問題文です.。これは改行後の問題文です.。選択肢1。選択肢2",
         "+100%",
       ),
     });
@@ -729,7 +880,7 @@ async function main() {
     assert.equal(
       (await azureSpeechCalls(iosPage))[1].body,
       expectedSpeechSSML(
-        "解説。これは動作確認用の解説です.",
+        "解説。これは動作確認用の解説です.。これは二つ目の解説です.",
         "+70%",
       ),
     );

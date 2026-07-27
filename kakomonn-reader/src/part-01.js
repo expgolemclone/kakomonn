@@ -44,7 +44,10 @@
   copyButton.id = "kakomonn-reader-copy";
   copyButton.type = "button";
   copyButton.textContent = "回答後にコピー";
-  copyButton.setAttribute("aria-label", "問題文と解説をコピー");
+  copyButton.setAttribute(
+    "aria-label",
+    "問題文と解説をMarkdownでコピー"
+  );
   copyButton.disabled = true;
 
   const actions = document.createElement("div");

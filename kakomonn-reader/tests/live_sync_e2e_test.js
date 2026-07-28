@@ -526,9 +526,10 @@ async function configureSyncToken(
 }
 
 async function submitCorrectAnswer(mcp) {
-  const clickTarget = await evaluate(
-    mcp,
-    `async () => {
+  await waitUntil("the visible answer 5 label", async () => {
+    const clickTarget = await evaluate(
+      mcp,
+      `async () => {
       const frame = window.document
         .querySelector("#kakomonn-reader-frame");
       const frameWindow = frame.contentWindow;
@@ -588,12 +589,9 @@ async function submitCorrectAnswer(mcp) {
       }
       return result;
     }`,
-  );
-  assert.equal(
-    clickTarget.hittable,
-    true,
-    `The visible answer 5 label is obscured: ${JSON.stringify(clickTarget)}`,
-  );
+    );
+    return clickTarget.hittable ? clickTarget : null;
+  });
 
   const verboseSnapshot = await snapshot(mcp, true);
   assert.equal(verboseSnapshot.includes(correctAnswerText), true);

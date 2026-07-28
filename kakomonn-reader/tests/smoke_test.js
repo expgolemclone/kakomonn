@@ -383,6 +383,24 @@ async function main() {
       true,
       JSON.stringify(readerLayout),
     );
+    assert.deepEqual(
+      await childFrame.evaluate(() => ({
+        explanation: getComputedStyle(
+          document.querySelector("#js-commentary-wrap > .item .text img"),
+        ).filter,
+        nonContent: getComputedStyle(
+          document.querySelector("body > div[hidden] > img"),
+        ).filter,
+        question: getComputedStyle(
+          document.querySelector(".problem_detail > .zoomin img"),
+        ).filter,
+      })),
+      {
+        explanation: "invert(1)",
+        nonContent: "none",
+        question: "invert(1)",
+      },
+    );
     await page.waitForFunction(
       () =>
         window.__readerStatusHistory.includes("問題文 1/1") &&

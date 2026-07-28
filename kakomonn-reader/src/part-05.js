@@ -493,6 +493,18 @@
     currentQuestionText = "";
   }
 
+  function applyFrameImageInversion(sourceDocument) {
+    const inversionStyle = sourceDocument.createElement("style");
+    inversionStyle.id = FRAME_IMAGE_INVERSION_STYLE_ID;
+    inversionStyle.textContent = `
+      .problem_detail > .zoomin img,
+      #js-commentary-wrap > .item .text img {
+        filter: invert(100%) !important;
+      }
+    `;
+    sourceDocument.head.appendChild(inversionStyle);
+  }
+
   function bindFrameDocument() {
     let nextDocument;
     let nextURL;
@@ -523,6 +535,7 @@
     boundFrameDocument = nextDocument;
     navigationInProgress = false;
     frameDocument = nextDocument;
+    applyFrameImageInversion(frameDocument);
     scheduleFrameScrollReset(frameDocument);
     frame.contentWindow.addEventListener("click", onFrameClick, true);
     observeExplanationChanges();

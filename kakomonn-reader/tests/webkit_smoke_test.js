@@ -212,6 +212,20 @@ async function main() {
         document.querySelector("#kakomonn-reader-count")?.textContent ===
         "0問,次は50問",
     );
+    assert.deepEqual(
+      await childFrame.evaluate(() => ({
+        explanation: getComputedStyle(
+          document.querySelector("#js-commentary-wrap > .item .text img"),
+        ).filter,
+        question: getComputedStyle(
+          document.querySelector(".problem_detail > .zoomin img"),
+        ).filter,
+      })),
+      {
+        explanation: "invert(1)",
+        question: "invert(1)",
+      },
+    );
 
     const nextButton = page.locator("#kakomonn-reader-next");
     const copyButton = page.locator("#kakomonn-reader-copy");

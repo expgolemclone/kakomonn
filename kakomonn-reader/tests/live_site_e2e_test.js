@@ -35,6 +35,10 @@ async function getQuestionFrame(page) {
   const frame = page.locator("#kakomonn-reader-frame").contentFrame();
   await frame.locator("body").waitFor({ state: "visible" });
   await frame.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
+  await frame.locator("#kakomonn-reader-image-inversion").waitFor({
+    state: "attached",
+    timeout: readerReadyTimeout,
+  });
   return frame;
 }
 
@@ -70,9 +74,9 @@ async function submitAnswer(frame, answerText) {
   await frame
     .locator(".problem_detail ul.check > li > label")
     .nth(choiceIndex)
-    .evaluate((label) => label.click());
+    .click();
   assert.equal(await answerInput.isChecked(), true);
-  await frame.locator("#send_exam_btn").evaluate((button) => button.click());
+  await frame.locator("#send_exam_btn").click();
 
   console.log(
     JSON.stringify({
@@ -496,6 +500,14 @@ async function runMarkdownCopyCase(browser, script) {
       .locator(".problem_detail > .zoomin img[src]")
       .evaluateAll((images) => images.map((image) => image.src));
     assert.deepEqual(questionImageURLs, markdownQuestionImageURLs);
+    assert.deepEqual(
+      await frame
+        .locator(".problem_detail > .zoomin img[src]")
+        .evaluateAll((images) =>
+          images.map((image) => getComputedStyle(image).filter),
+        ),
+      markdownQuestionImageURLs.map(() => "invert(1)"),
+    );
 
     await submitAnswer(frame, "b と d");
     await frame.getByText("正解！素晴らしいです", { exact: true }).waitFor({
@@ -535,6 +547,14 @@ async function runMarkdownCopyCase(browser, script) {
     assert.deepEqual(
       explanationImageURLs,
       markdownExplanationImageURLs,
+    );
+    assert.deepEqual(
+      await frame
+        .locator("#js-commentary-wrap > .item .text img[src]")
+        .evaluateAll((images) =>
+          images.map((image) => getComputedStyle(image).filter),
+        ),
+      markdownExplanationImageURLs.map(() => "invert(1)"),
     );
 
     await page.waitForFunction(

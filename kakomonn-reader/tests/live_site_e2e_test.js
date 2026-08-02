@@ -8,6 +8,8 @@ const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const fixedQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const fixedNextQuestionUrl = "https://chushoks.kakomonn.com/questions/86957";
+const imageChoiceQuestionUrl =
+  "https://chushoks.kakomonn.com/questions/73379";
 const markdownQuestionUrl = "https://chushoks.kakomonn.com/questions/54914";
 const markdownQuestionHeading =
   "中小企業診断士試験 令和2年度（2020年） 問19（経済学・経済政策 問19）";
@@ -156,7 +158,9 @@ async function blockThirdPartyAds(context) {
       hostname === "googletagmanager.com" ||
       hostname.endsWith(".googletagmanager.com") ||
       hostname === "anymind360.com" ||
-      hostname.endsWith(".anymind360.com");
+      hostname.endsWith(".anymind360.com") ||
+      hostname === "geniee.jp" ||
+      hostname.endsWith(".geniee.jp");
 
     if (isAdRequest) {
       await route.abort();
@@ -661,6 +665,51 @@ async function runMarkdownCopyCase(browser, script) {
   }
 }
 
+async function runImageChoiceInversionCase(browser, script) {
+  const context = await browser.newContext();
+  await blockThirdPartyAds(context);
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(String(error)));
+
+  try {
+    const response = await page.goto(imageChoiceQuestionUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 60_000,
+    });
+    assert.notEqual(response, null);
+    assert.equal(
+      response.ok(),
+      true,
+      `live page returned HTTP ${response.status()}`,
+    );
+    await page
+      .getByText("解答する", { exact: true })
+      .waitFor({ state: "visible" });
+
+    await page.evaluate(() => localStorage.clear());
+    await installSyncMock(page);
+    await page.evaluate((source) => {
+      (0, eval)(source);
+    }, script);
+
+    const frame = await getQuestionFrame(page);
+    const choiceImages = frame.locator(
+      ".problem_detail > ul.list > li img",
+    );
+    assert.equal(await choiceImages.count(), 4);
+    assert.deepEqual(
+      await choiceImages.evaluateAll((images) =>
+        images.map((image) => getComputedStyle(image).filter),
+      ),
+      Array(4).fill("invert(1)"),
+    );
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+}
+
 async function main() {
   const script = fs.readFileSync(scriptPath, "utf8");
   const browser = await chromium.launch({ headless: true });
@@ -676,6 +725,7 @@ async function main() {
       expectedCount: 0,
     });
     await runRandomNavigationCase(browser, script);
+    await runImageChoiceInversionCase(browser, script);
     await runMarkdownCopyCase(browser, script);
   } finally {
     await browser.close();

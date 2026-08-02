@@ -498,6 +498,7 @@
     inversionStyle.id = FRAME_IMAGE_INVERSION_STYLE_ID;
     inversionStyle.textContent = `
       .problem_detail > .zoomin img,
+      .problem_detail > ul.list img,
       #js-commentary-wrap > .item .text img {
         filter: invert(100%) !important;
       }

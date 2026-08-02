@@ -213,15 +213,25 @@ async function main() {
         "0問,次は50問",
     );
     assert.deepEqual(
-      await childFrame.evaluate(() => ({
-        explanation: getComputedStyle(
-          document.querySelector("#js-commentary-wrap > .item .text img"),
-        ).filter,
-        question: getComputedStyle(
-          document.querySelector(".problem_detail > .zoomin img"),
-        ).filter,
-      })),
+      await childFrame.evaluate(() => {
+        const choiceImage = document.createElement("img");
+        document
+          .querySelector(".problem_detail > ul.list > li > div")
+          .appendChild(choiceImage);
+        const filters = {
+          choice: getComputedStyle(choiceImage).filter,
+          explanation: getComputedStyle(
+            document.querySelector("#js-commentary-wrap > .item .text img"),
+          ).filter,
+          question: getComputedStyle(
+            document.querySelector(".problem_detail > .zoomin img"),
+          ).filter,
+        };
+        choiceImage.remove();
+        return filters;
+      }),
       {
+        choice: "invert(1)",
         explanation: "invert(1)",
         question: "invert(1)",
       },

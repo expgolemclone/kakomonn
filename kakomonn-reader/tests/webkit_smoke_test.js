@@ -218,26 +218,48 @@ async function main() {
     );
     assert.deepEqual(
       await childFrame.evaluate(() => {
+        const toggleAttribute = "data-kakomonn-reader-dark-toggle";
+        const inversionParity = (element) => {
+          let parity = 0;
+          for (
+            let current = element;
+            current !== null;
+            current = current.parentElement
+          ) {
+            if (current.hasAttribute(toggleAttribute)) {
+              parity = 1 - parity;
+            }
+          }
+          return parity;
+        };
         const choiceImage = document.createElement("img");
         document
           .querySelector(".problem_detail > ul.list > li > div")
           .appendChild(choiceImage);
-        const filters = {
-          choice: getComputedStyle(choiceImage).filter,
-          explanation: getComputedStyle(
+        const parity = {
+          choice: inversionParity(choiceImage),
+          explanation: inversionParity(
             document.querySelector("#js-commentary-wrap > .item .text img"),
-          ).filter,
-          question: getComputedStyle(
+          ),
+          question: inversionParity(
             document.querySelector(".problem_detail > .zoomin img"),
-          ).filter,
+          ),
         };
         choiceImage.remove();
-        return filters;
+        return {
+          hasDarkModeStyle: Boolean(
+            document.querySelector("#kakomonn-reader-dark-mode"),
+          ),
+          parity,
+        };
       }),
       {
-        choice: "invert(1)",
-        explanation: "invert(1)",
-        question: "invert(1)",
+        hasDarkModeStyle: true,
+        parity: {
+          choice: 1,
+          explanation: 1,
+          question: 1,
+        },
       },
     );
 

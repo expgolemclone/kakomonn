@@ -41,6 +41,21 @@ function expectedSpeechSSML(text, rate) {
 const mockBody = `
   <div hidden>
     <img src="https://cdn.example.test/question.png" alt="拡大表示の重複画像">
+    <div id="dark-mode-light-surface" style="background-color: rgb(255, 255, 255)">
+      <div
+        id="dark-mode-dark-surface"
+        style="background-color: rgb(20, 20, 20); filter: contrast(90%)"
+      >
+        <div
+          id="dark-mode-nested-light-surface"
+          style="background-color: rgb(255, 255, 255)"
+        ></div>
+      </div>
+      <div
+        id="dark-mode-alpha-surface"
+        style="background-color: rgba(0, 0, 0, 0.9)"
+      ></div>
+    </div>
   </div>
   <div class="problem_detail">
     <p class="when">
@@ -413,32 +428,110 @@ async function main() {
       JSON.stringify(readerLayout),
     );
     assert.deepEqual(
+      await page.evaluate(() => {
+        const root = getComputedStyle(document.documentElement);
+        const panel = getComputedStyle(
+          document.querySelector("#kakomonn-reader-sync-settings-panel"),
+        );
+        return {
+          colorScheme: root.colorScheme,
+          panelBackground: panel.backgroundColor,
+          panelColor: panel.color,
+          rootBackground: root.backgroundColor,
+        };
+      }),
+      {
+        colorScheme: "dark",
+        panelBackground: "rgb(29, 35, 43)",
+        panelColor: "rgb(243, 244, 246)",
+        rootBackground: "rgb(11, 13, 16)",
+      },
+    );
+    assert.deepEqual(
       await childFrame.evaluate(() => {
+        const toggleAttribute = "data-kakomonn-reader-dark-toggle";
+        const inversionParity = (element) => {
+          let parity = 0;
+          for (
+            let current = element;
+            current !== null;
+            current = current.parentElement
+          ) {
+            if (current.hasAttribute(toggleAttribute)) {
+              parity = 1 - parity;
+            }
+          }
+          return parity;
+        };
         const choiceImage = document.createElement("img");
         document
           .querySelector(".problem_detail > ul.list > li > div")
           .appendChild(choiceImage);
-        const filters = {
-          choice: getComputedStyle(choiceImage).filter,
-          explanation: getComputedStyle(
-            document.querySelector("#js-commentary-wrap > .item .text img"),
-          ).filter,
-          nonContent: getComputedStyle(
-            document.querySelector("body > div[hidden] > img"),
-          ).filter,
-          question: getComputedStyle(
-            document.querySelector(".problem_detail > .zoomin img"),
-          ).filter,
+        const darkSurface = document.querySelector(
+          "#dark-mode-dark-surface",
+        );
+        const result = {
+          darkFilter: getComputedStyle(darkSurface).filter,
+          hasDarkModeStyle: Boolean(
+            document.querySelector("#kakomonn-reader-dark-mode"),
+          ),
+          parity: {
+            alpha: inversionParity(
+              document.querySelector("#dark-mode-alpha-surface"),
+            ),
+            choice: inversionParity(choiceImage),
+            dark: inversionParity(darkSurface),
+            explanation: inversionParity(
+              document.querySelector("#js-commentary-wrap > .item .text img"),
+            ),
+            light: inversionParity(
+              document.querySelector("#dark-mode-light-surface"),
+            ),
+            nestedLight: inversionParity(
+              document.querySelector("#dark-mode-nested-light-surface"),
+            ),
+            nonContent: inversionParity(
+              document.querySelector("body > div[hidden] > img"),
+            ),
+            question: inversionParity(
+              document.querySelector(".problem_detail > .zoomin img"),
+            ),
+          },
         };
         choiceImage.remove();
-        return filters;
+        return result;
       }),
       {
-        choice: "invert(1)",
-        explanation: "invert(1)",
-        nonContent: "none",
-        question: "invert(1)",
+        darkFilter: "contrast(0.9) invert(1) hue-rotate(180deg)",
+        hasDarkModeStyle: true,
+        parity: {
+          alpha: 0,
+          choice: 1,
+          dark: 0,
+          explanation: 1,
+          light: 1,
+          nestedLight: 1,
+          nonContent: 1,
+          question: 1,
+        },
       },
+    );
+    await childFrame.locator("#dark-mode-dark-surface").evaluate((element) => {
+      element.style.backgroundColor = "rgb(255, 255, 255)";
+    });
+    await childFrame.waitForFunction(() =>
+      !document
+        .querySelector("#dark-mode-dark-surface")
+        .hasAttribute("data-kakomonn-reader-dark-toggle") &&
+      !document
+        .querySelector("#dark-mode-nested-light-surface")
+        .hasAttribute("data-kakomonn-reader-dark-toggle"),
+    );
+    assert.equal(
+      await childFrame.locator("#dark-mode-dark-surface").evaluate(
+        (element) => getComputedStyle(element).filter,
+      ),
+      "contrast(0.9)",
     );
     await page.waitForFunction(
       () =>

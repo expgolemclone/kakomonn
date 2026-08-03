@@ -37,11 +37,29 @@ async function getQuestionFrame(page) {
   const frame = page.locator("#kakomonn-reader-frame").contentFrame();
   await frame.locator("body").waitFor({ state: "visible" });
   await frame.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
-  await frame.locator("#kakomonn-reader-image-inversion").waitFor({
+  await frame.locator("#kakomonn-reader-dark-mode").waitFor({
     state: "attached",
     timeout: readerReadyTimeout,
   });
   return frame;
+}
+
+async function darkModeInversionParities(locator) {
+  return locator.evaluateAll((elements) =>
+    elements.map((element) => {
+      let parity = 0;
+      for (
+        let current = element;
+        current !== null;
+        current = current.parentElement
+      ) {
+        if (current.hasAttribute("data-kakomonn-reader-dark-toggle")) {
+          parity = 1 - parity;
+        }
+      }
+      return parity;
+    }),
+  );
 }
 
 async function waitForSyncReady(page) {
@@ -557,12 +575,10 @@ async function runMarkdownCopyCase(browser, script) {
       .evaluateAll((images) => images.map((image) => image.src));
     assert.deepEqual(questionImageURLs, markdownQuestionImageURLs);
     assert.deepEqual(
-      await frame
-        .locator(".problem_detail > .zoomin img[src]")
-        .evaluateAll((images) =>
-          images.map((image) => getComputedStyle(image).filter),
-        ),
-      markdownQuestionImageURLs.map(() => "invert(1)"),
+      await darkModeInversionParities(
+        frame.locator(".problem_detail > .zoomin img[src]"),
+      ),
+      markdownQuestionImageURLs.map(() => 1),
     );
 
     await submitAnswer(page, frame, "b と d");
@@ -605,12 +621,10 @@ async function runMarkdownCopyCase(browser, script) {
       markdownExplanationImageURLs,
     );
     assert.deepEqual(
-      await frame
-        .locator("#js-commentary-wrap > .item .text img[src]")
-        .evaluateAll((images) =>
-          images.map((image) => getComputedStyle(image).filter),
-        ),
-      markdownExplanationImageURLs.map(() => "invert(1)"),
+      await darkModeInversionParities(
+        frame.locator("#js-commentary-wrap > .item .text img[src]"),
+      ),
+      markdownExplanationImageURLs.map(() => 1),
     );
 
     await page.waitForFunction(
@@ -757,10 +771,8 @@ async function runImageChoiceInversionCase(browser, script) {
     );
     assert.equal(await choiceImages.count(), 4);
     assert.deepEqual(
-      await choiceImages.evaluateAll((images) =>
-        images.map((image) => getComputedStyle(image).filter),
-      ),
-      Array(4).fill("invert(1)"),
+      await darkModeInversionParities(choiceImages),
+      Array(4).fill(1),
     );
     assert.deepEqual(pageErrors, []);
   } finally {

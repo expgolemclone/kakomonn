@@ -45,8 +45,17 @@
   const COPY_FEEDBACK_DURATION_MS = 1400;
   const YANK_SEQUENCE_TIMEOUT_MS = 400;
   const MAX_CHUNK_LENGTH = 1500;
-  const FRAME_IMAGE_INVERSION_STYLE_ID =
-    "kakomonn-reader-image-inversion";
+  const FRAME_DARK_MODE_STYLE_ID = "kakomonn-reader-dark-mode";
+  const FRAME_DARK_MODE_TOGGLE_ATTRIBUTE =
+    "data-kakomonn-reader-dark-toggle";
+  const FRAME_DARK_MODE_TRANSFORM =
+    "invert(100%) hue-rotate(180deg)";
+  const FRAME_DARK_SURFACE_LUMINANCE_THRESHOLD = 0.45;
+  const FRAME_DARK_MODE_IMAGE_SELECTOR = [
+    ".problem_detail > .zoomin img",
+    ".problem_detail > ul.list img",
+    "#js-commentary-wrap > .item .text img",
+  ].join(",");
   const QUESTION_SPEECH_RATE = 2.0;
   const EXPLANATION_SPEECH_RATE = 1.7;
   const SPEECH_TOKEN_RENEWAL_SKEW_MS = 60000;
@@ -93,6 +102,9 @@
   let yankSequenceTimer = null;
   let yankSequenceDocument = null;
   let frameMutationObserver = null;
+  let frameDarkModeStyle = null;
+  let frameDarkModeRefreshQueued = false;
+  let frameDarkModeWindow = null;
   let lastExplanationText = "";
   let currentQuestionText = "";
   let navigationInProgress = false;
@@ -117,6 +129,13 @@
   const style = document.createElement("style");
   style.textContent = `
     :root {
+      color-scheme: dark;
+      --kakomonn-reader-canvas: #0b0d10;
+      --kakomonn-reader-surface: #15191e;
+      --kakomonn-reader-raised: #1d232b;
+      --kakomonn-reader-text: #f3f4f6;
+      --kakomonn-reader-muted: #a8b0bb;
+      --kakomonn-reader-border: #343b45;
       --kakomonn-reader-controls-height: calc(
         56px + env(safe-area-inset-top)
       );
@@ -131,7 +150,8 @@
       margin: 0 !important;
       padding: 0 !important;
       overflow: hidden !important;
-      background: #fff !important;
+      background: var(--kakomonn-reader-canvas) !important;
+      color: var(--kakomonn-reader-text) !important;
     }
 
     #kakomonn-reader-shell {
@@ -141,14 +161,14 @@
       bottom: var(--kakomonn-reader-actions-height);
       left: 0;
       z-index: 2147483000;
-      background: #fff;
+      background: var(--kakomonn-reader-canvas);
     }
 
     #kakomonn-reader-frame {
       width: 100%;
       height: 100%;
       border: 0;
-      background: #fff;
+      background: var(--kakomonn-reader-canvas);
     }
 
     #kakomonn-reader-controls {
@@ -164,7 +184,7 @@
       height: var(--kakomonn-reader-controls-height);
       padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
       box-sizing: border-box;
-      background: #111;
+      background: var(--kakomonn-reader-surface);
       pointer-events: none;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     }
@@ -175,8 +195,8 @@
     #kakomonn-reader-sync-settings-button {
       border: 0;
       border-radius: 999px;
-      background: rgba(20, 20, 20, 0.90);
-      color: #fff;
+      background: var(--kakomonn-reader-raised);
+      color: var(--kakomonn-reader-text);
       font-size: 13px;
       font-weight: 700;
       line-height: 1;
@@ -225,7 +245,7 @@
       height: var(--kakomonn-reader-actions-height);
       padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
       box-sizing: border-box;
-      background: #111;
+      background: var(--kakomonn-reader-surface);
       pointer-events: none;
     }
 
@@ -238,7 +258,7 @@
       min-height: 54px;
       border: 0;
       border-radius: 17px;
-      color: #fff;
+      color: var(--kakomonn-reader-text);
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       font-weight: 800;
       line-height: 1;
@@ -326,9 +346,10 @@
       width: min(420px, 100%);
       padding: 22px;
       box-sizing: border-box;
+      border: 1px solid var(--kakomonn-reader-border);
       border-radius: 18px;
-      background: #fff;
-      color: #1a202c;
+      background: var(--kakomonn-reader-raised);
+      color: var(--kakomonn-reader-text);
       box-shadow: 0 16px 48px rgba(0, 0, 0, 0.34);
     }
 
@@ -348,15 +369,21 @@
       min-height: 46px;
       padding: 10px 12px;
       box-sizing: border-box;
-      border: 1px solid #a0aec0;
+      border: 1px solid var(--kakomonn-reader-border);
       border-radius: 10px;
+      background: var(--kakomonn-reader-canvas);
+      color: var(--kakomonn-reader-text);
       font-size: 16px;
+    }
+
+    #kakomonn-reader-sync-token::placeholder {
+      color: var(--kakomonn-reader-muted);
     }
 
     #kakomonn-reader-sync-settings-error {
       min-height: 20px;
       margin: 10px 0;
-      color: #c53030;
+      color: #ff8a8a;
       font-size: 13px;
       line-height: 1.4;
     }
@@ -379,16 +406,27 @@
 
     #kakomonn-reader-sync-settings-save {
       background: #1473e6;
-      color: #fff;
+      color: var(--kakomonn-reader-text);
     }
 
     #kakomonn-reader-sync-settings-cancel {
-      background: #e2e8f0;
-      color: #1a202c;
+      background: var(--kakomonn-reader-border);
+      color: var(--kakomonn-reader-text);
     }
 
     #kakomonn-reader-sync-settings-save:disabled,
     #kakomonn-reader-sync-settings-cancel:disabled {
       opacity: 0.55;
+    }
+
+    #kakomonn-reader-next:focus-visible,
+    #kakomonn-reader-copy:focus-visible,
+    #kakomonn-reader-stop:focus-visible,
+    #kakomonn-reader-sync-settings-button:focus-visible,
+    #kakomonn-reader-sync-token:focus-visible,
+    #kakomonn-reader-sync-settings-save:focus-visible,
+    #kakomonn-reader-sync-settings-cancel:focus-visible {
+      outline: 3px solid #a8c7fa;
+      outline-offset: 2px;
     }
   `;

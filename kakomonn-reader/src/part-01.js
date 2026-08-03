@@ -49,8 +49,9 @@
   copyButton.textContent = "回答後にコピー";
   copyButton.setAttribute(
     "aria-label",
-    "問題文,自分の回答,解説をMarkdownでコピー"
+    "問題文,自分の回答,解説をMarkdownでコピー,ショートカットはyy"
   );
+  copyButton.title = "ショートカット: yy";
   copyButton.disabled = true;
 
   const actions = document.createElement("div");
@@ -460,6 +461,7 @@
       return;
     }
 
+    clearYankSequence();
     syncTokenInput.value = "";
     syncSettingsError.textContent = "";
     syncSettings.dataset.required = String(required);

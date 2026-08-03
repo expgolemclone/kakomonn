@@ -902,10 +902,10 @@ async function copyMarkdownInRealEdge(mcp) {
   const copyButton = findUid(
     copySnapshot,
     "button",
-    "問題文,自分の回答,解説をMarkdownでコピー",
+    "問題文,自分の回答,解説をMarkdownでコピー,ショートカットはyy",
   );
   assert.notEqual(copyButton, null, copySnapshot);
-  await mcp.tool("click", { uid: copyButton });
+  await mcp.tool("type_text", { text: "yy" });
   await waitUntil("the successful real clipboard copy", async () =>
     evaluate(
       mcp,

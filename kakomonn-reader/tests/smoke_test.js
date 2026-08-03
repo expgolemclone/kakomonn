@@ -381,6 +381,10 @@ async function main() {
       await page.locator("#kakomonn-reader-copy").isVisible(),
       true,
     );
+    assert.equal(
+      await page.locator("#kakomonn-reader-copy").getAttribute("title"),
+      "ショートカット: yy",
+    );
     const readerLayout = await page.evaluate(() => {
       const controls = document
         .querySelector("#kakomonn-reader-controls")
@@ -463,6 +467,68 @@ async function main() {
     await page.keyboard.press("w");
     assert.equal(await displayChoices.nth(1).evaluate((choice) =>
       choice.classList.contains("is-active")), false);
+
+    await childFrame.evaluate(() => {
+      const list = document.querySelector(".problem_detail > ul.list");
+      const checks = document.querySelector(".problem_detail > ul.check");
+      for (let choiceNumber = 3; choiceNumber <= 6; choiceNumber += 1) {
+        list.insertAdjacentHTML(
+          "beforeend",
+          `<li data-y-shortcut-fixture><div>選択肢${choiceNumber}</div></li>`,
+        );
+        checks.insertAdjacentHTML(
+          "beforeend",
+          `<li data-y-shortcut-fixture><label><input type="radio" name="answer">${choiceNumber}</label></li>`,
+        );
+      }
+      for (const choice of list.querySelectorAll(
+        "li[data-y-shortcut-fixture]",
+      )) {
+        choice.addEventListener("click", () => {
+          choice.classList.toggle("is-active");
+        });
+      }
+    });
+    await page.keyboard.press("y");
+    await page.waitForTimeout(200);
+    assert.equal(await displayChoices.nth(5).evaluate((choice) =>
+      choice.classList.contains("is-active")), false);
+    await page.waitForTimeout(300);
+    assert.equal(await displayChoices.nth(5).evaluate((choice) =>
+      choice.classList.contains("is-active")), true);
+    await page.keyboard.press("y");
+    await page.keyboard.press("q");
+    assert.equal(await displayChoices.nth(5).evaluate((choice) =>
+      choice.classList.contains("is-active")), false);
+    assert.equal(await displayChoices.first().evaluate((choice) =>
+      choice.classList.contains("is-active")), true);
+    await page.keyboard.press("q");
+    assert.equal(await displayChoices.first().evaluate((choice) =>
+      choice.classList.contains("is-active")), false);
+    await page.keyboard.press("y");
+    await page.keyboard.press("y");
+    assert.equal(await displayChoices.nth(5).evaluate((choice) =>
+      choice.classList.contains("is-active")), false);
+    assert.equal(await page.evaluate(() => window.__copiedTexts.length), 0);
+    await childFrame.locator("body").evaluate((body) => {
+      for (const init of [
+        { key: "y", repeat: true },
+        { ctrlKey: true, key: "y" },
+        { isComposing: true, key: "y" },
+      ]) {
+        body.dispatchEvent(new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          ...init,
+        }));
+      }
+    });
+    await page.waitForTimeout(500);
+    assert.equal(await displayChoices.nth(5).evaluate((choice) =>
+      choice.classList.contains("is-active")), false);
+    await childFrame.locator("[data-y-shortcut-fixture]").evaluateAll(
+      (elements) => elements.forEach((element) => element.remove()),
+    );
 
     await page.keyboard.press("2");
     assert.equal(await answerInputs.nth(1).isChecked(), true);
@@ -563,8 +629,8 @@ async function main() {
 
     const shortcutTextInput = childFrame.locator("#shortcut-text-input");
     await shortcutTextInput.focus();
-    await page.keyboard.type("2qjk ");
-    assert.equal(await shortcutTextInput.inputValue(), "2qjk ");
+    await page.keyboard.type("2qjky ");
+    assert.equal(await shortcutTextInput.inputValue(), "2qjky ");
     assert.equal(await answerInputs.first().isChecked(), true);
     assert.equal(await displayChoices.first().evaluate((choice) =>
       choice.classList.contains("is-active")), false);
@@ -701,7 +767,8 @@ async function main() {
       await page.locator("#kakomonn-reader-copy").isDisabled(),
       false,
     );
-    await page.locator("#kakomonn-reader-copy").click();
+    await page.keyboard.press("y");
+    await page.keyboard.press("y");
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
     assert.equal(
       await page.evaluate(() => window.__copiedTexts[0]),

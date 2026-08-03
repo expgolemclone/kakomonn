@@ -458,6 +458,9 @@
 
   const ANSWER_CHOICE_SHORTCUT_KEYS = "1234567890";
   const DISPLAY_CHOICE_SHORTCUT_KEYS = "qwertyuiop";
+  const YANK_SHORTCUT_KEY = "y";
+  const YANK_DISPLAY_CHOICE_INDEX =
+    DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf(YANK_SHORTCUT_KEY);
   const SHORTCUT_SCROLL_DISTANCE = 100;
 
   function shortcutTargetElement(target) {
@@ -592,6 +595,40 @@
     return true;
   }
 
+  function clearYankSequence() {
+    if (yankSequenceTimer !== null) {
+      window.clearTimeout(yankSequenceTimer);
+      yankSequenceTimer = null;
+    }
+    yankSequenceDocument = null;
+  }
+
+  function commitSingleYShortcut() {
+    const sourceDocument = yankSequenceDocument;
+    clearYankSequence();
+    if (sourceDocument !== frameDocument || !syncSettings.hidden) {
+      return false;
+    }
+    return activateDisplayChoice(YANK_DISPLAY_CHOICE_INDEX);
+  }
+
+  function startYankSequence() {
+    yankSequenceDocument = frameDocument;
+    yankSequenceTimer = window.setTimeout(() => {
+      commitSingleYShortcut();
+    }, YANK_SEQUENCE_TIMEOUT_MS);
+  }
+
+  function isReaderShortcutKey(event, key, scrollDirection) {
+    return (
+      (event.key === "Enter" && !nextQuestionButton.disabled) ||
+      ANSWER_CHOICE_SHORTCUT_KEYS.includes(event.key) ||
+      event.key === " " ||
+      DISPLAY_CHOICE_SHORTCUT_KEYS.includes(key) ||
+      scrollDirection !== 0
+    );
+  }
+
   function onReaderKeyDown(event) {
     const key = event.key.toLowerCase();
     const scrollDirection = key === "j" ? 1 : key === "k" ? -1 : 0;
@@ -605,16 +642,36 @@
       isEditableShortcutTarget(event.target) ||
       (event.repeat && scrollDirection === 0)
     ) {
+      clearYankSequence();
       return;
     }
 
     let handled = false;
-    if (event.key === "Enter" && !nextQuestionButton.disabled) {
+    if (key === YANK_SHORTCUT_KEY) {
+      if (yankSequenceTimer === null) {
+        startYankSequence();
+      } else {
+        clearYankSequence();
+        if (!copyButton.disabled) {
+          copyButton.click();
+        }
+      }
+      handled = true;
+    } else if (event.key === "Enter" && !nextQuestionButton.disabled) {
+      if (yankSequenceTimer !== null) {
+        commitSingleYShortcut();
+      }
       nextQuestionButton.click();
       handled = true;
     } else {
       const answerChoiceIndex = ANSWER_CHOICE_SHORTCUT_KEYS.indexOf(event.key);
       const displayChoiceIndex = DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf(key);
+      if (
+        yankSequenceTimer !== null &&
+        isReaderShortcutKey(event, key, scrollDirection)
+      ) {
+        commitSingleYShortcut();
+      }
       if (answerChoiceIndex >= 0) {
         handled = activateAnswerChoice(answerChoiceIndex);
       } else if (event.key === " ") {
@@ -652,6 +709,7 @@
   }
 
   function clearFrameState() {
+    clearYankSequence();
     if (loadTimer !== null) {
       clearTimeout(loadTimer);
       loadTimer = null;

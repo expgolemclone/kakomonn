@@ -43,6 +43,7 @@
   const EXPLANATION_CHANGE_DELAY_MS = 700;
   const FRAME_SCROLL_RESET_DELAYS_MS = [0, 120, 600];
   const COPY_FEEDBACK_DURATION_MS = 1400;
+  const YANK_SEQUENCE_TIMEOUT_MS = 400;
   const MAX_CHUNK_LENGTH = 1500;
   const FRAME_IMAGE_INVERSION_STYLE_ID =
     "kakomonn-reader-image-inversion";
@@ -89,6 +90,8 @@
   let explanationTimer = null;
   let frameScrollResetTimers = [];
   let copyFeedbackTimer = null;
+  let yankSequenceTimer = null;
+  let yankSequenceDocument = null;
   let frameMutationObserver = null;
   let lastExplanationText = "";
   let currentQuestionText = "";

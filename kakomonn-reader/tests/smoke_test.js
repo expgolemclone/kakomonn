@@ -66,6 +66,7 @@ const mockBody = `
       <li><label><input type="radio" name="answer">2</label></li>
     </ul>
     <button type="button">解答する</button>
+    <input id="shortcut-text-input" type="text">
   </div>
   <p id="correct-result" hidden>正解！素晴らしいです</p>
   <p id="incorrect-result" hidden>残念...</p>
@@ -120,6 +121,7 @@ const mockBody = `
   <a href="#report">（訂正依頼・報告はこちら）</a>
   <button id="scroll-next" type="button">次の問題へ</button>
   <a id="next" href="/questions/next/45125">次の問題（問5）へ</a>
+  <div id="shortcut-scroll-spacer" style="height: 1000px"></div>
 `;
 
 const expectedCopiedMarkdown = `# 中小企業診断士試験 令和2年度（2020年） 問19（経済学・経済政策 問19）
@@ -276,6 +278,19 @@ async function loadMockQuestion(page, script) {
         configurable: true,
         value: () => [],
       });
+      window.__answerButtonClicks = 0;
+      document
+        .querySelector(".problem_detail button")
+        .addEventListener("click", () => {
+          window.__answerButtonClicks += 1;
+        });
+      for (const choice of document.querySelectorAll(
+        ".problem_detail > ul.list > li",
+      )) {
+        choice.addEventListener("click", () => {
+          choice.classList.toggle("is-active");
+        });
+      }
     },
     mockBody,
   );
@@ -426,6 +441,136 @@ async function main() {
     assert.equal(
       await page.locator("#kakomonn-reader-next").isDisabled(),
       true,
+    );
+    const answerInputs = childFrame.locator("input[name='answer']");
+    const displayChoices = childFrame.locator(
+      ".problem_detail > ul.list > li",
+    );
+    await page.locator("#kakomonn-reader-sync-settings-button").focus();
+    await page.keyboard.press("q");
+    assert.equal(await displayChoices.first().evaluate((choice) =>
+      choice.classList.contains("is-active")), true);
+    await page.keyboard.press("q");
+    assert.equal(await displayChoices.first().evaluate((choice) =>
+      choice.classList.contains("is-active")), false);
+    await page.keyboard.press("w");
+    assert.equal(await displayChoices.nth(1).evaluate((choice) =>
+      choice.classList.contains("is-active")), true);
+    await page.keyboard.press("w");
+    assert.equal(await displayChoices.nth(1).evaluate((choice) =>
+      choice.classList.contains("is-active")), false);
+
+    await page.keyboard.press("2");
+    assert.equal(await answerInputs.nth(1).isChecked(), true);
+    await page.keyboard.press("3");
+    assert.equal(await answerInputs.nth(1).isChecked(), true);
+    await answerInputs.first().focus();
+    await page.keyboard.press("1");
+    assert.equal(await answerInputs.first().isChecked(), true);
+    assert.equal(await answerInputs.nth(1).isChecked(), false);
+
+    await page.keyboard.press("Space");
+    assert.equal(
+      await childFrame.evaluate(() => window.__answerButtonClicks),
+      1,
+    );
+    await childFrame.evaluate(() => {
+      const target = document.querySelector("input[name='answer']");
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: " ",
+          repeat: true,
+        }),
+      );
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          ctrlKey: true,
+          key: "2",
+        }),
+      );
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          isComposing: true,
+          key: "q",
+        }),
+      );
+    });
+    assert.equal(
+      await childFrame.evaluate(() => window.__answerButtonClicks),
+      1,
+    );
+    assert.equal(await answerInputs.first().isChecked(), true);
+    assert.equal(await displayChoices.first().evaluate((choice) =>
+      choice.classList.contains("is-active")), false);
+
+    await childFrame.locator("body").evaluate(() => window.scrollTo(0, 0));
+    await answerInputs.first().focus();
+    await childFrame.locator("body").evaluate(() => window.scrollTo(0, 0));
+    await page.keyboard.press("j");
+    await childFrame.locator("body").evaluate(() =>
+      new Promise((resolve) => requestAnimationFrame(() => resolve())),
+    );
+    assert.equal(
+      await childFrame.locator("body").evaluate(() => window.scrollY),
+      100,
+    );
+    await page.keyboard.press("k");
+    await childFrame.locator("body").evaluate(() =>
+      new Promise((resolve) => requestAnimationFrame(() => resolve())),
+    );
+    assert.equal(
+      await childFrame.locator("body").evaluate(() => window.scrollY),
+      0,
+    );
+    await childFrame.locator("body").evaluate((body) => {
+      body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "j",
+          repeat: true,
+        }),
+      );
+    });
+    assert.equal(
+      await childFrame.locator("body").evaluate(() => window.scrollY),
+      100,
+    );
+    await childFrame.locator("body").evaluate((body) => {
+      body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "k",
+          repeat: true,
+        }),
+      );
+    });
+    assert.equal(
+      await childFrame.locator("body").evaluate(() => window.scrollY),
+      0,
+    );
+
+    const shortcutTextInput = childFrame.locator("#shortcut-text-input");
+    await shortcutTextInput.focus();
+    await page.keyboard.type("2qjk ");
+    assert.equal(await shortcutTextInput.inputValue(), "2qjk ");
+    assert.equal(await answerInputs.first().isChecked(), true);
+    assert.equal(await displayChoices.first().evaluate((choice) =>
+      choice.classList.contains("is-active")), false);
+    assert.equal(
+      await childFrame.locator("body").evaluate(() => window.scrollY),
+      0,
+    );
+    assert.equal(
+      await childFrame.evaluate(() => window.__answerButtonClicks),
+      1,
     );
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
@@ -746,6 +891,12 @@ async function main() {
     assert.equal(
       await setupPage.locator("#kakomonn-reader-count").innerText(),
       "--問,次は50問",
+    );
+    await setupPage.locator("#kakomonn-reader-sync-token").focus();
+    await setupPage.keyboard.type("1 qjk ");
+    assert.equal(
+      await setupPage.locator("#kakomonn-reader-sync-token").inputValue(),
+      "1 qjk ",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").fill("test-sync-token");
     await setupPage.keyboard.press("Enter");

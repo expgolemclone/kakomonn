@@ -382,6 +382,39 @@ function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function isRemoteDebugApprovalRejection(error) {
+  return String(error).includes("Unexpected server response: 403");
+}
+
+async function connectWithRemoteDebugApproval(mcp, userDataDir) {
+  const approval = startRemoteDebugApproval(userDataDir);
+  const deadline = Date.now() + browserApprovalTimeoutMs;
+  let lastRejection = null;
+  try {
+    while (Date.now() < deadline) {
+      try {
+        await Promise.race([
+          mcp.tool("list_pages", {}, deadline - Date.now()),
+          approval.failure,
+        ]);
+        return;
+      } catch (error) {
+        if (!isRemoteDebugApprovalRejection(error)) {
+          throw error;
+        }
+        lastRejection = error;
+        await Promise.race([delay(250), approval.failure]);
+      }
+    }
+
+    throw new Error("Remote debugging approval timed out", {
+      cause: lastRejection,
+    });
+  } finally {
+    approval.stop();
+  }
+}
+
 class McpClient {
   constructor(userDataDir) {
     this.nextId = 1;
@@ -921,15 +954,7 @@ async function main() {
   let pageId = null;
   try {
     await mcp.initialize();
-    const approval = startRemoteDebugApproval(userDataDir);
-    try {
-      await Promise.race([
-        mcp.tool("list_pages", {}, browserApprovalTimeoutMs),
-        approval.failure,
-      ]);
-    } finally {
-      approval.stop();
-    }
+    await connectWithRemoteDebugApproval(mcp, userDataDir);
     const opened = toolText(
       await mcp.tool(
         "new_page",
@@ -986,6 +1011,7 @@ module.exports = {
   McpClient,
   assertRuntimeIdentity,
   extractBuildFingerprint,
+  isRemoteDebugApprovalRejection,
   readEdgeUserDataDir,
   remoteDebugApprovalEnvironment,
   remoteDebugApprovalPowerShell,

@@ -456,24 +456,182 @@
     void handleNextQuestion();
   }
 
-  function onNextQuestionKeyDown(event) {
+  const ANSWER_CHOICE_SHORTCUT_KEYS = "1234567890";
+  const DISPLAY_CHOICE_SHORTCUT_KEYS = "qwertyuiop";
+  const SHORTCUT_SCROLL_DISTANCE = 100;
+
+  function shortcutTargetElement(target) {
+    if (target?.nodeType === target?.ownerDocument?.defaultView?.Node.ELEMENT_NODE) {
+      return target;
+    }
+    return target?.parentElement ?? null;
+  }
+
+  function isEditableShortcutTarget(target) {
+    const element = shortcutTargetElement(target);
+    if (element === null) {
+      return false;
+    }
+
     if (
-      event.key !== "Enter" ||
+      element.isContentEditable ||
+      element.closest("textarea, select, [role='textbox']") !== null
+    ) {
+      return true;
+    }
+
+    const input = element.closest("input");
+    return (
+      input !== null &&
+      !["button", "checkbox", "radio", "reset", "submit"].includes(
+        input.type
+      )
+    );
+  }
+
+  function currentQuestionControls() {
+    if (!frameDocument?.body || frameDocument.defaultView === null) {
+      return null;
+    }
+
+    const metadataElement = findQuestionMetadataElement(frameDocument);
+    if (metadataElement === null) {
+      return null;
+    }
+
+    const problemElement = metadataElement.closest(".problem_detail");
+    const answerButton = findAnswerButtonAfter(metadataElement);
+    if (
+      problemElement === null ||
+      answerButton === null ||
+      !problemElement.contains(answerButton)
+    ) {
+      return null;
+    }
+
+    return {
+      answerButton,
+      answerChoiceControls: findAnswerChoiceControls(
+        metadataElement,
+        answerButton
+      ),
+      problemElement,
+    };
+  }
+
+  function isDisabledControl(control) {
+    return control.matches(":disabled, [aria-disabled='true']");
+  }
+
+  function activateAnswerChoice(index) {
+    const controls = currentQuestionControls();
+    const control = controls?.answerChoiceControls[index];
+    const label = control?.closest("label");
+    if (
+      control === undefined ||
+      label === null ||
+      isDisabledControl(control) ||
+      !isVisibleElement(label)
+    ) {
+      return false;
+    }
+
+    label.click();
+    return true;
+  }
+
+  function activateAnswerButton() {
+    const answerButton = currentQuestionControls()?.answerButton;
+    if (
+      answerButton === undefined ||
+      isDisabledControl(answerButton) ||
+      !isVisibleElement(answerButton)
+    ) {
+      return false;
+    }
+
+    answerButton.click();
+    return true;
+  }
+
+  function activateDisplayChoice(index) {
+    const controls = currentQuestionControls();
+    if (controls === null) {
+      return false;
+    }
+
+    const list = directChild(controls.problemElement, "ul.list");
+    const choices =
+      list === null ? [] : Array.from(list.children).filter((child) =>
+        child.matches("li")
+      );
+    const choice = choices[index];
+    if (
+      choices.length !== controls.answerChoiceControls.length ||
+      choice === undefined ||
+      !isVisibleElement(choice)
+    ) {
+      return false;
+    }
+
+    choice.click();
+    return true;
+  }
+
+  function scrollQuestionFrame(direction) {
+    const frameWindow = frameDocument?.defaultView;
+    if (frameWindow === null || frameWindow === undefined) {
+      return false;
+    }
+
+    frameWindow.scrollBy({
+      behavior: "auto",
+      left: 0,
+      top: direction * SHORTCUT_SCROLL_DISTANCE,
+    });
+    return true;
+  }
+
+  function onReaderKeyDown(event) {
+    const key = event.key.toLowerCase();
+    const scrollDirection = key === "j" ? 1 : key === "k" ? -1 : 0;
+    if (
       event.altKey ||
       event.ctrlKey ||
       event.metaKey ||
       event.shiftKey ||
-      event.repeat ||
       event.isComposing ||
       !syncSettings.hidden ||
-      nextQuestionButton.disabled
+      isEditableShortcutTarget(event.target) ||
+      (event.repeat && scrollDirection === 0)
     ) {
+      return;
+    }
+
+    let handled = false;
+    if (event.key === "Enter" && !nextQuestionButton.disabled) {
+      nextQuestionButton.click();
+      handled = true;
+    } else {
+      const answerChoiceIndex = ANSWER_CHOICE_SHORTCUT_KEYS.indexOf(event.key);
+      const displayChoiceIndex = DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf(key);
+      if (answerChoiceIndex >= 0) {
+        handled = activateAnswerChoice(answerChoiceIndex);
+      } else if (event.key === " ") {
+        handled = activateAnswerButton();
+      } else if (displayChoiceIndex >= 0) {
+        handled = activateDisplayChoice(displayChoiceIndex);
+      } else if (scrollDirection !== 0) {
+        handled = scrollQuestionFrame(scrollDirection);
+      }
+    }
+
+    if (!handled) {
       return;
     }
 
     event.preventDefault();
     event.stopImmediatePropagation();
-    nextQuestionButton.click();
   }
 
   function onFrameClick(event) {
@@ -561,7 +719,7 @@
     frame.contentWindow.addEventListener("click", onFrameClick, true);
     frame.contentWindow.addEventListener(
       "keydown",
-      onNextQuestionKeyDown,
+      onReaderKeyDown,
       true
     );
     observeExplanationChanges();
@@ -610,7 +768,7 @@
     }
   });
   frame.addEventListener("load", bindFrameDocument);
-  document.addEventListener("keydown", onNextQuestionKeyDown, true);
+  document.addEventListener("keydown", onReaderKeyDown, true);
   if (speechSupported) {
     document.addEventListener("click", activateSpeechFromGesture, true);
   }

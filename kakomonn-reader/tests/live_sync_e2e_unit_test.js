@@ -5,6 +5,7 @@ const test = require("node:test");
 const {
   assertRuntimeIdentity,
   extractBuildFingerprint,
+  isRemoteDebugApprovalRejection,
   readEdgeUserDataDir,
   remoteDebugApprovalEnvironment,
   remoteDebugApprovalPowerShell,
@@ -71,6 +72,25 @@ test("extracts exactly one generated build fingerprint", () => {
         `const BUILD_FINGERPRINT = "${fingerprint}";\nconst BUILD_FINGERPRINT = "${fingerprint}";`,
       ),
     /found 2/,
+  );
+});
+
+test("retries only an explicit remote-debugging approval rejection", () => {
+  assert.equal(
+    isRemoteDebugApprovalRejection(
+      new Error("Cause: Unexpected server response: 403"),
+    ),
+    true,
+  );
+  assert.equal(
+    isRemoteDebugApprovalRejection(
+      new Error("Cause: Unexpected server response: 500"),
+    ),
+    false,
+  );
+  assert.equal(
+    isRemoteDebugApprovalRejection(new Error("MCP request timed out")),
+    false,
   );
 });
 

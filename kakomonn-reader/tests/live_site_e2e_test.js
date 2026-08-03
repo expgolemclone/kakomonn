@@ -57,7 +57,7 @@ async function waitForSyncReady(page) {
   );
 }
 
-async function submitAnswer(frame, answerText) {
+async function submitAnswer(page, frame, answerText, inputMethod = "click") {
   const normalize = (value) => value.replace(/\s+/g, "").trim();
   const choiceTexts = await frame
     .locator(".problem_detail ul.list > li")
@@ -73,12 +73,60 @@ async function submitAnswer(frame, answerText) {
   assert.equal(await answerInputs.count(), choiceTexts.length);
 
   const answerInput = answerInputs.nth(choiceIndex);
-  await frame
-    .locator(".problem_detail ul.check > li > label")
-    .nth(choiceIndex)
-    .click();
+  if (inputMethod === "keyboard") {
+    const displayedChoice = frame
+      .locator(".problem_detail > ul.list > li")
+      .first();
+    await answerInputs.first().focus();
+    await page.keyboard.press("q");
+    assert.equal(
+      await displayedChoice.evaluate((choice) =>
+        choice.classList.contains("is-active"),
+      ),
+      true,
+    );
+    await page.keyboard.press("q");
+    assert.equal(
+      await displayedChoice.evaluate((choice) =>
+        choice.classList.contains("is-active"),
+      ),
+      false,
+    );
+
+    assert.equal(
+      await frame.locator("body").evaluate(() =>
+        document.scrollingElement.scrollHeight > window.innerHeight + 100),
+      true,
+    );
+    await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+    await page.keyboard.press("j");
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          .scrollY === 100,
+    );
+    await page.keyboard.press("k");
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          .scrollY === 0,
+    );
+
+    await page.locator("#kakomonn-reader-sync-settings-button").focus();
+    await page.keyboard.press(choiceIndex === 9 ? "0" : String(choiceIndex + 1));
+  } else {
+    assert.equal(inputMethod, "click");
+    await frame
+      .locator(".problem_detail ul.check > li > label")
+      .nth(choiceIndex)
+      .click();
+  }
   assert.equal(await answerInput.isChecked(), true);
-  await frame.locator("#send_exam_btn").click();
+  if (inputMethod === "keyboard") {
+    await page.keyboard.press("Space");
+  } else {
+    await frame.locator("#send_exam_btn").click();
+  }
 
   console.log(
     JSON.stringify({
@@ -171,7 +219,11 @@ async function blockThirdPartyAds(context) {
   });
 }
 
-async function runCase(browser, script, { answerText, expectedBanner, expectedCount }) {
+async function runCase(
+  browser,
+  script,
+  { answerText, expectedBanner, expectedCount, inputMethod = "click" },
+) {
   const context = await browser.newContext();
   await blockThirdPartyAds(context);
   const page = await context.newPage();
@@ -207,7 +259,7 @@ async function runCase(browser, script, { answerText, expectedBanner, expectedCo
       "0問,次は50問",
     );
 
-    await submitAnswer(frame, answerText);
+    await submitAnswer(page, frame, answerText, inputMethod);
     console.log(JSON.stringify({ phase: "answer-submitted", answerText }));
     await frame.getByText(expectedBanner, { exact: true }).waitFor({
       state: "visible",
@@ -342,7 +394,7 @@ async function runRandomNavigationCase(browser, script) {
       .locator(".problem_detail ul.list > li")
       .first()
       .innerText();
-    await submitAnswer(frame, firstAnswer);
+    await submitAnswer(page, frame, firstAnswer);
     await frame
       .locator(
         "#js-answer-result-box.is-correct, #js-answer-result-box.is-wrong",
@@ -513,7 +565,7 @@ async function runMarkdownCopyCase(browser, script) {
       markdownQuestionImageURLs.map(() => "invert(1)"),
     );
 
-    await submitAnswer(frame, "b と d");
+    await submitAnswer(page, frame, "b と d");
     await frame.getByText("正解！素晴らしいです", { exact: true }).waitFor({
       state: "visible",
       timeout: 15_000,
@@ -718,6 +770,7 @@ async function main() {
       answerText: "輸入の減少は、GDPを増加させる。",
       expectedBanner: "正解！素晴らしいです",
       expectedCount: 1,
+      inputMethod: "keyboard",
     });
     await runCase(browser, script, {
       answerText: "GDPは、フローとストックの混合概念である。",

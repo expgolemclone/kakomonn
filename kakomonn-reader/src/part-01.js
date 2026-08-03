@@ -40,6 +40,7 @@
   nextQuestionButton.type = "button";
   nextQuestionButton.textContent = "次の問題へ";
   nextQuestionButton.setAttribute("aria-label", "次の問題へ移動");
+  nextQuestionButton.setAttribute("aria-keyshortcuts", "Enter");
   nextQuestionButton.disabled = true;
 
   const copyButton = document.createElement("button");

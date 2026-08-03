@@ -6,6 +6,8 @@ const {
   assertRuntimeIdentity,
   extractBuildFingerprint,
   readEdgeUserDataDir,
+  remoteDebugApprovalEnvironment,
+  remoteDebugApprovalPowerShell,
 } = require("./live_sync_e2e_test");
 
 const fingerprint = "a".repeat(64);
@@ -128,5 +130,31 @@ test("accepts a dedicated Edge E2E user data directory with remote debugging", (
       platform: "win32",
     }),
     path.resolve(dedicatedUserDataDir),
+  );
+});
+
+test("automates approval only in the configured dedicated Edge profile", () => {
+  const userDataDir =
+    "C:\\Users\\tester\\AppData\\Local\\kakomonn-edge-e2e";
+  const environment = remoteDebugApprovalEnvironment(
+    userDataDir,
+    12_345,
+    {
+      KAKOMONN_SYNC_TOKEN: "must-not-reach-powershell",
+      SystemRoot: "C:\\Windows",
+    },
+  );
+
+  assert.equal(environment.KAKOMONN_E2E_EDGE_USER_DATA_DIR, userDataDir);
+  assert.equal(environment.KAKOMONN_E2E_APPROVAL_TIMEOUT_MS, "12345");
+  assert.equal(environment.KAKOMONN_SYNC_TOKEN, undefined);
+  assert.match(remoteDebugApprovalPowerShell, /--user-data-dir=/);
+  assert.match(remoteDebugApprovalPowerShell, /"許可"/);
+  assert.match(remoteDebugApprovalPowerShell, /"MdTextButton"/);
+  assert.match(remoteDebugApprovalPowerShell, /InvokePattern/);
+  assert.match(remoteDebugApprovalPowerShell, /BoundingRectangle/);
+  assert.match(
+    remoteDebugApprovalPowerShell,
+    /Multiple remote debugging approval buttons were found/,
   );
 });

@@ -353,6 +353,12 @@ async function main() {
       true,
     );
     assert.equal(
+      await page
+        .locator("#kakomonn-reader-next")
+        .getAttribute("aria-keyshortcuts"),
+      "Enter",
+    );
+    assert.equal(
       await page.locator("#kakomonn-reader-copy").isVisible(),
       true,
     );
@@ -420,6 +426,19 @@ async function main() {
     assert.equal(
       await page.locator("#kakomonn-reader-next").isDisabled(),
       true,
+    );
+    await childFrame.locator("input[name='answer']").first().focus();
+    await page.keyboard.press("Enter");
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.__syncMock.calls.filter(
+            (call) =>
+              call.method === "POST" &&
+              new URL(call.url).pathname === "/v2/answers",
+          ).length,
+      ),
+      0,
     );
 
     assert.deepEqual((await azureSpeechCalls(page))[0], {
@@ -570,29 +589,18 @@ async function main() {
         document.querySelector("#kakomonn-reader-copy").textContent ===
         "コピー対象を取得不可",
     );
-    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-next").textContent ===
-        "次の問題へ",
-    );
-
-    await childFrame.locator("#next").focus();
     await page.evaluate(() => {
       window.__syncMock.holdNextRequest = true;
+      window.dispatchEvent(new Event("focus"));
     });
     const nextQuestionButton = page.locator("#kakomonn-reader-next");
-    const nextQuestionButtonBox = await nextQuestionButton.boundingBox();
-    assert.notEqual(nextQuestionButtonBox, null);
-    await page.mouse.click(
-      nextQuestionButtonBox.x + nextQuestionButtonBox.width / 2,
-      nextQuestionButtonBox.y + nextQuestionButtonBox.height / 2,
-    );
     await page.waitForFunction(
       () => window.__syncMock.releaseHeldRequest !== null,
     );
     assert.equal(await nextQuestionButton.innerText(), "学習記録を同期中");
     assert.equal(await nextQuestionButton.isDisabled(), false);
+    await childFrame.locator("input[name='answer']").first().focus();
+    await page.keyboard.press("Enter");
     assert.equal(
       await page.evaluate(
         () =>
@@ -740,7 +748,7 @@ async function main() {
       "--問,次は50問",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").fill("test-sync-token");
-    await setupPage.locator("#kakomonn-reader-sync-settings-save").click();
+    await setupPage.keyboard.press("Enter");
     await setupPage.waitForSelector("#kakomonn-reader-sync-settings", {
       state: "hidden",
     });

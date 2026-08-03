@@ -22,6 +22,88 @@ const browserApprovalTimeoutMs = 120_000;
 const edgeViewport = { height: 900, width: 1440 };
 const buildFingerprintPattern =
   /const BUILD_FINGERPRINT = "([0-9a-f]{64})";/g;
+const remoteDebugApprovalPowerShell = String.raw`
+$ErrorActionPreference = "Stop"
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+
+$userDataDir = [System.IO.Path]::GetFullPath(
+  $env:KAKOMONN_E2E_EDGE_USER_DATA_DIR
+)
+$timeoutMs = [int]$env:KAKOMONN_E2E_APPROVAL_TIMEOUT_MS
+$plainProfileArgument = "--user-data-dir=$userDataDir"
+$quotedProfileArgument = '--user-data-dir="' + $userDataDir + '"'
+$deadline = [DateTime]::UtcNow.AddMilliseconds($timeoutMs)
+
+$buttonNameCondition = New-Object System.Windows.Automation.PropertyCondition(
+  [System.Windows.Automation.AutomationElement]::NameProperty,
+  "許可"
+)
+$buttonTypeCondition = New-Object System.Windows.Automation.PropertyCondition(
+  [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+  [System.Windows.Automation.ControlType]::Button
+)
+$allowButtonCondition = New-Object System.Windows.Automation.AndCondition(
+  $buttonNameCondition,
+  $buttonTypeCondition
+)
+
+while ([DateTime]::UtcNow -lt $deadline) {
+  $edgeProcesses = Get-CimInstance Win32_Process -Filter "Name = 'msedge.exe'" |
+    Where-Object {
+      $_.CommandLine -and (
+        $_.CommandLine.Contains($plainProfileArgument) -or
+        $_.CommandLine.Contains($quotedProfileArgument)
+      )
+    }
+
+  foreach ($edgeProcess in $edgeProcesses) {
+    $process = Get-Process -Id $edgeProcess.ProcessId -ErrorAction SilentlyContinue
+    if (-not $process -or $process.MainWindowHandle -eq 0) {
+      continue
+    }
+
+    $window = [System.Windows.Automation.AutomationElement]::FromHandle(
+      $process.MainWindowHandle
+    )
+    $buttons = $window.FindAll(
+      [System.Windows.Automation.TreeScope]::Descendants,
+      $allowButtonCondition
+    )
+    $distinctButtons = @{}
+    for ($index = 0; $index -lt $buttons.Count; $index += 1) {
+      $button = $buttons.Item($index)
+      if (
+        -not $button.Current.IsEnabled -or
+        $button.Current.IsOffscreen -or
+        $button.Current.ClassName -ne "MdTextButton"
+      ) {
+        continue
+      }
+      $bounds = $button.Current.BoundingRectangle
+      $boundsKey = "$($bounds.X),$($bounds.Y),$($bounds.Width),$($bounds.Height)"
+      if (-not $distinctButtons.ContainsKey($boundsKey)) {
+        $distinctButtons.Add($boundsKey, $button)
+      }
+    }
+    if ($distinctButtons.Count -gt 1) {
+      throw "Multiple remote debugging approval buttons were found"
+    }
+    if ($distinctButtons.Count -eq 1) {
+      $allowButton = @($distinctButtons.Values)[0]
+      $invoke = $allowButton.GetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern
+      )
+      $invoke.Invoke()
+      Write-Output "approved"
+    }
+  }
+
+  Start-Sleep -Milliseconds 200
+}
+
+throw "Remote debugging approval button was not found"
+`;
 
 function extractBuildFingerprint(userscript) {
   const matches = [...userscript.matchAll(buildFingerprintPattern)];
@@ -96,15 +178,19 @@ function windowsPowerShellExecutable() {
   return executable;
 }
 
-function runClipboardPowerShell(command, environment = {}) {
+function powerShellEnvironment(environment = {}) {
   const childEnvironment = { ...process.env, ...environment };
   delete childEnvironment.KAKOMONN_SYNC_TOKEN;
+  return childEnvironment;
+}
+
+function runClipboardPowerShell(command, environment = {}) {
   const result = spawnSync(
     windowsPowerShellExecutable(),
     ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command],
     {
       encoding: "utf8",
-      env: childEnvironment,
+      env: powerShellEnvironment(environment),
       maxBuffer: 2 * 1024 * 1024,
       windowsHide: true,
     },
@@ -118,6 +204,66 @@ function runClipboardPowerShell(command, environment = {}) {
     );
   }
   return result.stdout.replace(/\r\n/g, "\n").trimEnd();
+}
+
+function remoteDebugApprovalEnvironment(
+  userDataDir,
+  timeoutMs = browserApprovalTimeoutMs,
+  environment = process.env,
+) {
+  return powerShellEnvironment({
+    ...environment,
+    KAKOMONN_E2E_APPROVAL_TIMEOUT_MS: String(timeoutMs),
+    KAKOMONN_E2E_EDGE_USER_DATA_DIR: userDataDir,
+  });
+}
+
+function startRemoteDebugApproval(userDataDir) {
+  const child = spawn(
+    windowsPowerShellExecutable(),
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      remoteDebugApprovalPowerShell,
+    ],
+    {
+      env: remoteDebugApprovalEnvironment(userDataDir),
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    },
+  );
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr = `${stderr}${chunk}`.slice(-4000);
+  });
+  let stopped = false;
+  const failure = new Promise((_, reject) => {
+    child.once("error", (error) => {
+      if (!stopped) {
+        reject(error);
+      }
+    });
+    child.once("exit", (code, signal) => {
+      if (!stopped) {
+        reject(
+          new Error(
+            `Remote debugging approval failed: code=${code}, signal=${signal}\n${stderr.trim()}`,
+          ),
+        );
+      }
+    });
+  });
+  return {
+    failure,
+    stop() {
+      stopped = true;
+      if (child.exitCode === null && !child.killed) {
+        child.kill();
+      }
+    },
+  };
 }
 
 function prepareClipboardNonce() {
@@ -339,11 +485,16 @@ class McpClient {
   }
 
   async tool(name, args = {}, timeoutMs = requestTimeoutMs) {
-    const result = await this.request(
-      "tools/call",
-      { name, arguments: args },
-      timeoutMs,
-    );
+    let result;
+    try {
+      result = await this.request(
+        "tools/call",
+        { name, arguments: args },
+        timeoutMs,
+      );
+    } catch (error) {
+      throw new Error(`${name} failed: ${error.message}`, { cause: error });
+    }
     if (result.isError) {
       throw new Error(toolText(result));
     }
@@ -720,6 +871,41 @@ async function writeFailureDiagnostics(mcp) {
   console.error(JSON.stringify({ diagnostics, screenshotPath }));
 }
 
+async function resizeToExactViewport(mcp) {
+  let requestedViewport = { ...edgeViewport };
+  let actualViewport = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await mcp.tool("resize_page", requestedViewport);
+    actualViewport = await evaluate(
+      mcp,
+      `() => ({
+        height: window.innerHeight,
+        width: window.innerWidth
+      })`,
+    );
+    if (
+      actualViewport.height === edgeViewport.height &&
+      actualViewport.width === edgeViewport.width
+    ) {
+      return;
+    }
+    requestedViewport = {
+      height:
+        requestedViewport.height +
+        edgeViewport.height -
+        actualViewport.height,
+      width:
+        requestedViewport.width +
+        edgeViewport.width -
+        actualViewport.width,
+    };
+    if (requestedViewport.height <= 0 || requestedViewport.width <= 0) {
+      break;
+    }
+  }
+  assert.deepEqual(actualViewport, edgeViewport);
+}
+
 async function main() {
   const token = readSyncToken();
   const userDataDir = readEdgeUserDataDir();
@@ -735,10 +921,15 @@ async function main() {
   let pageId = null;
   try {
     await mcp.initialize();
-    console.error(
-      "Edgeにリモートデバッグの承認が表示された場合は,許可してください.",
-    );
-    await mcp.tool("list_pages", {}, browserApprovalTimeoutMs);
+    const approval = startRemoteDebugApproval(userDataDir);
+    try {
+      await Promise.race([
+        mcp.tool("list_pages", {}, browserApprovalTimeoutMs),
+        approval.failure,
+      ]);
+    } finally {
+      approval.stop();
+    }
     const opened = toolText(
       await mcp.tool(
         "new_page",
@@ -748,15 +939,7 @@ async function main() {
     );
     pageId = selectedPageId(opened, currentQuestionUrl);
     assert.notEqual(pageId, null, opened);
-    await mcp.tool("resize_page", edgeViewport);
-    const viewport = await evaluate(
-      mcp,
-      `() => ({
-        height: window.innerHeight,
-        width: window.innerWidth
-      })`,
-    );
-    assert.deepEqual(viewport, edgeViewport);
+    await resizeToExactViewport(mcp);
 
     const configuredState = await configureSyncToken(
       mcp,
@@ -804,6 +987,8 @@ module.exports = {
   assertRuntimeIdentity,
   extractBuildFingerprint,
   readEdgeUserDataDir,
+  remoteDebugApprovalEnvironment,
+  remoteDebugApprovalPowerShell,
   toolText,
 };
 

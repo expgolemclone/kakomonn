@@ -5,6 +5,7 @@
 ## 機能
 
 - 問題文と解説の自動連続読み上げ.
+- 解答後は,下部の「次の問題へ」をクリックまたはタップするか,Enterキーを押すと次問へ進みます.
 - 正解数と解答数の日次累計. 値は`kakomonn-sync`へ保存され,Win11 EdgeとiPhone Safariで共有されます.同期Workerのrootでは正解数を主指標,解答数を参考指標にした週と月の日別推移も確認できます.
 - 解答後に, 問題番号, 問題文, 選択肢, 画像, 解説をMarkdown形式でクリップボードへコピー.
 - 50,100,150問のように50問進むごとに,ランダムな祝福ページを表示します.祝福ページから今週の学習ログを開き,そこから戻ると準備済みの次の問題を再開します.
@@ -71,13 +72,13 @@ $edgeExecutable = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application
 Start-Process -FilePath $edgeExecutable -ArgumentList "--user-data-dir=$env:KAKOMONN_EDGE_USER_DATA_DIR",'edge://inspect/#remote-debugging'
 ```
 
-専用profileの`edge://inspect/#remote-debugging`でリモートデバッグを有効にしてから次の完全testを実行します. `KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ,ES2020構文,local smoke test,実サイトE2Eに続けて,専用profileの実Edge,実Tampermonkey,デプロイ済みの同期Workerを一続きで検証します. 最後のE2EはTampermonkeyへ保存されたbuild fingerprintが生成fileと一致することを確認してから,Edgeの通常clickで正解を1件送信し,問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに,本番の正解数と解答数を1件ずつ増やし,外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
+専用profileの`edge://inspect/#remote-debugging`でリモートデバッグを有効にしてから次の完全testを実行します. `KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ,ES2020構文,local smoke test,実サイトE2Eに続けて,専用profileの実Edge,実Tampermonkey,デプロイ済みの同期Workerを一続きで検証します. 最後のE2Eは専用Edgeに表示されるリモートデバッグの「許可」をWindows UI Automationで自動操作し,Tampermonkeyへ保存されたbuild fingerprintが生成fileと一致することを確認してから,Edgeの通常clickで正解を1件送信し,問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに,本番の正解数と解答数を1件ずつ増やし,外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
 
 ```powershell
 $env:KAKOMONN_SYNC_TOKEN='<SYNC_TOKEN>'
 npm test
 ```
 
-`KAKOMONN_EDGE_USER_DATA_DIR`は必須です. 通常利用するEdge user data directoryとその配下は使用できません. 初回接続時に専用profileのEdgeがリモートデバッグの承認を表示した場合は,許可します.
+`KAKOMONN_EDGE_USER_DATA_DIR`は必須です. 通常利用するEdge user data directoryとその配下は使用できません. 接続時に専用profileのEdgeが表示するリモートデバッグの承認は,testが「許可」を自動操作します.
 
 `npm run test:kakomonn-live-sync`で最後のlive E2Eだけを再実行できますが,build,local test,smoke test,live-site E2Eを含む完全な完了条件は`npm test`です. live-sync E2Eをskipまたはforce通過させるoptionはありません. `npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます.

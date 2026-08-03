@@ -456,6 +456,26 @@
     void handleNextQuestion();
   }
 
+  function onNextQuestionKeyDown(event) {
+    if (
+      event.key !== "Enter" ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      event.repeat ||
+      event.isComposing ||
+      !syncSettings.hidden ||
+      nextQuestionButton.disabled
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    nextQuestionButton.click();
+  }
+
   function onFrameClick(event) {
     activateSpeechFromGesture();
     const target = event.target;
@@ -539,6 +559,11 @@
     applyFrameImageInversion(frameDocument);
     scheduleFrameScrollReset(frameDocument);
     frame.contentWindow.addEventListener("click", onFrameClick, true);
+    frame.contentWindow.addEventListener(
+      "keydown",
+      onNextQuestionKeyDown,
+      true
+    );
     observeExplanationChanges();
 
     try {
@@ -585,6 +610,7 @@
     }
   });
   frame.addEventListener("load", bindFrameDocument);
+  document.addEventListener("keydown", onNextQuestionKeyDown, true);
   if (speechSupported) {
     document.addEventListener("click", activateSpeechFromGesture, true);
   }

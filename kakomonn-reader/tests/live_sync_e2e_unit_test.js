@@ -4,6 +4,7 @@ const test = require("node:test");
 
 const {
   assertRuntimeIdentity,
+  dedicatedEdgeWindowPowerShell,
   extractBuildFingerprint,
   isRemoteDebugApprovalRejection,
   readEdgeUserDataDir,
@@ -177,4 +178,12 @@ test("automates approval only in the configured dedicated Edge profile", () => {
     remoteDebugApprovalPowerShell,
     /Multiple remote debugging approval buttons were found/,
   );
+  assert.match(dedicatedEdgeWindowPowerShell, /--user-data-dir=/);
+  assert.match(dedicatedEdgeWindowPowerShell, /--new-window/);
+  assert.match(
+    dedicatedEdgeWindowPowerShell,
+    /edge:\/\/inspect\/#remote-debugging/,
+  );
+  assert.match(dedicatedEdgeWindowPowerShell, /MainWindowHandle/);
+  assert.match(dedicatedEdgeWindowPowerShell, /WindowStyle = "Normal"/);
 });

@@ -105,6 +105,60 @@ while ([DateTime]::UtcNow -lt $deadline) {
 throw "Remote debugging approval button was not found"
 `;
 
+const dedicatedEdgeWindowPowerShell = String.raw`
+$ErrorActionPreference = "Stop"
+
+$userDataDir = [System.IO.Path]::GetFullPath(
+  $env:KAKOMONN_E2E_EDGE_USER_DATA_DIR
+)
+$edgeExecutable = [System.IO.Path]::GetFullPath(
+  $env:KAKOMONN_E2E_EDGE_EXECUTABLE
+)
+$plainProfileArgument = "--user-data-dir=$userDataDir"
+$quotedProfileArgument = '--user-data-dir="' + $userDataDir + '"'
+
+function Get-DedicatedEdgeWindows {
+  return @(
+    Get-CimInstance Win32_Process -Filter "Name = 'msedge.exe'" |
+      Where-Object {
+        $_.CommandLine -and (
+          $_.CommandLine.Contains($plainProfileArgument) -or
+          $_.CommandLine.Contains($quotedProfileArgument)
+        )
+      } |
+      ForEach-Object {
+        $process = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
+        if ($process -and $process.MainWindowHandle -ne 0) {
+          $process
+        }
+      }
+  )
+}
+
+$windows = Get-DedicatedEdgeWindows
+if ($windows.Count -eq 0) {
+  $startArguments = @{
+    FilePath = $edgeExecutable
+    ArgumentList = @(
+      $plainProfileArgument,
+      "--new-window",
+      "edge://inspect/#remote-debugging"
+    )
+    WindowStyle = "Normal"
+  }
+  Start-Process @startArguments
+  $deadline = [DateTime]::UtcNow.AddSeconds(15)
+  do {
+    Start-Sleep -Milliseconds 200
+    $windows = Get-DedicatedEdgeWindows
+  } while ($windows.Count -eq 0 -and [DateTime]::UtcNow -lt $deadline)
+}
+
+if ($windows.Count -eq 0) {
+  throw "Dedicated Edge window did not open"
+}
+`;
+
 function extractBuildFingerprint(userscript) {
   const matches = [...userscript.matchAll(buildFingerprintPattern)];
   if (matches.length !== 1) {
@@ -184,7 +238,7 @@ function powerShellEnvironment(environment = {}) {
   return childEnvironment;
 }
 
-function runClipboardPowerShell(command, environment = {}) {
+function runWindowsPowerShell(command, environment = {}) {
   const result = spawnSync(
     windowsPowerShellExecutable(),
     ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command],
@@ -266,9 +320,30 @@ function startRemoteDebugApproval(userDataDir) {
   };
 }
 
+function ensureDedicatedEdgeWindow(userDataDir) {
+  const programFilesX86 = process.env["ProgramFiles(x86)"];
+  if (!programFilesX86) {
+    throw new Error("ProgramFiles(x86) is not set");
+  }
+  const edgeExecutable = path.join(
+    programFilesX86,
+    "Microsoft",
+    "Edge",
+    "Application",
+    "msedge.exe",
+  );
+  if (!fs.existsSync(edgeExecutable)) {
+    throw new Error(`Microsoft Edge was not found: ${edgeExecutable}`);
+  }
+  runWindowsPowerShell(dedicatedEdgeWindowPowerShell, {
+    KAKOMONN_E2E_EDGE_EXECUTABLE: edgeExecutable,
+    KAKOMONN_E2E_EDGE_USER_DATA_DIR: userDataDir,
+  });
+}
+
 function prepareClipboardNonce() {
   const nonce = `kakomonn-live-e2e-${randomUUID()}`;
-  runClipboardPowerShell(
+  runWindowsPowerShell(
     "Set-Clipboard -Value $env:KAKOMONN_E2E_CLIPBOARD_NONCE",
     { KAKOMONN_E2E_CLIPBOARD_NONCE: nonce },
   );
@@ -276,7 +351,7 @@ function prepareClipboardNonce() {
 }
 
 function readWindowsClipboard() {
-  return runClipboardPowerShell("Get-Clipboard -Raw");
+  return runWindowsPowerShell("Get-Clipboard -Raw");
 }
 
 function defaultEdgeUserDataDir(
@@ -387,6 +462,7 @@ function isRemoteDebugApprovalRejection(error) {
 }
 
 async function connectWithRemoteDebugApproval(mcp, userDataDir) {
+  ensureDedicatedEdgeWindow(userDataDir);
   const approval = startRemoteDebugApproval(userDataDir);
   const deadline = Date.now() + browserApprovalTimeoutMs;
   let lastRejection = null;
@@ -1016,6 +1092,7 @@ async function main() {
 module.exports = {
   McpClient,
   assertRuntimeIdentity,
+  dedicatedEdgeWindowPowerShell,
   extractBuildFingerprint,
   isRemoteDebugApprovalRejection,
   readEdgeUserDataDir,

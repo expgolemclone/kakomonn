@@ -49,7 +49,7 @@
   copyButton.textContent = "回答後にコピー";
   copyButton.setAttribute(
     "aria-label",
-    "問題文と解説をMarkdownでコピー"
+    "問題文,自分の回答,解説をMarkdownでコピー"
   );
   copyButton.disabled = true;
 

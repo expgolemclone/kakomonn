@@ -426,6 +426,16 @@
     };
   }
 
+  function isSelectedAnswerChoice(control) {
+    if (
+      control.matches("input[type='radio'], input[type='checkbox']")
+    ) {
+      return control.checked === true;
+    }
+
+    return control.matches("[role='radio'][aria-checked='true']");
+  }
+
   function buildCopyMarkdown(documentNode) {
     if (!documentNode?.body || documentNode.defaultView === null) {
       return { state: "unavailable", markdown: "" };
@@ -454,6 +464,42 @@
       !choicesElement ||
       !QUESTION_META_PATTERN.test(metadataText)
     ) {
+      return { state: "unavailable", markdown: "" };
+    }
+
+    const answerButton = findAnswerButtonAfter(metadataElement);
+    const choiceElements = Array.from(choicesElement.children).filter(
+      (child) => child.matches("li")
+    );
+    const answerChoiceControls =
+      answerButton !== null && problemElement.contains(answerButton)
+        ? findAnswerChoiceControls(metadataElement, answerButton)
+        : [];
+    const selectedAnswerIndexes = answerChoiceControls.reduce(
+      (indexes, control, index) => {
+        if (isSelectedAnswerChoice(control)) {
+          indexes.push(index);
+        }
+        return indexes;
+      },
+      []
+    );
+    if (
+      choiceElements.length === 0 ||
+      choiceElements.length !== answerChoiceControls.length ||
+      selectedAnswerIndexes.length !== 1
+    ) {
+      return { state: "unavailable", markdown: "" };
+    }
+
+    const selectedAnswerIndex = selectedAnswerIndexes[0];
+    const selectedAnswerMarkdown = normalizeMarkdown(
+      renderMarkdownChildren(
+        choiceElements[selectedAnswerIndex],
+        markdownState("回答の画像", new Set())
+      )
+    );
+    if (!selectedAnswerMarkdown) {
       return { state: "unavailable", markdown: "" };
     }
 
@@ -516,6 +562,8 @@
       questionImagesMarkdown,
       "### 選択肢",
       choicesMarkdown,
+      "### 自分の回答",
+      `選択肢${selectedAnswerIndex + 1}: ${selectedAnswerMarkdown}`,
       "## 解説",
       ...explanationParts,
     ]
@@ -593,7 +641,7 @@
       await navigator.clipboard.writeText(copyDocument.markdown);
       copyButton.textContent = "コピー済み";
       copyButton.disabled = true;
-      setStatus("問題文と解説をMarkdownでコピーしました");
+      setStatus("問題文,自分の回答,解説をMarkdownでコピーしました");
       clearCopyFeedbackTimer();
       copyFeedbackTimer = window.setTimeout(() => {
         copyFeedbackTimer = null;

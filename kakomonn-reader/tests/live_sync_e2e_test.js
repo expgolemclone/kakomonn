@@ -826,7 +826,7 @@ async function copyMarkdownInRealEdge(mcp) {
   const copyButton = findUid(
     copySnapshot,
     "button",
-    "問題文と解説をMarkdownでコピー",
+    "問題文,自分の回答,解説をMarkdownでコピー",
   );
   assert.notEqual(copyButton, null, copySnapshot);
   await mcp.tool("click", { uid: copyButton });
@@ -844,6 +844,12 @@ async function copyMarkdownInRealEdge(mcp) {
   assert.equal(copiedMarkdown.includes(clipboardNonce), false);
   assert.equal(copiedMarkdown.split("\n")[0], expectedMarkdownHeading);
   assert.equal(copiedMarkdown.includes(correctAnswerText), true);
+  assert.equal(
+    copiedMarkdown.includes(
+      `\n\n### 自分の回答\n\n選択肢5: ${correctAnswerText}\n\n`,
+    ),
+    true,
+  );
   assert.match(copiedMarkdown, /^## 解説$/m);
 }
 

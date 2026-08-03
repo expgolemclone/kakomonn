@@ -648,6 +648,12 @@ async function runMarkdownCopyCase(browser, script) {
     );
     assert.equal(copiedMarkdown.includes("\n\n## 問題文\n\n"), true);
     assert.equal(copiedMarkdown.includes("\n\n### 選択肢\n\n"), true);
+    assert.equal(
+      copiedMarkdown.includes(
+        "\n\n### 自分の回答\n\n選択肢4: b と d\n\n",
+      ),
+      true,
+    );
     assert.equal(copiedMarkdown.includes("\n\n## 解説\n\n"), true);
     for (const choice of choices) {
       assert.equal(

@@ -114,6 +114,10 @@ WebKit動作確認用の問題文です.
 - 選択肢1
 - 選択肢2
 
+### 自分の回答
+
+選択肢2: 選択肢2
+
 ## 解説
 
 ### 解説 01
@@ -271,6 +275,18 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-copy")?.textContent ===
+        "コピー対象を取得不可",
+    );
+    assert.equal(await copyButton.isDisabled(), true);
+    await childFrame.evaluate(() => {
+      document.querySelectorAll("input[name='answer']")[1].checked = true;
+      document.querySelector("#js-answer-result-box").classList.add(
+        "selected-answer-ready",
+      );
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy")?.textContent ===
           "Markdownをコピー",
     );
     await copyButton.tap();
@@ -284,6 +300,56 @@ async function main() {
       ).length - 1,
       1,
     );
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy")?.textContent ===
+        "Markdownをコピー",
+      null,
+      { timeout: 5_000 },
+    );
+    await childFrame.evaluate(() => {
+      const inputs = document.querySelectorAll("input[name='answer']");
+      inputs[0].type = "checkbox";
+      inputs[0].checked = true;
+      document.querySelector("#js-answer-result-box").classList.add(
+        "multiple-answers-selected",
+      );
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy")?.textContent ===
+        "コピー対象を取得不可",
+    );
+    assert.equal(await copyButton.isDisabled(), true);
+    await childFrame.evaluate(() => {
+      const inputs = document.querySelectorAll("input[name='answer']");
+      inputs[0].type = "radio";
+      inputs[0].checked = false;
+      inputs[1].checked = true;
+      document.querySelector("#js-answer-result-box").classList.add(
+        "single-answer-restored",
+      );
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy")?.textContent ===
+        "Markdownをコピー",
+    );
+    await childFrame.evaluate(() => {
+      document.querySelector(".problem_detail > ul.check > li").remove();
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy")?.textContent ===
+        "コピー対象を取得不可",
+    );
+    assert.equal(await copyButton.isDisabled(), true);
+    await childFrame.evaluate(() => {
+      document.querySelector(".problem_detail > ul.check").insertAdjacentHTML(
+        "afterbegin",
+        '<li><label><input type="radio" name="answer">1</label></li>',
+      );
+    });
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-copy")?.textContent ===

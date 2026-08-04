@@ -743,7 +743,11 @@ async function configureSyncToken(
     "the installed Tampermonkey userscript",
     async () => {
       const state = await readReaderState(mcp);
-      return state.actionsPresent && state.frameURL ? state : null;
+      return state.actionsPresent &&
+        state.outerURL === currentQuestionUrl &&
+        state.frameURL === currentQuestionUrl
+        ? state
+        : null;
     },
     60_000,
   );
@@ -751,25 +755,30 @@ async function configureSyncToken(
   assert.equal(ready.frameURL, currentQuestionUrl);
   assertRuntimeIdentity(ready, expectedBuildFingerprint);
 
-  let currentSnapshot = await snapshot(mcp);
-  let tokenInput = findUid(currentSnapshot, "textbox", "同期トークン");
-  if (!tokenInput) {
+  if (ready.settingsHidden) {
     await waitUntil("the enabled sync settings button", async () => {
       const state = await readReaderState(mcp);
       return state.settingsButtonDisabled === false ? state : null;
     });
-    currentSnapshot = await snapshot(mcp);
-    const settingsButton = findUid(
-      currentSnapshot,
-      "button",
-      "学習記録の同期設定を開く",
+    await evaluate(
+      mcp,
+      `() => {
+        const button = document.querySelector("#kakomonn-reader-sync-settings-button");
+        if (!button || button.disabled) {
+          throw new Error("The sync settings button is not available");
+        }
+        button.click();
+        return true;
+      }`,
     );
-    assert.notEqual(settingsButton, null, currentSnapshot);
-    await mcp.tool("click", { uid: settingsButton });
-    currentSnapshot = await snapshot(mcp);
-    tokenInput = findUid(currentSnapshot, "textbox", "同期トークン");
+    await waitUntil("the open sync settings panel", async () => {
+      const state = await readReaderState(mcp);
+      return state.settingsHidden === false ? state : null;
+    });
   }
 
+  const currentSnapshot = await snapshot(mcp);
+  const tokenInput = findUid(currentSnapshot, "textbox", "同期トークン");
   const saveButton = findUid(currentSnapshot, "button", "確認して保存");
   assert.notEqual(tokenInput, null, currentSnapshot);
   assert.notEqual(saveButton, null, currentSnapshot);

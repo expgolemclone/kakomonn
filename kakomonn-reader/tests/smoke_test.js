@@ -880,8 +880,9 @@ async function main() {
     await page.locator("#kakomonn-reader-copy").click();
     await page.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "クリップボードへコピーできません",
+        window.__readerStatusHistory.includes(
+          "クリップボードへコピーできません",
+        ),
     );
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
     await page.evaluate(() => {

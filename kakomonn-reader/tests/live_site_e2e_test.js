@@ -33,6 +33,7 @@ const markdownExplanationImageURLs = [
 const createQuestionUrl = "https://chushoks.kakomonn.com/createques";
 const randomQuestionUrl = "https://chushoks.kakomonn.com/questions";
 const readerReadyTimeout = 30_000;
+const darkModeImageFilter = "invert(1) hue-rotate(180deg)";
 
 async function getQuestionFrame(page) {
   await page.locator("#kakomonn-reader-frame").waitFor({ state: "attached" });
@@ -46,21 +47,9 @@ async function getQuestionFrame(page) {
   return frame;
 }
 
-async function darkModeInversionParities(locator) {
+async function darkModeImageFilters(locator) {
   return locator.evaluateAll((elements) =>
-    elements.map((element) => {
-      let parity = 0;
-      for (
-        let current = element;
-        current !== null;
-        current = current.parentElement
-      ) {
-        if (current.hasAttribute("data-kakomonn-reader-dark-toggle")) {
-          parity = 1 - parity;
-        }
-      }
-      return parity;
-    }),
+    elements.map((element) => getComputedStyle(element).filter),
   );
 }
 
@@ -278,6 +267,31 @@ async function runCase(
       await page.locator("#kakomonn-reader-count").innerText(),
       "0問,次は50問",
     );
+    assert.deepEqual(
+      await frame.locator("body").evaluate((body) => {
+        const documentNode = body.ownerDocument;
+        return {
+          bodyBackground: getComputedStyle(body).backgroundColor,
+          bodyColor: getComputedStyle(body).color,
+          problemBackground: getComputedStyle(
+            documentNode.querySelector(".problem_detail")
+          ).backgroundColor,
+          styleCount: documentNode.querySelectorAll(
+            "#kakomonn-reader-dark-mode"
+          ).length,
+          toggleCount: documentNode.querySelectorAll(
+            "[data-kakomonn-reader-dark-toggle]"
+          ).length,
+        };
+      }),
+      {
+        bodyBackground: "rgb(11, 13, 16)",
+        bodyColor: "rgb(243, 244, 246)",
+        problemBackground: "rgb(21, 25, 30)",
+        styleCount: 1,
+        toggleCount: 0,
+      },
+    );
 
     await submitAnswer(page, frame, answerText, inputMethod);
     console.log(JSON.stringify({ phase: "answer-submitted", answerText }));
@@ -289,6 +303,20 @@ async function runCase(
     const resultClasses =
       (await frame.locator("#js-answer-result-box").getAttribute("class")) ?? "";
     assert.equal(resultClasses.split(/\s+/).includes(expectedResultClass), true);
+    const semanticResultColor = await frame
+      .locator("#js-answer-result-box")
+      .evaluate((element, resultClass) => {
+        const style = getComputedStyle(element, "::before");
+        return resultClass === "is-correct"
+          ? style.borderTopColor
+          : style.backgroundColor;
+      }, expectedResultClass);
+    assert.equal(
+      semanticResultColor,
+      expectedResultClass === "is-correct"
+        ? "rgb(82, 225, 182)"
+        : "rgb(232, 146, 146)",
+    );
 
     await page.waitForFunction(
       () =>
@@ -577,10 +605,10 @@ async function runMarkdownCopyCase(browser, script) {
       .evaluateAll((images) => images.map((image) => image.src));
     assert.deepEqual(questionImageURLs, markdownQuestionImageURLs);
     assert.deepEqual(
-      await darkModeInversionParities(
+      await darkModeImageFilters(
         frame.locator(".problem_detail > .zoomin img[src]"),
       ),
-      markdownQuestionImageURLs.map(() => 1),
+      markdownQuestionImageURLs.map(() => darkModeImageFilter),
     );
 
     await submitAnswer(page, frame, "b と d");
@@ -623,10 +651,10 @@ async function runMarkdownCopyCase(browser, script) {
       markdownExplanationImageURLs,
     );
     assert.deepEqual(
-      await darkModeInversionParities(
+      await darkModeImageFilters(
         frame.locator("#js-commentary-wrap > .item .text img[src]"),
       ),
-      markdownExplanationImageURLs.map(() => 1),
+      markdownExplanationImageURLs.map(() => darkModeImageFilter),
     );
 
     await page.waitForFunction(
@@ -855,8 +883,8 @@ async function runImageChoiceInversionCase(browser, script) {
     );
     assert.equal(await choiceImages.count(), 4);
     assert.deepEqual(
-      await darkModeInversionParities(choiceImages),
-      Array(4).fill(1),
+      await darkModeImageFilters(choiceImages),
+      Array(4).fill(darkModeImageFilter),
     );
     assert.deepEqual(pageErrors, []);
   } finally {

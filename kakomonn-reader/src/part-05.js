@@ -724,225 +724,21 @@
     clearCopyFeedbackTimer();
     frameMutationObserver?.disconnect();
     frameMutationObserver = null;
-    if (frameDarkModeWindow !== null) {
-      frameDarkModeWindow.removeEventListener(
-        "resize",
-        scheduleFrameDarkModeRefresh
-      );
-      frameDarkModeWindow = null;
-    }
-    frameDarkModeStyle = null;
-    frameDarkModeRefreshQueued = false;
     currentPageReadPending = false;
     lastExplanationText = "";
     currentQuestionText = "";
   }
 
-  function compositeFrameBackground(foreground, background) {
-    const inverseForegroundAlpha = 1 - foreground.alpha;
-    const alpha =
-      foreground.alpha + background.alpha * inverseForegroundAlpha;
-    if (alpha === 0) {
-      return { red: 0, green: 0, blue: 0, alpha: 0 };
-    }
-
-    return {
-      red:
-        (foreground.red * foreground.alpha +
-          background.red * background.alpha * inverseForegroundAlpha) /
-        alpha,
-      green:
-        (foreground.green * foreground.alpha +
-          background.green * background.alpha * inverseForegroundAlpha) /
-        alpha,
-      blue:
-        (foreground.blue * foreground.alpha +
-          background.blue * background.alpha * inverseForegroundAlpha) /
-        alpha,
-      alpha,
-    };
-  }
-
-  function parseFrameBackgroundColor(context, color) {
-    context.clearRect(0, 0, 1, 1);
-    context.fillStyle = color;
-    context.fillRect(0, 0, 1, 1);
-    const [red, green, blue, alpha] = context.getImageData(0, 0, 1, 1).data;
-    return { red, green, blue, alpha: alpha / 255 };
-  }
-
-  function frameColorChannelLuminance(channel) {
-    const normalized = channel / 255;
-    return normalized <= 0.04045
-      ? normalized / 12.92
-      : ((normalized + 0.055) / 1.055) ** 2.4;
-  }
-
-  function frameBackgroundLuminance(background) {
-    return (
-      0.2126 * frameColorChannelLuminance(background.red) +
-      0.7152 * frameColorChannelLuminance(background.green) +
-      0.0722 * frameColorChannelLuminance(background.blue)
-    );
-  }
-
-  function frameDarkModeElements(sourceDocument) {
-    return [
-      sourceDocument.body,
-      ...sourceDocument.body.querySelectorAll("*"),
-    ];
-  }
-
-  function rebuildFrameDarkModeRules(styleElement, toggleRules) {
-    const sheet = styleElement.sheet;
-    if (sheet === null) {
-      throw new Error("dark mode stylesheet is unavailable");
-    }
-
-    while (sheet.cssRules.length > 0) {
-      sheet.deleteRule(sheet.cssRules.length - 1);
-    }
-
-    for (const rule of toggleRules) {
-      const ruleIndex = sheet.insertRule(
-        `[${FRAME_DARK_MODE_TOGGLE_ATTRIBUTE}="${rule.id}"] {}`,
-        sheet.cssRules.length
-      );
-      const sourceFilter = rule.sourceFilter === "none"
-        ? ""
-        : `${rule.sourceFilter} `;
-      sheet.cssRules[ruleIndex].style.setProperty(
-        "filter",
-        `${sourceFilter}${FRAME_DARK_MODE_TRANSFORM}`,
-        "important"
-      );
-    }
-  }
-
-  function refreshFrameDarkMode(sourceDocument) {
-    const styleElement = frameDarkModeStyle;
-    if (
-      sourceDocument !== frameDocument ||
-      styleElement === null ||
-      !styleElement.isConnected
-    ) {
-      return;
-    }
-
-    const canvas = sourceDocument.createElement("canvas");
-    canvas.width = 1;
-    canvas.height = 1;
-    const colorContext = canvas.getContext("2d", {
-      willReadFrequently: true,
-    });
-    if (colorContext === null) {
-      throw new Error("dark mode color parser is unavailable");
-    }
-
-    const canvasBackground = {
-      red: 255,
-      green: 255,
-      blue: 255,
-      alpha: 1,
-    };
-    const elements = frameDarkModeElements(sourceDocument);
-    const effectiveBackgrounds = new Map();
-    const inversionParity = new Map();
-    const toggleRules = [];
-
-    styleElement.disabled = true;
-    try {
-      for (const element of elements) {
-        element.removeAttribute(FRAME_DARK_MODE_TOGGLE_ATTRIBUTE);
-      }
-
-      const documentElementStyle = sourceDocument.defaultView.getComputedStyle(
-        sourceDocument.documentElement
-      );
-      effectiveBackgrounds.set(
-        sourceDocument.documentElement,
-        compositeFrameBackground(
-          parseFrameBackgroundColor(
-            colorContext,
-            documentElementStyle.backgroundColor
-          ),
-          canvasBackground
-        )
-      );
-      inversionParity.set(sourceDocument.documentElement, 0);
-
-      for (const element of elements) {
-        const parent = element === sourceDocument.documentElement
-          ? null
-          : element.parentElement;
-        const parentBackground = parent === null
-          ? canvasBackground
-          : effectiveBackgrounds.get(parent);
-        const parentParity = parent === null
-          ? 0
-          : inversionParity.get(parent);
-        if (parentBackground === undefined || parentParity === undefined) {
-          throw new Error("dark mode element order is invalid");
-        }
-
-        const computedStyle = sourceDocument.defaultView.getComputedStyle(
-          element
-        );
-        const ownBackground = parseFrameBackgroundColor(
-          colorContext,
-          computedStyle.backgroundColor
-        );
-        const effectiveBackground = compositeFrameBackground(
-          ownBackground,
-          parentBackground
-        );
-        effectiveBackgrounds.set(element, effectiveBackground);
-
-        const shouldInvert = element.matches(
-          FRAME_DARK_MODE_IMAGE_SELECTOR
-        ) || frameBackgroundLuminance(effectiveBackground) >=
-          FRAME_DARK_SURFACE_LUMINANCE_THRESHOLD;
-        const shouldToggle = Number(shouldInvert) !== parentParity;
-        const elementParity = shouldToggle ? 1 - parentParity : parentParity;
-        inversionParity.set(element, elementParity);
-
-        if (!shouldToggle) {
-          continue;
-        }
-
-        const id = String(toggleRules.length + 1);
-        element.setAttribute(FRAME_DARK_MODE_TOGGLE_ATTRIBUTE, id);
-        toggleRules.push({
-          id,
-          sourceFilter: computedStyle.filter,
-        });
-      }
-
-      rebuildFrameDarkModeRules(styleElement, toggleRules);
-    } finally {
-      styleElement.disabled = false;
-    }
-  }
-
-  function scheduleFrameDarkModeRefresh() {
-    if (frameDarkModeRefreshQueued || frameDocument === null) {
-      return;
-    }
-
-    const sourceDocument = frameDocument;
-    frameDarkModeRefreshQueued = true;
-    Promise.resolve().then(() => {
-      frameDarkModeRefreshQueued = false;
-      refreshFrameDarkMode(sourceDocument);
-    });
-  }
-
   function applyFrameDarkMode(sourceDocument) {
-    const darkModeStyle = sourceDocument.createElement("style");
-    darkModeStyle.id = FRAME_DARK_MODE_STYLE_ID;
-    sourceDocument.head.appendChild(darkModeStyle);
-    frameDarkModeStyle = darkModeStyle;
-    refreshFrameDarkMode(sourceDocument);
+    let darkModeStyle = sourceDocument.getElementById(
+      FRAME_DARK_MODE_STYLE_ID
+    );
+    if (darkModeStyle === null) {
+      darkModeStyle = sourceDocument.createElement("style");
+      darkModeStyle.id = FRAME_DARK_MODE_STYLE_ID;
+      sourceDocument.head.appendChild(darkModeStyle);
+    }
+    darkModeStyle.textContent = FRAME_DARK_MODE_CSS;
   }
 
   function bindFrameDocument() {
@@ -967,7 +763,6 @@
     }
 
     if (nextDocument === boundFrameDocument) {
-      scheduleFrameDarkModeRefresh();
       scheduleFrameScrollReset(nextDocument);
       return;
     }
@@ -978,11 +773,6 @@
     frameDocument = nextDocument;
     applyFrameDarkMode(frameDocument);
     scheduleFrameScrollReset(frameDocument);
-    frameDarkModeWindow = frame.contentWindow;
-    frameDarkModeWindow.addEventListener(
-      "resize",
-      scheduleFrameDarkModeRefresh
-    );
     frame.contentWindow.addEventListener("click", onFrameClick, true);
     frame.contentWindow.addEventListener(
       "keydown",

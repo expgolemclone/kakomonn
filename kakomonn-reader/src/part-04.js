@@ -53,10 +53,7 @@
 
   function observeExplanationChanges() {
     frameMutationObserver?.disconnect();
-    frameMutationObserver = new MutationObserver(() => {
-      scheduleFrameDarkModeRefresh();
-      scheduleExplanationCheck();
-    });
+    frameMutationObserver = new MutationObserver(scheduleExplanationCheck);
     frameMutationObserver.observe(frameDocument.body, {
       subtree: true,
       childList: true,

@@ -39,6 +39,16 @@ function expectedSpeechSSML(text, rate) {
 }
 
 const mockBody = `
+  <style>
+    #js-answer-result-box.is-correct {
+      background-color: rgb(24, 121, 78);
+      color: rgb(255, 255, 255);
+    }
+    #js-answer-result-box.is-wrong {
+      background-color: rgb(139, 47, 47);
+      color: rgb(255, 255, 255);
+    }
+  </style>
   <div hidden>
     <img src="https://cdn.example.test/question.png" alt="拡大表示の重複画像">
     <div id="dark-mode-light-surface" style="background-color: rgb(255, 255, 255)">
@@ -445,89 +455,119 @@ async function main() {
     );
     assert.deepEqual(
       await childFrame.evaluate(() => {
-        const toggleAttribute = "data-kakomonn-reader-dark-toggle";
-        const inversionParity = (element) => {
-          let parity = 0;
-          for (
-            let current = element;
-            current !== null;
-            current = current.parentElement
-          ) {
-            if (current.hasAttribute(toggleAttribute)) {
-              parity = 1 - parity;
-            }
-          }
-          return parity;
-        };
         const choiceImage = document.createElement("img");
+        choiceImage.id = "dynamic-choice-image";
         document
           .querySelector(".problem_detail > ul.list > li > div")
           .appendChild(choiceImage);
+        const darkModeStyle = document.querySelector(
+          "#kakomonn-reader-dark-mode"
+        );
+        window.__darkModeStyleNode = darkModeStyle;
+        window.__darkModeStyleText = darkModeStyle?.textContent;
         const darkSurface = document.querySelector(
           "#dark-mode-dark-surface",
         );
-        const result = {
+        return {
+          bodyBackground: getComputedStyle(document.body).backgroundColor,
+          bodyColor: getComputedStyle(document.body).color,
+          choiceBackground: getComputedStyle(
+            document.querySelector(".problem_detail > ul.list > li > div")
+          ).backgroundColor,
+          choiceColor: getComputedStyle(
+            document.querySelector(".problem_detail > ul.list > li > div")
+          ).color,
+          colorScheme: getComputedStyle(document.documentElement).colorScheme,
           darkFilter: getComputedStyle(darkSurface).filter,
-          hasDarkModeStyle: Boolean(
-            document.querySelector("#kakomonn-reader-dark-mode"),
-          ),
-          parity: {
-            alpha: inversionParity(
-              document.querySelector("#dark-mode-alpha-surface"),
-            ),
-            choice: inversionParity(choiceImage),
-            dark: inversionParity(darkSurface),
-            explanation: inversionParity(
-              document.querySelector("#js-commentary-wrap > .item .text img"),
-            ),
-            light: inversionParity(
-              document.querySelector("#dark-mode-light-surface"),
-            ),
-            nestedLight: inversionParity(
-              document.querySelector("#dark-mode-nested-light-surface"),
-            ),
-            nonContent: inversionParity(
-              document.querySelector("body > div[hidden] > img"),
-            ),
-            question: inversionParity(
-              document.querySelector(".problem_detail > .zoomin img"),
-            ),
-          },
+          explanationBackground: getComputedStyle(
+            document.querySelector("#js-commentary-wrap > .item > .text")
+          ).backgroundColor,
+          imageFilters: [
+            choiceImage,
+            document.querySelector(".problem_detail > .zoomin img"),
+            document.querySelector("#js-commentary-wrap > .item .text img"),
+          ].map((image) => getComputedStyle(image).filter),
+          inputBackground: getComputedStyle(
+            document.querySelector(".problem_detail input")
+          ).backgroundColor,
+          linkColor: getComputedStyle(
+            document.querySelector(".problem_detail a")
+          ).color,
+          nonContentFilter: getComputedStyle(
+            document.querySelector("body > div[hidden] > img")
+          ).filter,
+          problemBackground: getComputedStyle(
+            document.querySelector(".problem_detail")
+          ).backgroundColor,
+          styleCount: document.querySelectorAll(
+            "#kakomonn-reader-dark-mode"
+          ).length,
+          toggleCount: document.querySelectorAll(
+            "[data-kakomonn-reader-dark-toggle]"
+          ).length,
         };
-        choiceImage.remove();
-        return result;
       }),
       {
-        darkFilter: "contrast(0.9) invert(1) hue-rotate(180deg)",
-        hasDarkModeStyle: true,
-        parity: {
-          alpha: 0,
-          choice: 1,
-          dark: 0,
-          explanation: 1,
-          light: 1,
-          nestedLight: 1,
-          nonContent: 1,
-          question: 1,
-        },
+        bodyBackground: "rgb(11, 13, 16)",
+        bodyColor: "rgb(243, 244, 246)",
+        choiceBackground: "rgb(29, 35, 43)",
+        choiceColor: "rgb(243, 244, 246)",
+        colorScheme: "dark",
+        darkFilter: "contrast(0.9)",
+        explanationBackground: "rgb(29, 35, 43)",
+        imageFilters: Array(3).fill("invert(1) hue-rotate(180deg)"),
+        inputBackground: "rgb(11, 13, 16)",
+        linkColor: "rgb(138, 180, 248)",
+        nonContentFilter: "none",
+        problemBackground: "rgb(21, 25, 30)",
+        styleCount: 1,
+        toggleCount: 0,
       },
     );
-    await childFrame.locator("#dark-mode-dark-surface").evaluate((element) => {
-      element.style.backgroundColor = "rgb(255, 255, 255)";
+    await childFrame.evaluate(() => {
+      document.querySelector(".problem_detail").classList.add(
+        "dark-mode-stability-probe"
+      );
+      document.querySelector("#dark-mode-dark-surface").style.backgroundColor =
+        "rgb(255, 255, 255)";
     });
-    await childFrame.waitForFunction(() =>
-      !document
-        .querySelector("#dark-mode-dark-surface")
-        .hasAttribute("data-kakomonn-reader-dark-toggle") &&
-      !document
-        .querySelector("#dark-mode-nested-light-surface")
-        .hasAttribute("data-kakomonn-reader-dark-toggle"),
+    await page.waitForTimeout(100);
+    assert.deepEqual(
+      await childFrame.evaluate(() => ({
+        darkBackground: getComputedStyle(
+          document.querySelector("#dark-mode-dark-surface")
+        ).backgroundColor,
+        darkFilter: getComputedStyle(
+          document.querySelector("#dark-mode-dark-surface")
+        ).filter,
+        dynamicChoiceFilter: getComputedStyle(
+          document.querySelector("#dynamic-choice-image")
+        ).filter,
+        sameStyleNode:
+          window.__darkModeStyleNode ===
+          document.querySelector("#kakomonn-reader-dark-mode"),
+        sameStyleText:
+          window.__darkModeStyleText ===
+          document.querySelector("#kakomonn-reader-dark-mode").textContent,
+        styleCount: document.querySelectorAll(
+          "#kakomonn-reader-dark-mode"
+        ).length,
+        toggleCount: document.querySelectorAll(
+          "[data-kakomonn-reader-dark-toggle]"
+        ).length,
+      })),
+      {
+        darkBackground: "rgb(255, 255, 255)",
+        darkFilter: "contrast(0.9)",
+        dynamicChoiceFilter: "invert(1) hue-rotate(180deg)",
+        sameStyleNode: true,
+        sameStyleText: true,
+        styleCount: 1,
+        toggleCount: 0,
+      },
     );
-    assert.equal(
-      await childFrame.locator("#dark-mode-dark-surface").evaluate(
-        (element) => getComputedStyle(element).filter,
-      ),
-      "contrast(0.9)",
+    await childFrame.locator("#dynamic-choice-image").evaluate(
+      (element) => element.remove()
     );
     await page.waitForFunction(
       () =>
@@ -771,6 +811,19 @@ async function main() {
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 0);
 
     await markAnswerCorrect(childFrame);
+    assert.deepEqual(
+      await childFrame.locator("#js-answer-result-box").evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          background: style.backgroundColor,
+          color: style.color,
+        };
+      }),
+      {
+        background: "rgb(24, 121, 78)",
+        color: "rgb(255, 255, 255)",
+      },
+    );
     await page.waitForFunction(
       () => document.querySelector("#kakomonn-reader-next").disabled === false,
     );

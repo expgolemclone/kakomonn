@@ -215,48 +215,42 @@ async function main() {
     );
     assert.deepEqual(
       await childFrame.evaluate(() => {
-        const toggleAttribute = "data-kakomonn-reader-dark-toggle";
-        const inversionParity = (element) => {
-          let parity = 0;
-          for (
-            let current = element;
-            current !== null;
-            current = current.parentElement
-          ) {
-            if (current.hasAttribute(toggleAttribute)) {
-              parity = 1 - parity;
-            }
-          }
-          return parity;
-        };
         const choiceImage = document.createElement("img");
         document
           .querySelector(".problem_detail > ul.list > li > div")
           .appendChild(choiceImage);
-        const parity = {
-          choice: inversionParity(choiceImage),
-          explanation: inversionParity(
-            document.querySelector("#js-commentary-wrap > .item .text img"),
-          ),
-          question: inversionParity(
+        const result = {
+          bodyBackground: getComputedStyle(document.body).backgroundColor,
+          choiceBackground: getComputedStyle(
+            document.querySelector(".problem_detail > ul.list > li > div")
+          ).backgroundColor,
+          colorScheme: getComputedStyle(document.documentElement).colorScheme,
+          imageFilters: [
+            choiceImage,
             document.querySelector(".problem_detail > .zoomin img"),
-          ),
+            document.querySelector("#js-commentary-wrap > .item .text img"),
+          ].map((image) => getComputedStyle(image).filter),
+          problemBackground: getComputedStyle(
+            document.querySelector(".problem_detail")
+          ).backgroundColor,
+          styleCount: document.querySelectorAll(
+            "#kakomonn-reader-dark-mode"
+          ).length,
+          toggleCount: document.querySelectorAll(
+            "[data-kakomonn-reader-dark-toggle]"
+          ).length,
         };
         choiceImage.remove();
-        return {
-          hasDarkModeStyle: Boolean(
-            document.querySelector("#kakomonn-reader-dark-mode"),
-          ),
-          parity,
-        };
+        return result;
       }),
       {
-        hasDarkModeStyle: true,
-        parity: {
-          choice: 1,
-          explanation: 1,
-          question: 1,
-        },
+        bodyBackground: "rgb(11, 13, 16)",
+        choiceBackground: "rgb(29, 35, 43)",
+        colorScheme: "dark",
+        imageFilters: Array(3).fill("invert(1) hue-rotate(180deg)"),
+        problemBackground: "rgb(21, 25, 30)",
+        styleCount: 1,
+        toggleCount: 0,
       },
     );
 

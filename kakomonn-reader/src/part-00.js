@@ -47,16 +47,109 @@
   const YANK_SEQUENCE_TIMEOUT_MS = 400;
   const MAX_CHUNK_LENGTH = 1500;
   const FRAME_DARK_MODE_STYLE_ID = "kakomonn-reader-dark-mode";
-  const FRAME_DARK_MODE_TOGGLE_ATTRIBUTE =
-    "data-kakomonn-reader-dark-toggle";
-  const FRAME_DARK_MODE_TRANSFORM =
-    "invert(100%) hue-rotate(180deg)";
-  const FRAME_DARK_SURFACE_LUMINANCE_THRESHOLD = 0.45;
-  const FRAME_DARK_MODE_IMAGE_SELECTOR = [
-    ".problem_detail > .zoomin img",
-    ".problem_detail > ul.list img",
-    "#js-commentary-wrap > .item .text img",
-  ].join(",");
+  const FRAME_DARK_MODE_CSS = `
+    :root {
+      color-scheme: dark;
+      --kakomonn-frame-canvas: #0b0d10;
+      --kakomonn-frame-surface: #15191e;
+      --kakomonn-frame-raised: #1d232b;
+      --kakomonn-frame-text: #f3f4f6;
+      --kakomonn-frame-muted: #a8b0bb;
+      --kakomonn-frame-border: #343b45;
+      --kakomonn-frame-link: #8ab4f8;
+    }
+
+    html,
+    body,
+    .l-header,
+    .l-main,
+    .l-footer,
+    .p-post,
+    .inner,
+    #js-img-zoom-area,
+    .sect_problem,
+    .sect_commentary,
+    #js-commentary-section {
+      background-color: var(--kakomonn-frame-canvas) !important;
+      color: var(--kakomonn-frame-text) !important;
+      border-color: var(--kakomonn-frame-border) !important;
+    }
+
+    .problem_detail,
+    #js-commentary-wrap,
+    #js-expound-head,
+    #calculator {
+      background-color: var(--kakomonn-frame-surface) !important;
+      border-color: var(--kakomonn-frame-border) !important;
+    }
+
+    .problem_detail,
+    .problem_detail > .when,
+    .problem_detail > .ttl,
+    .problem_detail > .zoomin,
+    .problem_detail > ul.list,
+    .problem_detail > ul.list > li,
+    .problem_detail > ul.list > li > div,
+    .problem_detail > ul.check,
+    .problem_detail > ul.check > li,
+    .problem_detail > ul.check > li > label,
+    #js-commentary-wrap,
+    #js-commentary-wrap > .item,
+    #js-commentary-wrap > .item > .none_text,
+    #js-commentary-wrap > .item > .num,
+    #js-commentary-wrap > .item > .text,
+    #js-commentary-wrap > .item > .reference {
+      color: var(--kakomonn-frame-text) !important;
+      border-color: var(--kakomonn-frame-border) !important;
+    }
+
+    .problem_detail > ul.list > li,
+    .problem_detail > ul.list > li > div,
+    .problem_detail > ul.check > li,
+    .problem_detail > ul.check > li > label,
+    #js-commentary-wrap > .item > .text,
+    #js-commentary-wrap > .item > .reference {
+      background-color: var(--kakomonn-frame-raised) !important;
+    }
+
+    .problem_detail > ul.list > li.is-active > div,
+    #js-commentary-wrap > .item > .none_text,
+    #js-commentary-wrap > .item > .num {
+      color: var(--kakomonn-frame-muted) !important;
+    }
+
+    .problem_detail > ul.list > li::before,
+    .problem_detail > ul.check > li > label > span::before {
+      color: var(--kakomonn-frame-text) !important;
+      border-color: var(--kakomonn-frame-border) !important;
+    }
+
+    .problem_detail a,
+    #js-commentary-wrap a {
+      color: var(--kakomonn-frame-link) !important;
+    }
+
+    .problem_detail input,
+    .problem_detail select,
+    .problem_detail textarea,
+    #calculator input,
+    #calculator select,
+    #calculator textarea {
+      background-color: var(--kakomonn-frame-canvas) !important;
+      color: var(--kakomonn-frame-text) !important;
+      border-color: var(--kakomonn-frame-border) !important;
+    }
+
+    .problem_detail .next_ques_btn .button_entity {
+      background-color: var(--kakomonn-frame-surface) !important;
+    }
+
+    .problem_detail > .zoomin img,
+    .problem_detail > ul.list img,
+    #js-commentary-wrap > .item .text img {
+      filter: invert(100%) hue-rotate(180deg) !important;
+    }
+  `;
   const QUESTION_SPEECH_RATE = 2.0;
   const EXPLANATION_SPEECH_RATE = 1.7;
   const SPEECH_TOKEN_RENEWAL_SKEW_MS = 60000;
@@ -103,9 +196,6 @@
   let yankSequenceTimer = null;
   let yankSequenceDocument = null;
   let frameMutationObserver = null;
-  let frameDarkModeStyle = null;
-  let frameDarkModeRefreshQueued = false;
-  let frameDarkModeWindow = null;
   let lastExplanationText = "";
   let currentQuestionText = "";
   let navigationInProgress = false;

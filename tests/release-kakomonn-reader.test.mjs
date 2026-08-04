@@ -9,7 +9,7 @@ import {
 
 const SHA = "a".repeat(40);
 const OTHER_SHA = "b".repeat(40);
-const REPOSITORY = "expgolemclone/browser-extensions";
+const REPOSITORY = "expgolemclone/kakomonn";
 const REPOSITORY_URL = `https://github.com/${REPOSITORY}`;
 const packageJson = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),

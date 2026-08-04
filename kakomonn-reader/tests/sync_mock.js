@@ -26,6 +26,7 @@ function installSyncMockInWindow({
   expectedOrigin,
   expectedSpeechOrigin,
   expectedSpeechToken,
+  writeClipboardToSystem,
 }) {
   const values = new Map();
   if (hasStoredToken) {
@@ -71,6 +72,7 @@ function installSyncMockInWindow({
     commitThenFailNextAnswer: false,
     holdNextRequest: false,
     releaseHeldRequest: null,
+    clipboardWrites: [],
   };
 
   const syncState = () => ({
@@ -84,6 +86,17 @@ function installSyncMockInWindow({
 
   window.__syncMock = mock;
   window.GM = {
+    async setClipboard(value) {
+      if (window.__clipboardWriteFails) {
+        throw new Error("mock clipboard write failed");
+      }
+      mock.clipboardWrites.push(value);
+      window.__copiedTexts?.push(value);
+      if (writeClipboardToSystem) {
+        await navigator.clipboard.writeText(value);
+      }
+      return true;
+    },
     async getValue(key, defaultValue) {
       return values.has(key) ? values.get(key) : defaultValue;
     },
@@ -293,6 +306,7 @@ function createSyncMockConfiguration({
   pendingCelebration = null,
   processedOperations = [],
   userscriptsPromise = false,
+  systemClipboard = false,
 } = {}) {
   return {
     initialCorrectCount: count,
@@ -312,6 +326,7 @@ function createSyncMockConfiguration({
     expectedOrigin: SYNC_API_ORIGIN,
     expectedSpeechOrigin: AZURE_SPEECH_ORIGIN,
     expectedSpeechToken: AZURE_SPEECH_TOKEN,
+    writeClipboardToSystem: systemClipboard,
   };
 }
 

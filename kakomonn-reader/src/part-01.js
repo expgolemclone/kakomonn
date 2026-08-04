@@ -154,8 +154,13 @@
       typeof GM.getValue === "function" &&
       typeof GM.setValue === "function" &&
       typeof GM.deleteValue === "function" &&
-      typeof GM.xmlHttpRequest === "function"
+      typeof GM.xmlHttpRequest === "function" &&
+      clipboardAPIAvailable()
     );
+  }
+
+  function clipboardAPIAvailable() {
+    return typeof GM === "object" && typeof GM.setClipboard === "function";
   }
 
   function isSyncState(value) {
@@ -638,7 +643,7 @@
     updateSyncDependentControls();
 
     if (!userscriptAPIAvailable()) {
-      setStatus("ユーザースクリプトの同期APIを利用できません");
+      setStatus("ユーザースクリプトAPIを利用できません");
       return;
     }
 

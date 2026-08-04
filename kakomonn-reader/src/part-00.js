@@ -11,6 +11,7 @@
 // @grant        GM.setValue
 // @grant        GM.deleteValue
 // @grant        GM.xmlHttpRequest
+// @grant        GM.setClipboard
 // @grant        GM_info
 // ==/UserScript==
 

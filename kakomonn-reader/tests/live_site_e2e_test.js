@@ -11,6 +11,8 @@ const fixedNextQuestionUrl = "https://chushoks.kakomonn.com/questions/86957";
 const imageChoiceQuestionUrl =
   "https://chushoks.kakomonn.com/questions/73379";
 const markdownQuestionUrl = "https://chushoks.kakomonn.com/questions/54914";
+const reportedCopyQuestionUrl =
+  "https://chushoks.kakomonn.com/questions/73497";
 const markdownQuestionHeading =
   "中小企業診断士試験 令和2年度（2020年） 問19（経済学・経済政策 問19）";
 const markdownQuestionText =
@@ -537,7 +539,7 @@ async function runMarkdownCopyCase(browser, script) {
       .waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
-    await installSyncMock(page);
+    await installSyncMock(page, { systemClipboard: true });
     await page.evaluate((source) => {
       (0, eval)(source);
     }, script);
@@ -737,6 +739,88 @@ async function runMarkdownCopyCase(browser, script) {
   }
 }
 
+async function runReportedCopyCase(browser, script) {
+  const context = await browser.newContext({
+    permissions: ["clipboard-read", "clipboard-write"],
+  });
+  await blockThirdPartyAds(context);
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(String(error)));
+
+  try {
+    const response = await page.goto(reportedCopyQuestionUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 60_000,
+    });
+    assert.notEqual(response, null);
+    assert.equal(
+      response.ok(),
+      true,
+      `live page returned HTTP ${response.status()}`,
+    );
+    await page
+      .getByText("解答する", { exact: true })
+      .waitFor({ state: "visible" });
+
+    await page.evaluate(() => localStorage.clear());
+    await installSyncMock(page, { systemClipboard: true });
+    await page.evaluate((source) => {
+      (0, eval)(source);
+    }, script);
+
+    const frame = await getQuestionFrame(page);
+    await waitForSyncReady(page);
+    await submitAnswer(
+      page,
+      frame,
+      "再生債務者に対して売買契約に基づき継続的給付の義務を負う双務契約の相手方は、再生手続開始決定の申立て前の給付に係る再生債権について、弁済がないことを理由として、再生手続開始後は、その義務の履行を拒むことができない。",
+    );
+    await frame.getByText("正解！素晴らしいです", { exact: true }).waitFor({
+      state: "visible",
+      timeout: 15_000,
+    });
+    const explanationTexts = frame.locator(
+      "#js-commentary-wrap > .item > .text",
+    );
+    await explanationTexts.last().waitFor({
+      state: "visible",
+      timeout: 15_000,
+    });
+    assert.equal(await explanationTexts.count(), 2);
+
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy")?.textContent ===
+        "Markdownをコピー",
+      null,
+      { timeout: 15_000 },
+    );
+    await page.locator("#kakomonn-reader-copy").click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-copy")?.textContent ===
+        "コピー済み",
+      null,
+      { timeout: 15_000 },
+    );
+    const copiedMarkdown = await page.evaluate(() =>
+      navigator.clipboard.readText(),
+    );
+    assert.equal(
+      copiedMarkdown.startsWith(
+        "# 中小企業診断士試験 令和5年度（2023年） 問145（経営法務 問10）",
+      ),
+      true,
+    );
+    assert.equal(copiedMarkdown.includes("### 解説 01"), true);
+    assert.equal(copiedMarkdown.includes("### 解説 02"), true);
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+}
+
 async function runImageChoiceInversionCase(browser, script) {
   const context = await browser.newContext();
   await blockThirdPartyAds(context);
@@ -798,6 +882,7 @@ async function main() {
     await runRandomNavigationCase(browser, script);
     await runImageChoiceInversionCase(browser, script);
     await runMarkdownCopyCase(browser, script);
+    await runReportedCopyCase(browser, script);
   } finally {
     await browser.close();
   }

@@ -200,6 +200,14 @@ async function preparePage(page, speechMode, syncOptions = {}) {
     });
     window.__copiedTexts = [];
     window.__clipboardWriteFails = false;
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        async writeText() {
+          throw new Error("page clipboard API must not be used");
+        },
+      },
+    });
     window.__readerStatusHistory = [];
     const recordReaderStatus = () => {
       const status = document.querySelector(
@@ -216,18 +224,6 @@ async function preparePage(page, speechMode, syncOptions = {}) {
       subtree: true,
       characterData: true,
     });
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: {
-        async writeText(value) {
-          if (window.__clipboardWriteFails) {
-            throw new Error("mock clipboard write failed");
-          }
-          window.__copiedTexts.push(value);
-        },
-      },
-    });
-
     let gestureRequired = mode === "audio-gesture-required";
 
     class FakeAudio {
@@ -868,9 +864,13 @@ async function main() {
       expectedCopiedMarkdown,
     );
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-copy").textContent ===
-        "Markdownをコピー",
+      () => {
+        const copyButton = document.querySelector("#kakomonn-reader-copy");
+        return (
+          copyButton.textContent === "Markdownをコピー" &&
+          copyButton.disabled === false
+        );
+      },
       null,
       { timeout: 5_000 },
     );

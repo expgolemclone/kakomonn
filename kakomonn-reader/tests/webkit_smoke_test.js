@@ -187,11 +187,8 @@ async function main() {
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
         value: {
-          async writeText(value) {
-            if (window.__clipboardWriteFails) {
-              throw new Error("mock clipboard write failed");
-            }
-            window.__copiedTexts.push(value);
+          async writeText() {
+            throw new Error("page clipboard API must not be used");
           },
         },
       });

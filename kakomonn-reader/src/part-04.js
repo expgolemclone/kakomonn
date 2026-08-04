@@ -583,7 +583,7 @@
       return;
     }
 
-    if (!navigator.clipboard?.writeText) {
+    if (!clipboardAPIAvailable()) {
       copyButton.textContent = "コピー非対応";
       copyButton.disabled = true;
       return;
@@ -641,7 +641,10 @@
     }
 
     try {
-      await navigator.clipboard.writeText(copyDocument.markdown);
+      const copied = await GM.setClipboard(copyDocument.markdown);
+      if (copied === false) {
+        throw new Error("clipboard write was rejected");
+      }
       copyButton.textContent = "コピー済み";
       copyButton.disabled = true;
       setStatus("問題文,自分の回答,解説をMarkdownでコピーしました");

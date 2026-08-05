@@ -90,26 +90,6 @@
     return controls;
   }
 
-  function findFirstChoiceBlock(firstChoiceControl, choiceControls) {
-    let block = firstChoiceControl;
-
-    while (block.parentElement) {
-      const parent = block.parentElement;
-      const containedChoiceCount = choiceControls.reduce(
-        (count, control) => count + Number(parent.contains(control)),
-        0
-      );
-
-      if (containedChoiceCount !== 1) {
-        break;
-      }
-
-      block = parent;
-    }
-
-    return block;
-  }
-
   const NON_READABLE_SELECTOR =
     "script, style, noscript, template, [hidden], [aria-hidden='true'], [inert]";
 
@@ -145,22 +125,7 @@
     return isRendered;
   }
 
-  function isQuestionNoiseElement(element) {
-    if (!element.matches("a, button")) {
-      return false;
-    }
-
-    const label = compactLine(
-      element.innerText || element.textContent || ""
-    );
-    return label === "（訂正依頼・報告はこちら）";
-  }
-
-  function visibleStructuredText(
-    rootNode,
-    boundaryRange = null,
-    excludeElement = null
-  ) {
+  function visibleStructuredText(rootNode) {
     const parts = [];
     const documentNode =
       rootNode.nodeType === rootNode.DOCUMENT_NODE
@@ -174,15 +139,7 @@
       }
     }
 
-    function intersectsBoundary(node) {
-      return boundaryRange === null || boundaryRange.intersectsNode(node);
-    }
-
     function visit(node) {
-      if (!intersectsBoundary(node)) {
-        return;
-      }
-
       if (node.nodeType === NodeConstructor.TEXT_NODE) {
         if (isRenderedTextNode(node)) {
           parts.push(node.nodeValue ?? "");
@@ -197,10 +154,7 @@
         return;
       }
 
-      if (
-        isHiddenFromRendering(node) ||
-        (excludeElement !== null && excludeElement(node))
-      ) {
+      if (isHiddenFromRendering(node)) {
         return;
       }
 
@@ -241,6 +195,29 @@
 
     const answerButton = findAnswerButtonAfter(metadataElement);
     if (!answerButton) {
+      return "";
+    }
+
+    const problemElement = metadataElement.closest(".problem_detail");
+    if (!problemElement || !problemElement.contains(answerButton)) {
+      return "";
+    }
+
+    const questionElement =
+      Array.from(problemElement.children).find((child) =>
+        child.matches(".ttl")
+      ) ?? null;
+    const choicesElement =
+      Array.from(problemElement.children).find((child) =>
+        child.matches("ul.list")
+      ) ?? null;
+    if (
+      !questionElement ||
+      !choicesElement ||
+      !isFollowingNode(metadataElement, questionElement) ||
+      !isFollowingNode(questionElement, choicesElement) ||
+      !isFollowingNode(choicesElement, answerButton)
+    ) {
       return "";
     }
 

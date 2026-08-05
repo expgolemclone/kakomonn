@@ -26,6 +26,12 @@
   stopButton.id = "kakomonn-reader-stop";
   stopButton.type = "button";
   stopButton.textContent = "停止";
+  stopButton.setAttribute(
+    "aria-label",
+    "読み上げを停止,ショートカットはs"
+  );
+  stopButton.setAttribute("aria-keyshortcuts", "s");
+  stopButton.title = "ショートカット: s";
 
   const syncSettingsButton = document.createElement("button");
   syncSettingsButton.id = "kakomonn-reader-sync-settings-button";

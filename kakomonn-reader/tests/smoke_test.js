@@ -194,7 +194,14 @@ async function preparePage(page, speechMode, syncOptions = {}) {
   );
   await page.goto("https://chushoks.kakomonn.com/questions/current");
   await page.evaluate((mode) => {
-    if (!["none", "audio", "audio-gesture-required"].includes(mode)) {
+    if (
+      ![
+        "none",
+        "audio",
+        "audio-gesture-required",
+        "audio-manual",
+      ].includes(mode)
+    ) {
       throw new Error(`unknown speech mode: ${mode}`);
     }
 
@@ -235,6 +242,9 @@ async function preparePage(page, speechMode, syncOptions = {}) {
       characterData: true,
     });
     let gestureRequired = mode === "audio-gesture-required";
+    const manualPlayback = mode === "audio-manual";
+    window.__audioPauseCalls = 0;
+    window.__audioPlayCalls = 0;
 
     class FakeAudio {
       constructor() {
@@ -242,17 +252,25 @@ async function preparePage(page, speechMode, syncOptions = {}) {
         this.onplay = null;
         this.onended = null;
         this.onerror = null;
+        this.paused = true;
       }
 
       canPlayType(type) {
         return type === "audio/mpeg" ? "probably" : "";
       }
 
-      pause() {}
+      pause() {
+        this.paused = true;
+        window.__audioPauseCalls += 1;
+      }
 
-      load() {}
+      load() {
+        this.paused = true;
+      }
 
       play() {
+        this.paused = false;
+        window.__audioPlayCalls += 1;
         if (this.src.startsWith("data:audio/wav")) {
           if (gestureRequired) {
             gestureRequired = false;
@@ -261,8 +279,17 @@ async function preparePage(page, speechMode, syncOptions = {}) {
           return Promise.resolve();
         }
         window.setTimeout(() => {
+          if (this.paused) {
+            return;
+          }
           this.onplay?.();
-          window.setTimeout(() => this.onended?.(), 100);
+          if (!manualPlayback) {
+            window.setTimeout(() => {
+              if (!this.paused) {
+                this.onended?.();
+              }
+            }, 100);
+          }
         }, 0);
         return Promise.resolve();
       }
@@ -405,6 +432,16 @@ async function main() {
     assert.equal(
       await page.locator("#kakomonn-reader-copy").getAttribute("title"),
       "ショートカット: yy",
+    );
+    assert.equal(
+      await page
+        .locator("#kakomonn-reader-stop")
+        .getAttribute("aria-keyshortcuts"),
+      "s",
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-stop").getAttribute("title"),
+      "ショートカット: s",
     );
     const readerLayout = await page.evaluate(() => {
       const controls = document
@@ -795,7 +832,7 @@ async function main() {
         "X-Microsoft-OutputFormat": azureSpeechOutputFormat,
       },
       body: expectedSpeechSSML(
-        "問題文。これは動作確認用の問題文です.。これは改行後の問題文です.。選択肢1。選択肢2",
+        "問題文。これは動作確認用の問題文です.。これは改行後の問題文です.",
         "+100%",
       ),
     });
@@ -1032,6 +1069,88 @@ async function main() {
 
     assert.deepEqual(errors, []);
 
+    const speechShortcutPage = await context.newPage();
+    const speechShortcutErrors = await preparePage(
+      speechShortcutPage,
+      "audio-manual",
+    );
+    const speechShortcutFrame = await loadMockQuestion(
+      speechShortcutPage,
+      script,
+    );
+    await speechShortcutPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "問題文 1/1",
+    );
+    const speechShortcutInput = speechShortcutFrame.locator(
+      "#shortcut-text-input",
+    );
+    const pauseCallsBeforeInput = await speechShortcutPage.evaluate(
+      () => window.__audioPauseCalls,
+    );
+    await speechShortcutInput.focus();
+    await speechShortcutPage.keyboard.type("sm");
+    assert.equal(await speechShortcutInput.inputValue(), "sm");
+    assert.equal(
+      await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
+      "問題文 1/1",
+    );
+    assert.equal(
+      await speechShortcutPage.evaluate(() => window.__audioPauseCalls),
+      pauseCallsBeforeInput,
+    );
+
+    await speechShortcutFrame.locator("input[name='answer']").first().focus();
+    const playCallsBeforePause = await speechShortcutPage.evaluate(
+      () => window.__audioPlayCalls,
+    );
+    await speechShortcutPage.keyboard.press("m");
+    assert.equal(
+      await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
+      "読み上げ一時停止",
+    );
+    assert.equal(
+      await speechShortcutPage.evaluate(() => window.__audioPauseCalls),
+      pauseCallsBeforeInput + 1,
+    );
+    assert.equal(
+      await speechShortcutPage.locator("#kakomonn-reader-stop").isVisible(),
+      true,
+    );
+
+    await speechShortcutPage.keyboard.press("m");
+    await speechShortcutPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "問題文 1/1",
+    );
+    assert.equal(
+      await speechShortcutPage.evaluate(() => window.__audioPlayCalls),
+      playCallsBeforePause + 1,
+    );
+
+    await speechShortcutPage.keyboard.press("s");
+    assert.equal(
+      await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
+      "待機中",
+    );
+    assert.equal(
+      await speechShortcutPage.locator("#kakomonn-reader-stop").isVisible(),
+      false,
+    );
+    assert.equal(
+      await speechShortcutPage.evaluate(() => window.__audioPauseCalls),
+      pauseCallsBeforeInput + 2,
+    );
+    await speechShortcutPage.waitForTimeout(150);
+    assert.equal(
+      await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
+      "待機中",
+    );
+    assert.deepEqual(speechShortcutErrors, []);
+    await speechShortcutPage.close();
+
     const gestureRetryPage = await context.newPage();
     const gestureRetryErrors = await preparePage(
       gestureRetryPage,
@@ -1056,7 +1175,7 @@ async function main() {
     assert.equal(
       (await azureSpeechCalls(gestureRetryPage))[0].body,
       expectedSpeechSSML(
-        "問題文。これは動作確認用の問題文です.。これは改行後の問題文です.。選択肢1。選択肢2",
+        "問題文。これは動作確認用の問題文です.。これは改行後の問題文です.",
         "+100%",
       ),
     );
@@ -1266,7 +1385,7 @@ async function main() {
         "X-Microsoft-OutputFormat": azureSpeechOutputFormat,
       },
       body: expectedSpeechSSML(
-        "問題文。これは動作確認用の問題文です.。これは改行後の問題文です.。選択肢1。選択肢2",
+        "問題文。これは動作確認用の問題文です.。これは改行後の問題文です.",
         "+100%",
       ),
     });

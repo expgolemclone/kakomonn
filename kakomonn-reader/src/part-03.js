@@ -1,27 +1,15 @@
-    if (choiceControls.length < 2) {
+    const choiceElements = Array.from(choicesElement.children).filter(
+      (child) => child.matches("li")
+    );
+    if (
+      choiceElements.length < 2 ||
+      choiceElements.length !== choiceControls.length
+    ) {
       return "";
     }
 
-    const firstChoiceBlock = findFirstChoiceBlock(
-      choiceControls[0],
-      choiceControls
-    );
-    if (!isFollowingNode(metadataElement, firstChoiceBlock)) {
-      return "";
-    }
-
-    const range = documentNode.createRange();
-    range.setStartAfter(metadataElement);
-    range.setEndBefore(firstChoiceBlock);
-
-    const text = normalizeText(
-      visibleStructuredText(
-        range.commonAncestorContainer,
-        range,
-        isQuestionNoiseElement
-      )
-    );
-    if (!text || compactLine(text).includes("解答する")) {
+    const text = normalizeText(visibleStructuredText(questionElement));
+    if (!text) {
       return "";
     }
 
@@ -269,6 +257,7 @@
   }
 
   function clearActiveSpeechAudio() {
+    speechPaused = false;
     speechAudio?.pause();
     if (speechAudio) {
       speechAudio.onplay = null;
@@ -287,6 +276,38 @@
     activeSpeechRequest?.abort();
     activeSpeechRequest = null;
     clearActiveSpeechAudio();
+  }
+
+  async function playActiveSpeechAudio(runId) {
+    try {
+      await speechAudio.play();
+    } catch {
+      if (runId === speechRunId) {
+        clearActiveSpeechAudio();
+        stopButton.style.display = "none";
+        speechEnabled = false;
+        currentPageReadPending = true;
+        setStatus(SPEECH_GESTURE_STATUS);
+      }
+    }
+  }
+
+  function toggleSpeechPause() {
+    if (!speechEnabled || !activeSpeechAudioURL || speechAudio === null) {
+      return false;
+    }
+
+    if (!speechPaused) {
+      speechAudio.pause();
+      speechPaused = true;
+      setStatus("読み上げ一時停止");
+      return true;
+    }
+
+    speechPaused = false;
+    setStatus("読み上げ再開中");
+    void playActiveSpeechAudio(speechRunId);
+    return true;
   }
 
   function completeSpeechChunks(runId, label) {
@@ -347,6 +368,7 @@
     speechAudio.src = activeSpeechAudioURL;
     speechAudio.onplay = () => {
       if (runId === speechRunId) {
+        speechPaused = false;
         setStatus(`${label} ${index + 1}/${chunks.length}`);
         stopButton.style.display = "block";
       }
@@ -369,17 +391,7 @@
       setStatus("音声を再生できません");
     };
 
-    try {
-      await speechAudio.play();
-    } catch {
-      if (runId === speechRunId) {
-        clearActiveSpeechAudio();
-        stopButton.style.display = "none";
-        speechEnabled = false;
-        currentPageReadPending = true;
-        setStatus(SPEECH_GESTURE_STATUS);
-      }
-    }
+    await playActiveSpeechAudio(runId);
   }
 
   function speakText(text, label, rate) {

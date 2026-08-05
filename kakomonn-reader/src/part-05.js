@@ -459,6 +459,8 @@
   const ANSWER_CHOICE_SHORTCUT_KEYS = "1234567890";
   const DISPLAY_CHOICE_SHORTCUT_KEYS = "qwertyuiop";
   const YANK_SHORTCUT_KEY = "y";
+  const SPEECH_STOP_SHORTCUT_KEY = "s";
+  const SPEECH_PAUSE_SHORTCUT_KEY = "m";
   const YANK_DISPLAY_CHOICE_INDEX =
     DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf(YANK_SHORTCUT_KEY);
   const SHORTCUT_SCROLL_DISTANCE = 100;
@@ -625,6 +627,8 @@
       ANSWER_CHOICE_SHORTCUT_KEYS.includes(event.key) ||
       event.key === " " ||
       DISPLAY_CHOICE_SHORTCUT_KEYS.includes(key) ||
+      key === SPEECH_STOP_SHORTCUT_KEY ||
+      key === SPEECH_PAUSE_SHORTCUT_KEY ||
       scrollDirection !== 0
     );
   }
@@ -676,6 +680,11 @@
         handled = activateAnswerChoice(answerChoiceIndex);
       } else if (event.key === " ") {
         handled = activateAnswerButton();
+      } else if (key === SPEECH_STOP_SHORTCUT_KEY) {
+        stopSpeech();
+        handled = true;
+      } else if (key === SPEECH_PAUSE_SHORTCUT_KEY) {
+        handled = toggleSpeechPause();
       } else if (displayChoiceIndex >= 0) {
         handled = activateDisplayChoice(displayChoiceIndex);
       } else if (scrollDirection !== 0) {

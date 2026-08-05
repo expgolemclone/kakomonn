@@ -178,6 +178,7 @@
     speechAudio.canPlayType("audio/mpeg") !== "" &&
     (isIOS || isWindowsEdge);
   let speechEnabled = false;
+  let speechPaused = false;
   let speechInitializationInProgress = false;
   let speechRunId = 0;
   let activeSpeechRequest = null;

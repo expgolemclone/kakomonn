@@ -31,6 +31,10 @@
       "milestones": [
         150
       ]
+    },
+    {
+      "id": "midnight-emcee",
+      "entry": "sensational/midnight-emcee/index.html"
     }
   ]
 }

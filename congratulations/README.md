@@ -10,6 +10,7 @@ root shellは登録済みsiteを均等確率で1つ選び,全画面iframeで表�
 - `dance/hikakin`,dance形式の祝福.
 - `sensational/study-complete`,一日の学習完了を祝うGSAP体験.
 - `sensational/imura-rally`,投資家風の創作characterと上昇chartによるGSAP演出.
+- `dark/void-conductor`,夜の指揮者NOXと星屑の拍手によるdark celebration.
 
 抽選対象は`celebrations.json`へ明示します.存在しないentry,重複ID,空のmanifestはbuild errorになります.
 

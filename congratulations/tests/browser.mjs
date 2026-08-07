@@ -21,6 +21,7 @@ const selectors = new Map([
   ["void-conductor", "#night-stage"],
   ["midnight-orbit", "[data-celebration-ready]"],
   ["night-examiner", "#night-vault"],
+  ["midnight-emcee", "[data-celebration]"],
 ]);
 
 const retiredPaths = [
@@ -93,6 +94,12 @@ async function verifyEntry(browser, origin, site) {
         () => document.querySelector("#night-vault")?.dataset.ready === "true",
       );
       assert.equal(await page.locator("[data-milestone]").textContent(), "150");
+    } else if (site.id === "midnight-emcee") {
+      await page.waitForFunction(
+        () => document.querySelector("[data-celebration]")?.dataset.ready === "true",
+      );
+      assert.equal(await page.locator("[data-character]").isVisible(), true);
+      await page.locator("[data-encore]").click();
     }
 
     const layout = await page.evaluate(() => ({

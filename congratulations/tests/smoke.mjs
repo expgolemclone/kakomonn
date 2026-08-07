@@ -4,6 +4,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  chooseCelebrationForMilestone,
+  eligibleCelebrations,
   parseMilestone,
   randomIndex,
   validateManifest,
@@ -16,11 +18,64 @@ const manifest = validateManifest(
 );
 
 assert.equal(manifest.milestoneInterval, 50);
-assert.equal(manifest.sites.length, 5);
+assert.equal(manifest.sites.length, 7);
+assert.deepEqual(
+  manifest.sites.find((site) => site.id === "night-examiner")?.milestones,
+  [150],
+);
 assert.equal(parseMilestone("?milestone=50", 50), 50);
 assert.equal(parseMilestone("?milestone=150", 50), 150);
 assert.throws(() => parseMilestone("", 50), /positive integer/);
-assert.throws(() => parseMilestone("?milestone=51", 50), /multiple/);
+assert.throws(() => parseMilestone("?milestone=51", 50), /positive multiple/);
+
+assert.deepEqual(
+  eligibleCelebrations(manifest, 150).map((site) => site.id),
+  ["night-examiner"],
+);
+for (const milestone of [50, 100, 200]) {
+  const eligibleIds = eligibleCelebrations(manifest, milestone).map((site) => site.id);
+  assert.equal(eligibleIds.includes("night-examiner"), false);
+  assert.equal(eligibleIds.length, 6);
+}
+assert.equal(
+  chooseCelebrationForMilestone(manifest, 150, {
+    getRandomValues(array) {
+      array[0] = 0;
+      return array;
+    },
+  }).id,
+  "night-examiner",
+);
+
+assert.throws(
+  () =>
+    validateManifest({
+      milestoneInterval: 50,
+      sites: [
+        {
+          id: "invalid-special",
+          entry: "darkmode/invalid-special/index.html",
+          milestones: [125],
+        },
+        { id: "general", entry: "normal/general/index.html" },
+      ],
+    }),
+  /invalid site/,
+);
+assert.throws(
+  () =>
+    validateManifest({
+      milestoneInterval: 50,
+      sites: [
+        {
+          id: "special-only",
+          entry: "darkmode/special-only/index.html",
+          milestones: [150],
+        },
+      ],
+    }),
+  /general site/,
+);
 
 const previewOrigin = "http://127.0.0.1:4173/";
 const previewTargets = createPreviewTargets(manifest, previewOrigin);

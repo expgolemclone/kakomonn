@@ -16,6 +16,10 @@
     {
       "id": "imura-rally",
       "entry": "sensational/imura-rally/index.html"
+    },
+    {
+      "id": "void-conductor",
+      "entry": "dark/void-conductor/index.html"
     }
   ]
 }

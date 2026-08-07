@@ -1,6 +1,6 @@
 import manifest from "./celebrations.json";
 import {
-  chooseCelebration,
+  chooseCelebrationForMilestone,
   parseMilestone,
   validateManifest,
 } from "./site-selection.js";
@@ -31,7 +31,7 @@ try {
     window.location.search,
     validated.milestoneInterval,
   );
-  const selected = chooseCelebration(validated);
+  const selected = chooseCelebrationForMilestone(validated, milestone);
 
   milestoneLabel.textContent = `${milestone}問達成`;
   frame.dataset.siteId = selected.id;

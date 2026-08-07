@@ -12,6 +12,8 @@ root shellは通常siteを均等確率で1つ選び,全画面iframeで表示し�
 - `sensational/imura-rally`,投資家風の創作characterと上昇chartによるGSAP演出.
 - `dark/void-conductor`,夜の指揮者NOXと星屑の拍手によるdark celebration.
 - `sensational/midnight-orbit`,深夜の軌道演出によるdark celebration.
+- `sensational/midnight-emcee`,深夜の司会者によるdark celebration.
+- `sensational/night-archivist`,オリジナルcharacterの夜の記録官と星図によるdark mode演出.
 - `darkmode/night-examiner`,150問達成時だけ表示する,創作人物の夜間採点官ノクスが合格印を打つdark mode演出.
 
 抽選対象は`celebrations.json`へ明示します.専用siteは`milestones`へ対象の達成数を指定します.存在しないentry,重複ID,不正なmilestone,空のmanifestはbuild errorになります.
@@ -29,7 +31,7 @@ npm start
 
 `http://127.0.0.1:4173/?milestone=50`を開きます.
 
-登録済みの全siteと共通shellをデザイン確認する場合は,次のcommandを実行します.Vite開発serverとPlaywright Chromiumが起動し,1つのwindowへ8個のtabを開きます.編集内容はHMRで反映され,browserを閉じるか`Ctrl+C`を入力するとserverも終了します.
+登録済みの全siteと共通shellをデザイン確認する場合は,次のcommandを実行します.Vite開発serverとPlaywright Chromiumが起動し,1つのwindowへ10個のtabを開きます.編集内容はHMRで反映され,browserを閉じるか`Ctrl+C`を入力するとserverも終了します.
 
 ```bash
 npm run preview:all

@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ja" data-state="loading">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#06070c">
+    <title>Midnight Study Archive</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <main class="experience" data-night-archivist data-ready="false">
+      <div class="noise" aria-hidden="true"></div>
+      <div class="orbital-grid" aria-hidden="true"></div>
+
+      <header class="archive-header">
+        <div class="archive-mark" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div>
+          <p class="eyebrow">MIDNIGHT STUDY ARCHIVE</p>
+          <p class="archive-code">RECORD 050 / SEALED</p>
+        </div>
+        <div class="signal" aria-label="記録同期済み">
+          <span class="signal-dot"></span>
+          SYNCED
+        </div>
+      </header>
+
+      <section class="story-panel" aria-labelledby="celebration-title">
+        <div class="copy-column">
+          <p class="chapter-label">CHAPTER COMPLETE</p>
+          <h1 id="celebration-title">
+            50の軌跡が,<br>
+            <span>星座になった.</span>
+          </h1>
+          <p class="lead">
+            今日積み上げた一問ずつを, 深夜の記録庫へ保存しました.
+            次に迷った夜も, この星図が進んだ距離を照らします.
+          </p>
+
+          <div class="record-strip" aria-label="学習記録">
+            <div>
+              <span class="record-value">50</span>
+              <span class="record-label">QUESTIONS</span>
+            </div>
+            <div>
+              <span class="record-value">01</span>
+              <span class="record-label">CONSTELLATION</span>
+            </div>
+            <div>
+              <span class="record-value">∞</span>
+              <span class="record-label">NEXT HORIZON</span>
+            </div>
+          </div>
+
+          <button class="replay-button" type="button" data-replay>
+            <span class="button-icon" aria-hidden="true">↻</span>
+            星図を再生
+          </button>
+        </div>
+
+        <div class="visual-column" aria-label="夜の記録官ミナと学習星図">
+          <div class="constellation-frame" aria-hidden="true">
+            <div class="frame-corner frame-corner-a"></div>
+            <div class="frame-corner frame-corner-b"></div>
+            <svg class="star-map" viewBox="0 0 520 520" role="img" aria-label="50問達成を表す星座" data-star-map>
+              <defs>
+                <filter id="star-glow" x="-100%" y="-100%" width="300%" height="300%">
+                  <feGaussianBlur stdDeviation="4" result="blur"></feGaussianBlur>
+                  <feMerge>
+                    <feMergeNode in="blur"></feMergeNode>
+                    <feMergeNode in="SourceGraphic"></feMergeNode>
+                  </feMerge>
+                </filter>
+              </defs>
+              <circle class="orbit orbit-a" cx="260" cy="260" r="210"></circle>
+              <circle class="orbit orbit-b" cx="260" cy="260" r="158"></circle>
+              <circle class="orbit orbit-c" cx="260" cy="260" r="102"></circle>
+              <g class="constellation-lines" data-star-lines></g>
+              <g class="constellation-stars" data-stars></g>
+              <text class="map-index" x="42" y="474">ARCHIVE MAP / 050</text>
+            </svg>
+          </div>
+
+          <div class="archivist-wrap" data-parallax>
+            <div class="speech-card">
+              <span class="speaker">夜の記録官 ミナ</span>
+              <strong>記録完了.</strong>
+              <span>今日は, ちゃんと遠くまで来たね.</span>
+            </div>
+
+            <svg class="archivist" viewBox="0 0 360 520" role="img" aria-labelledby="archivist-title archivist-desc">
+              <title id="archivist-title">夜の記録官ミナ</title>
+              <desc id="archivist-desc">宇宙服を着て記録端末を持つオリジナルキャラクター</desc>
+              <ellipse class="character-shadow" cx="184" cy="480" rx="104" ry="22"></ellipse>
+              <g class="character-float">
+                <path class="cape-back" d="M95 257c-33 70-43 147-13 201 33 21 81 26 119 7-16-70-7-143 22-204-44-34-91-37-128-4Z"></path>
+                <path class="suit-body" d="M115 235c24-23 100-24 128 2 21 38 27 105 13 174-29 26-119 26-151-1-11-73-7-134 10-175Z"></path>
+                <path class="suit-panel" d="M141 292h83c9 0 16 7 16 16v69c0 10-7 17-16 17h-83c-9 0-16-7-16-17v-69c0-9 7-16 16-16Z"></path>
+                <path class="left-arm" d="M119 258c-28 8-50 38-62 88-5 23 21 34 32 14l48-79-18-23Z"></path>
+                <path class="right-arm" d="M239 257c31 4 61 31 78 75 9 22-14 38-29 20l-62-70 13-25Z"></path>
+                <path class="left-glove" d="M50 346c-7 14-2 30 12 37 13 6 28 0 34-13l4-11-41-20-9 7Z"></path>
+                <path class="right-glove" d="M285 342c-4 15 4 30 19 34 14 4 29-5 33-19l2-12-45-12-9 9Z"></path>
+                <path class="neck-ring" d="M128 220h105v42H128z"></path>
+                <ellipse class="helmet-shell" cx="180" cy="151" rx="104" ry="112"></ellipse>
+                <path class="helmet-glass" d="M101 137c4-58 39-92 79-92 47 0 81 42 82 98 0 56-34 93-82 93-46 0-82-40-79-99Z"></path>
+                <path class="hair-back" d="M125 109c18-45 90-51 115-3 12 23 6 68-2 86-18 27-94 30-115-2-12-28-11-57 2-81Z"></path>
+                <path class="face" d="M134 113c13-25 77-32 96 0 11 20 8 65-8 83-17 20-65 20-82-1-16-20-18-61-6-82Z"></path>
+                <path class="hair-fringe" d="M129 119c9-44 85-57 107-10-25-8-40 1-50 20-13-17-31-22-57-10Z"></path>
+                <path class="hair-side" d="M125 132c-4 29 2 60 17 78-25-13-33-60-17-78Zm112-3c7 31 0 64-17 82 26-12 37-58 17-82Z"></path>
+                <ellipse class="eye" cx="158" cy="155" rx="6" ry="8"></ellipse>
+                <ellipse class="eye" cx="207" cy="155" rx="6" ry="8"></ellipse>
+                <path class="mouth" d="M168 181c9 7 20 7 29 0"></path>
+                <path class="helmet-shine" d="M116 102c16-34 44-50 68-53"></path>
+                <path class="badge" d="M147 318h67v47h-67z"></path>
+                <circle class="badge-core" cx="180" cy="341" r="13"></circle>
+                <path class="badge-ray" d="M180 320v-11m0 64v-11m-21-21h-11m64 0h-11m-36-15-8-8m45 45-8-8m0-29 8-8m-45 45 8-8"></path>
+                <path class="boot" d="M113 405h54v55c-12 17-45 18-57 2l3-57Z"></path>
+                <path class="boot" d="M196 405h54l3 57c-13 16-45 15-57-2v-55Z"></path>
+                <path class="tablet" d="M243 304l68 30-30 83-68-30z"></path>
+                <path class="tablet-screen" d="m250 322 43 19-18 51-43-19z"></path>
+                <circle class="tablet-star" cx="263" cy="357" r="9"></circle>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <footer class="archive-footer">
+        <p>THE NIGHT REMEMBERS EVERY STEP.</p>
+        <div class="footer-line" aria-hidden="true"></div>
+        <p data-announcement aria-live="polite">星図を生成しています.</p>
+      </footer>
+    </main>
+  </body>
+</html>

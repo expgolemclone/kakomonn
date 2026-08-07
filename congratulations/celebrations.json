@@ -26,15 +26,19 @@
       "entry": "sensational/midnight-orbit/index.html"
     },
     {
+      "id": "midnight-emcee",
+      "entry": "sensational/midnight-emcee/index.html"
+    },
+    {
+      "id": "night-archivist",
+      "entry": "sensational/night-archivist/index.html"
+    },
+    {
       "id": "night-examiner",
       "entry": "darkmode/night-examiner/index.html",
       "milestones": [
         150
       ]
-    },
-    {
-      "id": "midnight-emcee",
-      "entry": "sensational/midnight-emcee/index.html"
     }
   ]
 }

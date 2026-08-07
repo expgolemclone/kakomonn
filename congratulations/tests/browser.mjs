@@ -20,8 +20,9 @@ const selectors = new Map([
   ["imura-rally", ".stage"],
   ["void-conductor", "#night-stage"],
   ["midnight-orbit", "[data-celebration-ready]"],
-  ["night-examiner", "#night-vault"],
   ["midnight-emcee", "[data-celebration]"],
+  ["night-archivist", "[data-night-archivist]"],
+  ["night-examiner", "#night-vault"],
 ]);
 
 const retiredPaths = [
@@ -89,17 +90,25 @@ async function verifyEntry(browser, origin, site) {
       await page.waitForFunction(
         () => document.querySelector("[data-celebration-ready]")?.dataset.celebrationReady === "true",
       );
-    } else if (site.id === "night-examiner") {
-      await page.waitForFunction(
-        () => document.querySelector("#night-vault")?.dataset.ready === "true",
-      );
-      assert.equal(await page.locator("[data-milestone]").textContent(), "150");
     } else if (site.id === "midnight-emcee") {
       await page.waitForFunction(
         () => document.querySelector("[data-celebration]")?.dataset.ready === "true",
       );
       assert.equal(await page.locator("[data-character]").isVisible(), true);
       await page.locator("[data-encore]").click();
+    } else if (site.id === "night-archivist") {
+      await page.waitForFunction(
+        () =>
+          document.querySelector("[data-night-archivist]")?.dataset.ready ===
+          "true",
+      );
+      assert.equal(await page.locator("[data-stars] .star-node").count(), 12);
+      assert.equal(await page.locator("[data-star-lines] .star-line").count(), 12);
+    } else if (site.id === "night-examiner") {
+      await page.waitForFunction(
+        () => document.querySelector("#night-vault")?.dataset.ready === "true",
+      );
+      assert.equal(await page.locator("[data-milestone]").textContent(), "150");
     }
 
     const layout = await page.evaluate(() => ({

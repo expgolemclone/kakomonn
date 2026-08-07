@@ -18,7 +18,7 @@ const manifest = validateManifest(
 );
 
 assert.equal(manifest.milestoneInterval, 50);
-assert.equal(manifest.sites.length, 8);
+assert.equal(manifest.sites.length, 9);
 assert.deepEqual(
   manifest.sites.find((site) => site.id === "night-examiner")?.milestones,
   [150],
@@ -40,7 +40,8 @@ for (const milestone of [50, 100, 200]) {
   const eligibleIds = eligibleCelebrations(manifest, milestone).map((site) => site.id);
   assert.equal(eligibleIds.includes("night-examiner"), false);
   assert.equal(eligibleIds.includes("midnight-emcee"), true);
-  assert.equal(eligibleIds.length, 7);
+  assert.equal(eligibleIds.includes("night-archivist"), true);
+  assert.equal(eligibleIds.length, 8);
 }
 assert.equal(
   chooseCelebrationForMilestone(manifest, 150, {

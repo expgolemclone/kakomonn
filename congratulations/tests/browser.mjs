@@ -19,6 +19,7 @@ const selectors = new Map([
   ["study-complete", "[data-burst]"],
   ["imura-rally", ".stage"],
   ["void-conductor", "#night-stage"],
+  ["midnight-orbit", "[data-celebration-ready]"],
 ]);
 
 const retiredPaths = [
@@ -78,6 +79,10 @@ async function verifyEntry(browser, origin, site) {
         () => document.querySelector("#night-stage")?.dataset.ready === "true",
       );
       assert.equal(await page.locator("#encore").isVisible(), true);
+    } else if (site.id === "midnight-orbit") {
+      await page.waitForFunction(
+        () => document.querySelector("[data-celebration-ready]")?.dataset.celebrationReady === "true",
+      );
     }
 
     const layout = await page.evaluate(() => ({

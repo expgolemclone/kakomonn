@@ -20,6 +20,10 @@
     {
       "id": "void-conductor",
       "entry": "dark/void-conductor/index.html"
+    },
+    {
+      "id": "midnight-orbit",
+      "entry": "sensational/midnight-orbit/index.html"
     }
   ]
 }

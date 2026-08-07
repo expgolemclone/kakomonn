@@ -121,41 +121,53 @@ elements.chartScroller.addEventListener(
   true
 );
 
-elements.chartScroller.addEventListener(
-  "wheel",
-  (event) => {
-    const maxScrollLeft =
-      elements.chartScroller.scrollWidth - elements.chartScroller.clientWidth;
-    if (maxScrollLeft <= 0) {
-      return;
-    }
+function wheelDeltaInPixels(event) {
+  const dominantDelta =
+    Math.abs(event.deltaY) >= Math.abs(event.deltaX)
+      ? event.deltaY
+      : event.deltaX;
+  if (!Number.isFinite(dominantDelta) || dominantDelta === 0) {
+    return 0;
+  }
 
-    const dominantDelta =
-      Math.abs(event.deltaX) > Math.abs(event.deltaY)
-        ? event.deltaX
-        : event.deltaY;
-    if (dominantDelta === 0) {
-      return;
-    }
+  const unit =
+    event.deltaMode === 1
+      ? 18
+      : event.deltaMode === 2
+        ? elements.chartScroller.clientWidth
+        : 1;
+  const pixelDelta = dominantDelta * unit;
+  const minimumStep = event.deltaMode === 0 ? 42 : 0;
+  return Math.sign(pixelDelta) * Math.max(Math.abs(pixelDelta), minimumStep);
+}
 
-    const unit =
-      event.deltaMode === WheelEvent.DOM_DELTA_LINE
-        ? 16
-        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-          ? elements.chartScroller.clientWidth
-          : 1;
-    const delta = dominantDelta * unit;
-    const before = elements.chartScroller.scrollLeft;
-    const target = Math.min(maxScrollLeft, Math.max(0, before + delta));
-    if (target === before) {
-      return;
-    }
+function scrollChartWithWheel(event) {
+  const maxScrollLeft =
+    elements.chartScroller.scrollWidth - elements.chartScroller.clientWidth;
+  if (maxScrollLeft <= 0) {
+    return;
+  }
 
-    elements.chartScroller.scrollLeft = target;
-    event.preventDefault();
-  },
-  { passive: false }
-);
+  const delta = wheelDeltaInPixels(event);
+  if (delta === 0) {
+    return;
+  }
+
+  const before = elements.chartScroller.scrollLeft;
+  const target = Math.min(maxScrollLeft, Math.max(0, before + delta));
+  if (target === before) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  elements.chartScroller.scrollLeft = target;
+}
+
+elements.chartScroller.addEventListener("wheel", scrollChartWithWheel, {
+  capture: true,
+  passive: false,
+});
 
 elements.chartScroller.addEventListener("keydown", (event) => {
   if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {

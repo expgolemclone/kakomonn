@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#06070b" />
+    <title>The Night Applauds You</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="night-stage" id="night-stage" data-ready="false">
+      <div class="aurora" aria-hidden="true"></div>
+      <div class="grain" aria-hidden="true"></div>
+      <div class="star-field" id="star-field" aria-hidden="true"></div>
+
+      <header class="signal-bar">
+        <p>KAKOMON // ACHIEVEMENT SIGNAL</p>
+        <p class="signal-status"><span></span> MILESTONE COMPLETE</p>
+      </header>
+
+      <section class="hero-copy" aria-labelledby="celebration-title">
+        <p class="eyebrow">A PRIVATE PERFORMANCE FOR ONE</p>
+        <h1 id="celebration-title">
+          <span>THE NIGHT</span>
+          <span>APPLAUDS</span>
+          <span class="accent-word">YOU.</span>
+        </h1>
+        <p class="message">
+          積み重ねた一問一問が, 今夜の星座になりました.
+          次の舞台へ進む前に, この拍手を受け取ってください.
+        </p>
+      </section>
+
+      <section class="maestro-scene" aria-label="夜の指揮者ノクス">
+        <div class="orbit orbit-one" aria-hidden="true"></div>
+        <div class="orbit orbit-two" aria-hidden="true"></div>
+        <p class="character-name">NOX<br /><span>CONDUCTOR OF SMALL VICTORIES</span></p>
+
+        <button class="maestro-button" id="encore" type="button" aria-label="指揮棒を振って星の拍手をもう一度再生する">
+          <svg class="maestro" viewBox="0 0 520 680" role="img" aria-labelledby="maestro-title maestro-desc">
+            <title id="maestro-title">夜の指揮者ノクス</title>
+            <desc id="maestro-desc">長いコートを着た人物が, 光る指揮棒を掲げています.</desc>
+            <defs>
+              <linearGradient id="coat" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#20263a" />
+                <stop offset="0.55" stop-color="#101420" />
+                <stop offset="1" stop-color="#05070d" />
+              </linearGradient>
+              <linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#f4d6c7" />
+                <stop offset="1" stop-color="#bd8f88" />
+              </linearGradient>
+              <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#d9dcff" />
+                <stop offset="0.4" stop-color="#777ca7" />
+                <stop offset="1" stop-color="#252a42" />
+              </linearGradient>
+              <radialGradient id="heartGlow">
+                <stop offset="0" stop-color="#ffffff" />
+                <stop offset="0.25" stop-color="#8ee7ff" />
+                <stop offset="1" stop-color="#8ee7ff" stop-opacity="0" />
+              </radialGradient>
+              <filter id="softGlow" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur stdDeviation="12" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            <ellipse cx="273" cy="633" rx="155" ry="25" fill="#000" opacity="0.52" />
+            <circle cx="270" cy="354" r="92" fill="url(#heartGlow)" opacity="0.3" />
+
+            <path d="M171 310 C134 373 126 512 118 618 L252 627 L270 380 Z" fill="url(#coat)" />
+            <path d="M347 310 C390 388 410 515 432 618 L286 627 L270 380 Z" fill="url(#coat)" />
+            <path d="M171 309 C204 284 233 278 269 279 C307 278 339 289 347 310 L309 389 L230 389 Z" fill="#252b42" />
+            <path d="M235 313 L270 374 L306 313 L292 474 L247 474 Z" fill="#0a0d16" />
+            <path d="M258 314 L270 337 L283 314 L277 371 L264 371 Z" fill="#fb7185" />
+            <path d="M181 322 C142 341 109 395 87 457" fill="none" stroke="#1b2134" stroke-width="43" stroke-linecap="round" />
+            <path d="M351 322 C392 321 427 278 449 216" fill="none" stroke="#1b2134" stroke-width="43" stroke-linecap="round" />
+            <path d="M90 452 C76 469 77 492 95 502 C113 513 130 498 132 478 C132 459 111 442 90 452 Z" fill="url(#face)" />
+            <path d="M446 218 C439 200 448 181 465 177 C484 173 497 189 491 207 C485 225 459 235 446 218 Z" fill="url(#face)" />
+
+            <path d="M210 214 C210 159 231 127 271 126 C313 126 333 160 331 214 C329 266 306 292 271 293 C237 293 211 267 210 214 Z" fill="url(#face)" />
+            <path d="M205 207 C192 159 211 101 264 92 C315 83 351 126 337 198 C326 170 312 150 292 137 C270 159 240 172 205 207 Z" fill="url(#hair)" />
+            <path d="M205 207 C201 161 225 117 264 99 C242 123 236 156 240 188 Z" fill="#eef0ff" opacity="0.48" />
+            <path d="M231 215 Q245 205 258 216" fill="none" stroke="#23283a" stroke-width="5" stroke-linecap="round" />
+            <path d="M282 216 Q296 205 310 216" fill="none" stroke="#23283a" stroke-width="5" stroke-linecap="round" />
+            <circle cx="248" cy="218" r="4" fill="#0b1220" />
+            <circle cx="295" cy="218" r="4" fill="#0b1220" />
+            <path d="M256 251 Q271 261 289 249" fill="none" stroke="#7f4e58" stroke-width="4" stroke-linecap="round" />
+            <path d="M216 274 Q271 318 326 273 L314 328 Q271 348 227 327 Z" fill="#151a2a" />
+
+            <g class="baton" filter="url(#softGlow)">
+              <path d="M472 192 L370 40" stroke="#ecfeff" stroke-width="7" stroke-linecap="round" />
+              <path d="M370 40 L357 21" stroke="#8ee7ff" stroke-width="12" stroke-linecap="round" />
+              <circle cx="355" cy="18" r="10" fill="#fff" />
+            </g>
+            <g class="applause-marks" fill="none" stroke-linecap="round">
+              <path d="M96 169 L50 127" stroke="#fb7185" stroke-width="8" />
+              <path d="M120 132 L105 73" stroke="#c4b5fd" stroke-width="8" />
+              <path d="M162 119 L170 58" stroke="#8ee7ff" stroke-width="8" />
+              <path d="M400 127 L433 81" stroke="#fb7185" stroke-width="8" />
+            </g>
+          </svg>
+          <span class="encore-label">RAISE THE BATON <b>↗</b></span>
+        </button>
+      </section>
+
+      <aside class="achievement-card" aria-label="達成記録">
+        <span>01</span>
+        <p>FOCUS HELD<br />EFFORT RECORDED<br />MOMENT UNLOCKED</p>
+      </aside>
+
+      <footer>
+        <p>THIS MOMENT WILL NOT REPEAT.</p>
+        <p>2026 // KAKOMONN</p>
+      </footer>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

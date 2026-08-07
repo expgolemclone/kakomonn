@@ -10,6 +10,39 @@ function isSafeEntry(entry) {
   );
 }
 
+function isValidMilestoneList(milestones, interval) {
+  if (milestones === undefined) {
+    return true;
+  }
+  if (!Array.isArray(milestones) || milestones.length === 0) {
+    return false;
+  }
+
+  const uniqueMilestones = new Set();
+  for (const milestone of milestones) {
+    if (
+      !Number.isSafeInteger(milestone) ||
+      milestone <= 0 ||
+      milestone % interval !== 0 ||
+      uniqueMilestones.has(milestone)
+    ) {
+      return false;
+    }
+    uniqueMilestones.add(milestone);
+  }
+  return true;
+}
+
+function assertMilestone(milestone, interval) {
+  if (
+    !Number.isSafeInteger(milestone) ||
+    milestone <= 0 ||
+    milestone % interval !== 0
+  ) {
+    throw new TypeError(`milestone must be a positive multiple of ${interval}.`);
+  }
+}
+
 export function validateManifest(manifest) {
   if (
     manifest === null ||
@@ -24,6 +57,7 @@ export function validateManifest(manifest) {
 
   const ids = new Set();
   const entries = new Set();
+  let generalSiteCount = 0;
   for (const site of manifest.sites) {
     if (
       site === null ||
@@ -31,13 +65,21 @@ export function validateManifest(manifest) {
       typeof site.id !== "string" ||
       !/^[a-z0-9-]+$/.test(site.id) ||
       !isSafeEntry(site.entry) ||
+      !isValidMilestoneList(site.milestones, manifest.milestoneInterval) ||
       ids.has(site.id) ||
       entries.has(site.entry)
     ) {
       throw new TypeError("Celebration manifest contains an invalid site.");
     }
+    if (site.milestones === undefined) {
+      generalSiteCount += 1;
+    }
     ids.add(site.id);
     entries.add(site.entry);
+  }
+
+  if (generalSiteCount === 0) {
+    throw new TypeError("Celebration manifest must contain a general site.");
   }
 
   return manifest;
@@ -50,9 +92,7 @@ export function parseMilestone(search, interval) {
   }
 
   const milestone = Number(raw);
-  if (!Number.isSafeInteger(milestone) || milestone % interval !== 0) {
-    throw new TypeError(`milestone must be a multiple of ${interval}.`);
-  }
+  assertMilestone(milestone, interval);
   return milestone;
 }
 
@@ -72,7 +112,32 @@ export function randomIndex(length, cryptoSource = globalThis.crypto) {
   return values[0] % length;
 }
 
+export function eligibleCelebrations(manifest, milestone) {
+  const validated = validateManifest(manifest);
+  assertMilestone(milestone, validated.milestoneInterval);
+
+  const dedicatedSites = validated.sites.filter((site) =>
+    site.milestones?.includes(milestone),
+  );
+  if (dedicatedSites.length > 0) {
+    return dedicatedSites;
+  }
+  return validated.sites.filter((site) => site.milestones === undefined);
+}
+
 export function chooseCelebration(manifest, cryptoSource = globalThis.crypto) {
   const validated = validateManifest(manifest);
-  return validated.sites[randomIndex(validated.sites.length, cryptoSource)];
+  const generalSites = validated.sites.filter(
+    (site) => site.milestones === undefined,
+  );
+  return generalSites[randomIndex(generalSites.length, cryptoSource)];
+}
+
+export function chooseCelebrationForMilestone(
+  manifest,
+  milestone,
+  cryptoSource = globalThis.crypto,
+) {
+  const candidates = eligibleCelebrations(manifest, milestone);
+  return candidates[randomIndex(candidates.length, cryptoSource)];
 }

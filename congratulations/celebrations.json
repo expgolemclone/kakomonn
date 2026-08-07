@@ -24,6 +24,13 @@
     {
       "id": "midnight-orbit",
       "entry": "sensational/midnight-orbit/index.html"
+    },
+    {
+      "id": "night-examiner",
+      "entry": "darkmode/night-examiner/index.html",
+      "milestones": [
+        150
+      ]
     }
   ]
 }

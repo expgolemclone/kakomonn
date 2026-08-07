@@ -2,6 +2,7 @@ const TOKEN_STORAGE_KEY = "kakomonn-dashboard.sync-token";
 const REQUEST_TIMEOUT_MS = 15_000;
 const DAY_MILLISECONDS = 86_400_000;
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
 class DashboardError extends Error {
   constructor(code, status = null) {
@@ -43,6 +44,8 @@ const elements = {
   chartScroller: required("chart-scroller"),
   chartFrame: required("chart-frame"),
   barChart: required("bar-chart"),
+  accuracyLine: required("accuracy-line"),
+  accuracyPoints: required("accuracy-points"),
   scaleMaximum: required("scale-maximum"),
   scaleMiddle: required("scale-middle"),
   dayDetail: required("day-detail"),
@@ -66,7 +69,7 @@ const state = {
   today: "",
   availableFrom: { correct: "", answered: "" },
   anchorDate: "",
-  view: "week",
+  view: "month",
   selectedDate: "",
   history: null,
   loading: false,
@@ -102,7 +105,7 @@ function daysInMonth(year, month) {
 
 function shiftMonth(value, amount) {
   const { year, month, day } = dateParts(value);
-  const monthIndex = year * 12 + (month - 1) + amount;
+  const monthIndex = year * 12 + month - 1 + amount;
   const nextYear = Math.floor(monthIndex / 12);
   const nextMonth = ((monthIndex % 12) + 12) % 12 + 1;
   const nextDay = Math.min(day, daysInMonth(nextYear, nextMonth));
@@ -119,7 +122,6 @@ function rangeFor(view, anchorDate) {
       to: dateFromOrdinal(fromOrdinal + 6),
     };
   }
-
   const { year, month } = dateParts(anchorDate);
   const prefix = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
   return {
@@ -129,10 +131,9 @@ function rangeFor(view, anchorDate) {
 }
 
 function shiftAnchor(view, anchorDate, amount) {
-  if (view === "week") {
-    return dateFromOrdinal(dateOrdinal(anchorDate) + amount * 7);
-  }
-  return shiftMonth(anchorDate, amount);
+  return view === "week"
+    ? dateFromOrdinal(dateOrdinal(anchorDate) + amount * 7)
+    : shiftMonth(anchorDate, amount);
 }
 
 function formatFullDate(value) {
@@ -150,7 +151,6 @@ function formatPeriod(view, range) {
     const { year, month } = dateParts(range.from);
     return `${year}年${month}月`;
   }
-
   const from = dateParts(range.from);
   const to = dateParts(range.to);
   if (from.year === to.year && from.month === to.month) {
@@ -196,9 +196,7 @@ function isCountPair(value, { nullable }) {
   return (
     validCount(value.correct) &&
     validCount(value.answered) &&
-    (value.correct === null ||
-      value.answered === null ||
-      value.answered >= value.correct)
+    (value.correct === null || value.answered === null || value.answered >= value.correct)
   );
 }
 
@@ -232,7 +230,6 @@ function isHistory(value, expectedRange) {
   ) {
     return false;
   }
-
   const fromOrdinal = dateOrdinal(expectedRange.from);
   const toOrdinal = dateOrdinal(expectedRange.to);
   if (value.days.length !== toOrdinal - fromOrdinal + 1) {
@@ -273,7 +270,6 @@ async function requestJSON(path, token) {
   } finally {
     window.clearTimeout(timeout);
   }
-
   let body;
   try {
     body = await response.json();
@@ -305,589 +301,3 @@ async function fetchHistory(token, range) {
   }
   return value;
 }
-
-function messageFor(error) {
-  switch (error?.code) {
-    case "unauthorized":
-      return "同期tokenが正しくありません.";
-    case "storage_unavailable":
-      return "このbrowserへ同期tokenを保存できません. browserの保存設定を確認してください.";
-    case "request_timeout":
-      return "学習記録の読込みが時間内に完了しませんでした.";
-    case "network_error":
-      return "学習記録へ接続できません. 通信状態を確認してください.";
-    case "server_misconfigured":
-      return "同期APIにtokenが設定されていません.";
-    case "invalid_response":
-      return "同期APIから不正な応答を受け取りました.";
-    case "invalid_request":
-      return "表示期間が正しくありません.";
-    default:
-      return "学習記録を読み込めませんでした.";
-  }
-}
-
-function setAuthBusy(busy) {
-  elements.authToken.disabled = busy;
-  elements.authSubmit.disabled = busy;
-  elements.authSubmit.textContent = busy ? "確認中" : "記録を開く";
-}
-
-function setSettingsBusy(busy) {
-  elements.settingsToken.disabled = busy;
-  elements.saveToken.disabled = busy;
-  elements.forgetToken.disabled = busy;
-  elements.settingsClose.disabled = busy;
-  elements.saveToken.textContent = busy ? "確認中" : "tokenを変更";
-}
-
-function showAuth(message = "") {
-  elements.authPanel.hidden = false;
-  elements.dashboard.hidden = true;
-  elements.loadError.hidden = true;
-  elements.settingsButton.hidden = true;
-  elements.authMessage.textContent = message;
-}
-
-function showDashboard() {
-  elements.authPanel.hidden = true;
-  elements.dashboard.hidden = false;
-  elements.loadError.hidden = true;
-  elements.settingsButton.hidden = false;
-}
-
-function showLoadError(error, recoveryToken) {
-  state.recoveryToken = recoveryToken;
-  elements.authPanel.hidden = true;
-  elements.dashboard.hidden = true;
-  elements.settingsButton.hidden = true;
-  elements.loadError.hidden = false;
-  elements.errorMessage.textContent = messageFor(error);
-}
-
-function setDashboardBusy(busy) {
-  state.loading = busy;
-  elements.dashboard.setAttribute("aria-busy", String(busy));
-  renderNavigation();
-}
-
-function niceMaximum(value) {
-  if (value <= 0) {
-    return 5;
-  }
-  const target = value * 1.12;
-  const magnitude = 10 ** Math.floor(Math.log10(target));
-  const normalized = target / magnitude;
-  const factor = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(
-    (candidate) => candidate >= normalized
-  );
-  return factor * magnitude;
-}
-
-function formatScale(value) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function chooseSelectedDate(days) {
-  const current = days.find(
-    (day) => day.date === state.selectedDate && day.counts.correct !== null
-  );
-  if (current !== undefined) {
-    return current.date;
-  }
-  const today = days.find(
-    (day) => day.date === state.today && day.counts.correct !== null
-  );
-  if (today !== undefined) {
-    return today.date;
-  }
-  const available = days.filter((day) => day.counts.correct !== null);
-  return available.at(-1)?.date ?? "";
-}
-
-function renderDayDetail() {
-  const day = state.history?.days.find(
-    (entry) => entry.date === state.selectedDate
-  );
-  if (day === undefined || day.counts.correct === null) {
-    elements.dayDetail.textContent = "";
-    return;
-  }
-  const answered =
-    day.counts.answered === null
-      ? "解答数は記録開始前"
-      : `解答${day.counts.answered}問`;
-  elements.dayDetail.textContent = `${formatFullDate(day.date)} ${WEEKDAY_LABELS[weekday(day.date)]}曜日, 正解${day.counts.correct}問, ${answered}.`;
-}
-
-function selectDay(date) {
-  state.selectedDate = date;
-  for (const button of elements.barChart.querySelectorAll(".bar-button")) {
-    button.setAttribute("aria-pressed", String(button.dataset.date === date));
-  }
-  renderDayDetail();
-}
-
-function positionSelectedDate() {
-  if (state.view !== "month" || state.selectedDate === "") {
-    elements.chartScroller.scrollLeft = 0;
-    return;
-  }
-  window.requestAnimationFrame(() => {
-    const selected = elements.barChart.querySelector(
-      `[data-date="${state.selectedDate}"]`
-    );
-    if (selected === null) {
-      return;
-    }
-    const target =
-      selected.closest(".bar-slot").offsetLeft -
-      elements.chartScroller.clientWidth / 2 +
-      selected.clientWidth / 2;
-    elements.chartScroller.scrollLeft = Math.max(0, target);
-  });
-}
-
-function renderChart() {
-  const days = state.history.days;
-  const correctAvailableDays = days.filter(
-    (day) => day.counts.correct !== null
-  );
-  const recordedTotal = correctAvailableDays.reduce(
-    (sum, day) => sum + (day.counts.answered ?? day.counts.correct),
-    0
-  );
-  const maximum = niceMaximum(
-    days.reduce(
-      (result, day) =>
-        Math.max(
-          result,
-          day.counts.correct ?? 0,
-          day.counts.answered ?? 0
-        ),
-      0
-    )
-  );
-  state.selectedDate = chooseSelectedDate(days);
-
-  elements.scaleMaximum.textContent = formatScale(maximum);
-  elements.scaleMiddle.textContent = formatScale(maximum / 2);
-  elements.chartFrame.classList.toggle("is-month", state.view === "month");
-  elements.barChart.classList.toggle("is-month", state.view === "month");
-  elements.barChart.style.setProperty("--day-count", String(days.length));
-  elements.barChart.replaceChildren();
-
-  for (const day of days) {
-    const item = document.createElement("li");
-    item.className = "bar-slot";
-    const dayLabel = document.createElement("span");
-    dayLabel.className = "day-label";
-    const { day: dayNumber } = dateParts(day.date);
-    dayLabel.append(String(dayNumber));
-    const weekdayLabel = document.createElement("small");
-    weekdayLabel.textContent = WEEKDAY_LABELS[weekday(day.date)];
-    dayLabel.append(weekdayLabel);
-
-    if (day.date === state.today) {
-      const todayMarker = document.createElement("span");
-      todayMarker.className = "today-marker";
-      todayMarker.textContent = "今日";
-      item.append(todayMarker);
-    }
-
-    if (day.counts.correct === null) {
-      const empty = document.createElement("div");
-      empty.className = "empty-bar";
-      empty.setAttribute("aria-hidden", "true");
-      item.setAttribute(
-        "aria-label",
-        day.date < state.availableFrom.correct
-          ? `${formatFullDate(day.date)}, 記録開始前.`
-          : `${formatFullDate(day.date)}, 未来日.`
-      );
-      item.append(empty, dayLabel);
-    } else {
-      const button = document.createElement("button");
-      button.className = "bar-button";
-      button.type = "button";
-      button.dataset.date = day.date;
-      button.setAttribute("aria-pressed", String(day.date === state.selectedDate));
-      button.setAttribute(
-        "aria-label",
-        `${formatFullDate(day.date)} ${WEEKDAY_LABELS[weekday(day.date)]}曜日, 正解${day.counts.correct}問, ${day.counts.answered === null ? "解答数は記録開始前" : `解答${day.counts.answered}問`}.`
-      );
-      button.style.setProperty(
-        "--correct-percent",
-        `${(day.counts.correct / maximum) * 100}%`
-      );
-      const labelCount = day.counts.answered ?? day.counts.correct;
-      button.style.setProperty(
-        "--bar-label-percent",
-        `${(labelCount / maximum) * 100}%`
-      );
-      const value = document.createElement("span");
-      value.className = "bar-value";
-      value.textContent =
-        day.counts.answered === null
-          ? String(day.counts.correct)
-          : `${day.counts.correct}/${day.counts.answered}`;
-      value.setAttribute("aria-hidden", "true");
-      if (day.counts.answered !== null) {
-        button.classList.add("has-answered-count");
-        button.style.setProperty(
-          "--answered-percent",
-          `${(day.counts.answered / maximum) * 100}%`
-        );
-        const answeredFill = document.createElement("span");
-        answeredFill.className = "bar-fill bar-fill-answered";
-        answeredFill.setAttribute("aria-hidden", "true");
-        button.append(answeredFill);
-      }
-      const correctFill = document.createElement("span");
-      correctFill.className = "bar-fill bar-fill-correct";
-      correctFill.setAttribute("aria-hidden", "true");
-      button.append(value, correctFill);
-      button.addEventListener("click", () => selectDay(day.date));
-      item.append(button, dayLabel);
-    }
-    elements.barChart.append(item);
-  }
-
-  elements.emptyMessage.hidden =
-    correctAvailableDays.length === 0 || recordedTotal !== 0;
-  renderDayDetail();
-  positionSelectedDate();
-}
-
-function renderNavigation() {
-  if (state.today === "" || state.anchorDate === "") {
-    return;
-  }
-  const currentRange = rangeFor(state.view, state.anchorDate);
-  const previousRange = rangeFor(
-    state.view,
-    shiftAnchor(state.view, state.anchorDate, -1)
-  );
-  elements.weekView.setAttribute("aria-pressed", String(state.view === "week"));
-  elements.monthView.setAttribute("aria-pressed", String(state.view === "month"));
-  elements.periodTitle.textContent = formatPeriod(state.view, currentRange);
-  elements.previousPeriod.disabled =
-    state.loading ||
-    state.availableFrom.correct === "" ||
-    previousRange.to < state.availableFrom.correct;
-  elements.nextPeriod.disabled = state.loading || currentRange.to >= state.today;
-  elements.todayButton.disabled =
-    state.loading ||
-    (currentRange.from <= state.today && currentRange.to >= state.today);
-  elements.refreshButton.disabled = state.loading;
-  elements.weekView.disabled = state.loading;
-  elements.monthView.disabled = state.loading;
-}
-
-function formatAverage(value) {
-  return value === null
-    ? "--"
-    : new Intl.NumberFormat("ja-JP", {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      }).format(value);
-}
-
-function renderDashboard() {
-  const range = rangeFor(state.view, state.anchorDate);
-  const correctDays = state.history.days.filter(
-    (day) => day.counts.correct !== null
-  );
-  const answeredDays = state.history.days.filter(
-    (day) => day.counts.answered !== null
-  );
-  const correctTotal = correctDays.reduce(
-    (sum, day) => sum + day.counts.correct,
-    0
-  );
-  const answeredTotal = answeredDays.reduce(
-    (sum, day) => sum + day.counts.answered,
-    0
-  );
-  const correctAverage =
-    correctDays.length === 0 ? null : correctTotal / correctDays.length;
-  const answeredAverage =
-    answeredDays.length === 0 ? null : answeredTotal / answeredDays.length;
-  elements.totalCount.textContent =
-    correctDays.length === 0 ? "--" : String(correctTotal);
-  elements.totalAnswered.textContent =
-    answeredDays.length === 0 ? "--" : String(answeredTotal);
-  elements.averageCount.textContent = formatAverage(correctAverage);
-  elements.averageAnswered.textContent = formatAverage(answeredAverage);
-
-  const trackingParts = [
-    `正解${correctDays.length}日間`,
-    `解答${answeredDays.length}日間`,
-  ];
-  if (range.from < state.availableFrom.correct) {
-    trackingParts.push(
-      `正解記録は${formatShortDate(state.availableFrom.correct)}から`
-    );
-  }
-  if (
-    range.from < state.availableFrom.answered ||
-    state.availableFrom.answered > state.today
-  ) {
-    trackingParts.push(
-      `解答記録は${formatShortDate(state.availableFrom.answered)}から`
-    );
-  }
-  elements.trackingNote.textContent = `${trackingParts.join(", ")}.`;
-  renderNavigation();
-  renderChart();
-  showDashboard();
-  elements.dashboardStatus.textContent = `${new Intl.DateTimeFormat("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date())}に更新しました.`;
-}
-
-async function loadSession(token, resetAnchor) {
-  const syncState = await fetchState(token);
-  const anchorDate =
-    resetAnchor || state.anchorDate === "" ? syncState.date : state.anchorDate;
-  const range = rangeFor(state.view, anchorDate);
-  const history = await fetchHistory(token, range);
-  if (history.today !== syncState.date) {
-    throw new DashboardError("invalid_response");
-  }
-  return { token, today: syncState.date, anchorDate, history };
-}
-
-function applySnapshot(snapshot) {
-  state.token = snapshot.token;
-  state.recoveryToken = snapshot.token;
-  state.today = snapshot.today;
-  state.anchorDate = snapshot.anchorDate;
-  state.history = snapshot.history;
-  state.availableFrom = snapshot.history.availableFrom;
-  renderDashboard();
-}
-
-async function openWithToken(candidate, { persist, resetAnchor }) {
-  const snapshot = await loadSession(candidate, resetAnchor);
-  if (persist) {
-    writeStoredToken(candidate);
-  }
-  applySnapshot(snapshot);
-}
-
-async function loadRange(view, anchorDate) {
-  if (state.loading) {
-    return;
-  }
-  setDashboardBusy(true);
-  try {
-    const range = rangeFor(view, anchorDate);
-    const history = await fetchHistory(state.token, range);
-    state.view = view;
-    state.anchorDate = anchorDate;
-    state.today = history.today;
-    state.availableFrom = history.availableFrom;
-    state.history = history;
-    state.selectedDate = "";
-    renderDashboard();
-  } catch (error) {
-    showLoadError(error, state.token);
-  } finally {
-    setDashboardBusy(false);
-  }
-}
-
-async function refreshDashboard() {
-  if (state.loading || state.token === "") {
-    return;
-  }
-  const currentRange = rangeFor(state.view, state.anchorDate);
-  const wasCurrent = currentRange.from <= state.today && currentRange.to >= state.today;
-  setDashboardBusy(true);
-  try {
-    const snapshot = await loadSession(state.token, false);
-    if (wasCurrent && snapshot.today !== state.today) {
-      snapshot.anchorDate = snapshot.today;
-      snapshot.history = await fetchHistory(
-        state.token,
-        rangeFor(state.view, snapshot.anchorDate)
-      );
-    }
-    applySnapshot(snapshot);
-  } catch (error) {
-    showLoadError(error, state.token);
-  } finally {
-    setDashboardBusy(false);
-  }
-}
-
-elements.authForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const candidate = elements.authToken.value.trim();
-  if (candidate === "") {
-    elements.authMessage.textContent = "同期tokenを入力してください.";
-    return;
-  }
-
-  elements.authMessage.textContent = "";
-  setAuthBusy(true);
-  try {
-    await openWithToken(candidate, { persist: true, resetAnchor: true });
-    elements.authToken.value = "";
-  } catch (error) {
-    elements.authMessage.textContent = messageFor(error);
-  } finally {
-    setAuthBusy(false);
-  }
-});
-
-elements.weekView.addEventListener("click", () => {
-  if (state.view !== "week") {
-    void loadRange("week", state.anchorDate);
-  }
-});
-
-elements.monthView.addEventListener("click", () => {
-  if (state.view !== "month") {
-    void loadRange("month", state.anchorDate);
-  }
-});
-
-elements.previousPeriod.addEventListener("click", () => {
-  void loadRange(
-    state.view,
-    shiftAnchor(state.view, state.anchorDate, -1)
-  );
-});
-
-elements.nextPeriod.addEventListener("click", () => {
-  void loadRange(state.view, shiftAnchor(state.view, state.anchorDate, 1));
-});
-
-elements.todayButton.addEventListener("click", () => {
-  void loadRange(state.view, state.today);
-});
-
-elements.refreshButton.addEventListener("click", () => {
-  void refreshDashboard();
-});
-
-elements.retryButton.addEventListener("click", async () => {
-  if (state.recoveryToken === "") {
-    showAuth();
-    return;
-  }
-  elements.retryButton.disabled = true;
-  try {
-    await openWithToken(state.recoveryToken, {
-      persist: false,
-      resetAnchor: state.anchorDate === "",
-    });
-  } catch (error) {
-    if (error?.code === "unauthorized") {
-      showAuth(messageFor(error));
-    } else {
-      showLoadError(error, state.recoveryToken);
-    }
-  } finally {
-    elements.retryButton.disabled = false;
-  }
-});
-
-elements.settingsButton.addEventListener("click", () => {
-  elements.settingsToken.value = "";
-  elements.settingsMessage.textContent = "";
-  elements.settingsDialog.showModal();
-  elements.settingsToken.focus();
-});
-
-elements.settingsClose.addEventListener("click", () => {
-  elements.settingsDialog.close();
-});
-
-elements.settingsForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const candidate = elements.settingsToken.value.trim();
-  if (candidate === "") {
-    elements.settingsMessage.textContent = "新しい同期tokenを入力してください.";
-    return;
-  }
-
-  elements.settingsMessage.textContent = "";
-  setSettingsBusy(true);
-  try {
-    const snapshot = await loadSession(candidate, false);
-    writeStoredToken(candidate);
-    applySnapshot(snapshot);
-    elements.settingsDialog.close();
-  } catch (error) {
-    elements.settingsMessage.textContent = messageFor(error);
-  } finally {
-    setSettingsBusy(false);
-  }
-});
-
-elements.forgetToken.addEventListener("click", () => {
-  try {
-    removeStoredToken();
-  } catch (error) {
-    elements.settingsMessage.textContent = messageFor(error);
-    return;
-  }
-  state.token = "";
-  state.recoveryToken = "";
-  state.today = "";
-  state.availableFrom = { correct: "", answered: "" };
-  state.anchorDate = "";
-  state.selectedDate = "";
-  state.history = null;
-  elements.settingsDialog.close();
-  showAuth("この端末から同期tokenを削除しました.");
-});
-
-document.addEventListener("visibilitychange", () => {
-  if (
-    document.visibilityState === "visible" &&
-    state.token !== "" &&
-    !state.loading &&
-    !elements.settingsDialog.open
-  ) {
-    void refreshDashboard();
-  }
-});
-
-window.addEventListener("resize", positionSelectedDate);
-
-async function start() {
-  let storedToken;
-  try {
-    storedToken = readStoredToken();
-  } catch (error) {
-    showAuth(messageFor(error));
-    setAuthBusy(true);
-    return;
-  }
-
-  if (storedToken === "") {
-    showAuth();
-    return;
-  }
-
-  state.recoveryToken = storedToken;
-  setAuthBusy(true);
-  try {
-    await openWithToken(storedToken, { persist: false, resetAnchor: true });
-  } catch (error) {
-    if (error?.code === "unauthorized") {
-      showAuth(messageFor(error));
-    } else {
-      showLoadError(error, storedToken);
-    }
-  } finally {
-    setAuthBusy(false);
-  }
-}
-
-void start();

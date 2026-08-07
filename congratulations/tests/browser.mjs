@@ -18,6 +18,7 @@ const selectors = new Map([
   ["hikakin", "main, .stage, .celebration"],
   ["study-complete", "[data-burst]"],
   ["imura-rally", ".stage"],
+  ["void-conductor", "#night-stage"],
 ]);
 
 const retiredPaths = [
@@ -72,6 +73,11 @@ async function verifyEntry(browser, origin, site) {
       await page.waitForFunction(
         () => document.querySelector("#stage")?.dataset.ready === "true",
       );
+    } else if (site.id === "void-conductor") {
+      await page.waitForFunction(
+        () => document.querySelector("#night-stage")?.dataset.ready === "true",
+      );
+      assert.equal(await page.locator("#encore").isVisible(), true);
     }
 
     const layout = await page.evaluate(() => ({

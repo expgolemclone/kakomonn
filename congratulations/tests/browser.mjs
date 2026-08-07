@@ -20,6 +20,7 @@ const selectors = new Map([
   ["imura-rally", ".stage"],
   ["void-conductor", "#night-stage"],
   ["midnight-orbit", "[data-celebration-ready]"],
+  ["night-examiner", "#night-vault"],
 ]);
 
 const retiredPaths = [
@@ -47,7 +48,11 @@ async function verifyEntry(browser, origin, site) {
   });
   const errors = captureErrors(page);
   try {
-    const response = await page.goto(`${origin}/${site.entry}`, {
+    const entryUrl = new URL(`/${site.entry}`, origin);
+    if (site.id === "night-examiner") {
+      entryUrl.searchParams.set("milestone", "150");
+    }
+    const response = await page.goto(entryUrl.href, {
       waitUntil: "domcontentloaded",
     });
     assert.equal(response?.status(), 200, site.id);
@@ -83,6 +88,11 @@ async function verifyEntry(browser, origin, site) {
       await page.waitForFunction(
         () => document.querySelector("[data-celebration-ready]")?.dataset.celebrationReady === "true",
       );
+    } else if (site.id === "night-examiner") {
+      await page.waitForFunction(
+        () => document.querySelector("#night-vault")?.dataset.ready === "true",
+      );
+      assert.equal(await page.locator("[data-milestone]").textContent(), "150");
     }
 
     const layout = await page.evaluate(() => ({
@@ -114,17 +124,47 @@ async function verifyShell(browser, origin) {
     await page.evaluate((url) => window.location.assign(url), `${origin}/?milestone=100`);
     await page.waitForSelector('html[data-state="ready"]');
 
-    const shell = await page.evaluate(() => ({
+    const regularShell = await page.evaluate(() => ({
       milestone: document.querySelector("#milestone-label")?.textContent,
       studyLogText: document.querySelector("#open-study-log")?.textContent,
       selectedSite: document.querySelector("#celebration-frame")?.dataset.siteId,
       frameSource: document.querySelector("#celebration-frame")?.src,
     }));
-    const selected = manifest.sites.find((site) => site.id === shell.selectedSite);
-    assert(selected, `Unknown selected site, ${shell.selectedSite}`);
-    assert.equal(shell.milestone, "100問達成");
-    assert.equal(shell.studyLogText, "週間の記録を見る");
-    assert.equal(new URL(shell.frameSource).pathname.endsWith(`/${selected.entry}`), true);
+    const regularSelection = manifest.sites.find(
+      (site) => site.id === regularShell.selectedSite,
+    );
+    assert(regularSelection, `Unknown selected site, ${regularShell.selectedSite}`);
+    assert.equal(regularShell.milestone, "100問達成");
+    assert.equal(regularShell.studyLogText, "週間の記録を見る");
+    assert.notEqual(regularShell.selectedSite, "night-examiner");
+    assert.equal(
+      new URL(regularShell.frameSource).pathname.endsWith(`/${regularSelection.entry}`),
+      true,
+    );
+
+    await page.goto(`${origin}/?milestone=150`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector('html[data-state="ready"]');
+    const specialShell = await page.evaluate(() => ({
+      milestone: document.querySelector("#milestone-label")?.textContent,
+      selectedSite: document.querySelector("#celebration-frame")?.dataset.siteId,
+      frameSource: document.querySelector("#celebration-frame")?.src,
+    }));
+    assert.equal(specialShell.milestone, "150問達成");
+    assert.equal(specialShell.selectedSite, "night-examiner");
+    assert.equal(
+      new URL(specialShell.frameSource).pathname.endsWith(
+        "/darkmode/night-examiner/index.html",
+      ),
+      true,
+    );
+    const celebrationFrame = page.locator("#celebration-frame");
+    await celebrationFrame.contentFrame().locator("#night-vault").waitFor({
+      state: "visible",
+    });
+    assert.equal(
+      await celebrationFrame.contentFrame().locator("[data-milestone]").textContent(),
+      "150",
+    );
     assert.equal(await page.locator("#open-study-log").isVisible(), true);
     assert.deepEqual(errors, []);
 

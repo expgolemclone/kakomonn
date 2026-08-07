@@ -18,10 +18,14 @@ const manifest = validateManifest(
 );
 
 assert.equal(manifest.milestoneInterval, 50);
-assert.equal(manifest.sites.length, 7);
+assert.equal(manifest.sites.length, 8);
 assert.deepEqual(
   manifest.sites.find((site) => site.id === "night-examiner")?.milestones,
   [150],
+);
+assert.equal(
+  manifest.sites.find((site) => site.id === "midnight-emcee")?.milestones,
+  undefined,
 );
 assert.equal(parseMilestone("?milestone=50", 50), 50);
 assert.equal(parseMilestone("?milestone=150", 50), 150);
@@ -35,7 +39,8 @@ assert.deepEqual(
 for (const milestone of [50, 100, 200]) {
   const eligibleIds = eligibleCelebrations(manifest, milestone).map((site) => site.id);
   assert.equal(eligibleIds.includes("night-examiner"), false);
-  assert.equal(eligibleIds.length, 6);
+  assert.equal(eligibleIds.includes("midnight-emcee"), true);
+  assert.equal(eligibleIds.length, 7);
 }
 assert.equal(
   chooseCelebrationForMilestone(manifest, 150, {

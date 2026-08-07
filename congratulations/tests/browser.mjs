@@ -22,6 +22,7 @@ const selectors = new Map([
   ["midnight-orbit", "[data-celebration-ready]"],
   ["midnight-emcee", "[data-celebration]"],
   ["night-archivist", "[data-night-archivist]"],
+  ["clearance-officer", ".console"],
   ["night-examiner", "#night-vault"],
 ]);
 
@@ -104,6 +105,13 @@ async function verifyEntry(browser, origin, site) {
       );
       assert.equal(await page.locator("[data-stars] .star-node").count(), 12);
       assert.equal(await page.locator("[data-star-lines] .star-line").count(), 12);
+    } else if (site.id === "clearance-officer") {
+      await page.waitForFunction(() =>
+        document.documentElement.classList.contains("is-fired"),
+      );
+      assert.equal(await page.locator(".officer-caption strong").textContent(), "K-50");
+      assert.equal(await page.locator("#replay").isVisible(), true);
+      await page.locator("#replay").click();
     } else if (site.id === "night-examiner") {
       await page.waitForFunction(
         () => document.querySelector("#night-vault")?.dataset.ready === "true",

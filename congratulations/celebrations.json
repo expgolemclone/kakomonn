@@ -34,6 +34,10 @@
       "entry": "sensational/night-archivist/index.html"
     },
     {
+      "id": "clearance-officer",
+      "entry": "darkmode/clearance-officer/index.html"
+    },
+    {
       "id": "night-examiner",
       "entry": "darkmode/night-examiner/index.html",
       "milestones": [

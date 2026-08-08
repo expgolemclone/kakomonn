@@ -18,10 +18,13 @@ export function createPreviewTargets(manifest, origin) {
 
   return [
     { id: "shell", url: shellUrl.href },
-    ...validated.sites.map((site) => ({
-      id: site.id,
-      url: new URL(site.entry, baseUrl).href,
-    })),
+    ...validated.tiers.flatMap((tier) =>
+      tier.sites.map((site) => {
+        const siteUrl = new URL(site.entry, baseUrl);
+        siteUrl.searchParams.set("milestone", String(tier.milestone));
+        return { id: site.id, url: siteUrl.href };
+      }),
+    ),
   ];
 }
 

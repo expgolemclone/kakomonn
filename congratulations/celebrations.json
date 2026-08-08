@@ -1,61 +1,82 @@
 {
   "milestoneInterval": 50,
-  "sites": [
+  "tiers": [
     {
-      "id": "kotonoha",
-      "entry": "normal/kotonoha/index.html"
-    },
-    {
-      "id": "hikakin",
-      "entry": "dance/hikakin/index.html"
-    },
-    {
-      "id": "study-complete",
-      "entry": "sensational/study-complete/index.html"
-    },
-    {
-      "id": "imura-rally",
-      "entry": "sensational/imura-rally/index.html"
-    },
-    {
-      "id": "void-conductor",
-      "entry": "dark/void-conductor/index.html"
-    },
-    {
-      "id": "midnight-orbit",
-      "entry": "sensational/midnight-orbit/index.html"
-    },
-    {
-      "id": "midnight-emcee",
-      "entry": "sensational/midnight-emcee/index.html"
-    },
-    {
-      "id": "night-archivist",
-      "entry": "sensational/night-archivist/index.html"
-    },
-    {
-      "id": "clearance-officer",
-      "entry": "darkmode/clearance-officer/index.html"
-    },
-    {
-      "id": "gouten-stomp",
-      "entry": "darkmode/gouten-stomp/index.html"
-    },
-    {
-      "id": "night-examiner",
-      "entry": "darkmode/night-examiner/index.html",
-      "milestones": [
-        150
+      "milestone": 50,
+      "sites": [
+        {
+          "id": "hikakin",
+          "entry": "50/hikakin/index.html"
+        },
+        {
+          "id": "void-conductor",
+          "entry": "50/void-conductor/index.html"
+        },
+        {
+          "id": "midnight-emcee",
+          "entry": "50/midnight-emcee/index.html"
+        }
       ]
-    }
-,
-    {
-      "id": "forge-fury",
-      "entry": "darkmode/forge-fury/index.html"
     },
     {
-      "id": "taiko-oni",
-      "entry": "darkmode/taiko-oni/index.html"
+      "milestone": 100,
+      "sites": [
+        {
+          "id": "midnight-orbit",
+          "entry": "100/midnight-orbit/index.html"
+        },
+        {
+          "id": "clearance-officer",
+          "entry": "100/clearance-officer/index.html"
+        },
+        {
+          "id": "night-archivist",
+          "entry": "100/night-archivist/index.html"
+        }
+      ]
+    },
+    {
+      "milestone": 150,
+      "sites": [
+        {
+          "id": "gouten-stomp",
+          "entry": "150/gouten-stomp/index.html"
+        },
+        {
+          "id": "imura-rally",
+          "entry": "150/imura-rally/index.html"
+        },
+        {
+          "id": "taiko-oni",
+          "entry": "150/taiko-oni/index.html"
+        }
+      ]
+    },
+    {
+      "milestone": 200,
+      "sites": [
+        {
+          "id": "night-examiner",
+          "entry": "200/night-examiner/index.html"
+        },
+        {
+          "id": "kotonoha",
+          "entry": "200/kotonoha/index.html"
+        }
+      ]
+    },
+    {
+      "milestone": 250,
+      "sites": [
+        {
+          "id": "forge-fury",
+          "entry": "250/forge-fury/index.html"
+        },
+        {
+          "id": "study-complete",
+          "entry": "250/study-complete/index.html"
+        }
+      ]
     }
   ]
 }

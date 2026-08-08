@@ -6,8 +6,7 @@ node_modules/
 .dev.vars.*
 .wrangler/
 congratulations/dist/
-congratulations/mobile-preview.png
-congratulations/preview.png
+congratulations/**/*preview*.png
 kakomonn-reader/kakomonn-reader.user.js
 kakomonn-reader/release-under-test/
 kakomonn-reader/test-results/

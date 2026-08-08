@@ -32,10 +32,12 @@ try {
     validated.milestoneInterval,
   );
   const selected = chooseCelebrationForMilestone(validated, milestone);
+  const entryUrl = new URL(selected.entry, window.location.href);
+  entryUrl.searchParams.set("milestone", String(milestone));
 
   milestoneLabel.textContent = `${milestone}問達成`;
   frame.dataset.siteId = selected.id;
-  frame.src = new URL(selected.entry, window.location.href).href;
+  frame.src = entryUrl.href;
   frame.addEventListener(
     "load",
     () => {

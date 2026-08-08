@@ -1,36 +1,15 @@
 const UINT32_RANGE = 0x1_0000_0000;
+const TIER_COUNT = 5;
 
-function isSafeEntry(entry) {
+function isSafeEntry(entry, milestone) {
   return (
     typeof entry === "string" &&
+    entry.startsWith(`${milestone}/`) &&
     entry.endsWith("/index.html") &&
     !entry.startsWith("/") &&
     !entry.includes("\\") &&
     !entry.split("/").includes("..")
   );
-}
-
-function isValidMilestoneList(milestones, interval) {
-  if (milestones === undefined) {
-    return true;
-  }
-  if (!Array.isArray(milestones) || milestones.length === 0) {
-    return false;
-  }
-
-  const uniqueMilestones = new Set();
-  for (const milestone of milestones) {
-    if (
-      !Number.isSafeInteger(milestone) ||
-      milestone <= 0 ||
-      milestone % interval !== 0 ||
-      uniqueMilestones.has(milestone)
-    ) {
-      return false;
-    }
-    uniqueMilestones.add(milestone);
-  }
-  return true;
 }
 
 function assertMilestone(milestone, interval) {
@@ -49,37 +28,42 @@ export function validateManifest(manifest) {
     typeof manifest !== "object" ||
     !Number.isInteger(manifest.milestoneInterval) ||
     manifest.milestoneInterval <= 0 ||
-    !Array.isArray(manifest.sites) ||
-    manifest.sites.length === 0
+    !Array.isArray(manifest.tiers) ||
+    manifest.tiers.length !== TIER_COUNT
   ) {
     throw new TypeError("Celebration manifest is invalid.");
   }
 
   const ids = new Set();
   const entries = new Set();
-  let generalSiteCount = 0;
-  for (const site of manifest.sites) {
+  for (let index = 0; index < manifest.tiers.length; index += 1) {
+    const tier = manifest.tiers[index];
+    const expectedMilestone = manifest.milestoneInterval * (index + 1);
     if (
-      site === null ||
-      typeof site !== "object" ||
-      typeof site.id !== "string" ||
-      !/^[a-z0-9-]+$/.test(site.id) ||
-      !isSafeEntry(site.entry) ||
-      !isValidMilestoneList(site.milestones, manifest.milestoneInterval) ||
-      ids.has(site.id) ||
-      entries.has(site.entry)
+      tier === null ||
+      typeof tier !== "object" ||
+      tier.milestone !== expectedMilestone ||
+      !Array.isArray(tier.sites) ||
+      tier.sites.length === 0
     ) {
-      throw new TypeError("Celebration manifest contains an invalid site.");
+      throw new TypeError("Celebration manifest contains an invalid tier.");
     }
-    if (site.milestones === undefined) {
-      generalSiteCount += 1;
-    }
-    ids.add(site.id);
-    entries.add(site.entry);
-  }
 
-  if (generalSiteCount === 0) {
-    throw new TypeError("Celebration manifest must contain a general site.");
+    for (const site of tier.sites) {
+      if (
+        site === null ||
+        typeof site !== "object" ||
+        typeof site.id !== "string" ||
+        !/^[a-z0-9-]+$/.test(site.id) ||
+        !isSafeEntry(site.entry, tier.milestone) ||
+        ids.has(site.id) ||
+        entries.has(site.entry)
+      ) {
+        throw new TypeError("Celebration manifest contains an invalid site.");
+      }
+      ids.add(site.id);
+      entries.add(site.entry);
+    }
   }
 
   return manifest;
@@ -94,6 +78,23 @@ export function parseMilestone(search, interval) {
   const milestone = Number(raw);
   assertMilestone(milestone, interval);
   return milestone;
+}
+
+export function allCelebrations(manifest) {
+  const validated = validateManifest(manifest);
+  return validated.tiers.flatMap((tier) => tier.sites);
+}
+
+export function resolveCelebrationTier(manifest, milestone) {
+  const validated = validateManifest(manifest);
+  assertMilestone(milestone, validated.milestoneInterval);
+  const maximumTier = validated.tiers[validated.tiers.length - 1].milestone;
+  const tierMilestone = Math.min(milestone, maximumTier);
+  return validated.tiers.find((tier) => tier.milestone === tierMilestone);
+}
+
+export function celebrationsForMilestone(manifest, milestone) {
+  return resolveCelebrationTier(manifest, milestone).sites;
 }
 
 export function randomIndex(length, cryptoSource = globalThis.crypto) {
@@ -112,32 +113,11 @@ export function randomIndex(length, cryptoSource = globalThis.crypto) {
   return values[0] % length;
 }
 
-export function eligibleCelebrations(manifest, milestone) {
-  const validated = validateManifest(manifest);
-  assertMilestone(milestone, validated.milestoneInterval);
-
-  const dedicatedSites = validated.sites.filter((site) =>
-    site.milestones?.includes(milestone),
-  );
-  if (dedicatedSites.length > 0) {
-    return dedicatedSites;
-  }
-  return validated.sites.filter((site) => site.milestones === undefined);
-}
-
-export function chooseCelebration(manifest, cryptoSource = globalThis.crypto) {
-  const validated = validateManifest(manifest);
-  const generalSites = validated.sites.filter(
-    (site) => site.milestones === undefined,
-  );
-  return generalSites[randomIndex(generalSites.length, cryptoSource)];
-}
-
 export function chooseCelebrationForMilestone(
   manifest,
   milestone,
   cryptoSource = globalThis.crypto,
 ) {
-  const candidates = eligibleCelebrations(manifest, milestone);
+  const candidates = celebrationsForMilestone(manifest, milestone);
   return candidates[randomIndex(candidates.length, cryptoSource)];
 }

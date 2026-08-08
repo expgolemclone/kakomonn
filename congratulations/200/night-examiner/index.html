@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="data:," />
+    <meta
+      name="description"
+      content="夜間採点官ノクスが学習の節目を祝う, ダークモードの祝福ページ."
+    />
+    <title>夜間合格通達</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <main class="night-vault" id="night-vault" data-ready="false">
+      <div class="sky" aria-hidden="true">
+        <span class="star star-a"></span>
+        <span class="star star-b"></span>
+        <span class="star star-c"></span>
+        <span class="star star-d"></span>
+        <span class="orbit orbit-a"></span>
+        <span class="orbit orbit-b"></span>
+      </div>
+
+      <aside class="signal-rail" aria-label="夜間合格通達">
+        <span class="signal-dot"></span>
+        <p>夜間合格通達</p>
+        <span class="signal-code">NX-150</span>
+      </aside>
+
+      <section class="character-stage" aria-labelledby="celebration-title">
+        <div class="answer-moon" aria-hidden="true">
+          <span class="answer-line answer-line-a"></span>
+          <span class="answer-line answer-line-b"></span>
+          <span class="answer-line answer-line-c"></span>
+          <span class="answer-mark answer-mark-a">A</span>
+          <span class="answer-mark answer-mark-b">B</span>
+          <span class="answer-mark answer-mark-c">C</span>
+        </div>
+
+        <figure class="examiner" aria-labelledby="examiner-caption">
+          <svg
+            class="examiner-portrait"
+            viewBox="0 0 520 700"
+            role="img"
+            aria-labelledby="examiner-title examiner-description"
+          >
+            <title id="examiner-title">夜間採点官ノクス</title>
+            <desc id="examiner-description">
+              長い外套を着て, 月型の採点灯を掲げる創作人物.
+            </desc>
+            <defs>
+              <linearGradient id="coat" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#18233f" />
+                <stop offset="0.55" stop-color="#0c1224" />
+                <stop offset="1" stop-color="#070911" />
+              </linearGradient>
+              <linearGradient id="face" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#f4e8cf" />
+                <stop offset="1" stop-color="#cbbda4" />
+              </linearGradient>
+              <radialGradient id="lamp" cx="50%" cy="45%" r="60%">
+                <stop offset="0" stop-color="#ffffff" />
+                <stop offset="0.4" stop-color="#b6fff0" />
+                <stop offset="1" stop-color="#5ee6d0" stop-opacity="0" />
+              </radialGradient>
+              <filter id="soft-glow" x="-80%" y="-80%" width="260%" height="260%">
+                <feGaussianBlur stdDeviation="18" />
+              </filter>
+            </defs>
+
+            <circle cx="356" cy="126" r="92" fill="url(#lamp)" filter="url(#soft-glow)" />
+            <path
+              class="lamp-crescent"
+              d="M351 45c48 0 87 39 87 87s-39 87-87 87c-26 0-50-11-66-29 12 5 24 7 37 7 53 0 96-43 96-96 0-13-2-25-7-37-16-12-37-19-60-19Z"
+              fill="#74f5d2"
+            />
+            <path
+              class="lamp-handle"
+              d="M313 176 276 245"
+              fill="none"
+              stroke="#f4e8cf"
+              stroke-width="15"
+              stroke-linecap="round"
+            />
+
+            <path
+              class="cape-shadow"
+              d="M109 630 176 257c10-54 55-94 110-97l41-2c54-3 102 33 115 85l72 287-98 44-42-121-23 201Z"
+              fill="#03040a"
+              opacity="0.85"
+            />
+            <path
+              class="coat"
+              d="M57 688 154 281c13-57 62-98 121-101l45-2c59-3 111 35 128 92l74 251-111 55-46-126-18 238Z"
+              fill="url(#coat)"
+              stroke="#7b61ff"
+              stroke-opacity="0.55"
+              stroke-width="3"
+            />
+            <path
+              class="coat-lapel"
+              d="m218 210 72 112 64-129 41 49-77 171-57-7-88-151Z"
+              fill="#111a31"
+              stroke="#293b64"
+              stroke-width="3"
+            />
+            <path
+              class="neck"
+              d="M263 181h73v72h-73z"
+              fill="url(#face)"
+            />
+            <path
+              class="face"
+              d="M235 65c22-31 82-40 119-15 36 24 45 76 28 119-17 42-52 69-91 62-45-8-74-58-65-107 4-23 2-44 9-59Z"
+              fill="url(#face)"
+            />
+            <path
+              class="hair"
+              d="M223 121c-6-55 28-103 83-110 52-7 99 27 106 79-24-22-46-31-68-29-20 2-33 14-50 18-22 5-42-1-71 42Z"
+              fill="#090c16"
+              stroke="#293b64"
+              stroke-width="4"
+            />
+            <path
+              d="M226 118c-11 23-9 48 4 71"
+              fill="none"
+              stroke="#090c16"
+              stroke-width="19"
+              stroke-linecap="round"
+            />
+            <path
+              d="M374 103c16 20 19 47 10 69"
+              fill="none"
+              stroke="#090c16"
+              stroke-width="18"
+              stroke-linecap="round"
+            />
+
+            <g class="eyes">
+              <ellipse cx="274" cy="133" rx="15" ry="9" fill="#f4e8cf" />
+              <ellipse cx="342" cy="128" rx="15" ry="9" fill="#f4e8cf" />
+              <circle class="pupil pupil-left" cx="276" cy="133" r="5" fill="#0b1425" />
+              <circle class="pupil pupil-right" cx="344" cy="128" r="5" fill="#0b1425" />
+            </g>
+            <path
+              d="M293 181c18 10 36 8 50-5"
+              fill="none"
+              stroke="#8a524f"
+              stroke-width="5"
+              stroke-linecap="round"
+            />
+            <path
+              d="M309 141 299 168h19"
+              fill="none"
+              stroke="#aa9b84"
+              stroke-width="4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+
+            <path
+              class="raised-arm"
+              d="M371 294c37-18 72-48 93-89"
+              fill="none"
+              stroke="#17213a"
+              stroke-width="48"
+              stroke-linecap="round"
+            />
+            <path
+              class="glove"
+              d="M451 205c7-20 24-31 41-23 16 8 19 27 10 43-9 17-27 25-43 18-15-7-14-22-8-38Z"
+              fill="#f4e8cf"
+            />
+            <path
+              class="lower-arm"
+              d="M181 376c-30 41-44 84-43 126"
+              fill="none"
+              stroke="#121b31"
+              stroke-width="50"
+              stroke-linecap="round"
+            />
+            <path
+              class="stamp-hand"
+              d="M129 499c-7 18 0 38 16 45 17 8 38-1 46-19 8-17 1-36-15-44-17-8-39 1-47 18Z"
+              fill="#f4e8cf"
+            />
+
+            <path
+              class="coat-seam"
+              d="m292 414-9 263"
+              fill="none"
+              stroke="#33466d"
+              stroke-width="3"
+            />
+            <path
+              class="coat-edge"
+              d="M167 552c66 38 165 43 252 8"
+              fill="none"
+              stroke="#74f5d2"
+              stroke-opacity="0.45"
+              stroke-width="3"
+            />
+          </svg>
+          <figcaption id="examiner-caption">
+            <span>夜間採点官</span>
+            <strong>NOX</strong>
+          </figcaption>
+        </figure>
+
+        <div class="pass-stamp" aria-hidden="true">
+          <span>合格</span>
+          <small>SESSION CLEARED</small>
+        </div>
+      </section>
+
+      <section class="message-panel">
+        <p class="eyebrow">
+          <span>ARCHIVE</span>
+          <span>SESSION COMPLETE</span>
+        </p>
+        <h1 id="celebration-title">
+          採点は終わった.
+          <span>今夜のあなたは, 合格だ.</span>
+        </h1>
+        <p class="message-copy">
+          難問へ戻るたび, 昨日の自分より解像度が上がった.
+          その積み重ねを, 今日の記録として残そう.
+        </p>
+
+        <div class="milestone-ticket" aria-label="達成した問題数">
+          <span class="ticket-label">CLEARED</span>
+          <strong data-milestone>200</strong>
+          <span class="ticket-unit">QUESTIONS</span>
+        </div>
+
+        <button class="replay-button" type="button" data-replay>
+          <span>合格印をもう一度</span>
+          <span aria-hidden="true">↗</span>
+        </button>
+
+        <p class="examiner-note">
+          <span>採点官ノクスより</span>
+          次の一問は, 今日のあなたなら解ける.
+        </p>
+      </section>
+
+      <div class="status-line" aria-hidden="true">
+        <span>CONGRATULATIONS SYSTEM</span>
+        <span>NOCTURNE CHANNEL OPEN</span>
+        <span data-clock>00:00:00</span>
+      </div>
+    </main>
+  </body>
+</html>

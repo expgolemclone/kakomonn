@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vite";
 
-import { validateManifest } from "./site-selection.js";
+import { allCelebrations, validateManifest } from "./site-selection.js";
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
 const manifest = validateManifest(
@@ -13,7 +13,10 @@ const manifest = validateManifest(
 const input = {
   shell: resolve(projectRoot, "index.html"),
   ...Object.fromEntries(
-    manifest.sites.map((site) => [site.id, resolve(projectRoot, site.entry)]),
+    allCelebrations(manifest).map((site) => [
+      site.id,
+      resolve(projectRoot, site.entry),
+    ]),
   ),
 };
 

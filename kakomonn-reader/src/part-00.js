@@ -44,7 +44,7 @@
   const EXPLANATION_CHANGE_DELAY_MS = 700;
   const FRAME_SCROLL_RESET_DELAYS_MS = [0, 120, 600];
   const COPY_FEEDBACK_DURATION_MS = 1400;
-  const YANK_SEQUENCE_TIMEOUT_MS = 400;
+  const SHORTCUT_SEQUENCE_TIMEOUT_MS = 400;
   const MAX_CHUNK_LENGTH = 1500;
   const FRAME_DARK_MODE_STYLE_ID = "kakomonn-reader-dark-mode";
   const FRAME_DARK_MODE_CSS = `
@@ -159,7 +159,7 @@
   const AZURE_SPEECH_OUTPUT_FORMAT =
     "audio-24khz-48kbitrate-mono-mp3";
   const SILENT_AUDIO_DATA_URL =
-    "data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
+    "data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
   const SPEECH_GESTURE_STATUS =
     "画面をクリックまたはタップすると読み上げます";
 
@@ -194,8 +194,6 @@
   let explanationTimer = null;
   let frameScrollResetTimers = [];
   let copyFeedbackTimer = null;
-  let yankSequenceTimer = null;
-  let yankSequenceDocument = null;
   let frameMutationObserver = null;
   let lastExplanationText = "";
   let currentQuestionText = "";

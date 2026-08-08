@@ -458,19 +458,10 @@
 
   const ANSWER_CHOICE_SHORTCUT_KEYS = "qwert";
   const DISPLAY_CHOICE_SHORTCUT_KEYS = "asdfg";
-  const SHORTCUT_SEQUENCE_TIMEOUT_MS = YANK_SEQUENCE_TIMEOUT_MS;
   const SHORTCUT_SCROLL_DISTANCE = 100;
   let shortcutSequenceTimer = null;
   let shortcutSequenceDocument = null;
   let shortcutSequenceKey = "";
-
-  stopButton.textContent = "スキップ";
-  stopButton.setAttribute(
-    "aria-label",
-    "現在の読み上げをスキップ,ショートカットはsk"
-  );
-  stopButton.removeAttribute("aria-keyshortcuts");
-  stopButton.title = "ショートカット: sk";
 
   function shortcutTargetElement(target) {
     if (target?.nodeType === target?.ownerDocument?.defaultView?.Node.ELEMENT_NODE) {

@@ -434,14 +434,18 @@ async function main() {
       "ショートカット: yy",
     );
     assert.equal(
+      await page.locator("#kakomonn-reader-stop").innerText(),
+      "スキップ",
+    );
+    assert.equal(
       await page
         .locator("#kakomonn-reader-stop")
         .getAttribute("aria-keyshortcuts"),
-      "s",
+      null,
     );
     assert.equal(
       await page.locator("#kakomonn-reader-stop").getAttribute("title"),
-      "ショートカット: s",
+      "ショートカット: sk",
     );
     const readerLayout = await page.evaluate(() => {
       const controls = document
@@ -621,18 +625,26 @@ async function main() {
       ".problem_detail > ul.list > li",
     );
     await page.locator("#kakomonn-reader-sync-settings-button").focus();
+
     await page.keyboard.press("q");
+    assert.equal(await answerInputs.first().isChecked(), true);
+    await page.keyboard.press("w");
+    assert.equal(await answerInputs.nth(1).isChecked(), true);
+    assert.equal(await answerInputs.first().isChecked(), false);
+
+    await page.keyboard.press("a");
     assert.equal(await displayChoices.first().evaluate((choice) =>
       choice.classList.contains("is-active")), true);
-    await page.keyboard.press("q");
+    await page.keyboard.press("a");
     assert.equal(await displayChoices.first().evaluate((choice) =>
       choice.classList.contains("is-active")), false);
-    await page.keyboard.press("w");
-    assert.equal(await displayChoices.nth(1).evaluate((choice) =>
-      choice.classList.contains("is-active")), true);
-    await page.keyboard.press("w");
+    await page.keyboard.press("s");
+    await page.waitForTimeout(200);
     assert.equal(await displayChoices.nth(1).evaluate((choice) =>
       choice.classList.contains("is-active")), false);
+    await page.waitForTimeout(300);
+    assert.equal(await displayChoices.nth(1).evaluate((choice) =>
+      choice.classList.contains("is-active")), true);
 
     await childFrame.evaluate(() => {
       const list = document.querySelector(".problem_detail > ul.list");
@@ -640,41 +652,41 @@ async function main() {
       for (let choiceNumber = 3; choiceNumber <= 6; choiceNumber += 1) {
         list.insertAdjacentHTML(
           "beforeend",
-          `<li data-y-shortcut-fixture><div>選択肢${choiceNumber}</div></li>`,
+          `<li data-shortcut-fixture><div>選択肢${choiceNumber}</div></li>`,
         );
         checks.insertAdjacentHTML(
           "beforeend",
-          `<li data-y-shortcut-fixture><label><input type="radio" name="answer">${choiceNumber}</label></li>`,
+          `<li data-shortcut-fixture><label><input type="radio" name="answer">${choiceNumber}</label></li>`,
         );
       }
       for (const choice of list.querySelectorAll(
-        "li[data-y-shortcut-fixture]",
+        "li[data-shortcut-fixture]",
       )) {
         choice.addEventListener("click", () => {
           choice.classList.toggle("is-active");
         });
       }
     });
-    await page.keyboard.press("y");
-    await page.waitForTimeout(200);
-    assert.equal(await displayChoices.nth(5).evaluate((choice) =>
-      choice.classList.contains("is-active")), false);
-    await page.waitForTimeout(300);
-    assert.equal(await displayChoices.nth(5).evaluate((choice) =>
+
+    await page.keyboard.press("g");
+    await page.waitForTimeout(500);
+    assert.equal(await displayChoices.nth(4).evaluate((choice) =>
       choice.classList.contains("is-active")), true);
-    await page.keyboard.press("y");
-    await page.keyboard.press("q");
-    assert.equal(await displayChoices.nth(5).evaluate((choice) =>
-      choice.classList.contains("is-active")), false);
-    assert.equal(await displayChoices.first().evaluate((choice) =>
+    await childFrame.locator("body").evaluate(() => window.scrollTo(0, 600));
+    await page.keyboard.press("g");
+    await page.keyboard.press("g");
+    await childFrame.locator("body").evaluate(() =>
+      new Promise((resolve) => requestAnimationFrame(() => resolve())),
+    );
+    assert.equal(
+      await childFrame.locator("body").evaluate(() => window.scrollY),
+      0,
+    );
+    assert.equal(await displayChoices.nth(4).evaluate((choice) =>
       choice.classList.contains("is-active")), true);
-    await page.keyboard.press("q");
-    assert.equal(await displayChoices.first().evaluate((choice) =>
-      choice.classList.contains("is-active")), false);
+
     await page.keyboard.press("y");
     await page.keyboard.press("y");
-    assert.equal(await displayChoices.nth(5).evaluate((choice) =>
-      choice.classList.contains("is-active")), false);
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 0);
     await childFrame.locator("body").evaluate((body) => {
       for (const init of [
@@ -690,22 +702,20 @@ async function main() {
       }
     });
     await page.waitForTimeout(500);
-    assert.equal(await displayChoices.nth(5).evaluate((choice) =>
-      choice.classList.contains("is-active")), false);
-    await childFrame.locator("[data-y-shortcut-fixture]").evaluateAll(
-      (elements) => elements.forEach((element) => element.remove()),
-    );
+    assert.equal(await page.evaluate(() => window.__copiedTexts.length), 0);
 
-    await page.keyboard.press("2");
-    assert.equal(await answerInputs.nth(1).isChecked(), true);
-    await page.keyboard.press("3");
-    assert.equal(await answerInputs.nth(1).isChecked(), true);
-    await answerInputs.first().focus();
-    await page.keyboard.press("1");
+    await page.keyboard.press("q");
     assert.equal(await answerInputs.first().isChecked(), true);
-    assert.equal(await answerInputs.nth(1).isChecked(), false);
+    await page.keyboard.press("r");
+    assert.equal(await answerInputs.first().isChecked(), true);
+    await answerInputs.nth(1).focus();
+    await page.keyboard.press("w");
+    assert.equal(await answerInputs.nth(1).isChecked(), true);
+    assert.equal(await answerInputs.first().isChecked(), false);
+    await page.keyboard.press("q");
+    assert.equal(await answerInputs.first().isChecked(), true);
 
-    await page.keyboard.press("Space");
+    await page.keyboard.press("Enter");
     assert.equal(
       await childFrame.evaluate(() => window.__answerButtonClicks),
       1,
@@ -716,7 +726,7 @@ async function main() {
         new KeyboardEvent("keydown", {
           bubbles: true,
           cancelable: true,
-          key: " ",
+          key: "Enter",
           repeat: true,
         }),
       );
@@ -725,7 +735,7 @@ async function main() {
           bubbles: true,
           cancelable: true,
           ctrlKey: true,
-          key: "2",
+          key: "w",
         }),
       );
       target.dispatchEvent(
@@ -733,7 +743,7 @@ async function main() {
           bubbles: true,
           cancelable: true,
           isComposing: true,
-          key: "q",
+          key: "a",
         }),
       );
     });
@@ -745,35 +755,20 @@ async function main() {
     assert.equal(await displayChoices.first().evaluate((choice) =>
       choice.classList.contains("is-active")), false);
 
-    await childFrame.locator("body").evaluate(() => window.scrollTo(0, 0));
+    await childFrame.locator("body").evaluate(() => window.scrollTo(0, 100));
     await answerInputs.first().focus();
-    await childFrame.locator("body").evaluate(() => window.scrollTo(0, 0));
-    await page.keyboard.press("j");
+    await page.keyboard.press("z");
     await childFrame.locator("body").evaluate(() =>
       new Promise((resolve) => requestAnimationFrame(() => resolve())),
     );
     assert.equal(
       await childFrame.locator("body").evaluate(() => window.scrollY),
-      100,
+      200,
     );
-    await page.keyboard.press("k");
+    await page.keyboard.press("x");
     await childFrame.locator("body").evaluate(() =>
       new Promise((resolve) => requestAnimationFrame(() => resolve())),
     );
-    assert.equal(
-      await childFrame.locator("body").evaluate(() => window.scrollY),
-      0,
-    );
-    await childFrame.locator("body").evaluate((body) => {
-      body.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          bubbles: true,
-          cancelable: true,
-          key: "j",
-          repeat: true,
-        }),
-      );
-    });
     assert.equal(
       await childFrame.locator("body").evaluate(() => window.scrollY),
       100,
@@ -783,26 +778,43 @@ async function main() {
         new KeyboardEvent("keydown", {
           bubbles: true,
           cancelable: true,
-          key: "k",
+          key: "z",
           repeat: true,
         }),
       );
     });
     assert.equal(
       await childFrame.locator("body").evaluate(() => window.scrollY),
-      0,
+      200,
+    );
+    await childFrame.locator("body").evaluate((body) => {
+      body.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "x",
+          repeat: true,
+        }),
+      );
+    });
+    assert.equal(
+      await childFrame.locator("body").evaluate(() => window.scrollY),
+      100,
     );
 
     const shortcutTextInput = childFrame.locator("#shortcut-text-input");
     await shortcutTextInput.focus();
-    await page.keyboard.type("2qjky ");
-    assert.equal(await shortcutTextInput.inputValue(), "2qjky ");
+    await page.keyboard.type("qwert asdfg sk gg yy xz ");
+    assert.equal(
+      await shortcutTextInput.inputValue(),
+      "qwert asdfg sk gg yy xz ",
+    );
     assert.equal(await answerInputs.first().isChecked(), true);
     assert.equal(await displayChoices.first().evaluate((choice) =>
       choice.classList.contains("is-active")), false);
     assert.equal(
       await childFrame.locator("body").evaluate(() => window.scrollY),
-      0,
+      100,
     );
     assert.equal(
       await childFrame.evaluate(() => window.__answerButtonClicks),
@@ -810,6 +822,10 @@ async function main() {
     );
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
+    assert.equal(
+      await childFrame.evaluate(() => window.__answerButtonClicks),
+      2,
+    );
     assert.equal(
       await page.evaluate(
         () =>
@@ -820,6 +836,10 @@ async function main() {
           ).length,
       ),
       0,
+    );
+
+    await childFrame.locator("[data-shortcut-fixture]").evaluateAll(
+      (elements) => elements.forEach((element) => element.remove()),
     );
 
     assert.deepEqual((await azureSpeechCalls(page))[0], {
@@ -1090,8 +1110,8 @@ async function main() {
       () => window.__audioPauseCalls,
     );
     await speechShortcutInput.focus();
-    await speechShortcutPage.keyboard.type("sm");
-    assert.equal(await speechShortcutInput.inputValue(), "sm");
+    await speechShortcutPage.keyboard.type("sk ");
+    assert.equal(await speechShortcutInput.inputValue(), "sk ");
     assert.equal(
       await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
       "問題文 1/1",
@@ -1105,7 +1125,7 @@ async function main() {
     const playCallsBeforePause = await speechShortcutPage.evaluate(
       () => window.__audioPlayCalls,
     );
-    await speechShortcutPage.keyboard.press("m");
+    await speechShortcutPage.keyboard.press("Space");
     assert.equal(
       await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
       "読み上げ一時停止",
@@ -1119,7 +1139,7 @@ async function main() {
       true,
     );
 
-    await speechShortcutPage.keyboard.press("m");
+    await speechShortcutPage.keyboard.press("Space");
     await speechShortcutPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
@@ -1131,6 +1151,7 @@ async function main() {
     );
 
     await speechShortcutPage.keyboard.press("s");
+    await speechShortcutPage.keyboard.press("k");
     assert.equal(
       await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
       "待機中",
@@ -1230,10 +1251,10 @@ async function main() {
       "--問,次は50問",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").focus();
-    await setupPage.keyboard.type("1 qjk ");
+    await setupPage.keyboard.type("qwert asdfg sk gg yy xz ");
     assert.equal(
       await setupPage.locator("#kakomonn-reader-sync-token").inputValue(),
-      "1 qjk ",
+      "qwert asdfg sk gg yy xz ",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").fill("test-sync-token");
     await setupPage.keyboard.press("Enter");

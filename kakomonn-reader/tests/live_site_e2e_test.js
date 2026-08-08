@@ -34,6 +34,7 @@ const createQuestionUrl = "https://chushoks.kakomonn.com/createques";
 const randomQuestionUrl = "https://chushoks.kakomonn.com/questions";
 const readerReadyTimeout = 30_000;
 const darkModeImageFilter = "invert(1) hue-rotate(180deg)";
+const answerShortcutKeys = "qwert";
 
 async function getQuestionFrame(page) {
   await page.locator("#kakomonn-reader-frame").waitFor({ state: "attached" });
@@ -83,18 +84,23 @@ async function submitAnswer(page, frame, answerText, inputMethod = "click") {
 
   const answerInput = answerInputs.nth(choiceIndex);
   if (inputMethod === "keyboard") {
+    assert.equal(
+      choiceIndex < answerShortcutKeys.length,
+      true,
+      `keyboard shortcut is unavailable for choice ${choiceIndex + 1}`,
+    );
     const displayedChoice = frame
       .locator(".problem_detail > ul.list > li")
       .first();
     await answerInputs.first().focus();
-    await page.keyboard.press("q");
+    await page.keyboard.press("a");
     assert.equal(
       await displayedChoice.evaluate((choice) =>
         choice.classList.contains("is-active"),
       ),
       true,
     );
-    await page.keyboard.press("q");
+    await page.keyboard.press("a");
     assert.equal(
       await displayedChoice.evaluate((choice) =>
         choice.classList.contains("is-active"),
@@ -108,13 +114,13 @@ async function submitAnswer(page, frame, answerText, inputMethod = "click") {
       true,
     );
     await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
-    await page.keyboard.press("j");
+    await page.keyboard.press("z");
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-frame")?.contentWindow
           .scrollY === 100,
     );
-    await page.keyboard.press("k");
+    await page.keyboard.press("x");
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-frame")?.contentWindow
@@ -122,7 +128,7 @@ async function submitAnswer(page, frame, answerText, inputMethod = "click") {
     );
 
     await page.locator("#kakomonn-reader-sync-settings-button").focus();
-    await page.keyboard.press(choiceIndex === 9 ? "0" : String(choiceIndex + 1));
+    await page.keyboard.press(answerShortcutKeys[choiceIndex]);
   } else {
     assert.equal(inputMethod, "click");
     await frame
@@ -132,7 +138,7 @@ async function submitAnswer(page, frame, answerText, inputMethod = "click") {
   }
   assert.equal(await answerInput.isChecked(), true);
   if (inputMethod === "keyboard") {
-    await page.keyboard.press("Space");
+    await page.keyboard.press("Enter");
   } else {
     await frame.locator("#send_exam_btn").click();
   }

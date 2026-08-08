@@ -456,14 +456,21 @@
     void handleNextQuestion();
   }
 
-  const ANSWER_CHOICE_SHORTCUT_KEYS = "1234567890";
-  const DISPLAY_CHOICE_SHORTCUT_KEYS = "qwertyuiop";
-  const YANK_SHORTCUT_KEY = "y";
-  const SPEECH_STOP_SHORTCUT_KEY = "s";
-  const SPEECH_PAUSE_SHORTCUT_KEY = "m";
-  const YANK_DISPLAY_CHOICE_INDEX =
-    DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf(YANK_SHORTCUT_KEY);
+  const ANSWER_CHOICE_SHORTCUT_KEYS = "qwert";
+  const DISPLAY_CHOICE_SHORTCUT_KEYS = "asdfg";
+  const SHORTCUT_SEQUENCE_TIMEOUT_MS = YANK_SEQUENCE_TIMEOUT_MS;
   const SHORTCUT_SCROLL_DISTANCE = 100;
+  let shortcutSequenceTimer = null;
+  let shortcutSequenceDocument = null;
+  let shortcutSequenceKey = "";
+
+  stopButton.textContent = "スキップ";
+  stopButton.setAttribute(
+    "aria-label",
+    "現在の読み上げをスキップ,ショートカットはsk"
+  );
+  stopButton.removeAttribute("aria-keyshortcuts");
+  stopButton.title = "ショートカット: sk";
 
   function shortcutTargetElement(target) {
     if (target?.nodeType === target?.ownerDocument?.defaultView?.Node.ELEMENT_NODE) {
@@ -597,45 +604,87 @@
     return true;
   }
 
-  function clearYankSequence() {
-    if (yankSequenceTimer !== null) {
-      window.clearTimeout(yankSequenceTimer);
-      yankSequenceTimer = null;
+  function clearShortcutSequence() {
+    if (shortcutSequenceTimer !== null) {
+      window.clearTimeout(shortcutSequenceTimer);
+      shortcutSequenceTimer = null;
     }
-    yankSequenceDocument = null;
+    shortcutSequenceDocument = null;
+    shortcutSequenceKey = "";
   }
 
-  function commitSingleYShortcut() {
-    const sourceDocument = yankSequenceDocument;
-    clearYankSequence();
+  function commitPendingShortcut() {
+    const key = shortcutSequenceKey;
+    const sourceDocument = shortcutSequenceDocument;
+    clearShortcutSequence();
     if (sourceDocument !== frameDocument || !syncSettings.hidden) {
       return false;
     }
-    return activateDisplayChoice(YANK_DISPLAY_CHOICE_INDEX);
+    if (key === "s") {
+      return activateDisplayChoice(DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf("s"));
+    }
+    if (key === "g") {
+      return activateDisplayChoice(DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf("g"));
+    }
+    return false;
   }
 
-  function startYankSequence() {
-    yankSequenceDocument = frameDocument;
-    yankSequenceTimer = window.setTimeout(() => {
-      commitSingleYShortcut();
-    }, YANK_SEQUENCE_TIMEOUT_MS);
+  function startShortcutSequence(key) {
+    shortcutSequenceKey = key;
+    shortcutSequenceDocument = frameDocument;
+    shortcutSequenceTimer = window.setTimeout(() => {
+      if (key === "s" || key === "g") {
+        commitPendingShortcut();
+      } else {
+        clearShortcutSequence();
+      }
+    }, SHORTCUT_SEQUENCE_TIMEOUT_MS);
   }
 
-  function isReaderShortcutKey(event, key, scrollDirection) {
-    return (
-      (event.key === "Enter" && !nextQuestionButton.disabled) ||
-      ANSWER_CHOICE_SHORTCUT_KEYS.includes(event.key) ||
-      event.key === " " ||
-      DISPLAY_CHOICE_SHORTCUT_KEYS.includes(key) ||
-      key === SPEECH_STOP_SHORTCUT_KEY ||
-      key === SPEECH_PAUSE_SHORTCUT_KEY ||
-      scrollDirection !== 0
-    );
+  function completeShortcutSequence(key) {
+    if (
+      shortcutSequenceTimer === null ||
+      shortcutSequenceDocument !== frameDocument
+    ) {
+      return false;
+    }
+
+    if (shortcutSequenceKey === "s" && key === "k") {
+      clearShortcutSequence();
+      stopSpeech();
+      return true;
+    }
+    if (shortcutSequenceKey === "g" && key === "g") {
+      clearShortcutSequence();
+      resetFrameScrollToTop();
+      return true;
+    }
+    if (shortcutSequenceKey === "y" && key === "y") {
+      clearShortcutSequence();
+      if (!copyButton.disabled) {
+        copyButton.click();
+      }
+      return true;
+    }
+
+    commitPendingShortcut();
+    return false;
+  }
+
+  function handleEnterShortcut() {
+    if (getCurrentAnswerResult() === "unknown") {
+      return activateAnswerButton();
+    }
+    if (nextQuestionButton.disabled) {
+      return false;
+    }
+    nextQuestionButton.click();
+    return true;
   }
 
   function onReaderKeyDown(event) {
     const key = event.key.toLowerCase();
-    const scrollDirection = key === "j" ? 1 : key === "k" ? -1 : 0;
+    const scrollDirection = key === "z" ? 1 : key === "x" ? -1 : 0;
     if (
       event.altKey ||
       event.ctrlKey ||
@@ -646,49 +695,29 @@
       isEditableShortcutTarget(event.target) ||
       (event.repeat && scrollDirection === 0)
     ) {
-      clearYankSequence();
+      clearShortcutSequence();
       return;
     }
 
-    let handled = false;
-    if (key === YANK_SHORTCUT_KEY) {
-      if (yankSequenceTimer === null) {
-        startYankSequence();
-      } else {
-        clearYankSequence();
-        if (!copyButton.disabled) {
-          copyButton.click();
-        }
-      }
-      handled = true;
-    } else if (event.key === "Enter" && !nextQuestionButton.disabled) {
-      if (yankSequenceTimer !== null) {
-        commitSingleYShortcut();
-      }
-      nextQuestionButton.click();
-      handled = true;
-    } else {
-      const answerChoiceIndex = ANSWER_CHOICE_SHORTCUT_KEYS.indexOf(event.key);
-      const displayChoiceIndex = DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf(key);
-      if (
-        yankSequenceTimer !== null &&
-        isReaderShortcutKey(event, key, scrollDirection)
-      ) {
-        commitSingleYShortcut();
-      }
-      if (answerChoiceIndex >= 0) {
-        handled = activateAnswerChoice(answerChoiceIndex);
-      } else if (event.key === " ") {
-        handled = activateAnswerButton();
-      } else if (key === SPEECH_STOP_SHORTCUT_KEY) {
-        stopSpeech();
+    let handled = completeShortcutSequence(key);
+    if (!handled) {
+      if (key === "s" || key === "g" || key === "y") {
+        startShortcutSequence(key);
         handled = true;
-      } else if (key === SPEECH_PAUSE_SHORTCUT_KEY) {
+      } else if (event.key === "Enter") {
+        handled = handleEnterShortcut();
+      } else if (event.key === " ") {
         handled = toggleSpeechPause();
-      } else if (displayChoiceIndex >= 0) {
-        handled = activateDisplayChoice(displayChoiceIndex);
-      } else if (scrollDirection !== 0) {
-        handled = scrollQuestionFrame(scrollDirection);
+      } else {
+        const answerChoiceIndex = ANSWER_CHOICE_SHORTCUT_KEYS.indexOf(key);
+        const displayChoiceIndex = DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf(key);
+        if (answerChoiceIndex >= 0) {
+          handled = activateAnswerChoice(answerChoiceIndex);
+        } else if (displayChoiceIndex >= 0) {
+          handled = activateDisplayChoice(displayChoiceIndex);
+        } else if (scrollDirection !== 0) {
+          handled = scrollQuestionFrame(scrollDirection);
+        }
       }
     }
 
@@ -718,7 +747,7 @@
   }
 
   function clearFrameState() {
-    clearYankSequence();
+    clearShortcutSequence();
     if (loadTimer !== null) {
       clearTimeout(loadTimer);
       loadTimer = null;

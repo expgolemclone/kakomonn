@@ -5,14 +5,14 @@
 ## 機能
 
 - 選択肢を除く問題文と解説の自動連続読み上げ.
-- `s`で現在の読み上げを停止し,`m`で一時停止と再開を切り替えます. 停止後も,次の解説や次問は自動で読み上げます.
-- 数字keyの`1`から`9`,`0`で解答用の選択肢1から10を選び,Spaceで「解答する」を実行します.
-- `q,w,e,r,t,y,u,i,o,p`で表示選択肢1から10の取り消し線を切り替えます.
-- `j`で100px下へ,`k`で100px上へscrollします. 検索欄や計算欄などへ入力中はkeyboard shortcutを無効にします.
-- 解答後は,下部の「次の問題へ」をクリックまたはタップするか,Enterキーを押すと次問へ進みます.
+- `sk`で現在の読み上げだけをスキップし,`Space`で一時停止と再開を切り替えます. スキップ後も,次の解説や次問は自動で読み上げます.
+- `q,w,e,r,t`で解答用の選択肢1から5を選びます.
+- `a,s,d,f,g`で表示選択肢1から5の取り消し線を切り替えます. `s`は`sk`判定のため400ms後に反映されます.
+- `z`で100px下へ,`x`で100px上へscrollし,`gg`でpage topへ戻ります. 検索欄や計算欄などへ入力中はkeyboard shortcutを無効にします.
+- `Enter`は未解答なら解答を実行し,解答後は次問へ進みます. 下部の`次の問題へ`をクリックまたはタップして進むこともできます.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
 - 正解数と解答数の日次累計. 値は`kakomonn-sync`へ保存され,Win11 EdgeとiPhone Safariで共有されます.同期Workerのrootでは正解数を主指標,解答数を参考指標にした週と月の日別推移も確認できます.
-- 解答後に, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でクリップボードへコピー. `yy`でもコピーできます. 単発の`y`は400ms後に従来どおり表示選択肢6の取り消し線を切り替えます.
+- 解答後に, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でクリップボードへコピー. `yy`でもコピーできます.
 - 50,100,150問のように50問進むごとに,ランダムな祝福ページを表示します.祝福ページから今週の学習ログを開き,そこから戻ると準備済みの次の問題を再開します.
 
 ## ビルド
@@ -77,13 +77,13 @@ $edgeExecutable = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application
 Start-Process -FilePath $edgeExecutable -ArgumentList "--user-data-dir=$env:KAKOMONN_EDGE_USER_DATA_DIR",'edge://inspect/#remote-debugging'
 ```
 
-専用profileの`edge://inspect/#remote-debugging`でリモートデバッグを有効にしてから次の完全testを実行します. `KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ,ES2020構文,local smoke test,実サイトE2Eに続けて,専用profileの実Edge,実Tampermonkey,デプロイ済みの同期Workerを一続きで検証します. 最後のE2Eは専用Edgeに表示されるリモートデバッグの「許可」をWindows UI Automationで自動操作し,Tampermonkeyへ保存されたbuild fingerprintが生成fileと一致することを確認してから,Edgeの通常clickで正解を1件送信し,問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに,本番の正解数と解答数を1件ずつ増やし,外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
+専用profileの`edge://inspect/#remote-debugging`でリモートデバッグを有効にしてから次の完全testを実行します. `KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ,ES2020構文,local smoke test,実サイトE2Eに続けて,専用profileの実Edge,実Tampermonkey,デプロイ済みの同期Workerを一続きで検証します. 最後のE2Eは専用Edgeに表示されるリモートデバッグの`許可`をWindows UI Automationで自動操作し,Tampermonkeyへ保存されたbuild fingerprintが生成fileと一致することを確認してから,Edgeの通常clickで正解を1件送信し,問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに,本番の正解数と解答数を1件ずつ増やし,外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
 
 ```powershell
 $env:KAKOMONN_SYNC_TOKEN='<SYNC_TOKEN>'
 npm test
 ```
 
-`KAKOMONN_EDGE_USER_DATA_DIR`は必須です. 通常利用するEdge user data directoryとその配下は使用できません. 接続時に専用profileのEdgeが表示するリモートデバッグの承認は,testが「許可」を自動操作します.
+`KAKOMONN_EDGE_USER_DATA_DIR`は必須です. 通常利用するEdge user data directoryとその配下は使用できません. 接続時に専用profileのEdgeが表示するリモートデバッグの承認は,testが`許可`を自動操作します.
 
 `npm run test:kakomonn-live-sync`で最後のlive E2Eだけを再実行できますが,build,local test,smoke test,live-site E2Eを含む完全な完了条件は`npm test`です. live-sync E2Eをskipまたはforce通過させるoptionはありません. `npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます.

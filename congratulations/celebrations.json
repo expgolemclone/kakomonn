@@ -38,12 +38,17 @@
       "entry": "darkmode/clearance-officer/index.html"
     },
     {
+      "id": "gouten-stomp",
+      "entry": "darkmode/gouten-stomp/index.html"
+    },
+    {
       "id": "night-examiner",
       "entry": "darkmode/night-examiner/index.html",
       "milestones": [
         150
       ]
-    },
+    }
+,
     {
       "id": "forge-fury",
       "entry": "darkmode/forge-fury/index.html"

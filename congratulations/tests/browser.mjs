@@ -23,6 +23,7 @@ const selectors = new Map([
   ["midnight-emcee", "[data-celebration]"],
   ["night-archivist", "[data-night-archivist]"],
   ["clearance-officer", ".console"],
+  ["forge-fury", "[data-forge]"],
   ["night-examiner", "#night-vault"],
 ]);
 
@@ -112,6 +113,14 @@ async function verifyEntry(browser, origin, site) {
       assert.equal(await page.locator(".officer-caption strong").textContent(), "K-50");
       assert.equal(await page.locator("#replay").isVisible(), true);
       await page.locator("#replay").click();
+    } else if (site.id === "forge-fury") {
+      await page.waitForFunction(
+        () => document.querySelector("[data-forge]")?.dataset.ready === "true",
+      );
+      assert.equal(await page.locator("[data-smith]").isVisible(), true);
+      assert.equal(await page.locator("[data-replay]").isVisible(), true);
+      await page.locator("[data-replay]").click();
+      assert.match(await page.locator("[data-announcement]").textContent(), /達成確定/);
     } else if (site.id === "night-examiner") {
       await page.waitForFunction(
         () => document.querySelector("#night-vault")?.dataset.ready === "true",

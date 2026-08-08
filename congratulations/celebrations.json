@@ -43,6 +43,10 @@
       "milestones": [
         150
       ]
+    },
+    {
+      "id": "forge-fury",
+      "entry": "darkmode/forge-fury/index.html"
     }
   ]
 }

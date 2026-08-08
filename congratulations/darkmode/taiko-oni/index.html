@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#070605" />
+    <meta
+      name="description"
+      content="四本腕の太鼓鬼ゴンが大太鼓を連打して学習の節目を祝う, ダークモードの祝福ページ."
+    />
+    <title>地鳴り祝祭, GON</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <main class="festival" data-festival data-ready="false">
+      <div class="soot-field" data-soot aria-hidden="true"></div>
+      <div class="floor-rings" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+
+      <header class="festival-header">
+        <div class="seal" aria-hidden="true">
+          <span>祝</span>
+        </div>
+        <div class="header-copy">
+          <p>UNDERGROUND CELEBRATION DRUM</p>
+          <strong>RITUAL FOR THE ONE WHO KEPT GOING</strong>
+        </div>
+        <p class="header-code">RUMBLE / <span>LIVE</span></p>
+      </header>
+
+      <section class="hero" aria-labelledby="celebration-title">
+        <div class="message-column">
+          <p class="eyebrow">THE GROUND HEARD IT FIRST</p>
+          <h1 id="celebration-title">
+            積み上げた分だけ,<br />
+            <span>地面を鳴らせ.</span>
+          </h1>
+          <p class="lead">
+            一問ずつ戻ってきた音は, もう小さくない.
+            今日の到達を, 地下祭礼の大太鼓で叩きつける.
+          </p>
+
+          <div class="milestone-block" aria-label="達成状態">
+            <span>RITUAL STATUS</span>
+            <strong>CLEAR</strong>
+            <small>THE DRUM STRIKES FOR YOU</small>
+          </div>
+
+          <button class="replay" type="button" data-replay>
+            <span>もう一度, 地鳴りを起こす</span>
+            <span aria-hidden="true">鼓</span>
+          </button>
+
+          <p class="status" role="status" aria-live="polite" data-status>
+            太鼓鬼ゴンが撥を構えています.
+          </p>
+        </div>
+
+        <div class="ritual-stage" aria-label="四本腕の太鼓鬼ゴンによる祝福演奏">
+          <div class="impact impact-a" aria-hidden="true"></div>
+          <div class="impact impact-b" aria-hidden="true"></div>
+          <div class="impact impact-c" aria-hidden="true"></div>
+          <div class="sparks" data-sparks aria-hidden="true"></div>
+
+          <svg
+            class="gon"
+            viewBox="0 0 720 760"
+            role="img"
+            aria-labelledby="gon-title gon-desc"
+          >
+            <title id="gon-title">四本腕の太鼓鬼ゴン</title>
+            <desc id="gon-desc">
+              漆塗りの大太鼓を四本の腕で激しく打ち鳴らす, 角のある創作キャラクター.
+            </desc>
+            <defs>
+              <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#c77955" />
+                <stop offset="0.58" stop-color="#9a4c36" />
+                <stop offset="1" stop-color="#623126" />
+              </linearGradient>
+              <linearGradient id="cloth" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#252a39" />
+                <stop offset="1" stop-color="#0c0d12" />
+              </linearGradient>
+              <radialGradient id="drumFace" cx="47%" cy="40%" r="70%">
+                <stop offset="0" stop-color="#f0e3c9" />
+                <stop offset="0.72" stop-color="#d7c7a7" />
+                <stop offset="1" stop-color="#9b896d" />
+              </radialGradient>
+              <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="0" dy="20" stdDeviation="14" flood-color="#000000" flood-opacity="0.55" />
+              </filter>
+            </defs>
+
+            <ellipse class="ground-shadow" cx="372" cy="690" rx="246" ry="40" />
+
+            <g class="character" filter="url(#shadow)">
+              <path class="back-cloth" d="M223 399c-61 73-81 193-55 270 72 35 198 36 278-2 16-94-7-205-60-275Z" />
+              <path class="torso" d="M247 326c39-30 121-34 162 2 39 60 57 178 31 265-46 32-163 31-205-4-24-93-16-199 12-263Z" />
+              <path class="sash" d="M231 489c69 33 154 35 220 2l13 62c-83 40-171 37-248-3Z" />
+
+              <g class="leg leg-left">
+                <path d="M265 559c-40 31-61 72-65 122" />
+                <path class="foot" d="M165 681h105c-8 39-80 47-111 18Z" />
+              </g>
+              <g class="leg leg-right">
+                <path d="M404 558c43 30 66 72 70 122" />
+                <path class="foot" d="M420 681h106c-6 38-80 48-112 17Z" />
+              </g>
+
+              <g class="head-group">
+                <path class="neck" d="M302 299h79v71h-79z" />
+                <path class="head" d="M252 151c9-69 55-112 103-108 57 5 94 61 89 133-5 82-46 142-101 140-57-2-101-76-91-165Z" />
+                <path class="hair" d="M257 165c-16-82 32-139 94-137 61 2 100 59 89 133-23-25-48-39-77-42-38-4-66 10-106 46Z" />
+                <path class="horn horn-left" d="M285 85c-39-45-21-76 7-81 3 29 15 46 38 62Z" />
+                <path class="horn horn-right" d="M396 78c35-50 16-78-13-81 0 29-10 48-31 66Z" />
+                <path class="brow brow-left" d="M281 190c18-13 37-15 55-5" />
+                <path class="brow brow-right" d="M363 184c19-11 38-8 54 6" />
+                <ellipse class="eye" cx="313" cy="212" rx="11" ry="8" />
+                <ellipse class="eye" cx="387" cy="211" rx="11" ry="8" />
+                <circle class="pupil" cx="316" cy="213" r="4" />
+                <circle class="pupil" cx="390" cy="212" r="4" />
+                <path class="nose" d="M347 211l-7 34h20" />
+                <path class="grin" d="M305 264c24 30 70 30 96-2" />
+                <path class="fang" d="M323 271l12 24 9-27Zm57-2-12 25-10-26Z" />
+                <path class="paint" d="M270 222l28 9-18 18Zm151 0-28 9 18 18Z" />
+              </g>
+
+              <g class="arm arm-upper-left">
+                <path class="arm-shape" d="M264 360c-69-48-115-104-137-166" />
+                <path class="hand" d="M126 197c-17-3-29-18-26-35 4-20 23-31 42-25 18 6 25 28 15 44-7 12-18 18-31 16Z" />
+                <path class="stick" d="M116 154 57 64" />
+              </g>
+
+              <g class="arm arm-lower-left">
+                <path class="arm-shape" d="M250 412c-83-15-136-5-191 35" />
+                <path class="hand" d="M64 451c-11 12-30 13-42 2-14-12-13-33 1-45 15-12 38-7 47 10 6 12 4 24-6 33Z" />
+                <path class="stick" d="M37 431 5 326" />
+              </g>
+
+              <g class="arm arm-upper-right">
+                <path class="arm-shape" d="M419 354c72-45 121-98 146-159" />
+                <path class="hand" d="M565 197c17-2 31-17 28-34-3-20-22-32-41-27-18 5-27 26-18 43 6 12 18 19 31 18Z" />
+                <path class="stick" d="M579 155 646 70" />
+              </g>
+
+              <g class="arm arm-lower-right">
+                <path class="arm-shape" d="M430 411c84-12 137 1 190 43" />
+                <path class="hand" d="M616 457c10 13 29 15 42 5 15-11 15-32 2-45-14-13-37-9-47 8-7 11-6 23 3 32Z" />
+                <path class="stick" d="M643 438 681 335" />
+              </g>
+            </g>
+
+            <g class="drum" filter="url(#shadow)">
+              <ellipse class="drum-shell" cx="350" cy="544" rx="187" ry="151" />
+              <ellipse class="drum-rim" cx="350" cy="514" rx="178" ry="134" />
+              <ellipse class="drum-face" cx="350" cy="505" rx="157" ry="116" />
+              <g class="studs">
+                <circle cx="350" cy="379" r="7" /><circle cx="418" cy="391" r="7" />
+                <circle cx="476" cy="425" r="7" /><circle cx="504" cy="476" r="7" />
+                <circle cx="502" cy="535" r="7" /><circle cx="469" cy="584" r="7" />
+                <circle cx="413" cy="616" r="7" /><circle cx="350" cy="627" r="7" />
+                <circle cx="287" cy="616" r="7" /><circle cx="231" cy="584" r="7" />
+                <circle cx="198" cy="535" r="7" /><circle cx="196" cy="476" r="7" />
+                <circle cx="224" cy="425" r="7" /><circle cx="282" cy="391" r="7" />
+              </g>
+              <path class="drum-mark" d="M287 483c30-37 80-45 122-20-16 5-28 15-35 29 19 6 34 20 41 39-42 20-91 11-122-25 17-1 30-8 40-19-13-7-28-9-46-4Z" />
+              <ellipse class="drum-hit" cx="350" cy="505" rx="108" ry="80" />
+            </g>
+          </svg>
+
+          <div class="character-card">
+            <span>FOUR-ARMED DRUM ONI</span>
+            <strong>GON</strong>
+            <p>「まだ鳴る. まだ進める. 今日は祝え.」</p>
+          </div>
+        </div>
+      </section>
+
+      <footer class="festival-footer">
+        <p>ONE STRIKE FOR EVERY RETURN TO THE DESK.</p>
+        <div class="beat-meter" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <p>SOOT / LACQUER / BRASS</p>
+      </footer>
+    </main>
+  </body>
+</html>

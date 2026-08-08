@@ -24,6 +24,7 @@ const selectors = new Map([
   ["night-archivist", "[data-night-archivist]"],
   ["clearance-officer", ".console"],
   ["forge-fury", "[data-forge]"],
+  ["taiko-oni", "[data-festival]"],
   ["night-examiner", "#night-vault"],
 ]);
 
@@ -121,6 +122,15 @@ async function verifyEntry(browser, origin, site) {
       assert.equal(await page.locator("[data-replay]").isVisible(), true);
       await page.locator("[data-replay]").click();
       assert.match(await page.locator("[data-announcement]").textContent(), /達成確定/);
+    } else if (site.id === "taiko-oni") {
+      await page.waitForFunction(
+        () => document.querySelector("[data-festival]")?.dataset.ready === "true",
+      );
+      assert.equal(await page.locator("[data-sparks] i").count(), 24);
+      assert.equal(await page.locator("[data-soot] i").count(), 18);
+      assert.equal(await page.locator("[data-replay]").isVisible(), true);
+      await page.locator("[data-replay]").click();
+      assert.match(await page.locator("[data-status]").textContent(), /地鳴り/);
     } else if (site.id === "night-examiner") {
       await page.waitForFunction(
         () => document.querySelector("#night-vault")?.dataset.ready === "true",

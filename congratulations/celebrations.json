@@ -47,6 +47,10 @@
     {
       "id": "forge-fury",
       "entry": "darkmode/forge-fury/index.html"
+    },
+    {
+      "id": "taiko-oni",
+      "entry": "darkmode/taiko-oni/index.html"
     }
   ]
 }

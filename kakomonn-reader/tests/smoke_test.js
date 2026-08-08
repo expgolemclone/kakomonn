@@ -707,7 +707,8 @@ async function main() {
     await page.keyboard.press("q");
     assert.equal(await answerInputs.first().isChecked(), true);
     await page.keyboard.press("r");
-    assert.equal(await answerInputs.first().isChecked(), true);
+    assert.equal(await answerInputs.nth(3).isChecked(), true);
+    assert.equal(await answerInputs.first().isChecked(), false);
     await answerInputs.nth(1).focus();
     await page.keyboard.press("w");
     assert.equal(await answerInputs.nth(1).isChecked(), true);

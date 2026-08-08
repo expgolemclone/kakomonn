@@ -25,13 +25,12 @@
   const stopButton = document.createElement("button");
   stopButton.id = "kakomonn-reader-stop";
   stopButton.type = "button";
-  stopButton.textContent = "停止";
+  stopButton.textContent = "スキップ";
   stopButton.setAttribute(
     "aria-label",
-    "読み上げを停止,ショートカットはs"
+    "現在の読み上げをスキップ,ショートカットはsk"
   );
-  stopButton.setAttribute("aria-keyshortcuts", "s");
-  stopButton.title = "ショートカット: s";
+  stopButton.title = "ショートカット: sk";
 
   const syncSettingsButton = document.createElement("button");
   syncSettingsButton.id = "kakomonn-reader-sync-settings-button";
@@ -472,7 +471,7 @@
       return;
     }
 
-    clearYankSequence();
+    clearShortcutSequence();
     syncTokenInput.value = "";
     syncSettingsError.textContent = "";
     syncSettings.dataset.required = String(required);

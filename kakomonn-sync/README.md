@@ -1,6 +1,6 @@
 # kakomonn-sync
 
-`kakomonn-reader`の正解数と解答数を端末間で共有し,日別履歴を週と月のgraphで表示するCloudflare Workerです. 認証済み端末へAzure Speechの短期tokenも発行します.
+`kakomonn-reader`のサイト別の正解数と解答数を端末間で共有し,日別履歴を週と月のgraphで表示するCloudflare Workerです. 認証済み端末へAzure Speechの短期tokenも発行します.
 
 ## 学習ログ
 
@@ -10,7 +10,7 @@ productionのWorker rootを開くと,独立した学習ログを表示します.
 https://kakomonn-count-sync.expgolem-lab.workers.dev/
 ```
 
-初回だけ`kakomonn-reader`と同じ同期tokenを入力します.tokenはこのoriginの`localStorage`へ保存されます.初期表示は月曜から日曜の現在週です.月表示,過去期間,正解数と解答数の期間合計,0問の日を含む1日平均も確認できます.graphは解答数を淡い外側の棒,正解数を濃い内側の棒で表示します.
+初回だけ`kakomonn-reader`と同じ同期tokenを入力します.tokenと最後に表示したサイトはこのoriginの`localStorage`へ保存されます.サイト選択,週表示,月表示,過去期間,正解数と解答数の期間合計,0問の日を含む1日平均を確認できます.graphは解答数を淡い外側の棒,正解数を濃い内側の棒で表示します.
 
 ## ローカルテスト
 
@@ -45,12 +45,12 @@ npm run deploy:kakomonn-sync
 
 `SYNC_TOKEN`には暗号学的に安全な256bit以上のrandom値を設定します.デプロイで表示された`workers.dev` URLは`kakomonn-reader`の`SYNC_API_URL`へ設定します.tokenとkeyはsourceや設定fileへ保存しません.
 
-APIは日本時間で日次正解数と解答数を保持し,履歴の保存期間には上限を設けません.同じ操作IDと結果の再送は再加算せず,同じ操作IDへ異なる結果を送った場合は拒否します.日付が変わると当日の値を履歴へ保存し,操作IDだけを破棄します.
+APIは日本時間でサイト別の日次正解数と解答数を保持し,履歴の保存期間には上限を設けません.同じサイト,操作ID,結果の再送は再加算せず,同じサイトと操作IDへ異なる結果を送った場合は拒否します.日付が変わると当日の値を履歴へ保存し,そのサイトの操作IDだけを破棄します.
 
-`GET /v2/state`は`date`,`counts.correct`,`counts.answered`,`milestoneInterval`を返します.`POST /v2/answers`は`date`,`operationId`,`result`を受け取り,同じ状態を`state`へ入れます.`result`は`correct`または`incorrect`です.正解数が50問ごとの区切りへ到達した場合だけ`completedMilestone`へ50,100,150のような値を返します.操作ごとの結果と到達値を保存するため,通信失敗後の再送でも同じ応答になります.
+`GET /v3/sites`は記録済みのサイト一覧を返します.`GET /v3/state?site=<host>`は`site`,`date`,`counts.correct`,`counts.answered`,`milestoneInterval`を返します.`POST /v3/answers`は`site`,`date`,`operationId`,`result`を受け取り,同じ状態を`state`へ入れます.`result`は`correct`または`incorrect`です.正解数が50問ごとの区切りへ到達した場合だけ`completedMilestone`へ50,100,150のような値を返します.操作ごとの結果と到達値を保存するため,通信失敗後の再送でも同じ応答になります.
 
-`GET /v2/history?from=YYYY-MM-DD&to=YYYY-MM-DD`は,両端を含む最大31日の日別正解数と解答数を返します.`counts`の値が`null`なら記録開始前または未来日,追跡期間内の欠損日は`0`です.
+`GET /v3/history?site=<host>&from=YYYY-MM-DD&to=YYYY-MM-DD`は,両端を含む最大31日の日別正解数と解答数を返します.`counts`の値が`null`なら記録開始前または未来日,追跡期間内の欠損日は`0`です.
 
-`POST /v2/speech-token`は,有効期間600秒のAzure Speech tokenを返します. `kakomonn-reader`はtokenを約9分間再利用し,`ja-JP-NanamiNeural`のMP3をAzureから直接取得します. Workerは音声dataを中継せず,Workers AI,Durable Objects,R2も音声処理には使用しません. Azure Speech F0の無料枠を超過した場合は読み上げを停止し,別の音声へ切り替えません.
+`POST /v3/speech-token`は,有効期間600秒のAzure Speech tokenを返します. `kakomonn-reader`はtokenを約9分間再利用し,`ja-JP-NanamiNeural`のMP3をAzureから直接取得します. Workerは音声dataを中継せず,Workers AI,Durable Objects,R2も音声処理には使用しません. Azure Speech F0の無料枠を超過した場合は読み上げを停止し,別の音声へ切り替えません.
 
-旧SQLite schemaは起動時に新schemaへ移行します.既存の正解数,正解履歴,操作ID,milestoneを維持し,復元できない解答数は`null`にします.移行日は解答数を表示せず,最初のv2 requestを受けた次の日本時間の日付から完全な解答数を記録します.想定外のschemaは起動errorにします.
+旧SQLite schemaは起動時に新schemaへ移行します.既存の正解数,正解履歴,操作ID,milestoneは`chushoks.kakomonn.com`へ割り当てて維持し,復元できない解答数は`null`にします.移行日は解答数を表示せず,最初のv3 requestを受けた次の日本時間の日付から完全な解答数を記録します.想定外のschemaは起動errorにします.v2 APIは提供しません.

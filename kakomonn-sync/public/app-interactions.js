@@ -227,6 +227,25 @@ elements.refreshButton.addEventListener("click", () => {
   void refreshDashboard();
 });
 
+elements.siteSelect.addEventListener("change", async () => {
+  if (state.loading || elements.siteSelect.value === state.site) {
+    return;
+  }
+  setDashboardBusy(true);
+  try {
+    const snapshot = await loadSession(
+      state.token,
+      true,
+      elements.siteSelect.value
+    );
+    applySnapshot(snapshot);
+  } catch (error) {
+    showLoadError(error, state.token);
+  } finally {
+    setDashboardBusy(false);
+  }
+});
+
 elements.retryButton.addEventListener("click", async () => {
   if (state.recoveryToken === "") {
     showAuth();
@@ -282,12 +301,15 @@ elements.settingsForm.addEventListener("submit", async (event) => {
 elements.forgetToken.addEventListener("click", () => {
   try {
     removeStoredToken();
+    removeStoredSite();
   } catch (error) {
     elements.settingsMessage.textContent = messageFor(error);
     return;
   }
   state.token = "";
   state.recoveryToken = "";
+  state.sites = [];
+  state.site = "";
   state.today = "";
   state.availableFrom = { correct: "", answered: "" };
   state.anchorDate = "";

@@ -47,6 +47,7 @@
       explanationTimer = null;
       updateNextQuestionButton();
       updateCopyButton();
+      synchronizeTimeLimitPhase();
       checkForNewExplanation();
     }, EXPLANATION_CHANGE_DELAY_MS);
   }
@@ -115,6 +116,118 @@
     }
 
     return nextURLs.size === 1 ? nextURLs.values().next().value : null;
+  }
+
+  function clearTimeLimit(hide = true) {
+    if (timeLimitTimeout !== null) {
+      window.clearTimeout(timeLimitTimeout);
+      timeLimitTimeout = null;
+    }
+    if (timeLimitInterval !== null) {
+      window.clearInterval(timeLimitInterval);
+      timeLimitInterval = null;
+    }
+    timeLimitPhase = null;
+    timeLimitDeadline = 0;
+    timeLimitSourceDocument = null;
+    if (hide) {
+      timeLimitProgress.hidden = true;
+      timeLimitProgress.removeAttribute("data-phase");
+    }
+  }
+
+  function renderTimeLimit() {
+    if (timeLimitPhase === null || timeLimitDeadline === 0) {
+      return;
+    }
+    const remaining = Math.max(0, timeLimitDeadline - Date.now());
+    const totalSeconds = Math.ceil(remaining / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const phaseLabel =
+      timeLimitPhase === "question" ? "問題" : "解説";
+    timeLimitProgress.hidden = false;
+    timeLimitProgress.dataset.phase = timeLimitPhase;
+    timeLimitProgress.value = remaining;
+    timeLimitProgress.setAttribute(
+      "aria-valuetext",
+      `${phaseLabel}の残り時間${minutes}分${seconds}秒`
+    );
+  }
+
+  function startTimeLimit(phase, sourceDocument) {
+    clearTimeLimit();
+    timeLimitPhase = phase;
+    timeLimitDeadline = Date.now() + TIME_LIMIT_MS;
+    timeLimitSourceDocument = sourceDocument;
+    timeLimitTimeout = window.setTimeout(
+      () => expireTimeLimit(phase, sourceDocument),
+      TIME_LIMIT_MS
+    );
+    timeLimitInterval = window.setInterval(renderTimeLimit, 1000);
+    renderTimeLimit();
+  }
+
+  function synchronizeTimeLimitPhase() {
+    if (
+      !syncReady ||
+      navigationInProgress ||
+      frameDocument?.body === undefined ||
+      currentQuestionControls() === null
+    ) {
+      clearTimeLimit();
+      return;
+    }
+
+    const phase =
+      getCurrentAnswerResult() === "unknown" ? "question" : "explanation";
+    if (
+      timeLimitPhase === phase &&
+      timeLimitSourceDocument === frameDocument
+    ) {
+      if (Date.now() >= timeLimitDeadline) {
+        expireTimeLimit(phase, frameDocument);
+      } else {
+        renderTimeLimit();
+      }
+      return;
+    }
+
+    startTimeLimit(phase, frameDocument);
+  }
+
+  function expireTimeLimit(expectedPhase, sourceDocument) {
+    if (
+      timeLimitPhase !== expectedPhase ||
+      timeLimitSourceDocument !== sourceDocument ||
+      frameDocument !== sourceDocument
+    ) {
+      return;
+    }
+
+    const currentPhase =
+      getCurrentAnswerResult() === "unknown" ? "question" : "explanation";
+    if (currentPhase !== expectedPhase) {
+      startTimeLimit(currentPhase, sourceDocument);
+      return;
+    }
+
+    renderTimeLimit();
+    clearTimeLimit(false);
+    timeLimitProgress.value = 0;
+    if (findNextQuestionURL() === null) {
+      setStatus("時間切れですが次の問題リンクがありません");
+      return;
+    }
+
+    if (expectedPhase === "question") {
+      setStatus("問題の制限時間が終了しました");
+      proceedToNextQuestion();
+      return;
+    }
+
+    setStatus("解説の制限時間が終了しました");
+    void handleNextQuestion();
   }
 
   function clearFrameScrollResetTimers() {

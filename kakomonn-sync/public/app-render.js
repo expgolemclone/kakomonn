@@ -36,6 +36,7 @@ function setSettingsBusy(busy) {
 function showAuth(message = "") {
   elements.authPanel.hidden = false;
   elements.dashboard.hidden = true;
+  elements.siteEmpty.hidden = true;
   elements.loadError.hidden = true;
   elements.settingsButton.hidden = true;
   elements.authMessage.textContent = message;
@@ -44,6 +45,15 @@ function showAuth(message = "") {
 function showDashboard() {
   elements.authPanel.hidden = true;
   elements.dashboard.hidden = false;
+  elements.siteEmpty.hidden = true;
+  elements.loadError.hidden = true;
+  elements.settingsButton.hidden = false;
+}
+
+function showSiteEmpty() {
+  elements.authPanel.hidden = true;
+  elements.dashboard.hidden = true;
+  elements.siteEmpty.hidden = false;
   elements.loadError.hidden = true;
   elements.settingsButton.hidden = false;
 }
@@ -52,6 +62,7 @@ function showLoadError(error, recoveryToken) {
   state.recoveryToken = recoveryToken;
   elements.authPanel.hidden = true;
   elements.dashboard.hidden = true;
+  elements.siteEmpty.hidden = true;
   elements.settingsButton.hidden = true;
   elements.loadError.hidden = false;
   elements.errorMessage.textContent = messageFor(error);
@@ -60,6 +71,7 @@ function showLoadError(error, recoveryToken) {
 function setDashboardBusy(busy) {
   state.loading = busy;
   elements.dashboard.setAttribute("aria-busy", String(busy));
+  elements.siteSelect.disabled = busy;
   renderNavigation();
 }
 

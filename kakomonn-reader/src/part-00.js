@@ -2,7 +2,7 @@
 // @name         過去問マイルストーン＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
 // @description  問題文と解説の読み上げ, コピー, 端末間で共有する日次学習記録と50問ごとの祝福を提供します.
-// @match        https://chushoks.kakomonn.com/*
+// @match        https://*.kakomonn.com/*
 // @connect      kakomonn-count-sync.expgolem-lab.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com
 // @run-at       document-end
@@ -33,10 +33,20 @@
     "https://kakomonn-count-sync.expgolem-lab.workers.dev";
   const CONGRATULATIONS_URL =
     "https://kakomonn-congratulations.expgolem-lab.workers.dev/";
+  const SITE_ID = location.hostname.toLowerCase();
+  if (
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(
+      SITE_ID
+    )
+  ) {
+    return;
+  }
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
-  const PENDING_ANSWER_KEY = "kakomonn-reader.pending-answer";
-  const LEGACY_PENDING_CORRECT_KEY = "kakomonn-reader.pending-correct";
-  const PENDING_CELEBRATION_KEY = "kakomonn-reader.pending-celebration";
+  const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE_ID}.pending-answer`;
+  const LEGACY_PENDING_CORRECT_KEY =
+    `kakomonn-reader.${SITE_ID}.pending-correct`;
+  const PENDING_CELEBRATION_KEY =
+    `kakomonn-reader.${SITE_ID}.pending-celebration`;
   const START_PARAMETER = "count50";
   const SYNC_TIMEOUT_MS = 15000;
   const SPEECH_TIMEOUT_MS = 30000;
@@ -45,6 +55,7 @@
   const FRAME_SCROLL_RESET_DELAYS_MS = [0, 120, 600];
   const COPY_FEEDBACK_DURATION_MS = 1400;
   const SHORTCUT_SEQUENCE_TIMEOUT_MS = 400;
+  const TIME_LIMIT_MS = 5 * 60 * 1000;
   const MAX_CHUNK_LENGTH = 1500;
   const FRAME_DARK_MODE_STYLE_ID = "kakomonn-reader-dark-mode";
   const FRAME_DARK_MODE_CSS = `
@@ -192,6 +203,11 @@
   let currentFrameURL = location.href;
   let loadTimer = null;
   let explanationTimer = null;
+  let timeLimitPhase = null;
+  let timeLimitDeadline = 0;
+  let timeLimitTimeout = null;
+  let timeLimitInterval = null;
+  let timeLimitSourceDocument = null;
   let frameScrollResetTimers = [];
   let copyFeedbackTimer = null;
   let frameMutationObserver = null;
@@ -226,6 +242,9 @@
       --kakomonn-reader-text: #f3f4f6;
       --kakomonn-reader-muted: #a8b0bb;
       --kakomonn-reader-border: #343b45;
+      --kakomonn-reader-time-track: oklch(0.32 0.02 255);
+      --kakomonn-reader-time-question: oklch(0.72 0.16 245);
+      --kakomonn-reader-time-explanation: oklch(0.74 0.16 150);
       --kakomonn-reader-controls-height: calc(
         56px + env(safe-area-inset-top)
       );
@@ -277,6 +296,41 @@
       background: var(--kakomonn-reader-surface);
       pointer-events: none;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    #kakomonn-reader-time-limit {
+      --kakomonn-reader-time-fill: var(--kakomonn-reader-time-question);
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      border: 0;
+      appearance: none;
+      background: var(--kakomonn-reader-time-track);
+      color: var(--kakomonn-reader-time-fill);
+      pointer-events: none;
+    }
+
+    #kakomonn-reader-time-limit[hidden] {
+      display: none;
+    }
+
+    #kakomonn-reader-time-limit[data-phase="explanation"] {
+      --kakomonn-reader-time-fill: var(--kakomonn-reader-time-explanation);
+    }
+
+    #kakomonn-reader-time-limit::-webkit-progress-bar {
+      background: var(--kakomonn-reader-time-track);
+    }
+
+    #kakomonn-reader-time-limit::-webkit-progress-value {
+      background: var(--kakomonn-reader-time-fill);
+    }
+
+    #kakomonn-reader-time-limit::-moz-progress-bar {
+      background: var(--kakomonn-reader-time-fill);
     }
 
     #kakomonn-reader-count,

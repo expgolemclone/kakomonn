@@ -140,7 +140,7 @@ async function runCountCase(browser, script, result, expectedCount) {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v2/answers",
+              new URL(call.url).pathname === "/v3/answers",
           ).length === 1 && window.__syncMock.answeredCount === 1,
       );
     }
@@ -168,7 +168,7 @@ async function runCountCase(browser, script, result, expectedCount) {
       window.__syncMock.calls.filter(
         (call) =>
           call.method === "POST" &&
-          new URL(call.url).pathname === "/v2/answers",
+          new URL(call.url).pathname === "/v3/answers",
       ),
     );
     assert.equal(answerCalls.length, result === "unknown" ? 0 : 1);
@@ -220,7 +220,7 @@ async function runSyncRefreshClickRaceCase(browser, script) {
       window.__syncMock.calls.filter(
         (call) =>
           call.method === "POST" &&
-          new URL(call.url).pathname === "/v2/answers",
+          new URL(call.url).pathname === "/v3/answers",
       ),
     );
     assert.equal(correctCalls.length, 1);
@@ -272,7 +272,7 @@ async function runRetryCase(browser, script, answerResult) {
         window.__syncMock.calls.filter(
           (call) =>
             call.method === "POST" &&
-            new URL(call.url).pathname === "/v2/answers" &&
+            new URL(call.url).pathname === "/v3/answers" &&
             call.body.result === expectedResult,
         ).length === 2,
       {
@@ -286,7 +286,7 @@ async function runRetryCase(browser, script, answerResult) {
       const correctCalls = window.__syncMock.calls.filter(
         (call) =>
           call.method === "POST" &&
-          new URL(call.url).pathname === "/v2/answers",
+          new URL(call.url).pathname === "/v3/answers",
       );
       return {
         serverCount: window.__syncMock.count,
@@ -353,7 +353,7 @@ async function runDoubleClickCase(browser, script) {
       correctCalls: window.__syncMock.calls.filter(
         (call) =>
           call.method === "POST" &&
-          new URL(call.url).pathname === "/v2/answers",
+          new URL(call.url).pathname === "/v3/answers",
       ),
     }));
     assert.equal(result.serverCount, 1);
@@ -416,7 +416,7 @@ async function runDeleteFailureCase(browser, script) {
       const correctCalls = window.__syncMock.calls.filter(
         (call) =>
           call.method === "POST" &&
-          new URL(call.url).pathname === "/v2/answers",
+          new URL(call.url).pathname === "/v3/answers",
       );
       return {
         serverCount: window.__syncMock.count,
@@ -543,7 +543,7 @@ async function runDateChangeCase(browser, script) {
       window.__syncMock.calls.filter(
         (call) =>
           call.method === "POST" &&
-          new URL(call.url).pathname === "/v2/answers",
+          new URL(call.url).pathname === "/v3/answers",
       ),
     );
     assert.equal(correctCalls.length, 2);
@@ -629,7 +629,7 @@ async function runReloadRetryCase(browser, script) {
       const correctCalls = window.__syncMock.calls.filter(
         (call) =>
           call.method === "POST" &&
-          new URL(call.url).pathname === "/v2/answers",
+          new URL(call.url).pathname === "/v3/answers",
       );
       return {
         serverCount: window.__syncMock.count,
@@ -687,6 +687,7 @@ async function runLegacyPendingMigrationCase(browser, script) {
     assert.deepEqual(migrated.pending, {
       ...legacyPendingCorrect,
       result: "correct",
+      site: "chushoks.kakomonn.com",
     });
     assert.equal(migrated.legacy, null);
 
@@ -699,7 +700,7 @@ async function runLegacyPendingMigrationCase(browser, script) {
       window.__syncMock.calls.filter(
         (call) =>
           call.method === "POST" &&
-          new URL(call.url).pathname === "/v2/answers",
+          new URL(call.url).pathname === "/v3/answers",
       ),
     );
     assert.equal(answerCalls.length, 1);
@@ -798,6 +799,7 @@ async function runPendingCelebrationRecoveryCase(browser, script) {
       pendingCelebration: {
         date: "2026-07-17",
         milestone: 50,
+        site: "chushoks.kakomonn.com",
         sourcePageURL:
           "https://chushoks.kakomonn.com/questions/current",
       },

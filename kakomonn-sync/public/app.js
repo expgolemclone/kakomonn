@@ -1,4 +1,5 @@
 const TOKEN_STORAGE_KEY = "kakomonn-dashboard.sync-token";
+const SITE_STORAGE_KEY = "kakomonn-dashboard.site";
 const REQUEST_TIMEOUT_MS = 15_000;
 const DAY_MILLISECONDS = 86_400_000;
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -28,6 +29,8 @@ const elements = {
   authSubmit: required("auth-submit"),
   authMessage: required("auth-message"),
   dashboard: required("dashboard"),
+  siteEmpty: required("site-empty"),
+  siteSelect: required("site-select"),
   settingsButton: required("settings-button"),
   weekView: required("week-view"),
   monthView: required("month-view"),
@@ -66,6 +69,8 @@ const elements = {
 const state = {
   token: "",
   recoveryToken: "",
+  sites: [],
+  site: "",
   today: "",
   availableFrom: { correct: "", answered: "" },
   anchorDate: "",
@@ -186,6 +191,37 @@ function removeStoredToken() {
   }
 }
 
+function readStoredSite() {
+  try {
+    return window.localStorage.getItem(SITE_STORAGE_KEY) ?? "";
+  } catch {
+    throw new DashboardError("storage_unavailable");
+  }
+}
+
+function writeStoredSite(site) {
+  try {
+    window.localStorage.setItem(SITE_STORAGE_KEY, site);
+  } catch {
+    throw new DashboardError("storage_unavailable");
+  }
+}
+
+function removeStoredSite() {
+  try {
+    window.localStorage.removeItem(SITE_STORAGE_KEY);
+  } catch {
+    throw new DashboardError("storage_unavailable");
+  }
+}
+
+function isSite(value) {
+  return (
+    typeof value === "string" &&
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(value)
+  );
+}
+
 function isCountPair(value, { nullable }) {
   if (value === null || typeof value !== "object") {
     return false;
@@ -200,10 +236,11 @@ function isCountPair(value, { nullable }) {
   );
 }
 
-function isSyncState(value) {
+function isSyncState(value, expectedSite) {
   return (
     value !== null &&
     typeof value === "object" &&
+    value.site === expectedSite &&
     dateOrdinal(value.date) !== null &&
     isCountPair(value.counts, { nullable: true }) &&
     value.counts.correct !== null &&
@@ -211,10 +248,11 @@ function isSyncState(value) {
   );
 }
 
-function isHistory(value, expectedRange) {
+function isHistory(value, expectedSite, expectedRange) {
   if (
     value === null ||
     typeof value !== "object" ||
+    value.site !== expectedSite ||
     value.timeZone !== "Asia/Tokyo" ||
     dateOrdinal(value.today) === null ||
     value.availableFrom === null ||
@@ -285,18 +323,34 @@ async function requestJSON(path, token) {
   return body;
 }
 
-async function fetchState(token) {
-  const value = await requestJSON("/v2/state", token);
-  if (!isSyncState(value)) {
+async function fetchSites(token) {
+  const value = await requestJSON("/v3/sites", token);
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    !Array.isArray(value.sites) ||
+    value.sites.some((site) => !isSite(site)) ||
+    new Set(value.sites).size !== value.sites.length ||
+    value.sites.some((site, index) => index > 0 && value.sites[index - 1] >= site)
+  ) {
+    throw new DashboardError("invalid_response");
+  }
+  return value.sites;
+}
+
+async function fetchState(token, site) {
+  const query = new URLSearchParams({ site });
+  const value = await requestJSON(`/v3/state?${query}`, token);
+  if (!isSyncState(value, site)) {
     throw new DashboardError("invalid_response");
   }
   return value;
 }
 
-async function fetchHistory(token, range) {
-  const query = new URLSearchParams({ from: range.from, to: range.to });
-  const value = await requestJSON(`/v2/history?${query}`, token);
-  if (!isHistory(value, range)) {
+async function fetchHistory(token, site, range) {
+  const query = new URLSearchParams({ site, from: range.from, to: range.to });
+  const value = await requestJSON(`/v3/history?${query}`, token);
+  if (!isHistory(value, site, range)) {
     throw new DashboardError("invalid_response");
   }
   return value;

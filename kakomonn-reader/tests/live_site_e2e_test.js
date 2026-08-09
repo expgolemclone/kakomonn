@@ -8,6 +8,11 @@ const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const fixedQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const fixedNextQuestionUrl = "https://chushoks.kakomonn.com/questions/86957";
+const crossDomainQuestionUrls = [
+  "https://nurse.kakomonn.com/questions/84233",
+  "https://ktjoho.kakomonn.com/questions/87404",
+  "https://kyosai.kakomonn.com/questions/51358",
+];
 const imageChoiceQuestionUrl =
   "https://chushoks.kakomonn.com/questions/73379";
 const markdownQuestionUrl = "https://chushoks.kakomonn.com/questions/54914";
@@ -309,6 +314,13 @@ async function runCase(
     const resultClasses =
       (await frame.locator("#js-answer-result-box").getAttribute("class")) ?? "";
     assert.equal(resultClasses.split(/\s+/).includes(expectedResultClass), true);
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase ===
+        "explanation",
+      null,
+      { timeout: 15_000 }
+    );
     const semanticResultColor = await frame
       .locator("#js-answer-result-box")
       .evaluate((element, resultClass) => {
@@ -898,6 +910,59 @@ async function runImageChoiceInversionCase(browser, script) {
   }
 }
 
+async function runCrossDomainActivationCase(browser, script) {
+  for (const questionURL of crossDomainQuestionUrls) {
+    const context = await browser.newContext();
+    await blockThirdPartyAds(context);
+    const page = await context.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(String(error)));
+    try {
+      const response = await page.goto(questionURL, {
+        waitUntil: "domcontentloaded",
+        timeout: 60_000,
+      });
+      assert.notEqual(response, null);
+      assert.equal(response.ok(), true, `${questionURL} returned ${response.status()}`);
+      await page.getByText("解答する", { exact: true }).waitFor({
+        state: "visible",
+        timeout: readerReadyTimeout,
+      });
+      await page.evaluate(() => localStorage.clear());
+      const site = new URL(questionURL).hostname;
+      await installSyncMock(page, { site });
+      await page.evaluate((source) => {
+        (0, eval)(source);
+      }, script);
+
+      const frame = await getQuestionFrame(page);
+      await waitForSyncReady(page);
+      await page.locator("#kakomonn-reader-time-limit").waitFor({
+        state: "visible",
+      });
+      assert.equal(
+        await page.locator("#kakomonn-reader-time-limit").getAttribute("data-phase"),
+        "question"
+      );
+      assert.equal(
+        await frame.locator(".problem_detail > .when").count(),
+        1,
+        `question metadata must be unique on ${site}`
+      );
+      const stateSites = await page.evaluate(() =>
+        window.__syncMock.calls
+          .filter((call) => new URL(call.url).pathname === "/v3/state")
+          .map((call) => new URL(call.url).searchParams.get("site"))
+      );
+      assert.equal(stateSites.length >= 1, true);
+      assert.equal(stateSites.every((requestedSite) => requestedSite === site), true);
+      assert.deepEqual(pageErrors, []);
+    } finally {
+      await context.close();
+    }
+  }
+}
+
 async function main() {
   const script = fs.readFileSync(scriptPath, "utf8");
   const browser = await chromium.launch({ headless: true });
@@ -917,6 +982,7 @@ async function main() {
     await runImageChoiceInversionCase(browser, script);
     await runMarkdownCopyCase(browser, script);
     await runReportedCopyCase(browser, script);
+    await runCrossDomainActivationCase(browser, script);
   } finally {
     await browser.close();
   }

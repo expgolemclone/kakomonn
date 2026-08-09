@@ -5,6 +5,9 @@ const DAILY_COUNT_OBJECT_NAME = "primary";
 const MAX_HISTORY_DAYS = 31;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const OPERATION_ID_PATTERN = /^[0-9a-f]{32}$/;
+const SITE_PATTERN =
+  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/;
+const LEGACY_SITE = "chushoks.kakomonn.com";
 const ANSWER_RESULTS = new Set(["correct", "incorrect"]);
 const AZURE_SPEECH_TOKEN_URL =
   "https://japaneast.api.cognitive.microsoft.com/sts/v1.0/issueToken";
@@ -109,8 +112,13 @@ async function isAuthorized(request, env) {
   return secretsEqual(authorization.slice(prefix.length), env.SYNC_TOKEN);
 }
 
-function parseStateRow(row, availability) {
+function isSite(value) {
+  return typeof value === "string" && SITE_PATTERN.test(value);
+}
+
+function parseStateRow(site, row, availability) {
   return {
+    site,
     date: row.date,
     counts: {
       correct: row.correct_count,
@@ -146,7 +154,43 @@ function assertColumns(actual, expected, tableName) {
   }
 }
 
-function createLearningLogSchema(storage) {
+function createSiteLearningLogSchema(storage) {
+  storage.sql.exec(`
+    CREATE TABLE daily_state (
+      site TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      correct_count INTEGER NOT NULL CHECK (correct_count >= 0),
+      answered_count INTEGER NOT NULL CHECK (
+        answered_count >= correct_count
+      )
+    );
+    CREATE TABLE processed_answers (
+      site TEXT NOT NULL,
+      operation_id TEXT NOT NULL,
+      result TEXT NOT NULL CHECK (result IN ('correct', 'incorrect')),
+      completed_milestone INTEGER CHECK (
+        completed_milestone IS NULL OR completed_milestone >= 1
+      ),
+      PRIMARY KEY (site, operation_id)
+    ) WITHOUT ROWID;
+    CREATE TABLE daily_history (
+      site TEXT NOT NULL,
+      date TEXT NOT NULL,
+      correct_count INTEGER NOT NULL CHECK (correct_count >= 0),
+      answered_count INTEGER CHECK (
+        answered_count IS NULL OR answered_count >= correct_count
+      ),
+      PRIMARY KEY (site, date)
+    ) WITHOUT ROWID;
+    CREATE TABLE tracking_metadata (
+      site TEXT PRIMARY KEY,
+      correct_available_from TEXT,
+      answered_available_from TEXT
+    );
+  `);
+}
+
+function createSiteLessLearningLogSchema(storage) {
   storage.sql.exec(`
     CREATE TABLE daily_state (
       singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -220,7 +264,7 @@ function validateLegacyHistorySchema(storage) {
   );
 }
 
-function validateLearningLogSchema(storage) {
+function validateSiteLessLearningLogSchema(storage) {
   const tableNames = [
     "daily_state",
     "processed_answers",
@@ -261,6 +305,47 @@ function validateLearningLogSchema(storage) {
   }
 }
 
+function validateSiteLearningLogSchema(storage) {
+  const tableNames = [
+    "daily_state",
+    "processed_answers",
+    "daily_history",
+    "tracking_metadata",
+  ];
+  if (tableNames.some((name) => tableDefinition(storage, name) === undefined)) {
+    throw new Error("incomplete site learning log schema");
+  }
+
+  assertColumns(
+    tableColumns(storage, "daily_state"),
+    ["site", "date", "correct_count", "answered_count"],
+    "daily_state"
+  );
+  assertColumns(
+    tableColumns(storage, "processed_answers"),
+    ["site", "operation_id", "result", "completed_milestone"],
+    "processed_answers"
+  );
+  assertColumns(
+    tableColumns(storage, "daily_history"),
+    ["site", "date", "correct_count", "answered_count"],
+    "daily_history"
+  );
+  assertColumns(
+    tableColumns(storage, "tracking_metadata"),
+    ["site", "correct_available_from", "answered_available_from"],
+    "tracking_metadata"
+  );
+
+  const dailyDefinition = tableDefinition(storage, "daily_state");
+  if (
+    !/correct_count\s*>=\s*0/i.test(dailyDefinition) ||
+    !/answered_count\s*>=\s*correct_count/i.test(dailyDefinition)
+  ) {
+    throw new Error("unsupported daily_state schema");
+  }
+}
+
 function migrateLegacySchema(storage, hasHistory) {
   validateLegacyDailySchema(storage);
   if (hasHistory) {
@@ -280,7 +365,7 @@ function migrateLegacySchema(storage, hasHistory) {
     );
   }
 
-  createLearningLogSchema(storage);
+  createSiteLessLearningLogSchema(storage);
   storage.sql.exec(`
     INSERT INTO daily_state (
       singleton,
@@ -346,6 +431,63 @@ function migrateLegacySchema(storage, hasHistory) {
   }
 }
 
+function migrateSiteLessSchema(storage) {
+  validateSiteLessLearningLogSchema(storage);
+  for (const tableName of [
+    "daily_state",
+    "processed_answers",
+    "daily_history",
+    "tracking_metadata",
+  ]) {
+    storage.sql.exec(
+      `ALTER TABLE ${tableName} RENAME TO site_less_${tableName}`
+    );
+  }
+
+  createSiteLearningLogSchema(storage);
+  storage.sql.exec(
+    `INSERT INTO daily_state (
+       site, date, correct_count, answered_count
+     )
+     SELECT ?, date, correct_count, answered_count
+     FROM site_less_daily_state`,
+    LEGACY_SITE
+  );
+  storage.sql.exec(
+    `INSERT INTO processed_answers (
+       site, operation_id, result, completed_milestone
+     )
+     SELECT ?, operation_id, result, completed_milestone
+     FROM site_less_processed_answers`,
+    LEGACY_SITE
+  );
+  storage.sql.exec(
+    `INSERT INTO daily_history (
+       site, date, correct_count, answered_count
+     )
+     SELECT ?, date, correct_count, answered_count
+     FROM site_less_daily_history`,
+    LEGACY_SITE
+  );
+  storage.sql.exec(
+    `INSERT INTO tracking_metadata (
+       site, correct_available_from, answered_available_from
+     )
+     SELECT ?, correct_available_from, answered_available_from
+     FROM site_less_tracking_metadata`,
+    LEGACY_SITE
+  );
+
+  for (const tableName of [
+    "processed_answers",
+    "daily_state",
+    "tracking_metadata",
+    "daily_history",
+  ]) {
+    storage.sql.exec(`DROP TABLE site_less_${tableName}`);
+  }
+}
+
 export function initializeSchema(storage) {
   storage.transactionSync(() => {
     const newTableNames = [
@@ -363,7 +505,7 @@ export function initializeSchema(storage) {
       legacyOperations === undefined &&
       newDefinitions.every((definition) => definition === undefined)
     ) {
-      createLearningLogSchema(storage);
+      createSiteLearningLogSchema(storage);
       return;
     }
 
@@ -371,8 +513,17 @@ export function initializeSchema(storage) {
       legacyOperations === undefined &&
       newDefinitions.every((definition) => definition !== undefined)
     ) {
-      validateLearningLogSchema(storage);
-      return;
+      const dailyColumns = tableColumns(storage, "daily_state");
+      if (dailyColumns[0] === "site") {
+        validateSiteLearningLogSchema(storage);
+        return;
+      }
+      if (dailyColumns[0] === "singleton") {
+        migrateSiteLessSchema(storage);
+        validateSiteLearningLogSchema(storage);
+        return;
+      }
+      throw new Error("unexpected DailyCount schema");
     }
 
     const hasLegacyDaily =
@@ -387,7 +538,8 @@ export function initializeSchema(storage) {
         (newDefinitions[2] === undefined && newDefinitions[3] === undefined))
     ) {
       migrateLegacySchema(storage, hasLegacyHistory);
-      validateLearningLogSchema(storage);
+      migrateSiteLessSchema(storage);
+      validateSiteLearningLogSchema(storage);
       return;
     }
 
@@ -411,12 +563,13 @@ export class DailyCount extends DurableObject {
     });
   }
 
-  trackingAvailability() {
+  trackingAvailability(site) {
     const row = this.ctx.storage.sql
       .exec(
         `SELECT correct_available_from, answered_available_from
          FROM tracking_metadata
-         WHERE singleton = 1`
+         WHERE site = ?`,
+        site
       )
       .toArray()[0];
     return row === undefined
@@ -427,15 +580,16 @@ export class DailyCount extends DurableObject {
         };
   }
 
-  ensureTrackingAvailability(date) {
-    const existing = this.trackingAvailability();
+  ensureTrackingAvailability(site, date) {
+    const existing = this.trackingAvailability(site);
     if (existing === undefined) {
       this.ctx.storage.sql.exec(
         `INSERT INTO tracking_metadata (
-           singleton,
+           site,
            correct_available_from,
            answered_available_from
-         ) VALUES (1, ?, ?)`,
+         ) VALUES (?, ?, ?)`,
+        site,
         date,
         date
       );
@@ -450,21 +604,23 @@ export class DailyCount extends DurableObject {
       this.ctx.storage.sql.exec(
         `UPDATE tracking_metadata
          SET correct_available_from = ?, answered_available_from = ?
-         WHERE singleton = 1`,
+         WHERE site = ?`,
         availability.correct,
-        availability.answered
+        availability.answered,
+        site
       );
     }
     return availability;
   }
 
-  ensureDate(date) {
-    const availability = this.ensureTrackingAvailability(date);
+  ensureDate(site, date) {
+    const availability = this.ensureTrackingAvailability(site, date);
     const existing = this.ctx.storage.sql
       .exec(
         `SELECT date, correct_count, answered_count
          FROM daily_state
-         WHERE singleton = 1`
+         WHERE site = ?`,
+        site
       )
       .toArray()[0];
 
@@ -478,11 +634,13 @@ export class DailyCount extends DurableObject {
 
     if (existing !== undefined && existing.date >= availability.correct) {
       this.ctx.storage.sql.exec(
-        `INSERT INTO daily_history (
+         `INSERT INTO daily_history (
+           site,
            date,
            correct_count,
            answered_count
-         ) VALUES (?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?)`,
+        site,
         existing.date,
         existing.correct_count,
         existing.date < availability.answered
@@ -490,24 +648,29 @@ export class DailyCount extends DurableObject {
           : existing.answered_count
       );
     }
-    this.ctx.storage.sql.exec("DELETE FROM processed_answers");
+    this.ctx.storage.sql.exec(
+      "DELETE FROM processed_answers WHERE site = ?",
+      site
+    );
 
     if (existing === undefined) {
       this.ctx.storage.sql.exec(
-        `INSERT INTO daily_state (
-           singleton,
+         `INSERT INTO daily_state (
+           site,
            date,
            correct_count,
            answered_count
-         ) VALUES (1, ?, 0, 0)`,
+         ) VALUES (?, ?, 0, 0)`,
+        site,
         date
       );
     } else {
       this.ctx.storage.sql.exec(
-        `UPDATE daily_state
+         `UPDATE daily_state
          SET date = ?, correct_count = 0, answered_count = 0
-         WHERE singleton = 1`,
-        date
+         WHERE site = ?`,
+        date,
+        site
       );
     }
     return {
@@ -517,25 +680,25 @@ export class DailyCount extends DurableObject {
     };
   }
 
-  getState(date) {
-    if (dateOrdinal(date) === null) {
+  getState(site, date) {
+    if (!isSite(site) || dateOrdinal(date) === null) {
       throw new TypeError("invalid date");
     }
 
     return this.ctx.storage.transactionSync(() => {
-      const ensured = this.ensureDate(date);
-      return parseStateRow(ensured.state, ensured.availability);
+      const ensured = this.ensureDate(site, date);
+      return parseStateRow(site, ensured.state, ensured.availability);
     });
   }
 
-  getHistory(today, from, to) {
+  getHistory(site, today, from, to) {
     const range = parseHistoryRange(from, to);
-    if (dateOrdinal(today) === null || range === null) {
+    if (!isSite(site) || dateOrdinal(today) === null || range === null) {
       throw new TypeError("invalid history range");
     }
 
     return this.ctx.storage.transactionSync(() => {
-      const ensured = this.ensureDate(today);
+      const ensured = this.ensureDate(site, today);
       if (ensured.stale) {
         throw new Error("history date moved backwards");
       }
@@ -546,8 +709,9 @@ export class DailyCount extends DurableObject {
           .exec(
             `SELECT date, correct_count, answered_count
              FROM daily_history
-             WHERE date >= ? AND date <= ?
+             WHERE site = ? AND date >= ? AND date <= ?
              ORDER BY date`,
+            site,
             from,
             to
           )
@@ -581,6 +745,7 @@ export class DailyCount extends DurableObject {
         });
       }
       return {
+        site,
         timeZone: "Asia/Tokyo",
         today,
         availableFrom: availability,
@@ -591,8 +756,9 @@ export class DailyCount extends DurableObject {
     });
   }
 
-  recordAnswer(date, operationId, result) {
+  recordAnswer(site, date, operationId, result) {
     if (
+      !isSite(site) ||
       dateOrdinal(date) === null ||
       !OPERATION_ID_PATTERN.test(operationId) ||
       !ANSWER_RESULTS.has(result)
@@ -601,11 +767,11 @@ export class DailyCount extends DurableObject {
     }
 
     return this.ctx.storage.transactionSync(() => {
-      const ensured = this.ensureDate(date);
+      const ensured = this.ensureDate(site, date);
       if (ensured.stale) {
         return {
           error: "date_changed",
-          state: parseStateRow(ensured.state, ensured.availability),
+          state: parseStateRow(site, ensured.state, ensured.availability),
         };
       }
 
@@ -613,7 +779,8 @@ export class DailyCount extends DurableObject {
         .exec(
           `SELECT result, completed_milestone
            FROM processed_answers
-           WHERE operation_id = ?`,
+           WHERE site = ? AND operation_id = ?`,
+          site,
           operationId
         )
         .toArray()[0];
@@ -621,11 +788,11 @@ export class DailyCount extends DurableObject {
         if (processed.result !== result) {
           return {
             error: "operation_conflict",
-            state: parseStateRow(ensured.state, ensured.availability),
+            state: parseStateRow(site, ensured.state, ensured.availability),
           };
         }
         return {
-          state: parseStateRow(ensured.state, ensured.availability),
+          state: parseStateRow(site, ensured.state, ensured.availability),
           completedMilestone: processed.completed_milestone,
         };
       }
@@ -637,28 +804,38 @@ export class DailyCount extends DurableObject {
            SET
              correct_count = correct_count + ?,
              answered_count = answered_count + 1
-           WHERE singleton = 1
+           WHERE site = ?
            RETURNING date, correct_count, answered_count`,
-          correctIncrement
+          correctIncrement,
+          site
         )
         .toArray()[0];
       const milestone =
         result === "correct" ? completedMilestone(updated.correct_count) : null;
       this.ctx.storage.sql.exec(
         `INSERT INTO processed_answers (
+           site,
            operation_id,
            result,
            completed_milestone
-         ) VALUES (?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?)`,
+        site,
         operationId,
         result,
         milestone
       );
       return {
-        state: parseStateRow(updated, ensured.availability),
+        state: parseStateRow(site, updated, ensured.availability),
         completedMilestone: milestone,
       };
     });
+  }
+
+  listSites() {
+    return this.ctx.storage.sql
+      .exec("SELECT site FROM tracking_metadata ORDER BY site")
+      .toArray()
+      .map((row) => row.site);
   }
 }
 
@@ -722,13 +899,15 @@ async function parseAnswerRequest(request) {
   }
   const keys = Object.keys(body).sort();
   if (
-    keys.length !== 3 ||
+    keys.length !== 4 ||
     keys[0] !== "date" ||
     keys[1] !== "operationId" ||
     keys[2] !== "result" ||
+    keys[3] !== "site" ||
     dateOrdinal(body.date) === null ||
     !OPERATION_ID_PATTERN.test(body.operationId) ||
-    !ANSWER_RESULTS.has(body.result)
+    !ANSWER_RESULTS.has(body.result) ||
+    !isSite(body.site)
   ) {
     return null;
   }
@@ -737,16 +916,19 @@ async function parseAnswerRequest(request) {
     date: body.date,
     operationId: body.operationId,
     result: body.result,
+    site: body.site,
   };
 }
 
 function parseHistoryRequest(url) {
   const keys = [...url.searchParams.keys()];
   if (
-    keys.length !== 2 ||
-    keys.some((key) => key !== "from" && key !== "to") ||
+    keys.length !== 3 ||
+    keys.some((key) => !["from", "site", "to"].includes(key)) ||
     url.searchParams.getAll("from").length !== 1 ||
-    url.searchParams.getAll("to").length !== 1
+    url.searchParams.getAll("to").length !== 1 ||
+    url.searchParams.getAll("site").length !== 1 ||
+    !isSite(url.searchParams.get("site"))
   ) {
     return null;
   }
@@ -756,13 +938,27 @@ function parseHistoryRequest(url) {
   );
 }
 
+function parseStateSite(url) {
+  const keys = [...url.searchParams.keys()];
+  if (
+    keys.length !== 1 ||
+    keys[0] !== "site" ||
+    url.searchParams.getAll("site").length !== 1
+  ) {
+    return null;
+  }
+  const site = url.searchParams.get("site");
+  return isSite(site) ? site : null;
+}
+
 export async function handleRequest(request, env, fetcher = fetch) {
   const url = new URL(request.url);
   const routes = new Map([
-    ["/v2/state", "GET"],
-    ["/v2/history", "GET"],
-    ["/v2/answers", "POST"],
-    ["/v2/speech-token", "POST"],
+    ["/v3/sites", "GET"],
+    ["/v3/state", "GET"],
+    ["/v3/history", "GET"],
+    ["/v3/answers", "POST"],
+    ["/v3/speech-token", "POST"],
   ]);
   const expectedMethod = routes.get(url.pathname);
   if (expectedMethod === undefined) {
@@ -782,21 +978,41 @@ export async function handleRequest(request, env, fetcher = fetch) {
     return errorResponse("unauthorized", 401);
   }
 
-  if (url.pathname === "/v2/speech-token") {
+  if (url.pathname === "/v3/speech-token") {
+    if (url.search !== "") {
+      return errorResponse("invalid_request", 400);
+    }
     return issueSpeechToken(env, fetcher);
   }
 
   const today = getTokyoDate();
   const stub = getDailyCountStub(env);
-  if (url.pathname === "/v2/state") {
-    return jsonResponse(await stub.getState(today));
+  if (url.pathname === "/v3/sites") {
+    if (url.search !== "") {
+      return errorResponse("invalid_request", 400);
+    }
+    return jsonResponse({ sites: await stub.listSites() });
   }
-  if (url.pathname === "/v2/history") {
+  if (url.pathname === "/v3/state") {
+    const site = parseStateSite(url);
+    if (site === null) {
+      return errorResponse("invalid_request", 400);
+    }
+    return jsonResponse(await stub.getState(site, today));
+  }
+  if (url.pathname === "/v3/history") {
     const range = parseHistoryRequest(url);
     if (range === null) {
       return errorResponse("invalid_request", 400);
     }
-    return jsonResponse(await stub.getHistory(today, range.from, range.to));
+    const site = url.searchParams.get("site");
+    return jsonResponse(
+      await stub.getHistory(site, today, range.from, range.to)
+    );
+  }
+
+  if (url.search !== "") {
+    return errorResponse("invalid_request", 400);
   }
 
   const answer = await parseAnswerRequest(request);
@@ -805,12 +1021,16 @@ export async function handleRequest(request, env, fetcher = fetch) {
   }
   if (answer.date !== today) {
     return jsonResponse(
-      { error: "date_changed", state: await stub.getState(today) },
+      {
+        error: "date_changed",
+        state: await stub.getState(answer.site, today),
+      },
       409
     );
   }
 
   const result = await stub.recordAnswer(
+    answer.site,
     answer.date,
     answer.operationId,
     answer.result

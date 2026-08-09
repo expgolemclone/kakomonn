@@ -12,6 +12,8 @@ const projectRoot = resolve(__dirname, "..", "..");
 const wranglerBin = resolve(projectRoot, "node_modules", "wrangler", "bin", "wrangler.js");
 const configPath = resolve(projectRoot, "kakomonn-sync", "wrangler.jsonc");
 const token = "test-dashboard-token";
+const site = "chushoks.kakomonn.com";
+const otherSite = "nurse.kakomonn.com";
 const today = "2026-07-18";
 const availableFrom = {
   correct: "2026-07-01",
@@ -156,6 +158,7 @@ async function startWorker() {
 }
 
 function historyResponse(url) {
+  const requestedSite = url.searchParams.get("site");
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   const days = [];
@@ -171,15 +174,20 @@ function historyResponse(url) {
         correct:
           date < availableFrom.correct || date > today
             ? null
-            : (correctCounts.get(date) ?? 0),
+            : requestedSite === site
+              ? (correctCounts.get(date) ?? 0)
+              : 0,
         answered:
           date < availableFrom.answered || date > today
             ? null
-            : (answeredCounts.get(date) ?? 0),
+            : requestedSite === site
+              ? (answeredCounts.get(date) ?? 0)
+              : 0,
       },
     });
   }
   return {
+    site: requestedSite,
     timeZone: "Asia/Tokyo",
     today,
     availableFrom,
@@ -201,6 +209,7 @@ async function main() {
   const browserErrors = [];
   const apiCalls = [];
   let failNextHistory = false;
+  let returnNoSites = false;
   page.on("console", (message) => {
     if (message.type() === "error") {
       browserErrors.push(message.text());
@@ -208,7 +217,7 @@ async function main() {
   });
   page.on("pageerror", (error) => browserErrors.push(String(error)));
 
-  await page.route(`${worker.origin}/v2/**`, async (route) => {
+  await page.route(`${worker.origin}/v3/**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const authorization = request.headers().authorization ?? "";
@@ -221,19 +230,34 @@ async function main() {
       });
       return;
     }
-    if (url.pathname === "/v2/state") {
+    if (url.pathname === "/v3/sites") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
+          sites: returnNoSites ? [] : [site, otherSite],
+        }),
+      });
+      return;
+    }
+    if (url.pathname === "/v3/state") {
+      const requestedSite = url.searchParams.get("site");
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          site: requestedSite,
           date: today,
-          counts: { correct: 10, answered: 14 },
+          counts:
+            requestedSite === site
+              ? { correct: 10, answered: 14 }
+              : { correct: 0, answered: 0 },
           milestoneInterval: 50,
         }),
       });
       return;
     }
-    if (url.pathname === "/v2/history") {
+    if (url.pathname === "/v3/history") {
       if (failNextHistory) {
         failNextHistory = false;
         await route.fulfill({
@@ -267,6 +291,12 @@ async function main() {
     await page.locator("#auth-token").fill(token);
     await page.locator("#auth-submit").click();
     await page.locator("#dashboard").waitFor({ state: "visible" });
+    await page.locator("#week-view").click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#period-title")?.textContent ===
+        "2026年7月13日 - 19日"
+    );
     assert.equal(await page.locator("#period-title").textContent(), "2026年7月13日 - 19日");
     assert.equal(await page.locator("#total-count").textContent(), "30");
     assert.equal(await page.locator("#total-answered").textContent(), "40");
@@ -291,6 +321,28 @@ async function main() {
       await page.evaluate(() => localStorage.getItem("kakomonn-dashboard.sync-token")),
       token
     );
+    assert.deepEqual(await page.locator("#site-select option").allTextContents(), [
+      site,
+      otherSite,
+    ]);
+    assert.equal(await page.locator("#site-select").inputValue(), site);
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem("kakomonn-dashboard.site")),
+      site
+    );
+
+    await page.locator("#site-select").selectOption(otherSite);
+    await page.waitForFunction(
+      () => document.querySelector("#total-count")?.textContent === "0"
+    );
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem("kakomonn-dashboard.site")),
+      otherSite
+    );
+    await page.locator("#site-select").selectOption(site);
+    await page.waitForFunction(
+      () => document.querySelector("#total-count")?.textContent === "30"
+    );
 
     const desktopScreenshot = join(tmpdir(), "kakomonn-dashboard-desktop.png");
     await page.screenshot({ path: desktopScreenshot, fullPage: true });
@@ -313,7 +365,16 @@ async function main() {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForFunction(
-      () => document.querySelector("#chart-scroller").scrollLeft > 0
+      () => {
+        const marker = document.querySelector(".today-marker")?.getBoundingClientRect();
+        const scroller = document.querySelector("#chart-scroller")?.getBoundingClientRect();
+        return (
+          marker !== undefined &&
+          scroller !== undefined &&
+          marker.left >= scroller.left &&
+          marker.right <= scroller.right
+        );
+      }
     );
     const mobileLayout = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
@@ -329,7 +390,11 @@ async function main() {
     assert.equal(
       mobileLayout.todayMarker.left >= mobileLayout.chartScroller.left &&
         mobileLayout.todayMarker.right <= mobileLayout.chartScroller.right,
-      true
+      true,
+      JSON.stringify({
+        chartScroller: mobileLayout.chartScroller,
+        todayMarker: mobileLayout.todayMarker,
+      })
     );
     const mobileScreenshot = join(tmpdir(), "kakomonn-dashboard-mobile.png");
     await page.screenshot({ path: mobileScreenshot, fullPage: true });
@@ -360,7 +425,21 @@ async function main() {
       await page.evaluate(() => localStorage.getItem("kakomonn-dashboard.sync-token")),
       null
     );
-    assert.equal(apiCalls.every((call) => call.pathname.startsWith("/v2/")), true);
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem("kakomonn-dashboard.site")),
+      null
+    );
+    returnNoSites = true;
+    await page.locator("#auth-token").fill(token);
+    await page.locator("#auth-submit").click();
+    await page.locator("#site-empty").waitFor({ state: "visible" });
+    returnNoSites = false;
+    await page.evaluate(() =>
+      document.dispatchEvent(new Event("visibilitychange"))
+    );
+    await page.locator("#dashboard").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#site-select").inputValue(), site);
+    assert.equal(apiCalls.every((call) => call.pathname.startsWith("/v3/")), true);
     assert.equal(
       apiCalls.some((call) => call.authorization === `Bearer ${token}`),
       true

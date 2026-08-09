@@ -378,7 +378,7 @@ async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v2/speech-token",
+        (call) => new URL(call.url).pathname === "/v3/speech-token",
       ).length,
   );
 }
@@ -833,7 +833,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v2/answers",
+              new URL(call.url).pathname === "/v3/answers",
           ).length,
       ),
       0,
@@ -1028,7 +1028,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v2/answers",
+              new URL(call.url).pathname === "/v3/answers",
           ).length,
       ),
       0,
@@ -1058,7 +1058,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v2/answers",
+              new URL(call.url).pathname === "/v3/answers",
           ).length,
       ),
       1,
@@ -1456,7 +1456,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v2/answers",
+              new URL(call.url).pathname === "/v3/answers",
           ).length,
       ),
       1,

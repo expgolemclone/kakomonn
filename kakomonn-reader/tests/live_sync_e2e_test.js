@@ -432,6 +432,7 @@ function chromeDevToolsMcpEntry() {
 }
 
 function assertSyncState(state) {
+  assert.equal(state.site, "chushoks.kakomonn.com");
   assert.match(state.date, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(Number.isSafeInteger(state.counts?.correct), true);
   assert.equal(Number.isSafeInteger(state.counts?.answered), true);
@@ -441,7 +442,8 @@ function assertSyncState(state) {
 }
 
 async function requestSyncState(token) {
-  const response = await fetch(`${syncApiOrigin}/v2/state`, {
+  const query = new URLSearchParams({ site: "chushoks.kakomonn.com" });
+  const response = await fetch(`${syncApiOrigin}/v3/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });

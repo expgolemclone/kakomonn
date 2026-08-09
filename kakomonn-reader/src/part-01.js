@@ -38,7 +38,20 @@
   syncSettingsButton.textContent = "同期設定";
   syncSettingsButton.setAttribute("aria-label", "学習記録の同期設定を開く");
 
-  controls.append(statusBadge, countBadge, stopButton, syncSettingsButton);
+  const timeLimitProgress = document.createElement("progress");
+  timeLimitProgress.id = "kakomonn-reader-time-limit";
+  timeLimitProgress.max = TIME_LIMIT_MS;
+  timeLimitProgress.value = TIME_LIMIT_MS;
+  timeLimitProgress.hidden = true;
+  timeLimitProgress.setAttribute("aria-label", "問題の制限時間");
+
+  controls.append(
+    statusBadge,
+    countBadge,
+    stopButton,
+    syncSettingsButton,
+    timeLimitProgress
+  );
 
   const nextQuestionButton = document.createElement("button");
   nextQuestionButton.id = "kakomonn-reader-next";
@@ -172,6 +185,7 @@
     return (
       value !== null &&
       typeof value === "object" &&
+      value.site === SITE_ID &&
       /^\d{4}-\d{2}-\d{2}$/.test(value.date) &&
       value.counts !== null &&
       typeof value.counts === "object" &&
@@ -216,13 +230,14 @@
       /^[0-9a-f]{32}$/.test(value.operationId) &&
       /^\d{4}-\d{2}-\d{2}$/.test(value.date) &&
       typeof value.pageURL === "string" &&
-      value.pageURL.startsWith("https://chushoks.kakomonn.com/")
+      isSitePageURL(value.pageURL)
     );
   }
 
   function isPendingAnswer(value) {
     return (
       isLegacyPendingCorrect(value) &&
+      value.site === SITE_ID &&
       (value.result === "correct" || value.result === "incorrect")
     );
   }
@@ -231,13 +246,27 @@
     return (
       value !== null &&
       typeof value === "object" &&
+      value.site === SITE_ID &&
       /^\d{4}-\d{2}-\d{2}$/.test(value.date) &&
       Number.isSafeInteger(value.milestone) &&
       value.milestone > 0 &&
       value.milestone % MILESTONE_INTERVAL === 0 &&
       typeof value.sourcePageURL === "string" &&
-      value.sourcePageURL.startsWith("https://chushoks.kakomonn.com/")
+      isSitePageURL(value.sourcePageURL)
     );
+  }
+
+  function isSitePageURL(value) {
+    try {
+      const url = new URL(value);
+      return (
+        url.origin === `https://${SITE_ID}` &&
+        url.username === "" &&
+        url.password === ""
+      );
+    } catch {
+      return false;
+    }
   }
 
   function parseResponseJSON(response) {
@@ -350,9 +379,10 @@
   }
 
   function requestSyncState(token) {
+    const parameters = new URLSearchParams({ site: SITE_ID });
     return requestSyncResponse(
       "GET",
-      "/v2/state",
+      `/v3/state?${parameters}`,
       token,
       isSyncState
     );
@@ -361,7 +391,7 @@
   function requestAnswerResult(token, operation) {
     return requestSyncResponse(
       "POST",
-      "/v2/answers",
+      "/v3/answers",
       token,
       isAnswerResponse,
       operation
@@ -371,7 +401,7 @@
   function requestSpeechTokenResult(token) {
     return requestSyncResponse(
       "POST",
-      "/v2/speech-token",
+      "/v3/speech-token",
       token,
       isSpeechTokenResponse
     );
@@ -438,6 +468,7 @@
       syncInProgress || nextQuestionOperationInProgress;
     updateNextQuestionButton();
     updateCopyButton();
+    synchronizeTimeLimitPhase();
   }
 
   async function clearPendingAnswer() {
@@ -631,7 +662,7 @@
     }
 
     if (answer === null && legacyCorrect !== null) {
-      answer = { ...legacyCorrect, result: "correct" };
+      answer = { ...legacyCorrect, result: "correct", site: SITE_ID };
       if (!isPendingAnswer(answer)) {
         throw new Error("invalid migrated pending answer");
       }
@@ -709,6 +740,7 @@
   }
 
   function handlePageResume() {
+    synchronizeTimeLimitPhase();
     if (
       document.visibilityState === "visible" &&
       syncToken &&
@@ -778,8 +810,7 @@
   }
 
   // BEGIN QUESTION EXTRACTION
-  const QUESTION_META_PATTERN =
-    /^中小企業診断士試験\s*.+?(?:問|第)\s*\d+/;
+  const QUESTION_META_PATTERN = /(?:問\s*\d+|第\s*\d+)/;
   const ANSWER_CHOICE_SELECTOR =
     "input[type='radio'], input[type='checkbox'], [role='radio']";
   const BLOCK_TAG_NAMES = new Set([
@@ -841,23 +872,22 @@
     return element.getClientRects().length > 0;
   }
 
-  function elementDepth(element) {
-    let depth = 0;
-    let current = element;
-
-    while (current.parentElement) {
-      depth += 1;
-      current = current.parentElement;
-    }
-
-    return depth;
-  }
-
   function findQuestionMetadataElement(documentNode) {
-    const candidates = [];
-    const checkedElements = new Set();
-    const NodeFilterConstructor = documentNode.defaultView.NodeFilter;
-    const walker = documentNode.createTreeWalker(
-      documentNode.body,
-      NodeFilterConstructor.SHOW_TEXT
-    );
+    const candidates = Array.from(
+      documentNode.querySelectorAll(".problem_detail > .when")
+    ).filter((element) => {
+      const text = normalizeInlineText(element.innerText ?? "");
+      const problemElement = element.closest(".problem_detail");
+      const answerButton = findAnswerButtonAfter(element);
+      return (
+        text.length > 0 &&
+        text.length <= 220 &&
+        QUESTION_META_PATTERN.test(text) &&
+        isVisibleElement(element) &&
+        problemElement !== null &&
+        answerButton !== null &&
+        problemElement.contains(answerButton)
+      );
+    });
+
+    return candidates.length === 1 ? candidates[0] : null;

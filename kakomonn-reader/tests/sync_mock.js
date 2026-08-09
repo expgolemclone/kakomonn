@@ -1,7 +1,8 @@
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
-const PENDING_ANSWER_KEY = "kakomonn-reader.pending-answer";
-const LEGACY_PENDING_CORRECT_KEY = "kakomonn-reader.pending-correct";
-const PENDING_CELEBRATION_KEY = "kakomonn-reader.pending-celebration";
+const SITE = "chushoks.kakomonn.com";
+const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE}.pending-answer`;
+const LEGACY_PENDING_CORRECT_KEY = `kakomonn-reader.${SITE}.pending-correct`;
+const PENDING_CELEBRATION_KEY = `kakomonn-reader.${SITE}.pending-celebration`;
 const SYNC_API_ORIGIN = "https://kakomonn-count-sync.expgolem-lab.workers.dev";
 const CONGRATULATIONS_ORIGIN =
   "https://kakomonn-congratulations.expgolem-lab.workers.dev";
@@ -13,6 +14,7 @@ function installSyncMockInWindow({
   initialAnsweredCount,
   initialDate,
   expectedToken,
+  expectedSite,
   hasStoredToken,
   initialPendingAnswer,
   initialLegacyPendingCorrect,
@@ -76,6 +78,7 @@ function installSyncMockInWindow({
   };
 
   const syncState = () => ({
+    site: expectedSite,
     date: mock.date,
     counts: {
       correct: mock.count,
@@ -203,12 +206,16 @@ function installSyncMockInWindow({
         }
 
         const pathname = requestURL.pathname;
-        if (call.method === "GET" && pathname === "/v2/state") {
+        if (
+          call.method === "GET" &&
+          pathname === "/v3/state" &&
+          requestURL.searchParams.get("site") === expectedSite
+        ) {
           respondJSON(200, syncState());
           return;
         }
 
-        if (call.method === "POST" && pathname === "/v2/speech-token") {
+        if (call.method === "POST" && pathname === "/v3/speech-token") {
           respondJSON(200, {
             token: expectedSpeechToken,
             expiresInSeconds: 600,
@@ -216,7 +223,7 @@ function installSyncMockInWindow({
           return;
         }
 
-        if (call.method === "POST" && pathname === "/v2/answers") {
+        if (call.method === "POST" && pathname === "/v3/answers") {
           if (call.body?.date !== mock.date) {
             respondJSON(409, {
               error: "date_changed",
@@ -229,6 +236,7 @@ function installSyncMockInWindow({
           const result = call.body?.result;
           if (
             !/^[0-9a-f]{32}$/.test(operationId) ||
+            call.body?.site !== expectedSite ||
             (result !== "correct" && result !== "incorrect")
           ) {
             respondJSON(400, { error: "invalid_request" });
@@ -307,12 +315,14 @@ function createSyncMockConfiguration({
   processedOperations = [],
   userscriptsPromise = false,
   systemClipboard = false,
+  site = SITE,
 } = {}) {
   return {
     initialCorrectCount: count,
     initialAnsweredCount: answeredCount,
     initialDate: date,
     expectedToken: token,
+    expectedSite: site,
     hasStoredToken: configured,
     initialPendingAnswer: pendingAnswer,
     initialLegacyPendingCorrect: legacyPendingCorrect,
@@ -320,9 +330,9 @@ function createSyncMockConfiguration({
     initialProcessedOperations: processedOperations,
     returnsPromise: userscriptsPromise,
     tokenKey: SYNC_TOKEN_KEY,
-    pendingAnswerKey: PENDING_ANSWER_KEY,
-    legacyPendingCorrectKey: LEGACY_PENDING_CORRECT_KEY,
-    celebrationKey: PENDING_CELEBRATION_KEY,
+    pendingAnswerKey: `kakomonn-reader.${site}.pending-answer`,
+    legacyPendingCorrectKey: `kakomonn-reader.${site}.pending-correct`,
+    celebrationKey: `kakomonn-reader.${site}.pending-celebration`,
     expectedOrigin: SYNC_API_ORIGIN,
     expectedSpeechOrigin: AZURE_SPEECH_ORIGIN,
     expectedSpeechToken: AZURE_SPEECH_TOKEN,
@@ -346,6 +356,7 @@ module.exports = {
   LEGACY_PENDING_CORRECT_KEY,
   PENDING_ANSWER_KEY,
   PENDING_CELEBRATION_KEY,
+  SITE,
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,
 };

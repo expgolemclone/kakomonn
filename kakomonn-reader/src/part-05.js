@@ -124,6 +124,7 @@
     const celebration = {
       date: operation.date,
       milestone,
+      site: SITE_ID,
       sourcePageURL: operation.pageURL,
     };
     if (!isPendingCelebration(celebration)) {
@@ -205,6 +206,7 @@
       date: activeCountDate,
       pageURL: currentFrameURL,
       result,
+      site: SITE_ID,
     };
     if (!isPendingAnswer(operation)) {
       throw new Error("invalid pending answer");
@@ -232,6 +234,7 @@
           date: operation.date,
           operationId: operation.operationId,
           result: operation.result,
+          site: operation.site,
         });
         applyRemoteState(result.state);
         if (result.completedMilestone !== null) {
@@ -739,6 +742,7 @@
 
   function clearFrameState() {
     clearShortcutSequence();
+    clearTimeLimit();
     if (loadTimer !== null) {
       clearTimeout(loadTimer);
       loadTimer = null;
@@ -820,6 +824,7 @@
 
     updateNextQuestionButton();
     updateCopyButton();
+    synchronizeTimeLimitPhase();
     void maybeContinuePendingCelebration();
 
     loadTimer = window.setTimeout(() => {

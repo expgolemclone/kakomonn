@@ -1,4 +1,8 @@
-import { env, runInDurableObject, SELF } from "cloudflare:test";
+import {
+  env,
+  runInDurableObject as runInRawDurableObject,
+  SELF,
+} from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import worker, {
   getTokyoDate,
@@ -10,28 +14,50 @@ import worker, {
 const TOKEN = "test-sync-token";
 const AUTHORIZATION = { Authorization: `Bearer ${TOKEN}` };
 const MILESTONE_INTERVAL = 50;
+const SITE = "chushoks.kakomonn.com";
+const OTHER_SITE = "nurse.kakomonn.com";
 
 function operationId(value) {
   return value.toString(16).padStart(32, "0");
 }
 
-function state(date, correct, answered) {
+function state(date, correct, answered, site = SITE) {
   return {
+    site,
     date,
     counts: { correct, answered },
     milestoneInterval: MILESTONE_INTERVAL,
   };
 }
 
-function result(date, correct, answered, completedMilestone = null) {
+function result(
+  date,
+  correct,
+  answered,
+  completedMilestone = null,
+  site = SITE
+) {
   return {
-    state: state(date, correct, answered),
+    state: state(date, correct, answered, site),
     completedMilestone,
   };
 }
 
 function stubFor(name) {
-  return env.DAILY_COUNT.get(env.DAILY_COUNT.idFromName(name));
+  const raw = env.DAILY_COUNT.get(env.DAILY_COUNT.idFromName(name));
+  return {
+    raw,
+    getState: (date, site = SITE) => raw.getState(site, date),
+    getHistory: (today, from, to, site = SITE) =>
+      raw.getHistory(site, today, from, to),
+    recordAnswer: (date, id, answerResult, site = SITE) =>
+      raw.recordAnswer(site, date, id, answerResult),
+    listSites: () => raw.listSites(),
+  };
+}
+
+function runInDurableObject(stub, callback) {
+  return runInRawDurableObject(stub.raw, callback);
 }
 
 async function resetPrimaryObject() {
@@ -76,9 +102,74 @@ function replaceWithLegacySchema(storage, { history }) {
   }
 }
 
+function replaceWithSiteLessSchema(storage) {
+  storage.sql.exec(`
+    DROP TABLE processed_answers;
+    DROP TABLE daily_history;
+    DROP TABLE tracking_metadata;
+    DROP TABLE daily_state;
+    CREATE TABLE daily_state (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      date TEXT NOT NULL,
+      correct_count INTEGER NOT NULL CHECK (correct_count >= 0),
+      answered_count INTEGER NOT NULL CHECK (answered_count >= correct_count)
+    );
+    CREATE TABLE processed_answers (
+      operation_id TEXT PRIMARY KEY,
+      result TEXT NOT NULL CHECK (result IN ('correct', 'incorrect')),
+      completed_milestone INTEGER
+    ) WITHOUT ROWID;
+    CREATE TABLE daily_history (
+      date TEXT PRIMARY KEY,
+      correct_count INTEGER NOT NULL CHECK (correct_count >= 0),
+      answered_count INTEGER CHECK (
+        answered_count IS NULL OR answered_count >= correct_count
+      )
+    ) WITHOUT ROWID;
+    CREATE TABLE tracking_metadata (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      correct_available_from TEXT,
+      answered_available_from TEXT
+    );
+    INSERT INTO daily_state VALUES (1, '2026-07-17', 7, 9);
+    INSERT INTO processed_answers VALUES (
+      '${operationId(1)}', 'correct', NULL
+    );
+    INSERT INTO daily_history VALUES ('2026-07-16', 5, 8);
+    INSERT INTO tracking_metadata VALUES (
+      1, '2026-07-16', '2026-07-16'
+    );
+  `);
+}
+
 beforeEach(resetPrimaryObject);
 
 describe("DailyCount", () => {
+  it("assigns the existing v2 schema to the legacy site", async () => {
+    const stub = stubFor("site-less-migration");
+    await runInDurableObject(stub, (_instance, durableState) => {
+      replaceWithSiteLessSchema(durableState.storage);
+      initializeSchema(durableState.storage);
+    });
+
+    expect(await stub.listSites()).toEqual([SITE]);
+    expect(await stub.getState("2026-07-17")).toEqual(
+      state("2026-07-17", 7, 9)
+    );
+    expect(
+      await stub.recordAnswer("2026-07-17", operationId(1), "correct")
+    ).toEqual(result("2026-07-17", 7, 9));
+    expect(
+      await stub.getHistory("2026-07-17", "2026-07-16", "2026-07-17")
+    ).toMatchObject({
+      site: SITE,
+      days: [
+        { date: "2026-07-16", counts: { correct: 5, answered: 8 } },
+        { date: "2026-07-17", counts: { correct: 7, answered: 9 } },
+      ],
+    });
+  });
+
   it("records both outcomes and treats retries as idempotent", async () => {
     const stub = stubFor("answer-idempotency");
 
@@ -189,6 +280,7 @@ describe("DailyCount", () => {
     expect(
       await stub.getHistory("2026-07-17", "2026-07-16", "2026-07-18")
     ).toEqual({
+      site: SITE,
       timeZone: "Asia/Tokyo",
       today: "2026-07-17",
       availableFrom: { correct: "2026-07-16", answered: "2026-07-18" },
@@ -228,6 +320,7 @@ describe("DailyCount", () => {
     expect(
       await stub.getHistory("2026-07-18", "2026-07-17", "2026-07-19")
     ).toEqual({
+      site: SITE,
       timeZone: "Asia/Tokyo",
       today: "2026-07-18",
       availableFrom: { correct: "2026-07-18", answered: "2026-07-19" },
@@ -254,6 +347,7 @@ describe("DailyCount", () => {
     expect(
       await stub.getHistory("2026-07-17", "2026-07-17", "2026-07-18")
     ).toEqual({
+      site: SITE,
       timeZone: "Asia/Tokyo",
       today: "2026-07-17",
       availableFrom: { correct: "2026-07-17", answered: "2026-07-18" },
@@ -274,6 +368,7 @@ describe("DailyCount", () => {
     expect(
       await stub.getHistory("2026-07-19", "2026-07-16", "2026-07-20")
     ).toEqual({
+      site: SITE,
       timeZone: "Asia/Tokyo",
       today: "2026-07-19",
       availableFrom: { correct: "2026-07-17", answered: "2026-07-17" },
@@ -303,16 +398,47 @@ describe("DailyCount", () => {
       state("2026-07-18", 1, 1)
     );
   });
+
+  it("isolates counts and operation ids by site", async () => {
+    const stub = stubFor("site-isolation");
+    const id = operationId(1);
+
+    expect(await stub.recordAnswer("2026-07-17", id, "correct")).toEqual(
+      result("2026-07-17", 1, 1)
+    );
+    expect(
+      await stub.recordAnswer("2026-07-17", id, "incorrect", OTHER_SITE)
+    ).toEqual(result("2026-07-17", 0, 1, null, OTHER_SITE));
+    expect(await stub.listSites()).toEqual([SITE, OTHER_SITE]);
+  });
 });
 
 describe("HTTP API", () => {
+  it("lists initialized sites in stable order", async () => {
+    for (const site of [OTHER_SITE, SITE]) {
+      const response = await SELF.fetch(
+        `https://example.test/v3/state?site=${site}`,
+        { headers: AUTHORIZATION }
+      );
+      expect(response.status).toBe(200);
+    }
+    const response = await SELF.fetch("https://example.test/v3/sites", {
+      headers: AUTHORIZATION,
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      sites: [SITE, OTHER_SITE],
+    });
+  });
+
   it("distinguishes missing, incorrect, and unconfigured bearer tokens", async () => {
-    const missing = await SELF.fetch("https://example.test/v2/state");
-    const incorrect = await SELF.fetch("https://example.test/v2/state", {
+    const stateURL = `https://example.test/v3/state?site=${SITE}`;
+    const missing = await SELF.fetch(stateURL);
+    const incorrect = await SELF.fetch(stateURL, {
       headers: { Authorization: "Bearer incorrect-token" },
     });
     const unconfigured = await worker.fetch(
-      new Request("https://example.test/v2/state"),
+      new Request(stateURL),
       {}
     );
 
@@ -327,7 +453,7 @@ describe("HTTP API", () => {
   });
 
   it("records correct and incorrect answers once", async () => {
-    const initialResponse = await SELF.fetch("https://example.test/v2/state", {
+    const initialResponse = await SELF.fetch(`https://example.test/v3/state?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     const initial = await initialResponse.json();
@@ -341,19 +467,20 @@ describe("HTTP API", () => {
         date: initial.date,
         operationId: id,
         result: answerResult,
+        site: SITE,
       }),
     });
 
     const correct = await SELF.fetch(
-      "https://example.test/v2/answers",
+      "https://example.test/v3/answers",
       answerRequest(operationId(1), "correct")
     );
     const incorrect = await SELF.fetch(
-      "https://example.test/v2/answers",
+      "https://example.test/v3/answers",
       answerRequest(operationId(2), "incorrect")
     );
     const retry = await SELF.fetch(
-      "https://example.test/v2/answers",
+      "https://example.test/v3/answers",
       answerRequest(operationId(2), "incorrect")
     );
 
@@ -372,17 +499,18 @@ describe("HTTP API", () => {
   });
 
   it("returns an authenticated inclusive history range", async () => {
-    const stateResponse = await SELF.fetch("https://example.test/v2/state", {
+    const stateResponse = await SELF.fetch(`https://example.test/v3/state?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     const current = await stateResponse.json();
     const response = await SELF.fetch(
-      `https://example.test/v2/history?from=${current.date}&to=${current.date}`,
+      `https://example.test/v3/history?site=${SITE}&from=${current.date}&to=${current.date}`,
       { headers: AUTHORIZATION }
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
+      site: SITE,
       timeZone: "Asia/Tokyo",
       today: current.date,
       availableFrom: { correct: current.date, answered: current.date },
@@ -394,13 +522,13 @@ describe("HTTP API", () => {
     });
   });
 
-  it("rejects invalid history ranges, methods, and v1 routes", async () => {
+  it("rejects invalid history ranges, methods, and removed routes", async () => {
     const invalidRequests = [
-      "https://example.test/v2/history",
-      "https://example.test/v2/history?from=2026-02-30&to=2026-03-01",
-      "https://example.test/v2/history?from=2026-01-01&to=2026-02-01",
-      "https://example.test/v2/history?from=2026-07-01&from=2026-07-02&to=2026-07-03",
-      "https://example.test/v2/history?from=2026-07-01&to=2026-07-03&extra=1",
+      "https://example.test/v3/history",
+      `https://example.test/v3/history?site=${SITE}&from=2026-02-30&to=2026-03-01`,
+      `https://example.test/v3/history?site=${SITE}&from=2026-01-01&to=2026-02-01`,
+      `https://example.test/v3/history?site=${SITE}&from=2026-07-01&from=2026-07-02&to=2026-07-03`,
+      `https://example.test/v3/history?site=${SITE}&from=2026-07-01&to=2026-07-03&extra=1`,
     ];
     for (const url of invalidRequests) {
       const response = await SELF.fetch(url, { headers: AUTHORIZATION });
@@ -411,7 +539,7 @@ describe("HTTP API", () => {
     }
 
     const methodResponse = await SELF.fetch(
-      "https://example.test/v2/history?from=2026-07-01&to=2026-07-07",
+      `https://example.test/v3/history?site=${SITE}&from=2026-07-01&to=2026-07-07`,
       { method: "POST", headers: AUTHORIZATION }
     );
     expect(methodResponse.status).toBe(405);
@@ -421,6 +549,10 @@ describe("HTTP API", () => {
       headers: AUTHORIZATION,
     });
     expect(legacy.status).toBe(404);
+    const removedV2 = await SELF.fetch("https://example.test/v2/state", {
+      headers: AUTHORIZATION,
+    });
+    expect(removedV2.status).toBe(404);
   });
 
   it("rejects malformed, stale, and conflicting answer operations", async () => {
@@ -430,16 +562,18 @@ describe("HTTP API", () => {
         date: getTokyoDate(),
         operationId: operationId(1),
         result: "unknown",
+        site: SITE,
       },
       {
         date: getTokyoDate(),
         operationId: operationId(1),
         result: "correct",
+        site: SITE,
         extra: true,
       },
     ];
     for (const body of malformedBodies) {
-      const response = await SELF.fetch("https://example.test/v2/answers", {
+      const response = await SELF.fetch("https://example.test/v3/answers", {
         method: "POST",
         headers: {
           ...AUTHORIZATION,
@@ -453,7 +587,7 @@ describe("HTTP API", () => {
       });
     }
 
-    const stale = await SELF.fetch("https://example.test/v2/answers", {
+    const stale = await SELF.fetch("https://example.test/v3/answers", {
       method: "POST",
       headers: {
         ...AUTHORIZATION,
@@ -463,6 +597,7 @@ describe("HTTP API", () => {
         date: "2000-01-01",
         operationId: operationId(2),
         result: "incorrect",
+        site: SITE,
       }),
     });
     expect(stale.status).toBe(409);
@@ -472,7 +607,7 @@ describe("HTTP API", () => {
     });
 
     const current = await (
-      await SELF.fetch("https://example.test/v2/state", {
+      await SELF.fetch(`https://example.test/v3/state?site=${SITE}`, {
         headers: AUTHORIZATION,
       })
     ).json();
@@ -486,14 +621,15 @@ describe("HTTP API", () => {
         date: current.date,
         operationId: operationId(3),
         result: answerResult,
+        site: SITE,
       }),
     });
     await SELF.fetch(
-      "https://example.test/v2/answers",
+      "https://example.test/v3/answers",
       request("incorrect")
     );
     const conflict = await SELF.fetch(
-      "https://example.test/v2/answers",
+      "https://example.test/v3/answers",
       request("correct")
     );
     expect(conflict.status).toBe(409);
@@ -506,7 +642,7 @@ describe("HTTP API", () => {
   it("exchanges the shared secret for a short-lived Azure speech token", async () => {
     let upstreamCall = null;
     const response = await handleRequest(
-      new Request("https://example.test/v2/speech-token", {
+      new Request("https://example.test/v3/speech-token", {
         method: "POST",
         headers: AUTHORIZATION,
       }),
@@ -577,7 +713,7 @@ describe("HTTP API", () => {
 
   it("requires POST for the speech token route", async () => {
     const response = await SELF.fetch(
-      "https://example.test/v2/speech-token",
+      "https://example.test/v3/speech-token",
       { headers: AUTHORIZATION }
     );
 

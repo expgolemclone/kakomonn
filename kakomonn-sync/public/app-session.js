@@ -17,6 +17,7 @@ function renderNavigation() {
   elements.refreshButton.disabled = state.loading;
   elements.weekView.disabled = state.loading;
   elements.monthView.disabled = state.loading;
+  elements.siteSelect.disabled = state.loading;
 }
 
 function formatAverage(value) {
@@ -58,20 +59,51 @@ function renderDashboard() {
   }).format(new Date())}に更新しました.`;
 }
 
-async function loadSession(token, resetAnchor) {
-  const syncState = await fetchState(token);
+async function loadSession(token, resetAnchor, preferredSite = "") {
+  const sites = await fetchSites(token);
+  if (sites.length === 0) {
+    return { token, sites, site: "" };
+  }
+  const storedSite = readStoredSite();
+  const site = sites.includes(preferredSite)
+    ? preferredSite
+    : sites.includes(storedSite)
+      ? storedSite
+      : sites[0];
+  const syncState = await fetchState(token, site);
   const anchorDate = resetAnchor || state.anchorDate === "" ? syncState.date : state.anchorDate;
   const range = rangeFor(state.view, anchorDate);
-  const history = await fetchHistory(token, range);
+  const history = await fetchHistory(token, site, range);
   if (history.today !== syncState.date) {
     throw new DashboardError("invalid_response");
   }
-  return { token, today: syncState.date, anchorDate, history };
+  return { token, sites, site, today: syncState.date, anchorDate, history };
 }
 
 function applySnapshot(snapshot) {
   state.token = snapshot.token;
   state.recoveryToken = snapshot.token;
+  state.sites = snapshot.sites;
+  state.site = snapshot.site;
+  elements.siteSelect.replaceChildren(
+    ...snapshot.sites.map((site) => {
+      const option = document.createElement("option");
+      option.value = site;
+      option.textContent = site;
+      return option;
+    })
+  );
+  elements.siteSelect.value = snapshot.site;
+  if (snapshot.site === "") {
+    state.today = "";
+    state.anchorDate = "";
+    state.history = null;
+    state.availableFrom = { correct: "", answered: "" };
+    state.selectedDate = "";
+    showSiteEmpty();
+    return;
+  }
+  writeStoredSite(snapshot.site);
   state.today = snapshot.today;
   state.anchorDate = snapshot.anchorDate;
   state.history = snapshot.history;
@@ -94,7 +126,7 @@ async function loadRange(view, anchorDate) {
   setDashboardBusy(true);
   try {
     const range = rangeFor(view, anchorDate);
-    const history = await fetchHistory(state.token, range);
+    const history = await fetchHistory(state.token, state.site, range);
     state.view = view;
     state.anchorDate = anchorDate;
     state.today = history.today;
@@ -113,6 +145,17 @@ async function refreshDashboard() {
   if (state.loading || state.token === "") {
     return;
   }
+  if (state.site === "") {
+    setDashboardBusy(true);
+    try {
+      applySnapshot(await loadSession(state.token, true));
+    } catch (error) {
+      showLoadError(error, state.token);
+    } finally {
+      setDashboardBusy(false);
+    }
+    return;
+  }
   const currentRange = rangeFor(state.view, state.anchorDate);
   const wasCurrent = currentRange.from <= state.today && currentRange.to >= state.today;
   setDashboardBusy(true);
@@ -120,7 +163,11 @@ async function refreshDashboard() {
     const snapshot = await loadSession(state.token, false);
     if (wasCurrent && snapshot.today !== state.today) {
       snapshot.anchorDate = snapshot.today;
-      snapshot.history = await fetchHistory(state.token, rangeFor(state.view, snapshot.anchorDate));
+      snapshot.history = await fetchHistory(
+        state.token,
+        snapshot.site,
+        rangeFor(state.view, snapshot.anchorDate)
+      );
     }
     applySnapshot(snapshot);
   } catch (error) {

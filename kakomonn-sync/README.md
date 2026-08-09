@@ -43,6 +43,8 @@ $speechKey | npx wrangler secret put AZURE_SPEECH_KEY --config kakomonn-sync/wra
 npm run deploy:kakomonn-sync
 ```
 
+このcommandはWorker testとdashboard E2Eを実行してからdeploymentし,productionの全公開assetがrepositoryと一致することまで検証します.
+
 `SYNC_TOKEN`には暗号学的に安全な256bit以上のrandom値を設定します.デプロイで表示された`workers.dev` URLは`kakomonn-reader`の`SYNC_API_URL`へ設定します.tokenとkeyはsourceや設定fileへ保存しません.
 
 APIは日本時間でサイト別の日次正解数と解答数を保持し,履歴の保存期間には上限を設けません.同じサイト,操作ID,結果の再送は再加算せず,同じサイトと操作IDへ異なる結果を送った場合は拒否します.日付が変わると当日の値を履歴へ保存し,そのサイトの操作IDだけを破棄します.

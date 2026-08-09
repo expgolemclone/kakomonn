@@ -1,3 +1,10 @@
+let chartZoom = 1;
+let chartViewportKey = "";
+
+const CHART_MAX_ZOOM = 8;
+const CHART_SCALE_WIDTH = 42;
+const MONTH_DAY_WIDTH = 42;
+
 function messageFor(error) {
   switch (error?.code) {
     case "unauthorized":
@@ -92,6 +99,153 @@ function formatScale(value) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+function chartKey(days) {
+  return `${state.view}:${state.history.from}:${state.history.to}:${days.length}`;
+}
+
+function chartBaseWidth(days) {
+  const viewportWidth = elements.chartScroller.clientWidth;
+  if (viewportWidth <= 0) {
+    return 0;
+  }
+  if (state.view === "month") {
+    return Math.max(1360, viewportWidth, CHART_SCALE_WIDTH + days.length * MONTH_DAY_WIDTH);
+  }
+  return viewportWidth;
+}
+
+function chartMinimumZoom(days) {
+  const viewportWidth = elements.chartScroller.clientWidth;
+  const baseWidth = chartBaseWidth(days);
+  if (viewportWidth <= 0 || baseWidth <= 0) {
+    return 1;
+  }
+  return Math.min(1, viewportWidth / baseWidth);
+}
+
+function chartFrameWidth(days) {
+  const viewportWidth = elements.chartScroller.clientWidth;
+  const baseWidth = chartBaseWidth(days);
+  return Math.max(viewportWidth, Math.round(baseWidth * chartZoom));
+}
+
+function clampChartScroll(value) {
+  const maximum = Math.max(
+    0,
+    elements.chartScroller.scrollWidth - elements.chartScroller.clientWidth
+  );
+  return Math.min(maximum, Math.max(0, value));
+}
+
+function updateChartDensity(days) {
+  const dayWidth = elements.barChart.clientWidth / Math.max(1, days.length);
+  const labelStride = Math.max(1, Math.ceil(28 / Math.max(1, dayWidth)));
+  const showValues = dayWidth >= 24;
+  const showTodayMarker = dayWidth >= 26;
+  const slots = elements.barChart.querySelectorAll(".bar-slot");
+  slots.forEach((slot, index) => {
+    const day = days[index];
+    const label = slot.querySelector(".day-label");
+    const showLabel =
+      dayWidth >= 20 ||
+      index % labelStride === 0 ||
+      index === days.length - 1 ||
+      day?.date === state.today;
+    if (label !== null) {
+      label.style.visibility = showLabel ? "" : "hidden";
+    }
+    const value = slot.querySelector(".bar-value");
+    if (value !== null) {
+      value.style.visibility = showValues ? "" : "hidden";
+    }
+    const marker = slot.querySelector(".today-marker");
+    if (marker !== null) {
+      marker.style.visibility = showTodayMarker ? "" : "hidden";
+    }
+  });
+  elements.accuracyPoints.style.display = dayWidth >= 8 ? "" : "none";
+}
+
+function applyChartLayout(days) {
+  const frameWidth = chartFrameWidth(days);
+  if (frameWidth <= 0) {
+    return;
+  }
+  const plotWidth = Math.max(1, frameWidth - CHART_SCALE_WIDTH);
+  const dayWidth = plotWidth / Math.max(1, days.length);
+  const gap =
+    state.view === "week"
+      ? ""
+      : dayWidth >= 16
+        ? "2px"
+        : dayWidth >= 8
+          ? "1px"
+          : "0px";
+
+  elements.chartFrame.classList.remove("is-expanded");
+  elements.barChart.classList.remove("is-expanded");
+  elements.chartFrame.style.width = `${frameWidth}px`;
+  elements.chartFrame.style.minWidth = `${frameWidth}px`;
+  elements.chartFrame.style.overflow = "hidden";
+  elements.barChart.style.gridTemplateColumns = `repeat(${days.length}, minmax(0, 1fr))`;
+  elements.barChart.style.gap = gap;
+
+  window.requestAnimationFrame(() => {
+    updateChartDensity(days);
+    renderAccuracyLine(days);
+  });
+}
+
+function setChartZoom(nextZoom, clientX = null) {
+  const days = state.history?.days;
+  if (!Array.isArray(days) || days.length === 0) {
+    return;
+  }
+  const minimum = chartMinimumZoom(days);
+  const clamped = Math.min(CHART_MAX_ZOOM, Math.max(minimum, nextZoom));
+  if (Math.abs(clamped - chartZoom) < 0.001) {
+    return;
+  }
+
+  const scroller = elements.chartScroller;
+  const rect = scroller.getBoundingClientRect();
+  const anchorOffset = Math.min(
+    rect.width,
+    Math.max(0, clientX === null ? rect.width / 2 : clientX - rect.left)
+  );
+  const oldWidth = Math.max(1, scroller.scrollWidth);
+  const anchorRatio = (scroller.scrollLeft + anchorOffset) / oldWidth;
+
+  chartZoom = clamped;
+  applyChartLayout(days);
+  window.requestAnimationFrame(() => {
+    scroller.scrollLeft = clampChartScroll(
+      anchorRatio * scroller.scrollWidth - anchorOffset
+    );
+  });
+}
+
+function resizeChartForViewport() {
+  const days = state.history?.days;
+  if (!Array.isArray(days) || days.length === 0) {
+    return;
+  }
+  const scroller = elements.chartScroller;
+  const oldWidth = Math.max(1, scroller.scrollWidth);
+  const centerRatio =
+    (scroller.scrollLeft + scroller.clientWidth / 2) / oldWidth;
+  chartZoom = Math.min(
+    CHART_MAX_ZOOM,
+    Math.max(chartMinimumZoom(days), chartZoom)
+  );
+  applyChartLayout(days);
+  window.requestAnimationFrame(() => {
+    scroller.scrollLeft = clampChartScroll(
+      centerRatio * scroller.scrollWidth - scroller.clientWidth / 2
+    );
+  });
+}
+
 function accuracyFor(day) {
   const { correct, answered } = day.counts;
   if (correct === null || answered === null || answered <= 0) {
@@ -146,6 +300,10 @@ function selectDay(date) {
 
 function positionSelectedDate() {
   if (state.view === "week" || state.selectedDate === "") {
+    elements.chartScroller.scrollLeft = 0;
+    return;
+  }
+  if (state.view === "all" && chartZoom <= 1) {
     elements.chartScroller.scrollLeft = 0;
     return;
   }
@@ -213,6 +371,11 @@ function renderAccuracyLine(days) {
 
 function renderChart() {
   const days = state.history.days;
+  const nextChartKey = chartKey(days);
+  if (nextChartKey !== chartViewportKey) {
+    chartViewportKey = nextChartKey;
+    chartZoom = 1;
+  }
   const correctAvailableDays = days.filter((day) => day.counts.correct !== null);
   const recordedTotal = correctAvailableDays.reduce(
     (sum, day) => sum + (day.counts.answered ?? day.counts.correct),
@@ -227,9 +390,6 @@ function renderChart() {
   state.selectedDate = chooseSelectedDate(days);
   elements.scaleMaximum.textContent = formatScale(maximum);
   elements.scaleMiddle.textContent = formatScale(maximum / 2);
-  const expanded = state.view !== "week";
-  elements.chartFrame.classList.toggle("is-expanded", expanded);
-  elements.barChart.classList.toggle("is-expanded", expanded);
   elements.chartFrame.style.setProperty("--day-count", String(days.length));
   elements.barChart.replaceChildren();
 
@@ -311,6 +471,6 @@ function renderChart() {
 
   elements.emptyMessage.hidden = correctAvailableDays.length === 0 || recordedTotal !== 0;
   renderDayDetail();
-  renderAccuracyLine(days);
+  applyChartLayout(days);
   positionSelectedDate();
 }

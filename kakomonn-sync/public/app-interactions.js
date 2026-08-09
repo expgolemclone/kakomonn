@@ -1,5 +1,6 @@
 let mouseDrag = null;
 let touchDrag = null;
+let touchPinch = null;
 let suppressClick = false;
 let edgeWheelDirection = 0;
 let edgeWheelDistance = 0;
@@ -8,6 +9,28 @@ let wheelNavigationUnlockTimer = 0;
 
 const EDGE_WHEEL_THRESHOLD = 80;
 const WHEEL_NAVIGATION_IDLE_MS = 300;
+
+function beginTouchDrag(touch) {
+  touchDrag = {
+    identifier: touch.identifier,
+    startX: touch.clientX,
+    startY: touch.clientY,
+    startScrollLeft: elements.chartScroller.scrollLeft,
+    horizontal: false,
+    moved: false,
+  };
+}
+
+function touchDistance(first, second) {
+  return Math.hypot(
+    second.clientX - first.clientX,
+    second.clientY - first.clientY
+  );
+}
+
+function touchCenterX(first, second) {
+  return (first.clientX + second.clientX) / 2;
+}
 
 elements.chartScroller.addEventListener("pointerdown", (event) => {
   if (event.pointerType !== "mouse" || event.button !== 0) {
@@ -54,26 +77,51 @@ elements.chartScroller.addEventListener("pointercancel", finishMouseDrag);
 elements.chartScroller.addEventListener(
   "touchstart",
   (event) => {
+    if (event.touches.length >= 2) {
+      const [first, second] = event.touches;
+      const distance = touchDistance(first, second);
+      if (distance <= 0) {
+        return;
+      }
+      touchDrag = null;
+      touchPinch = {
+        startDistance: distance,
+        startZoom: chartZoom,
+      };
+      elements.chartScroller.classList.add("is-dragging");
+      event.preventDefault();
+      return;
+    }
+    touchPinch = null;
     if (event.touches.length !== 1) {
       touchDrag = null;
       return;
     }
-    const touch = event.touches[0];
-    touchDrag = {
-      identifier: touch.identifier,
-      startX: touch.clientX,
-      startY: touch.clientY,
-      startScrollLeft: elements.chartScroller.scrollLeft,
-      horizontal: false,
-      moved: false,
-    };
+    beginTouchDrag(event.touches[0]);
   },
-  { passive: true }
+  { passive: false }
 );
 
 elements.chartScroller.addEventListener(
   "touchmove",
   (event) => {
+    if (touchPinch !== null) {
+      if (event.touches.length < 2) {
+        return;
+      }
+      const [first, second] = event.touches;
+      const distance = touchDistance(first, second);
+      if (distance <= 0) {
+        return;
+      }
+      setChartZoom(
+        touchPinch.startZoom * (distance / touchPinch.startDistance),
+        touchCenterX(first, second)
+      );
+      suppressClick = true;
+      event.preventDefault();
+      return;
+    }
     if (touchDrag === null) {
       return;
     }
@@ -103,7 +151,21 @@ elements.chartScroller.addEventListener(
   { passive: false }
 );
 
-function finishTouchDrag() {
+function finishTouchDrag(event) {
+  if (touchPinch !== null) {
+    if (event.touches.length >= 2) {
+      return;
+    }
+    touchPinch = null;
+    suppressClick = true;
+    elements.chartScroller.classList.remove("is-dragging");
+    if (event.touches.length === 1) {
+      beginTouchDrag(event.touches[0]);
+    } else {
+      touchDrag = null;
+    }
+    return;
+  }
   if (touchDrag === null) {
     return;
   }
@@ -113,7 +175,17 @@ function finishTouchDrag() {
 }
 
 elements.chartScroller.addEventListener("touchend", finishTouchDrag, { passive: true });
-elements.chartScroller.addEventListener("touchcancel", finishTouchDrag, { passive: true });
+elements.chartScroller.addEventListener(
+  "touchcancel",
+  (event) => {
+    touchPinch = null;
+    touchDrag = null;
+    suppressClick = true;
+    elements.chartScroller.classList.remove("is-dragging");
+    finishTouchDrag(event);
+  },
+  { passive: true }
+);
 
 elements.chartScroller.addEventListener(
   "click",
@@ -128,24 +200,33 @@ elements.chartScroller.addEventListener(
   true
 );
 
+function wheelUnit(event) {
+  return event.deltaMode === 1
+    ? 18
+    : event.deltaMode === 2
+      ? elements.chartScroller.clientWidth
+      : 1;
+}
+
 function wheelDeltaInPixels(event) {
-  const dominantDelta =
-    Math.abs(event.deltaY) >= Math.abs(event.deltaX)
-      ? event.deltaY
-      : event.deltaX;
-  if (!Number.isFinite(dominantDelta) || dominantDelta === 0) {
+  const horizontal = event.deltaX * wheelUnit(event);
+  const vertical = event.deltaY * wheelUnit(event);
+  if (!Number.isFinite(horizontal) || !Number.isFinite(vertical)) {
     return 0;
   }
+  if (horizontal === 0) {
+    return vertical;
+  }
+  if (vertical === 0) {
+    return horizontal;
+  }
+  return Math.abs(horizontal) >= Math.abs(vertical) ? horizontal : vertical;
+}
 
-  const unit =
-    event.deltaMode === 1
-      ? 18
-      : event.deltaMode === 2
-        ? elements.chartScroller.clientWidth
-        : 1;
-  const pixelDelta = dominantDelta * unit;
-  const minimumStep = event.deltaMode === 0 ? 42 : 0;
-  return Math.sign(pixelDelta) * Math.max(Math.abs(pixelDelta), minimumStep);
+function zoomDeltaInPixels(event) {
+  const unit = wheelUnit(event);
+  const delta = event.deltaY !== 0 ? event.deltaY : event.deltaX;
+  return Number.isFinite(delta) ? delta * unit : 0;
 }
 
 function resetEdgeWheel() {
@@ -205,7 +286,7 @@ function scrollChartWithWheel(event) {
   );
   const before = elements.chartScroller.scrollLeft;
   const target = Math.min(maxScrollLeft, Math.max(0, before + delta));
-  if (target === before) {
+  if (Math.abs(target - before) < 0.01) {
     navigatePeriodWithWheel(event, Math.sign(delta));
     return;
   }
@@ -216,7 +297,22 @@ function scrollChartWithWheel(event) {
   elements.chartScroller.scrollLeft = target;
 }
 
-elements.chartScroller.addEventListener("wheel", scrollChartWithWheel, {
+function handleChartWheel(event) {
+  if (event.ctrlKey) {
+    const delta = zoomDeltaInPixels(event);
+    if (delta === 0) {
+      return;
+    }
+    resetEdgeWheel();
+    event.preventDefault();
+    event.stopPropagation();
+    setChartZoom(chartZoom * Math.exp(-delta * 0.0025), event.clientX);
+    return;
+  }
+  scrollChartWithWheel(event);
+}
+
+elements.chartScroller.addEventListener("wheel", handleChartWheel, {
   capture: true,
   passive: false,
 });
@@ -398,9 +494,8 @@ document.addEventListener("visibilitychange", () => {
 
 window.addEventListener("resize", () => {
   if (state.history !== null) {
-    renderAccuracyLine(state.history.days);
+    resizeChartForViewport();
   }
-  positionSelectedDate();
 });
 
 async function start() {

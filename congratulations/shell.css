@@ -1,6 +1,6 @@
 :root {
-  color: #152642;
-  background: #152642;
+  color: #f7f2e8;
+  background: #06080d;
   font-family: "Yu Gothic UI", "Hiragino Sans", system-ui, sans-serif;
   font-synthesis: none;
 }
@@ -34,47 +34,63 @@ iframe {
 #celebration-frame {
   z-index: 1;
   border: 0;
-  background: #fff;
+  background: #06080d;
   opacity: 0;
-  transition: opacity 180ms ease-out;
+  transform: scale(1.006);
+  transition: opacity 420ms ease-out, transform 620ms cubic-bezier(0.2, 0.85, 0.3, 1);
 }
 
 html[data-state="ready"] #celebration-frame {
   opacity: 1;
+  transform: none;
 }
 
-.loading,
-.error-panel {
+.loading {
   position: fixed;
   inset: 50% auto auto 50%;
   z-index: 0;
   margin: 0;
-  color: #f5f1e8;
-  font-family: ui-monospace, "Cascadia Mono", monospace;
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
+  color: #f7f2e8;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
   transform: translate(-50%, -50%);
 }
 
+.loading::before {
+  display: block;
+  width: 2.4rem;
+  height: 2px;
+  margin: 0 auto 0.9rem;
+  background: #dfff36;
+  box-shadow: 0 0 1rem #dfff36;
+  content: "";
+  animation: loading-scan 900ms ease-in-out infinite alternate;
+}
+
 .error-panel {
+  position: fixed;
+  inset: 50% auto auto 50%;
   z-index: 4;
   width: min(34rem, calc(100% - 2rem));
-  padding: 1.4rem;
-  border: 2px solid #d74336;
-  background: #f5f1e8;
-  color: #152642;
-  transform: translate(-50%, -50%) rotate(-0.5deg);
+  padding: 1.6rem;
+  border: 1px solid #ff4d4d;
+  background: #f7f2e8;
+  color: #111722;
+  box-shadow: 0.7rem 0.7rem 0 rgb(255 77 77 / 0.42);
+  transform: translate(-50%, -50%);
 }
 
 .error-panel h1 {
-  margin: 0 0 0.5rem;
-  font-size: 1.2rem;
+  margin: 0 0 0.65rem;
+  font-size: 1.3rem;
 }
 
 .error-panel p {
   margin: 0;
-  font-family: ui-monospace, "Cascadia Mono", monospace;
-  font-size: 0.82rem;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.7;
 }
 
 .study-log-ticket {
@@ -85,57 +101,61 @@ html[data-state="ready"] #celebration-frame {
   display: grid;
   grid-template-columns: auto auto;
   align-items: stretch;
-  filter: drop-shadow(0 8px 22px rgb(21 38 66 / 0.28));
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.33);
+  border-radius: 999px;
+  background: rgb(7 10 15 / 0.84);
+  box-shadow: 0 0.8rem 2.4rem rgb(0 0 0 / 0.42);
+  backdrop-filter: blur(16px) saturate(1.4);
 }
 
 .milestone-label,
 .study-log-button {
-  min-height: 3.15rem;
+  min-height: 3.4rem;
   border: 0;
 }
 
 .milestone-label {
   display: grid;
   place-items: center;
-  padding: 0.7rem 1rem;
-  border: 2px solid #152642;
-  border-right: 0;
-  background:
-    radial-gradient(circle at right center, transparent 0 5px, #f5f1e8 5.5px)
-      right center / 100% 16px repeat-y,
-    #f5f1e8;
-  color: #d74336;
-  font-family: "Arial Narrow", "Yu Gothic UI", sans-serif;
-  font-size: 0.86rem;
+  padding: 0.75rem 1.15rem;
+  border-right: 1px solid rgb(255 255 255 / 0.2);
+  color: #dfff36;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 0.73rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   white-space: nowrap;
 }
 
 .study-log-button {
-  position: relative;
-  padding: 0.7rem 1.1rem;
-  border: 2px solid #152642;
-  background: #f6c84c;
-  color: #152642;
-  font-weight: 800;
+  padding: 0.75rem 1.25rem;
+  background: transparent;
+  color: #f7f2e8;
   cursor: pointer;
+  font-weight: 800;
+  transition: color 160ms ease, background 160ms ease;
 }
 
 .study-log-button::after {
-  content: "→";
   display: inline-block;
-  margin-left: 0.65rem;
-  transition: transform 150ms ease-out;
+  margin-left: 0.7rem;
+  content: "↗";
+  transition: transform 160ms ease-out;
+}
+
+.study-log-button:hover {
+  background: #dfff36;
+  color: #07100a;
 }
 
 .study-log-button:hover::after {
-  transform: translateX(0.25rem);
+  transform: translate(0.18rem, -0.18rem);
 }
 
 .study-log-button:focus-visible {
-  outline: 4px solid #fff;
-  outline-offset: 3px;
+  outline: 3px solid #fff;
+  outline-offset: -5px;
 }
 
 html[data-state="error"] .study-log-ticket,
@@ -144,19 +164,24 @@ html[data-state="ready"] .loading {
   display: none;
 }
 
+@keyframes loading-scan {
+  from { transform: translateX(-1.1rem) scaleX(0.5); }
+  to { transform: translateX(1.1rem) scaleX(1); }
+}
+
 @media (max-width: 560px) {
   .study-log-ticket {
     right: max(0.6rem, env(safe-area-inset-right));
     bottom: max(0.6rem, env(safe-area-inset-bottom));
     left: max(0.6rem, env(safe-area-inset-left));
-    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
   }
 
   .milestone-label,
   .study-log-button {
-    min-height: 3rem;
+    min-height: 3.25rem;
     padding-inline: 0.65rem;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
   }
 }
 
@@ -164,5 +189,9 @@ html[data-state="ready"] .loading {
   #celebration-frame,
   .study-log-button::after {
     transition: none;
+  }
+
+  .loading::before {
+    animation: none;
   }
 }

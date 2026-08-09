@@ -55,6 +55,8 @@ export function validateManifest(manifest) {
         typeof site !== "object" ||
         typeof site.id !== "string" ||
         !/^[a-z0-9-]+$/.test(site.id) ||
+        typeof site.label !== "string" ||
+        site.label.trim().length === 0 ||
         !isSafeEntry(site.entry, tier.milestone) ||
         ids.has(site.id) ||
         entries.has(site.entry)

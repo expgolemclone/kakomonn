@@ -1,146 +1,16 @@
 <!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <meta name="theme-color" content="#09091b">
-  <title>Midnight Orbit - 合格祝賀放送局</title>
-  <link rel="stylesheet" href="./styles.css">
-</head>
-<body>
-  <div class="noise" aria-hidden="true"></div>
-  <main class="stage" data-celebration-ready="false">
-    <header class="broadcast-bar" aria-label="放送情報">
-      <span class="live-dot" aria-hidden="true"></span>
-      <span>LIVE FROM ORBIT <b data-milestone>50</b></span>
-      <span class="frequency">88.8 MHz</span>
-    </header>
-
-    <section class="hero" aria-labelledby="hero-title">
-      <div class="copy-column">
-        <p class="kicker">合格祝賀放送局 / SPECIAL TRANSMISSION</p>
-        <h1 id="hero-title">
-          <span class="line-small">あなたの努力は</span>
-          <span class="line-large">夜空を<br>追い越した.</span>
-        </h1>
-        <p class="lead"><strong id="milestone-value" data-milestone>50</strong>問到達. これは偶然ではなく, 積み上げた選択の軌道です.</p>
-        <div class="actions">
-          <button id="parade-button" class="primary-action" type="button">
-            <span>祝賀パレードを起動</span>
-            <span aria-hidden="true">↗</span>
-          </button>
-          <p class="status" id="status-message" aria-live="polite">司会者がカウントダウン中.</p>
-        </div>
-      </div>
-
-      <div class="orbit-column" aria-label="宇宙司会者ドクター・ノクターンと応援団のイラスト">
-        <div class="orbit-ring orbit-ring-a" aria-hidden="true"></div>
-        <div class="orbit-ring orbit-ring-b" aria-hidden="true"></div>
-        <svg class="host" viewBox="0 0 520 620" role="img" aria-labelledby="host-title host-desc">
-          <title id="host-title">ドクター・ノクターン</title>
-          <desc id="host-desc">月の襟と星形の眼鏡をつけた, 紫色の宇宙司会者</desc>
-          <defs>
-            <linearGradient id="coat" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#6d3bc0"/>
-              <stop offset="1" stop-color="#281750"/>
-            </linearGradient>
-            <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#f4b69d"/>
-              <stop offset="1" stop-color="#b65c68"/>
-            </linearGradient>
-          </defs>
-          <path class="host-shadow" d="M104 588c74-52 238-57 312 0-76 32-236 34-312 0Z"/>
-          <path class="coat" d="M126 565c2-151 50-240 134-240 92 0 137 95 136 240H126Z"/>
-          <path class="lapel" d="m220 355 39 74 39-74 44 198h-168l46-198Z"/>
-          <path class="collar" d="M155 360c42-63 175-70 213 0-45-24-73-26-106 1-31-27-63-25-107-1Z"/>
-          <ellipse class="neck" cx="260" cy="341" rx="54" ry="56"/>
-          <path class="head" d="M154 205c0-95 52-152 112-152 80 0 120 60 109 163-8 81-50 132-115 132-67 0-106-55-106-143Z"/>
-          <path class="hair" d="M153 209c-12-91 36-163 114-163 65 0 116 51 114 128-17-35-45-54-78-61-31-7-63 10-83 35-19 24-35 47-67 61Z"/>
-          <path class="hair-glint" d="M222 73c33-16 70-10 95 8-37-1-64 13-84 39-18 24-42 33-65 33 22-19 34-58 54-80Z"/>
-          <path class="ear left" d="M154 206c-28-12-44 12-34 48 9 30 34 43 48 25Z"/>
-          <path class="ear right" d="M371 207c27-12 42 16 31 50-9 28-32 39-46 22Z"/>
-          <g class="glasses">
-            <path d="m179 183 29 11 23-20 1 33 30 12-31 9-2 34-20-27-31 9 18-28-17-33Z"/>
-            <path d="m286 181 29 11 23-20 1 33 30 12-31 9-2 34-20-27-31 9 18-28-17-33Z"/>
-            <path class="bridge" d="M251 216c13-8 23-8 36 0"/>
-          </g>
-          <path class="nose" d="M266 218c-9 24-13 42 8 45"/>
-          <path class="smile" d="M218 283c27 28 70 29 98-2-31 13-65 14-98 2Z"/>
-          <path class="teeth" d="M228 285c24 10 51 10 76-1-20 17-57 19-76 1Z"/>
-          <circle class="pin" cx="343" cy="423" r="18"/>
-          <path class="pin-star" d="m343 411 4 8 9 1-7 6 2 9-8-5-8 5 2-9-7-6 9-1 4-8Z"/>
-          <path class="arm left" d="M144 402c-64 53-73 118-26 127 31 6 47-28 70-81Z"/>
-          <path class="hand left" d="M96 493c-24 17-13 50 12 51 21 1 33-20 25-39Z"/>
-          <path class="arm right" d="M378 406c56 48 82 98 49 121-29 20-56-15-86-66Z"/>
-          <path class="hand right" d="M420 488c23 10 26 39 7 52-19 13-42-1-44-23Z"/>
-          <g class="mic">
-            <rect x="99" y="417" width="22" height="100" rx="11" transform="rotate(-18 110 467)"/>
-            <ellipse cx="92" cy="409" rx="31" ry="37" transform="rotate(-18 92 409)"/>
-            <path d="m72 398 45 16M68 411l45 16M76 385l45 16"/>
-          </g>
-        </svg>
-        <div class="host-label">
-          <span>MASTER OF CEREMONY</span>
-          <strong>DR. NOCTURNE</strong>
-        </div>
-      </div>
-    </section>
-
-    <section class="crew" aria-labelledby="crew-title">
-      <div class="crew-heading">
-        <p class="kicker">TONIGHT'S CREW</p>
-        <h2 id="crew-title">軌道上の応援団.</h2>
-      </div>
-
-      <article class="crew-card card-moth">
-        <div class="portrait" aria-hidden="true">
-          <div class="moth-wing wing-left"></div>
-          <div class="moth-wing wing-right"></div>
-          <div class="moth-body"><span></span><span></span></div>
-        </div>
-        <p class="role">LIGHT KEEPER</p>
-        <h3>モス田フラッシュ</h3>
-        <p>迷った夜ほど, 光を増やす照明係.</p>
-      </article>
-
-      <article class="crew-card card-cat">
-        <div class="portrait" aria-hidden="true">
-          <div class="cat-ear ear-one"></div>
-          <div class="cat-ear ear-two"></div>
-          <div class="cat-head">
-            <span class="cat-eye eye-one"></span>
-            <span class="cat-eye eye-two"></span>
-            <span class="cat-mouth"></span>
-          </div>
-          <div class="cat-antenna"></div>
-        </div>
-        <p class="role">SIGNAL ENGINEER</p>
-        <h3>局長ネコメトリ</h3>
-        <p>達成の信号を宇宙全域へ送る三つ目の局長.</p>
-      </article>
-
-      <article class="crew-card card-oracle">
-        <div class="portrait" aria-hidden="true">
-          <div class="oracle-halo"></div>
-          <div class="oracle-head">
-            <span class="oracle-eye"></span>
-          </div>
-          <div class="oracle-cloak"></div>
-        </div>
-        <p class="role">FUTURE READER</p>
-        <h3>予言者マルゼロ</h3>
-        <p>次の一問を, すでに正解として記録している.</p>
-      </article>
-    </section>
-
-    <footer class="footer-note">
-      <p>KEEP GOING. THE ORBIT REMEMBERS EVERY STEP.</p>
-      <span aria-hidden="true">✦</span>
-    </footer>
-  </main>
-
-  <div class="confetti-layer" id="confetti-layer" aria-hidden="true"></div>
-  <script type="module" src="./app.js"></script>
-</body>
+<html lang="ja" data-state="loading" data-site="midnight-orbit">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description" content="軌道上の祝賀放送局が学習達成を宇宙へ伝えるpage.">
+    <title>Midnight Orbit</title>
+    <link rel="stylesheet" href="../../shared/foundation.css">
+    <script type="module" src="../../shared/celebration.js"></script>
+  </head>
+  <body>
+    <main id="celebration-root" aria-live="off"></main>
+    
+  </body>
 </html>

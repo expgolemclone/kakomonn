@@ -1,146 +1,16 @@
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-state="loading" data-site="midnight-emcee">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#05040a" />
-    <meta name="color-scheme" content="dark" />
-    <title>Midnight Emcee Celebration</title>
-    <link rel="stylesheet" href="./style.css" />
-    <script type="module" src="./script.js"></script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description" content="深夜劇場の司会者が学習達成を満場の拍手で祝うpage.">
+    <title>Midnight Emcee</title>
+    <link rel="stylesheet" href="../../shared/foundation.css">
+    <script type="module" src="../../shared/celebration.js"></script>
   </head>
   <body>
-    <main class="celebration" data-celebration data-ready="false">
-      <div class="night-sky" aria-hidden="true"></div>
-      <div class="curtain curtain-left" aria-hidden="true"></div>
-      <div class="curtain curtain-right" aria-hidden="true"></div>
-      <div class="confetti-field" data-confetti-field aria-hidden="true"></div>
-
-      <header class="masthead">
-        <p class="venue">KAKOMONN NIGHTLY THEATRE</p>
-        <p class="admit">ADMIT ONE, THE PERSON WHO KEPT GOING</p>
-      </header>
-
-      <div class="bravo bravo-left" aria-hidden="true">BRA</div>
-      <div class="bravo bravo-right" aria-hidden="true">VO</div>
-
-      <section class="stage" aria-labelledby="celebration-title">
-        <div class="spotlight" aria-hidden="true"></div>
-
-        <div class="character-wrap" data-character>
-          <svg
-            class="emcee"
-            viewBox="0 0 520 620"
-            role="img"
-            aria-label="紙吹雪を指揮する祝祭の司会者"
-          >
-            <defs>
-              <linearGradient id="coat" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#5d36d8" />
-                <stop offset="1" stop-color="#21104e" />
-              </linearGradient>
-              <linearGradient id="vest" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#ff7ce8" />
-                <stop offset="1" stop-color="#a41579" />
-              </linearGradient>
-              <filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="7" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-
-            <ellipse cx="260" cy="577" rx="153" ry="25" fill="#000" opacity=".48" />
-
-            <g class="tails">
-              <path d="M193 392 111 548l105-44 44-118Z" fill="#261053" />
-              <path d="M327 392 409 548l-105-44-44-118Z" fill="#261053" />
-            </g>
-
-            <path
-              d="M171 318c18-42 52-67 89-67s71 25 89 67l32 203H139Z"
-              fill="url(#coat)"
-              stroke="#a58cff"
-              stroke-width="5"
-            />
-            <path d="m225 286 35 62 35-62 35 226H190Z" fill="#100826" opacity=".8" />
-            <path d="M219 318h82l-13 154h-56Z" fill="url(#vest)" />
-            <circle cx="260" cy="360" r="8" fill="#fff3b5" />
-            <circle cx="260" cy="404" r="8" fill="#fff3b5" />
-
-            <g class="head">
-              <path
-                d="M183 190c0-70 38-119 79-119 44 0 82 49 82 119 0 55-35 100-82 100-45 0-79-45-79-100Z"
-                fill="#f0b58f"
-                stroke="#3a1b34"
-                stroke-width="6"
-              />
-              <path
-                d="M181 190c-1-88 44-135 93-127 50 8 77 57 67 119-17-25-38-38-62-41-22-3-42 2-61 15-13 8-25 20-37 34Z"
-                fill="#251332"
-              />
-              <path d="M195 137c17-43 50-67 91-64 19 2 38 10 55 27-38-9-75-5-109 12Z" fill="#4e2d64" />
-              <ellipse class="eye eye-left" cx="229" cy="199" rx="13" ry="17" fill="#fff" />
-              <ellipse class="eye eye-right" cx="296" cy="199" rx="13" ry="17" fill="#fff" />
-              <circle class="pupil pupil-left" cx="232" cy="202" r="6" fill="#161020" />
-              <circle class="pupil pupil-right" cx="299" cy="202" r="6" fill="#161020" />
-              <path d="M231 239c18 17 42 17 60 0" fill="none" stroke="#8e3d52" stroke-width="7" stroke-linecap="round" />
-              <path d="M213 175c10-8 22-10 34-6M281 169c13-4 25-1 34 7" fill="none" stroke="#3a1b34" stroke-width="7" stroke-linecap="round" />
-            </g>
-
-            <g class="top-hat">
-              <ellipse cx="260" cy="89" rx="111" ry="25" fill="#12091d" stroke="#b79fff" stroke-width="5" />
-              <path d="M190 84 205 13h110l15 71Z" fill="#1a0c2a" stroke="#b79fff" stroke-width="5" />
-              <path d="M198 52h124l5 26H193Z" fill="#ff4fd8" />
-              <path d="m274 50 19-21 9 25 29-4-18 22 16 22-29-6-11 25-6-28-29 2 22-19-15-24Z" fill="#fff3b5" filter="url(#soft-glow)" />
-            </g>
-
-            <g class="arm arm-left">
-              <path d="M173 339c-43 15-76 46-97 91" fill="none" stroke="#4d2c9a" stroke-width="33" stroke-linecap="round" />
-              <path d="M76 430c-11 25-10 48 4 68" fill="none" stroke="#f0b58f" stroke-width="25" stroke-linecap="round" />
-              <path d="m67 494-17 29m30-24 0 35m13-38 16 30" fill="none" stroke="#f0b58f" stroke-width="9" stroke-linecap="round" />
-            </g>
-
-            <g class="arm arm-right">
-              <path d="M347 340c53-31 85-75 97-131" fill="none" stroke="#4d2c9a" stroke-width="33" stroke-linecap="round" />
-              <path d="M444 209c6-27 1-48-15-64" fill="none" stroke="#f0b58f" stroke-width="25" stroke-linecap="round" />
-              <path d="m429 147 4-36m11 36 16-31m-3 43 29-17" fill="none" stroke="#f0b58f" stroke-width="9" stroke-linecap="round" />
-              <path d="M460 118 492 14" stroke="#fff3b5" stroke-width="8" stroke-linecap="round" />
-              <circle cx="493" cy="12" r="9" fill="#ff4fd8" filter="url(#soft-glow)" />
-            </g>
-
-            <path d="m216 282 44 41 44-41-17-13-27 25-27-25Z" fill="#fff3b5" />
-          </svg>
-
-          <div class="speech" aria-hidden="true">
-            <span>あなたの努力に</span>
-            <strong>総立ちです.</strong>
-          </div>
-        </div>
-
-        <div class="copy">
-          <p class="kicker">THE HOUSE IS FULL. THE LIGHTS ARE YOURS.</p>
-          <h1 id="celebration-title">
-            今日の主役は,
-            <span>あなたです.</span>
-          </h1>
-          <p class="message">
-            区切りまで走り切ったことを, 今夜は盛大に祝います.
-            次の一歩へ進む前に, この拍手を受け取ってください.
-          </p>
-          <button class="encore" type="button" data-encore>
-            <span>もう一度, 拍手を浴びる</span>
-            <span aria-hidden="true">+</span>
-          </button>
-        </div>
-      </section>
-
-      <footer class="footlights" aria-label="祝福の拍手">
-        <span></span><span></span><span></span><span></span><span></span><span></span>
-        <p>STANDING OVATION, RESERVED FOR YOU</p>
-      </footer>
-    </main>
+    <main id="celebration-root" aria-live="off"></main>
+    
   </body>
 </html>

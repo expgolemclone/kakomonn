@@ -14,21 +14,6 @@ const manifest = JSON.parse(
 const sites = manifest.tiers.flatMap((tier) =>
   tier.sites.map((site) => ({ ...site, milestone: tier.milestone })),
 );
-const selectors = new Map([
-  ["kotonoha", ".celebration"],
-  ["hikakin", "main, .stage, .celebration"],
-  ["study-complete", "[data-burst]"],
-  ["imura-rally", ".stage"],
-  ["void-conductor", "#night-stage"],
-  ["midnight-orbit", "[data-celebration-ready]"],
-  ["midnight-emcee", "[data-celebration]"],
-  ["night-archivist", "[data-night-archivist]"],
-  ["clearance-officer", ".console"],
-  ["forge-fury", "[data-forge]"],
-  ["taiko-oni", "[data-festival]"],
-  ["gouten-stomp", "[data-gouten-stage]"],
-  ["night-examiner", "#night-vault"],
-]);
 const retiredPaths = [
   "/dance/hikakin/",
   "/dark/void-conductor/",
@@ -57,136 +42,65 @@ function captureErrors(page) {
   return errors;
 }
 
-const siteChecks = {
-  async kotonoha(page) {
-    await page.waitForFunction(
-      () => document.querySelector(".celebration")?.dataset.intro === "complete",
-    );
-    assert.equal((await page.locator(".credit").textContent()).includes("© AI Inc."), true);
-  },
-  async hikakin(page) {
-    await page.waitForFunction(() => document.title !== "Loading celebration");
-  },
-  async "study-complete"(page) {
-    await page.waitForFunction(
-      () => document.querySelector("[data-progress-number]")?.textContent === "100",
-    );
-  },
-  async "imura-rally"(page) {
-    await page.waitForFunction(
-      () => document.querySelector("#stage")?.dataset.ready === "true",
-    );
-  },
-  async "void-conductor"(page) {
-    await page.waitForFunction(
-      () => document.querySelector("#night-stage")?.dataset.ready === "true",
-    );
-    assert.equal(await page.locator("#encore").isVisible(), true);
-  },
-  async "midnight-orbit"(page, milestone) {
-    await page.waitForFunction(
-      () =>
-        document.querySelector("[data-celebration-ready]")?.dataset
-          .celebrationReady === "true",
-    );
-    assert.equal(
-      await page.locator("[data-milestone]").first().textContent(),
-      String(milestone),
-    );
-  },
-  async "midnight-emcee"(page) {
-    await page.waitForFunction(
-      () => document.querySelector("[data-celebration]")?.dataset.ready === "true",
-    );
-    assert.equal(await page.locator("[data-character]").isVisible(), true);
-    await page.locator("[data-encore]").click();
-  },
-  async "night-archivist"(page, milestone) {
-    await page.waitForFunction(
-      () =>
-        document.querySelector("[data-night-archivist]")?.dataset.ready === "true",
-    );
-    assert.equal(await page.locator("[data-stars] .star-node").count(), 12);
-    assert.equal(await page.locator("[data-star-lines] .star-line").count(), 12);
-    assert.equal(
-      await page.locator(".record-value").first().textContent(),
-      String(milestone),
-    );
-  },
-  async "clearance-officer"(page, milestone) {
-    await page.waitForFunction(() =>
-      document.documentElement.classList.contains("is-fired"),
-    );
-    assert.equal(
-      await page.locator(".officer-caption strong").textContent(),
-      `K-${milestone}`,
-    );
-    assert.equal(await page.locator("#replay").isVisible(), true);
-    await page.locator("#replay").click();
-  },
-  async "forge-fury"(page, milestone) {
-    await page.waitForFunction(
-      () => document.querySelector("[data-forge]")?.dataset.ready === "true",
-    );
-    assert.equal(await page.locator("[data-smith]").isVisible(), true);
-    assert.equal(
-      await page.locator("[data-milestone]").textContent(),
-      String(milestone),
-    );
-    await page.locator("[data-replay]").click();
-    assert.match(await page.locator("[data-announcement]").textContent(), /達成確定/);
-  },
-  async "taiko-oni"(page) {
-    await page.waitForFunction(
-      () => document.querySelector("[data-festival]")?.dataset.ready === "true",
-    );
-    assert.equal(await page.locator("[data-replay]").isVisible(), true);
-    await page.locator("[data-replay]").click();
-    assert.match(await page.locator("[data-status]").textContent(), /地鳴り/);
-  },
-  async "gouten-stomp"(page, milestone) {
-    await page.waitForFunction(
-      () => document.querySelector("[data-gouten-stage]")?.dataset.ready === "true",
-    );
-    assert.equal(await page.locator("[data-character]").isVisible(), true);
-    assert.equal(
-      await page.locator("[data-milestone]").first().textContent(),
-      String(milestone),
-    );
-    assert.equal(await page.locator("[data-talismans] .talisman").count(), 9);
-    await page.locator("[data-replay]").click();
-  },
-  async "night-examiner"(page, milestone) {
-    await page.waitForFunction(
-      () => document.querySelector("#night-vault")?.dataset.ready === "true",
-    );
-    assert.equal(
-      await page.locator("[data-milestone]").textContent(),
-      String(milestone),
-    );
-  },
-};
-
-async function verifyEntry(browser, origin, site) {
-  const page = await browser.newPage({
-    viewport: { width: 390, height: 844 },
-    reducedMotion: "reduce",
-  });
+async function verifyEntry(browser, origin, site, viewport, reducedMotion) {
+  const page = await browser.newPage({ viewport, reducedMotion });
   const errors = captureErrors(page);
   try {
     const url = new URL(`/${site.entry}`, origin);
     url.searchParams.set("milestone", String(site.milestone));
     const response = await page.goto(url.href, { waitUntil: "domcontentloaded" });
     assert.equal(response?.status(), 200, site.id);
-    const selector = selectors.get(site.id);
-    assert(selector, `Missing selector for ${site.id}`);
-    await page.locator(selector).first().waitFor({ state: "visible", timeout: 15_000 });
-    await siteChecks[site.id]?.(page, site.milestone);
-    const layout = await page.evaluate(() => ({
-      width: document.documentElement.scrollWidth,
-      viewport: innerWidth,
-    }));
-    assert.equal(layout.width <= layout.viewport + 1, true, `${site.id} has horizontal overflow`);
+    const root = page.locator("[data-celebration-root]");
+    await root.waitFor({ state: "visible", timeout: 15_000 });
+    await page.waitForFunction(
+      () => document.querySelector("[data-celebration-root]")?.dataset.ready === "true",
+    );
+
+    const milestoneTexts = await page.locator("[data-milestone]").allTextContents();
+    assert.equal(milestoneTexts.length >= 2, true, `${site.id} milestone markers`);
+    assert.equal(
+      milestoneTexts.every((text) => text.trim() === String(site.milestone)),
+      true,
+      `${site.id} milestone values`,
+    );
+    assert.match(await page.title(), new RegExp(`^${site.milestone}問達成`));
+
+    const layout = await page.evaluate(() => {
+      const action = document.querySelector("[data-replay]")?.getBoundingClientRect();
+      const heading = document.querySelector("h1")?.getBoundingClientRect();
+      return {
+        width: document.documentElement.scrollWidth,
+        viewportWidth: innerWidth,
+        heightRatio: document.documentElement.scrollHeight / innerHeight,
+        actionBottom: action?.bottom,
+        headingLeft: heading?.left,
+        headingRight: heading?.right,
+        state: document.documentElement.dataset.state,
+        theme: document.documentElement.dataset.site,
+        accent: getComputedStyle(document.documentElement)
+          .getPropertyValue("--celebration-accent")
+          .trim(),
+      };
+    });
+    assert.equal(layout.width <= layout.viewportWidth + 1, true, `${site.id} overflow`);
+    if (viewport.height >= 800) {
+      assert.equal(layout.actionBottom <= viewport.height, true, `${site.id} action below fold`);
+    }
+    assert.equal(layout.headingLeft >= 0, true, `${site.id} heading left clipping`);
+    assert.equal(layout.headingRight <= viewport.width + 1, true, `${site.id} heading right clipping`);
+    assert.equal(layout.state, "ready");
+    assert.equal(layout.theme, site.id);
+    assert.notEqual(layout.accent, "", `${site.id} theme accent`);
+    if (viewport.width === 390) {
+      assert.equal(layout.heightRatio <= 2.2, true, `${site.id} is too long`);
+    }
+
+    const status = page.locator("[data-status]");
+    const before = await status.textContent();
+    await page.locator("[data-replay]").click();
+    const after = await status.textContent();
+    assert.notEqual(after, before, `${site.id} replay status`);
+    assert.equal((after ?? "").length > 0, true);
     assert.deepEqual(errors, [], site.id);
   } finally {
     await page.close();
@@ -214,20 +128,30 @@ async function verifyShell(browser, origin) {
         study: document.querySelector("#open-study-log")?.textContent,
         id: document.querySelector("#celebration-frame")?.dataset.siteId,
         src: document.querySelector("#celebration-frame")?.src,
+        title: document.title,
+        frameTitle: document.querySelector("#celebration-frame")?.title,
+        busy: document.querySelector("#celebration-frame")?.getAttribute("aria-busy"),
       }));
       const selected = sites.find((site) => site.id === state.id);
       assert(selected, `Unknown selected site, ${state.id}`);
       assert.equal(selected.milestone, Math.min(milestone, 250));
       assert.equal(state.milestone, `${milestone}問達成`);
       assert.equal(state.study, "週間の記録を見る");
+      assert.equal(state.title, `${milestone}問達成 | ${selected.label}`);
+      assert.equal(state.frameTitle, `${milestone}問達成 - ${selected.label}`);
+      assert.equal(state.busy, null);
       const frameUrl = new URL(state.src);
       assert.equal(frameUrl.pathname.endsWith(`/${selected.entry}`), true);
       assert.equal(frameUrl.searchParams.get("milestone"), String(milestone));
       const frame = page.locator("#celebration-frame").contentFrame();
-      await frame.locator(selectors.get(selected.id)).first().waitFor({
+      await frame.locator('[data-celebration-root][data-ready="true"]').waitFor({
         state: "visible",
         timeout: 15_000,
       });
+      assert.equal(
+        (await frame.locator("[data-milestone]").first().textContent())?.trim(),
+        String(milestone),
+      );
     }
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -281,7 +205,27 @@ const origin = configuredOrigin ?? server.origin;
 const browser = await chromium.launch({ headless: true });
 try {
   for (const site of sites) {
-    await verifyEntry(browser, origin, site);
+    await verifyEntry(
+      browser,
+      origin,
+      site,
+      { width: 390, height: 844 },
+      "reduce",
+    );
+    await verifyEntry(
+      browser,
+      origin,
+      site,
+      { width: 1440, height: 900 },
+      "no-preference",
+    );
+    await verifyEntry(
+      browser,
+      origin,
+      site,
+      { width: 320, height: 568 },
+      "reduce",
+    );
   }
   await verifyRetiredEntries(browser, origin);
   await verifyShell(browser, origin);

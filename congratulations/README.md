@@ -1,8 +1,14 @@
 # congratulations
 
-kakomonn-readerが当日50問ごとのmilestoneへ到達した時に表示する,静的な祝福site集です.
+kakomonn-readerが当日50問ごとのmilestoneへ到達した時に表示する,静的な祝福site集です.13作品は同じ品質基準とaccessibility contractを共有しながら,それぞれ異なる世界観,配色,造形,motionで達成を祝います.
 
-root shellは達成数に対応するtierからsiteを均等確率で1つ選び,全画面iframeで表示します.250問を超えた場合は250tierを使い,画面には実際の達成数を表示します.画面下の`週間の記録を見る`を押すと,同期Workerの今週の学習ログを同じtabで開きます.
+root shellは達成数に対応するtierからsiteを均等確率で1つ選び,全画面iframeで表示します.250問を超えた場合は250tierを使い,全作品のtitle,本文,visualには実際の達成数を表示します.画面下の`週間の記録を見る`を押すと,同期Workerの今週の学習ログを同じtabで開きます.
+
+## 実装contract
+
+全作品は`shared/foundation.css`のdesign tokenとresponsive基盤,`shared/celebration.js`のmilestone,replay,ready通知を使用します.作品固有の色,構図,visual DOM,motionは`data-site`単位で定義します.remote画像やremote fontには依存しません.
+
+全作品は`data-celebration-root`,`data-milestone`,`data-replay`,`data-status`,`data-ready`を公開し,root shellとbrowser E2Eはこのcontractだけを参照します.子作品が初期化を完了するまでshellはiframeを表示せず,初期化失敗時に別作品へfallbackしません.
 
 ## 収録site
 
@@ -44,7 +50,7 @@ npm run build
 npm test
 ```
 
-Viteのmulti-page buildは`dist/`へ全siteを出力します.`npm test`はmanifest,全entry,50から250までのtier,250問を超えた場合の選択,desktopとmobile,共通の学習ログ導線をChromiumで検証します.
+Viteのmulti-page buildは`dist/`へ全siteを出力します.`npm test`はmanifest,全entry,50から250までのtier,250問を超えた場合の選択,320px幅,desktop,mobile,reduced motion,replay,実達成数,scroll量,共通の学習ログ導線をChromiumで検証します.
 
 ## Cloudflare
 

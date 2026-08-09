@@ -39,6 +39,8 @@ assert.deepEqual(
 const sites = allCelebrations(manifest);
 assert.equal(sites.length, 13);
 assert.equal(new Set(sites.map((site) => site.id)).size, 13);
+assert.equal(new Set(sites.map((site) => site.label)).size, 13);
+assert.equal(sites.every((site) => site.label.trim().length > 0), true);
 
 assert.equal(parseMilestone("?milestone=50", 50), 50);
 assert.equal(parseMilestone("?milestone=300", 50), 300);
@@ -103,6 +105,10 @@ const duplicateId = cloneManifest();
 duplicateId.tiers[1].sites[0].id = duplicateId.tiers[0].sites[0].id;
 assert.throws(() => validateManifest(duplicateId), /invalid site/);
 
+const blankLabel = cloneManifest();
+blankLabel.tiers[0].sites[0].label = " ";
+assert.throws(() => validateManifest(blankLabel), /invalid site/);
+
 const previewOrigin = "http://127.0.0.1:4173/";
 const previewTargets = createPreviewTargets(manifest, previewOrigin);
 assert.deepEqual(previewTargets, [
@@ -152,5 +158,11 @@ for (const site of sites) {
   const output = await readFile(outputPath, "utf8");
   assert.equal(output.includes("node_modules/"), false, `${site.id} exposes node_modules`);
 }
+
+await Promise.all([
+  access(resolve(projectRoot, "dist", "assets")),
+  access(resolve(projectRoot, "shared", "celebration.js")),
+  access(resolve(projectRoot, "shared", "foundation.css")),
+]);
 
 console.log(`Congratulations smoke assertions passed for ${sites.length} sites`);

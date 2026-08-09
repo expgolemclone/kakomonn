@@ -6,14 +6,17 @@
       "sites": [
         {
           "id": "hikakin",
+          "label": "HIKAKIN STYLE PRAISE",
           "entry": "50/hikakin/index.html"
         },
         {
           "id": "void-conductor",
+          "label": "The Night Applauds",
           "entry": "50/void-conductor/index.html"
         },
         {
           "id": "midnight-emcee",
+          "label": "Midnight Emcee",
           "entry": "50/midnight-emcee/index.html"
         }
       ]
@@ -23,14 +26,17 @@
       "sites": [
         {
           "id": "midnight-orbit",
+          "label": "Midnight Orbit",
           "entry": "100/midnight-orbit/index.html"
         },
         {
           "id": "clearance-officer",
+          "label": "Checkpoint Cleared",
           "entry": "100/clearance-officer/index.html"
         },
         {
           "id": "night-archivist",
+          "label": "Midnight Study Archive",
           "entry": "100/night-archivist/index.html"
         }
       ]
@@ -40,14 +46,17 @@
       "sites": [
         {
           "id": "gouten-stomp",
+          "label": "祝砲鬼ゴウテンの勝ち四股",
           "entry": "150/gouten-stomp/index.html"
         },
         {
           "id": "imura-rally",
+          "label": "Imura Rally Live",
           "entry": "150/imura-rally/index.html"
         },
         {
           "id": "taiko-oni",
+          "label": "地鳴り祝祭 GON",
           "entry": "150/taiko-oni/index.html"
         }
       ]
@@ -57,10 +66,12 @@
       "sites": [
         {
           "id": "night-examiner",
+          "label": "夜間合格通達",
           "entry": "200/night-examiner/index.html"
         },
         {
           "id": "kotonoha",
+          "label": "Kotonoha Twin Live",
           "entry": "200/kotonoha/index.html"
         }
       ]
@@ -70,10 +81,12 @@
       "sites": [
         {
           "id": "forge-fury",
+          "label": "Forge Fury",
           "entry": "250/forge-fury/index.html"
         },
         {
           "id": "study-complete",
+          "label": "Study Complete",
           "entry": "250/study-complete/index.html"
         }
       ]

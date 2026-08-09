@@ -8,6 +8,7 @@ const {
   extractBuildFingerprint,
   isRemoteDebugApprovalRejection,
   readEdgeUserDataDir,
+  readSyncToken,
   remoteDebugApprovalEnvironment,
   remoteDebugApprovalPowerShell,
 } = require("./live_sync_e2e_test");
@@ -73,6 +74,61 @@ test("extracts exactly one generated build fingerprint", () => {
         `const BUILD_FINGERPRINT = "${fingerprint}";\nconst BUILD_FINGERPRINT = "${fingerprint}";`,
       ),
     /found 2/,
+  );
+});
+
+test("uses the process sync token without loading an env file", () => {
+  const token = "a".repeat(32);
+  let loaded = false;
+  assert.equal(
+    readSyncToken({
+      environment: { KAKOMONN_SYNC_TOKEN: token },
+      loadEnvironmentFile: () => {
+        loaded = true;
+      },
+    }),
+    token,
+  );
+  assert.equal(loaded, false);
+});
+
+test("loads the repository env file when the process token is absent", () => {
+  const token = "b".repeat(32);
+  const environment = {};
+  const envFilePath = "C:\\workspace\\kakomonn\\.env";
+  let loadedPath = "";
+  assert.equal(
+    readSyncToken({
+      environment,
+      envFilePath,
+      loadEnvironmentFile: (candidatePath) => {
+        loadedPath = candidatePath;
+        environment.KAKOMONN_SYNC_TOKEN = token;
+      },
+    }),
+    token,
+  );
+  assert.equal(loadedPath, envFilePath);
+});
+
+test("rejects a missing or invalid sync token after env loading", () => {
+  assert.throws(
+    () =>
+      readSyncToken({
+        environment: {},
+        loadEnvironmentFile: () => {},
+      }),
+    /must contain the deployed secret token/,
+  );
+  assert.throws(
+    () =>
+      readSyncToken({
+        environment: { KAKOMONN_SYNC_TOKEN: "invalid token" },
+        loadEnvironmentFile: () => {
+          throw new Error("must not load");
+        },
+      }),
+    /must contain the deployed secret token/,
   );
 });
 

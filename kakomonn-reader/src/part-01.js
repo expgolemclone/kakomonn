@@ -238,7 +238,18 @@
     return (
       isLegacyPendingCorrect(value) &&
       value.site === SITE_ID &&
-      (value.result === "correct" || value.result === "incorrect")
+      (value.result === "correct" || value.result === "incorrect") &&
+      (value.phase === "queued" ||
+        value.phase === "awaiting_navigation")
+    );
+  }
+
+  function isUnphasedPendingAnswer(value) {
+    return (
+      isLegacyPendingCorrect(value) &&
+      value.site === SITE_ID &&
+      (value.result === "correct" || value.result === "incorrect") &&
+      value.phase === undefined
     );
   }
 
@@ -476,6 +487,24 @@
     pendingAnswer = null;
   }
 
+  async function markPendingAnswerAwaitingNavigation(operation) {
+    if (
+      pendingAnswer === null ||
+      pendingAnswer.operationId !== operation.operationId
+    ) {
+      throw new Error("pending answer changed");
+    }
+    const completed = {
+      ...operation,
+      phase: "awaiting_navigation",
+    };
+    if (!isPendingAnswer(completed)) {
+      throw new Error("invalid completed answer");
+    }
+    await GM.setValue(PENDING_ANSWER_KEY, completed);
+    pendingAnswer = completed;
+  }
+
   async function clearPendingCelebration() {
     await GM.deleteValue(PENDING_CELEBRATION_KEY);
     pendingCelebration = null;
@@ -483,8 +512,12 @@
 
   async function reconcilePendingDates() {
     let discarded = false;
-    if (pendingAnswer !== null && pendingAnswer.date !== activeCountDate) {
-      await clearPendingAnswer();
+    if (
+      pendingAnswer !== null &&
+      pendingAnswer.phase === "queued" &&
+      pendingAnswer.date !== activeCountDate
+    ) {
+      await markPendingAnswerAwaitingNavigation(pendingAnswer);
       discarded = true;
     }
     if (
@@ -562,6 +595,7 @@
         syncInProgress = false;
         syncPromise = null;
         updateSyncDependentControls();
+        void maybeContinuePendingAnswerNavigation();
         void maybeContinuePendingCelebration();
         processCurrentPageSpeech();
       }
@@ -620,6 +654,7 @@
         syncSettingsCancelButton.disabled = false;
         syncTokenInput.disabled = false;
         updateSyncDependentControls();
+        void maybeContinuePendingAnswerNavigation();
         void maybeContinuePendingCelebration();
         processCurrentPageSpeech();
       }
@@ -642,6 +677,10 @@
     let legacyCorrect = storedLegacyCorrect;
     let discardedInvalid = false;
 
+    if (answer !== null && isUnphasedPendingAnswer(answer)) {
+      answer = { ...answer, phase: "queued" };
+      await GM.setValue(PENDING_ANSWER_KEY, answer);
+    }
     if (answer !== null && !isPendingAnswer(answer)) {
       await GM.deleteValue(PENDING_ANSWER_KEY);
       answer = null;
@@ -662,7 +701,12 @@
     }
 
     if (answer === null && legacyCorrect !== null) {
-      answer = { ...legacyCorrect, result: "correct", site: SITE_ID };
+      answer = {
+        ...legacyCorrect,
+        phase: "queued",
+        result: "correct",
+        site: SITE_ID,
+      };
       if (!isPendingAnswer(answer)) {
         throw new Error("invalid migrated pending answer");
       }

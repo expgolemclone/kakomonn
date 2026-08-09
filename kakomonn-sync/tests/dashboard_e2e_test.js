@@ -54,6 +54,24 @@ function dateFromOrdinal(ordinal) {
   return new Date(ordinal * 86_400_000).toISOString().slice(0, 10);
 }
 
+function historyRange(view, anchorDate) {
+  const anchorOrdinal = dateOrdinal(anchorDate);
+  if (view === "week") {
+    const weekday = new Date(anchorOrdinal * 86_400_000).getUTCDay();
+    const fromOrdinal = anchorOrdinal - ((weekday + 6) % 7);
+    return {
+      from: dateFromOrdinal(fromOrdinal),
+      to: dateFromOrdinal(fromOrdinal + 6),
+    };
+  }
+  const [year, month] = anchorDate.split("-").map(Number);
+  const prefix = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+  return {
+    from: `${prefix}-01`,
+    to: `${prefix}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`,
+  };
+}
+
 async function getAvailablePort() {
   const probe = createServer();
   probe.listen(0, "127.0.0.1");
@@ -67,7 +85,7 @@ async function getAvailablePort() {
 }
 
 async function waitForServer(origin, child, readOutput) {
-  const deadline = Date.now() + 15_000;
+  const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
       throw new Error(`wrangler dev exited with ${child.exitCode}.\n${readOutput()}`);
@@ -157,10 +175,12 @@ async function startWorker() {
   };
 }
 
-function historyResponse(url) {
+function historyResponse(url, responseToday) {
   const requestedSite = url.searchParams.get("site");
-  const from = url.searchParams.get("from");
-  const to = url.searchParams.get("to");
+  const view = url.searchParams.get("view");
+  const requestedAnchor = url.searchParams.get("anchor");
+  const anchorDate = requestedAnchor === "today" ? responseToday : requestedAnchor;
+  const { from, to } = historyRange(view, anchorDate);
   const days = [];
   for (
     let ordinal = dateOrdinal(from);
@@ -172,13 +192,13 @@ function historyResponse(url) {
       date,
       counts: {
         correct:
-          date < availableFrom.correct || date > today
+          date < availableFrom.correct || date > responseToday
             ? null
             : requestedSite === site
               ? (correctCounts.get(date) ?? 0)
               : 0,
         answered:
-          date < availableFrom.answered || date > today
+          date < availableFrom.answered || date > responseToday
             ? null
             : requestedSite === site
               ? (answeredCounts.get(date) ?? 0)
@@ -189,7 +209,7 @@ function historyResponse(url) {
   return {
     site: requestedSite,
     timeZone: "Asia/Tokyo",
-    today,
+    today: responseToday,
     availableFrom,
     from,
     to,
@@ -210,6 +230,7 @@ async function main() {
   const apiCalls = [];
   let failNextHistory = false;
   let returnNoSites = false;
+  let currentToday = today;
   page.on("console", (message) => {
     if (message.type() === "error") {
       browserErrors.push(message.text());
@@ -221,7 +242,11 @@ async function main() {
     const request = route.request();
     const url = new URL(request.url());
     const authorization = request.headers().authorization ?? "";
-    apiCalls.push({ pathname: url.pathname, authorization });
+    apiCalls.push({
+      pathname: url.pathname,
+      search: url.search,
+      authorization,
+    });
     if (authorization !== `Bearer ${token}`) {
       await route.fulfill({
         status: 401,
@@ -240,23 +265,6 @@ async function main() {
       });
       return;
     }
-    if (url.pathname === "/v3/state") {
-      const requestedSite = url.searchParams.get("site");
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          site: requestedSite,
-          date: today,
-          counts:
-            requestedSite === site
-              ? { correct: 10, answered: 14 }
-              : { correct: 0, answered: 0 },
-          milestoneInterval: 50,
-        }),
-      });
-      return;
-    }
     if (url.pathname === "/v3/history") {
       if (failNextHistory) {
         failNextHistory = false;
@@ -270,7 +278,7 @@ async function main() {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(historyResponse(url)),
+        body: JSON.stringify(historyResponse(url, currentToday)),
       });
       return;
     }
@@ -400,6 +408,15 @@ async function main() {
     await page.screenshot({ path: mobileScreenshot, fullPage: true });
     assert.deepEqual(browserErrors, []);
 
+    currentToday = "2026-08-01";
+    await page.locator("#refresh-button").click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#period-title")?.textContent === "2026年8月" &&
+        document.querySelector(".today-marker")?.textContent === "今日"
+    );
+    assert.equal(await page.locator("#load-error").isHidden(), true);
+
     await page.locator("#settings-button").click();
     await page.locator("#settings-token").fill("incorrect-token");
     await page.locator("#save-token").click();
@@ -440,6 +457,32 @@ async function main() {
     await page.locator("#dashboard").waitFor({ state: "visible" });
     assert.equal(await page.locator("#site-select").inputValue(), site);
     assert.equal(apiCalls.every((call) => call.pathname.startsWith("/v3/")), true);
+    assert.equal(
+      apiCalls.some((call) => call.pathname === "/v3/state"),
+      false
+    );
+    const historyCalls = apiCalls.filter(
+      (call) => call.pathname === "/v3/history"
+    );
+    assert.equal(historyCalls.length > 0, true);
+    assert.equal(
+      historyCalls.every((call) => {
+        const query = new URLSearchParams(call.search);
+        return (
+          query.getAll("site").length === 1 &&
+          query.getAll("view").length === 1 &&
+          query.getAll("anchor").length === 1 &&
+          [...query.keys()].length === 3
+        );
+      }),
+      true
+    );
+    assert.equal(
+      historyCalls.some(
+        (call) => new URLSearchParams(call.search).get("anchor") === "today"
+      ),
+      true
+    );
     assert.equal(
       apiCalls.some((call) => call.authorization === `Bearer ${token}`),
       true

@@ -26,11 +26,15 @@ $edgeExecutable = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application
 Start-Process -FilePath $edgeExecutable -ArgumentList "--user-data-dir=$env:KAKOMONN_EDGE_USER_DATA_DIR",'edge://inspect/#remote-debugging'
 ```
 
-専用profileの`edge://inspect/#remote-debugging`でリモートデバッグを有効にします. その後,本番同期Workerのtokenを設定して完全testを実行します.
+専用profileの`edge://inspect/#remote-debugging`でリモートデバッグを有効にします. その後,本番同期Workerのtokenをprocess環境変数へ設定するか,repository rootのignore済み`.env`へ保存して完全testを実行します. process環境変数が設定されている場合は,その値を優先します.
 
 ```powershell
 $env:KAKOMONN_SYNC_TOKEN='<SYNC_TOKEN>'
 npm test
+```
+
+```dotenv
+KAKOMONN_SYNC_TOKEN=<SYNC_TOKEN>
 ```
 
 `npm ci`でPlaywrightと対応するChromiumおよびWebKitもインストールします. `npm test`はlocal testとsmoke testに続けて,実サイトE2Eと,専用profileの実Edge,実Tampermonkey,本番同期Workerを使用するlive E2Eを実行します. live E2Eは実OS clipboardへのMarkdownコピーも検証します. 専用profile,Edgeのリモートデバッグ,本番token,最新buildのいずれかが欠けている場合は失敗し,live E2Eをskipするoptionはありません.

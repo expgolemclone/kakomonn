@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import worker, {
   getTokyoDate,
   handleRequest,
+  historyRangeFor,
   initializeSchema,
   issueSpeechToken,
 } from "../src/index.js";
@@ -504,31 +505,36 @@ describe("HTTP API", () => {
     });
     const current = await stateResponse.json();
     const response = await SELF.fetch(
-      `https://example.test/v3/history?site=${SITE}&from=${current.date}&to=${current.date}`,
+      `https://example.test/v3/history?site=${SITE}&view=week&anchor=today`,
       { headers: AUTHORIZATION }
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    const history = await response.json();
+    const range = historyRangeFor("week", current.date);
+    expect(history).toMatchObject({
       site: SITE,
       timeZone: "Asia/Tokyo",
       today: current.date,
       availableFrom: { correct: current.date, answered: current.date },
-      from: current.date,
-      to: current.date,
-      days: [
-        { date: current.date, counts: { correct: 0, answered: 0 } },
-      ],
+      from: range.from,
+      to: range.to,
+    });
+    expect(history.days).toHaveLength(7);
+    expect(history.days.find((day) => day.date === current.date)).toEqual({
+      date: current.date,
+      counts: { correct: 0, answered: 0 },
     });
   });
 
-  it("rejects invalid history ranges, methods, and removed routes", async () => {
+  it("rejects invalid history periods, methods, and removed routes", async () => {
     const invalidRequests = [
       "https://example.test/v3/history",
-      `https://example.test/v3/history?site=${SITE}&from=2026-02-30&to=2026-03-01`,
-      `https://example.test/v3/history?site=${SITE}&from=2026-01-01&to=2026-02-01`,
-      `https://example.test/v3/history?site=${SITE}&from=2026-07-01&from=2026-07-02&to=2026-07-03`,
-      `https://example.test/v3/history?site=${SITE}&from=2026-07-01&to=2026-07-03&extra=1`,
+      `https://example.test/v3/history?site=${SITE}&view=day&anchor=today`,
+      `https://example.test/v3/history?site=${SITE}&view=month&anchor=2026-02-30`,
+      `https://example.test/v3/history?site=${SITE}&view=week&anchor=today&anchor=2026-07-01`,
+      `https://example.test/v3/history?site=${SITE}&view=week&anchor=today&extra=1`,
+      `https://example.test/v3/history?site=${SITE}&from=2026-07-01&to=2026-07-07`,
     ];
     for (const url of invalidRequests) {
       const response = await SELF.fetch(url, { headers: AUTHORIZATION });
@@ -539,7 +545,7 @@ describe("HTTP API", () => {
     }
 
     const methodResponse = await SELF.fetch(
-      `https://example.test/v3/history?site=${SITE}&from=2026-07-01&to=2026-07-07`,
+      `https://example.test/v3/history?site=${SITE}&view=week&anchor=2026-07-01`,
       { method: "POST", headers: AUTHORIZATION }
     );
     expect(methodResponse.status).toBe(405);
@@ -730,5 +736,30 @@ describe("Tokyo date", () => {
     expect(getTokyoDate(new Date("2026-07-17T15:00:00.000Z"))).toBe(
       "2026-07-18"
     );
+  });
+});
+
+describe("history period", () => {
+  it("uses Monday as the first day of a week across a year boundary", () => {
+    expect(historyRangeFor("week", "2026-01-01")).toMatchObject({
+      from: "2025-12-29",
+      to: "2026-01-04",
+    });
+  });
+
+  it("uses the complete month including leap days", () => {
+    expect(historyRangeFor("month", "2028-02-29")).toMatchObject({
+      from: "2028-02-01",
+      to: "2028-02-29",
+    });
+    expect(historyRangeFor("month", "2026-07-18")).toMatchObject({
+      from: "2026-07-01",
+      to: "2026-07-31",
+    });
+  });
+
+  it("rejects unsupported views and invalid anchors", () => {
+    expect(historyRangeFor("day", "2026-07-18")).toBeNull();
+    expect(historyRangeFor("month", "2026-02-30")).toBeNull();
   });
 });

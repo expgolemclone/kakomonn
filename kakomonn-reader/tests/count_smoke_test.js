@@ -303,6 +303,181 @@ async function runRetryCase(browser, script, answerResult) {
   }
 }
 
+async function runCompletionStorageRetryCase(browser, script) {
+  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  try {
+    const page = await context.newPage();
+    const errors = await preparePage(page);
+    await page.addScriptTag({ content: script });
+    const childFrame = await waitForReaderFrame(page);
+    await childFrame.evaluate(
+      (html) => {
+        document.body.innerHTML = html;
+      },
+      createMockBody("correct"),
+    );
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-count").textContent ===
+        "0問,次は50問",
+    );
+    await page.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+    });
+
+    await childFrame.locator("#next").click();
+    await page.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+    await page.evaluate(() => {
+      window.__syncMock.failNextSetValue = true;
+      window.__syncMock.releaseHeldRequest();
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "学習記録を同期できません.再試行してください",
+    );
+
+    const queued = await page.evaluate(
+      (key) => window.__getGMValue(key),
+      PENDING_ANSWER_KEY,
+    );
+    assert.equal(queued.phase, "queued");
+    assert.equal(await page.evaluate(() => window.__syncMock.count), 1);
+
+    await childFrame.locator("#next").click();
+    await page.waitForFunction(
+      (key) => window.__getGMValue(key) === null,
+      PENDING_ANSWER_KEY,
+    );
+    const result = await page.evaluate(() => {
+      const answerCalls = window.__syncMock.calls.filter(
+        (call) =>
+          call.method === "POST" &&
+          new URL(call.url).pathname === "/v3/answers",
+      );
+      return {
+        count: window.__syncMock.count,
+        answeredCount: window.__syncMock.answeredCount,
+        operationIds: answerCalls.map((call) => call.body.operationId),
+      };
+    });
+    assert.equal(result.count, 1);
+    assert.equal(result.answeredCount, 1);
+    assert.deepEqual(result.operationIds, [
+      queued.operationId,
+      queued.operationId,
+    ]);
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
+async function runSuccessfulResponseReloadCase(browser, script) {
+  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  try {
+    const firstPage = await context.newPage();
+    const firstErrors = await preparePage(firstPage);
+    await firstPage.addScriptTag({ content: script });
+    const firstFrame = await waitForReaderFrame(firstPage);
+    await firstFrame.evaluate(
+      (html) => {
+        document.body.innerHTML = html;
+      },
+      createMockBody("correct"),
+    );
+    await firstPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-count").textContent ===
+        "0問,次は50問",
+    );
+    await firstPage.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+    });
+
+    await firstFrame.locator("#next").click();
+    await firstPage.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+    await firstFrame.locator("#next").evaluate((link) => link.remove());
+    await firstPage.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await firstPage.waitForFunction(
+      (key) => window.__getGMValue(key)?.phase === "awaiting_navigation",
+      PENDING_ANSWER_KEY,
+    );
+
+    const pending = await firstPage.evaluate(
+      (key) => window.__getGMValue(key),
+      PENDING_ANSWER_KEY,
+    );
+    const firstResult = await firstPage.evaluate(() => ({
+      count: window.__syncMock.count,
+      answeredCount: window.__syncMock.answeredCount,
+      answerCalls: window.__syncMock.calls.filter(
+        (call) =>
+          call.method === "POST" &&
+          new URL(call.url).pathname === "/v3/answers",
+      ).length,
+    }));
+    assert.deepEqual(firstResult, {
+      count: 1,
+      answeredCount: 1,
+      answerCalls: 1,
+    });
+    assert.deepEqual(firstErrors, []);
+    await firstPage.close();
+
+    const secondPage = await context.newPage();
+    const secondErrors = await preparePage(secondPage, {
+      count: 1,
+      answeredCount: 1,
+      pendingAnswer: pending,
+      processedOperations: [
+        { operationId: pending.operationId, resultingCount: 1 },
+      ],
+    });
+    await secondPage.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+    });
+    await secondPage.addScriptTag({ content: script });
+    const secondFrame = await waitForReaderFrame(secondPage);
+    await secondFrame.evaluate(
+      (html) => {
+        document.body.innerHTML = html;
+      },
+      createMockBody("correct"),
+    );
+    await secondPage.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+    await secondPage.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await secondPage.waitForFunction(
+      (key) => window.__getGMValue(key) === null,
+      PENDING_ANSWER_KEY,
+    );
+
+    const secondResult = await secondPage.evaluate(() => ({
+      count: window.__syncMock.count,
+      answeredCount: window.__syncMock.answeredCount,
+      answerCalls: window.__syncMock.calls.filter(
+        (call) =>
+          call.method === "POST" &&
+          new URL(call.url).pathname === "/v3/answers",
+      ).length,
+    }));
+    assert.deepEqual(secondResult, {
+      count: 1,
+      answeredCount: 1,
+      answerCalls: 0,
+    });
+    assert.deepEqual(secondErrors, []);
+  } finally {
+    await context.close();
+  }
+}
+
 async function runDoubleClickCase(browser, script) {
   const context = await browser.newContext({ userAgent: edgeUserAgent });
   try {
@@ -394,20 +569,21 @@ async function runDeleteFailureCase(browser, script) {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
-        "学習記録を同期できません.再試行してください",
+        "完了した解答記録を削除できません.再試行してください",
     );
     const storedPending = await page.evaluate(
       (key) => window.__getGMValue(key),
       PENDING_ANSWER_KEY,
     );
     assert.match(storedPending.operationId, /^[0-9a-f]{32}$/);
+    assert.equal(storedPending.phase, "awaiting_navigation");
     assert.equal(storedPending.result, "correct");
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
       "1問,次は50問",
     );
 
-    await childFrame.locator("#next").click();
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.waitForFunction(
       (key) => window.__getGMValue(key) === null,
       PENDING_ANSWER_KEY,
@@ -424,10 +600,7 @@ async function runDeleteFailureCase(browser, script) {
       };
     });
     assert.equal(result.serverCount, 1);
-    assert.deepEqual(result.operationIds, [
-      storedPending.operationId,
-      storedPending.operationId,
-    ]);
+    assert.deepEqual(result.operationIds, [storedPending.operationId]);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
@@ -513,10 +686,17 @@ async function runDateChangeCase(browser, script) {
       window.__syncMock.date = "2026-07-18";
       window.__syncMock.count = 4;
       window.__syncMock.answeredCount = 4;
-      window.__syncMock.failNextDeleteValue = true;
+      window.__syncMock.holdNextRequest = true;
     });
 
     await childFrame.locator("#next").click();
+    await page.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+    await page.evaluate(() => {
+      window.__syncMock.failNextSetValue = true;
+      window.__syncMock.releaseHeldRequest();
+    });
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
@@ -532,6 +712,13 @@ async function runDateChangeCase(browser, script) {
         PENDING_ANSWER_KEY,
       ),
       null,
+    );
+    assert.equal(
+      await page.evaluate(
+        (key) => window.__getGMValue(key).phase,
+        PENDING_ANSWER_KEY,
+      ),
+      "queued",
     );
 
     await childFrame.locator("#next").click();
@@ -595,8 +782,9 @@ async function runReloadRetryCase(browser, script) {
     assert.deepEqual(firstErrors, []);
     await firstPage.close();
 
+    const { phase: _phase, ...unphasedPending } = pending;
     const restoredPending = {
-      ...pending,
+      ...unphasedPending,
       pageURL: "https://chushoks.kakomonn.com/questions/restored",
     };
     const secondPage = await context.newPage();
@@ -686,6 +874,7 @@ async function runLegacyPendingMigrationCase(browser, script) {
     );
     assert.deepEqual(migrated.pending, {
       ...legacyPendingCorrect,
+      phase: "queued",
       result: "correct",
       site: "chushoks.kakomonn.com",
     });
@@ -907,6 +1096,8 @@ async function main() {
     await runSyncRefreshClickRaceCase(browser, script);
     await runRetryCase(browser, script, "correct");
     await runRetryCase(browser, script, "incorrect");
+    await runCompletionStorageRetryCase(browser, script);
+    await runSuccessfulResponseReloadCase(browser, script);
     await runDoubleClickCase(browser, script);
     await runFrameChangeDuringSyncCase(browser, script);
     await runDeleteFailureCase(browser, script);

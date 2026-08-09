@@ -201,13 +201,23 @@ elements.authForm.addEventListener("submit", async (event) => {
 
 elements.weekView.addEventListener("click", () => {
   if (state.view !== "week") {
-    void loadRange("week", state.anchorDate);
+    const range = rangeFor(state.view, state.anchorDate);
+    const anchor =
+      range.from <= state.today && range.to >= state.today
+        ? "today"
+        : state.anchorDate;
+    void loadRange("week", anchor);
   }
 });
 
 elements.monthView.addEventListener("click", () => {
   if (state.view !== "month") {
-    void loadRange("month", state.anchorDate);
+    const range = rangeFor(state.view, state.anchorDate);
+    const anchor =
+      range.from <= state.today && range.to >= state.today
+        ? "today"
+        : state.anchorDate;
+    void loadRange("month", anchor);
   }
 });
 
@@ -220,7 +230,7 @@ elements.nextPeriod.addEventListener("click", () => {
 });
 
 elements.todayButton.addEventListener("click", () => {
-  void loadRange(state.view, state.today);
+  void loadRange(state.view, "today");
 });
 
 elements.refreshButton.addEventListener("click", () => {

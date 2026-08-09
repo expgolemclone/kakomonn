@@ -10,6 +10,7 @@ const userscriptPath = path.resolve(
   "..",
   "kakomonn-reader.user.js",
 );
+const repositoryEnvPath = path.resolve(__dirname, "..", "..", ".env");
 const syncApiOrigin =
   "https://kakomonn-count-sync.expgolem-lab.workers.dev";
 const currentQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
@@ -201,8 +202,15 @@ function assertRuntimeIdentity(state, expectedBuildFingerprint) {
   );
 }
 
-function readSyncToken() {
-  const token = process.env.KAKOMONN_SYNC_TOKEN ?? "";
+function readSyncToken({
+  environment = process.env,
+  envFilePath = repositoryEnvPath,
+  loadEnvironmentFile = (filePath) => process.loadEnvFile(filePath),
+} = {}) {
+  if ((environment.KAKOMONN_SYNC_TOKEN ?? "") === "") {
+    loadEnvironmentFile(envFilePath);
+  }
+  const token = environment.KAKOMONN_SYNC_TOKEN ?? "";
   if (token.length < 32 || /\s/.test(token)) {
     throw new Error(
       "KAKOMONN_SYNC_TOKEN must contain the deployed secret token",
@@ -1107,6 +1115,7 @@ module.exports = {
   extractBuildFingerprint,
   isRemoteDebugApprovalRejection,
   readEdgeUserDataDir,
+  readSyncToken,
   remoteDebugApprovalEnvironment,
   remoteDebugApprovalPowerShell,
   toolText,

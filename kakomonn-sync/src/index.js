@@ -77,6 +77,28 @@ function parseHistoryRange(from, to) {
   return { from, to, fromOrdinal, toOrdinal };
 }
 
+export function historyRangeFor(view, anchorDate) {
+  const anchorOrdinal = dateOrdinal(anchorDate);
+  if (anchorOrdinal === null || (view !== "week" && view !== "month")) {
+    return null;
+  }
+  if (view === "week") {
+    const weekday = new Date(anchorOrdinal * 86_400_000).getUTCDay();
+    const fromOrdinal = anchorOrdinal - ((weekday + 6) % 7);
+    return parseHistoryRange(
+      isoDateFromOrdinal(fromOrdinal),
+      isoDateFromOrdinal(fromOrdinal + 6)
+    );
+  }
+
+  const [year, month] = anchorDate.split("-").map(Number);
+  const prefix = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+  return parseHistoryRange(
+    `${prefix}-01`,
+    `${prefix}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`
+  );
+}
+
 async function secretsEqual(received, expected) {
   if (typeof received !== "string" || typeof expected !== "string") {
     return false;
@@ -920,22 +942,24 @@ async function parseAnswerRequest(request) {
   };
 }
 
-function parseHistoryRequest(url) {
+function parseHistoryRequest(url, today) {
   const keys = [...url.searchParams.keys()];
   if (
     keys.length !== 3 ||
-    keys.some((key) => !["from", "site", "to"].includes(key)) ||
-    url.searchParams.getAll("from").length !== 1 ||
-    url.searchParams.getAll("to").length !== 1 ||
+    keys.some((key) => !["anchor", "site", "view"].includes(key)) ||
+    url.searchParams.getAll("anchor").length !== 1 ||
     url.searchParams.getAll("site").length !== 1 ||
+    url.searchParams.getAll("view").length !== 1 ||
     !isSite(url.searchParams.get("site"))
   ) {
     return null;
   }
-  return parseHistoryRange(
-    url.searchParams.get("from"),
-    url.searchParams.get("to")
-  );
+  const anchor = url.searchParams.get("anchor");
+  const view = url.searchParams.get("view");
+  const range = historyRangeFor(view, anchor === "today" ? today : anchor);
+  return range === null
+    ? null
+    : { range, site: url.searchParams.get("site") };
 }
 
 function parseStateSite(url) {
@@ -1001,13 +1025,17 @@ export async function handleRequest(request, env, fetcher = fetch) {
     return jsonResponse(await stub.getState(site, today));
   }
   if (url.pathname === "/v3/history") {
-    const range = parseHistoryRequest(url);
-    if (range === null) {
+    const history = parseHistoryRequest(url, today);
+    if (history === null) {
       return errorResponse("invalid_request", 400);
     }
-    const site = url.searchParams.get("site");
     return jsonResponse(
-      await stub.getHistory(site, today, range.from, range.to)
+      await stub.getHistory(
+        history.site,
+        today,
+        history.range.from,
+        history.range.to
+      )
     );
   }
 

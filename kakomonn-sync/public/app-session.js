@@ -70,14 +70,17 @@ async function loadSession(token, resetAnchor, preferredSite = "") {
     : sites.includes(storedSite)
       ? storedSite
       : sites[0];
-  const syncState = await fetchState(token, site);
-  const anchorDate = resetAnchor || state.anchorDate === "" ? syncState.date : state.anchorDate;
-  const range = rangeFor(state.view, anchorDate);
-  const history = await fetchHistory(token, site, range);
-  if (history.today !== syncState.date) {
-    throw new DashboardError("invalid_response");
-  }
-  return { token, sites, site, today: syncState.date, anchorDate, history };
+  const currentRange =
+    state.anchorDate === "" ? null : rangeFor(state.view, state.anchorDate);
+  const anchor =
+    resetAnchor ||
+    currentRange === null ||
+    (currentRange.from <= state.today && currentRange.to >= state.today)
+      ? "today"
+      : state.anchorDate;
+  const history = await fetchHistory(token, site, state.view, anchor);
+  const anchorDate = anchor === "today" ? history.today : anchor;
+  return { token, sites, site, today: history.today, anchorDate, history };
 }
 
 function applySnapshot(snapshot) {
@@ -119,16 +122,15 @@ async function openWithToken(candidate, { persist, resetAnchor }) {
   applySnapshot(snapshot);
 }
 
-async function loadRange(view, anchorDate) {
+async function loadRange(view, anchor) {
   if (state.loading) {
     return;
   }
   setDashboardBusy(true);
   try {
-    const range = rangeFor(view, anchorDate);
-    const history = await fetchHistory(state.token, state.site, range);
+    const history = await fetchHistory(state.token, state.site, view, anchor);
     state.view = view;
-    state.anchorDate = anchorDate;
+    state.anchorDate = anchor === "today" ? history.today : anchor;
     state.today = history.today;
     state.availableFrom = history.availableFrom;
     state.history = history;
@@ -156,19 +158,9 @@ async function refreshDashboard() {
     }
     return;
   }
-  const currentRange = rangeFor(state.view, state.anchorDate);
-  const wasCurrent = currentRange.from <= state.today && currentRange.to >= state.today;
   setDashboardBusy(true);
   try {
     const snapshot = await loadSession(state.token, false);
-    if (wasCurrent && snapshot.today !== state.today) {
-      snapshot.anchorDate = snapshot.today;
-      snapshot.history = await fetchHistory(
-        state.token,
-        snapshot.site,
-        rangeFor(state.view, snapshot.anchorDate)
-      );
-    }
     applySnapshot(snapshot);
   } catch (error) {
     showLoadError(error, state.token);

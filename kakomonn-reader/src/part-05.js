@@ -29,8 +29,14 @@
     }
 
     if (pendingAnswer !== null) {
-      nextQuestionButton.textContent = "同期を再試行";
-      nextQuestionButton.disabled = findNextQuestionURL() === null;
+      nextQuestionButton.textContent =
+        pendingAnswer.phase === "queued"
+          ? "同期を再試行"
+          : "次の問題を準備中";
+      nextQuestionButton.disabled =
+        pendingAnswer.phase === "awaiting_navigation" &&
+        currentFrameURL === pendingAnswer.pageURL &&
+        findNextQuestionURL() === null;
       return;
     }
 
@@ -84,18 +90,6 @@
     );
   }
 
-  function isOperationPageActive(operation, sourceDocument) {
-    if (frameDocument !== sourceDocument) {
-      return false;
-    }
-
-    try {
-      return frame.contentWindow.location.href === operation.pageURL;
-    } catch {
-      return false;
-    }
-  }
-
   function proceedToNextQuestion() {
     const nextURL = findNextQuestionURL();
     if (nextURL === null) {
@@ -117,6 +111,59 @@
       navigationInProgress = false;
       setStatus("次の問題へ移動できません");
       updateSyncDependentControls();
+    }
+  }
+
+  async function maybeContinuePendingAnswerNavigation() {
+    if (
+      pendingAnswer === null ||
+      pendingAnswer.phase !== "awaiting_navigation" ||
+      !syncReady ||
+      syncInProgress ||
+      nextQuestionOperationInProgress
+    ) {
+      return false;
+    }
+    if (pendingAnswerTransitionPromise !== null) {
+      return pendingAnswerTransitionPromise;
+    }
+
+    const operation = pendingAnswer;
+    pendingAnswerTransitionPromise = (async () => {
+      if (currentFrameURL !== operation.pageURL) {
+        try {
+          if (
+            pendingAnswer !== null &&
+            pendingAnswer.operationId === operation.operationId &&
+            pendingAnswer.phase === "awaiting_navigation"
+          ) {
+            await clearPendingAnswer();
+          }
+          setStatus(
+            pendingCelebration === null
+              ? "解答記録を同期しました"
+              : `${pendingCelebration.milestone}問達成.祝福を準備中`
+          );
+          return true;
+        } catch {
+          setStatus("完了した解答記録を削除できません.再試行してください");
+          return false;
+        }
+      }
+
+      if (frameDocument === null || navigationInProgress) {
+        return false;
+      }
+      proceedToNextQuestion();
+      return navigationInProgress;
+    })();
+
+    try {
+      return await pendingAnswerTransitionPromise;
+    } finally {
+      pendingAnswerTransitionPromise = null;
+      updateSyncDependentControls();
+      void maybeContinuePendingCelebration();
     }
   }
 
@@ -204,6 +251,7 @@
     const operation = {
       operationId: createOperationId(),
       date: activeCountDate,
+      phase: "queued",
       pageURL: currentFrameURL,
       result,
       site: SITE_ID,
@@ -219,10 +267,12 @@
     if (pendingAnswer === null || syncPromise !== null) {
       return;
     }
+    if (pendingAnswer.phase === "awaiting_navigation") {
+      return maybeContinuePendingAnswerNavigation();
+    }
 
     nextQuestionOperationInProgress = true;
     const operation = pendingAnswer;
-    const sourceDocument = frameDocument;
     navigationInProgress = true;
     syncInProgress = true;
     setStatus("学習記録を同期中");
@@ -243,29 +293,16 @@
             result.completedMilestone
           );
         }
-        await clearPendingAnswer();
+        await markPendingAnswerAwaitingNavigation(operation);
         syncReady = true;
-        const shouldNavigate = isOperationPageActive(
-          operation,
-          sourceDocument
-        );
-
-        if (shouldNavigate) {
-          proceedToNextQuestion();
-        } else {
-          navigationInProgress = false;
-          setStatus(
-            pendingCelebration === null
-              ? "未完了の解答記録を同期しました"
-              : `${pendingCelebration.milestone}問達成.祝福を準備中`
-          );
-        }
+        navigationInProgress = false;
+        setStatus("解答記録を同期しました.次の問題を準備中");
         return true;
       } catch (error) {
         if (error?.code === "date_changed" && isSyncState(error.state)) {
           applyRemoteState(error.state);
           try {
-            await clearPendingAnswer();
+            await markPendingAnswerAwaitingNavigation(operation);
             await reconcilePendingDates();
           } catch {
             navigationInProgress = false;
@@ -273,18 +310,8 @@
             return false;
           }
           syncReady = true;
-          const shouldNavigate = isOperationPageActive(
-            operation,
-            sourceDocument
-          );
-
-          if (shouldNavigate) {
-            setStatus("前日の未同期分を破棄しました");
-            proceedToNextQuestion();
-          } else {
-            navigationInProgress = false;
-            setStatus("前日の未同期分を破棄しました");
-          }
+          navigationInProgress = false;
+          setStatus("前日の未同期分を破棄しました");
           return false;
         }
 
@@ -299,6 +326,7 @@
         syncInProgress = false;
         syncPromise = null;
         updateSyncDependentControls();
+        void maybeContinuePendingAnswerNavigation();
         void maybeContinuePendingCelebration();
       }
     })();
@@ -825,6 +853,7 @@
     updateNextQuestionButton();
     updateCopyButton();
     synchronizeTimeLimitPhase();
+    void maybeContinuePendingAnswerNavigation();
     void maybeContinuePendingCelebration();
 
     loadTimer = window.setTimeout(() => {

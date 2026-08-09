@@ -236,19 +236,7 @@ function isCountPair(value, { nullable }) {
   );
 }
 
-function isSyncState(value, expectedSite) {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    value.site === expectedSite &&
-    dateOrdinal(value.date) !== null &&
-    isCountPair(value.counts, { nullable: true }) &&
-    value.counts.correct !== null &&
-    value.milestoneInterval === 50
-  );
-}
-
-function isHistory(value, expectedSite, expectedRange) {
+function isHistory(value, expectedSite, expectedView, requestedAnchor) {
   if (
     value === null ||
     typeof value !== "object" ||
@@ -262,10 +250,13 @@ function isHistory(value, expectedSite, expectedRange) {
     value.availableFrom.correct > value.today ||
     value.availableFrom.answered < value.availableFrom.correct ||
     dateOrdinal(value.availableFrom.answered) > dateOrdinal(value.today) + 1 ||
-    value.from !== expectedRange.from ||
-    value.to !== expectedRange.to ||
     !Array.isArray(value.days)
   ) {
+    return false;
+  }
+  const anchorDate = requestedAnchor === "today" ? value.today : requestedAnchor;
+  const expectedRange = rangeFor(expectedView, anchorDate);
+  if (value.from !== expectedRange.from || value.to !== expectedRange.to) {
     return false;
   }
   const fromOrdinal = dateOrdinal(expectedRange.from);
@@ -338,19 +329,10 @@ async function fetchSites(token) {
   return value.sites;
 }
 
-async function fetchState(token, site) {
-  const query = new URLSearchParams({ site });
-  const value = await requestJSON(`/v3/state?${query}`, token);
-  if (!isSyncState(value, site)) {
-    throw new DashboardError("invalid_response");
-  }
-  return value;
-}
-
-async function fetchHistory(token, site, range) {
-  const query = new URLSearchParams({ site, from: range.from, to: range.to });
+async function fetchHistory(token, site, view, anchor) {
+  const query = new URLSearchParams({ site, view, anchor });
   const value = await requestJSON(`/v3/history?${query}`, token);
-  if (!isHistory(value, site, range)) {
+  if (!isHistory(value, site, view, anchor)) {
     throw new DashboardError("invalid_response");
   }
   return value;

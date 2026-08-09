@@ -222,6 +222,7 @@
   let syncInProgress = false;
   let syncPromise = null;
   let pendingAnswer = null;
+  let pendingAnswerTransitionPromise = null;
   let pendingCelebration = null;
   let celebrationTransitionPromise = null;
 

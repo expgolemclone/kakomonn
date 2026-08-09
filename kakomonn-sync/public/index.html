@@ -75,8 +75,9 @@
               <select id="site-select" aria-label="表示する過去問サイト"></select>
             </div>
             <div class="view-switch" role="group" aria-label="表示期間">
+              <button id="all-view" type="button" aria-pressed="true">全期間</button>
               <button id="week-view" type="button" aria-pressed="false">週</button>
-              <button id="month-view" type="button" aria-pressed="true">月</button>
+              <button id="month-view" type="button" aria-pressed="false">月</button>
             </div>
             <div class="period-navigation">
               <button id="previous-period" class="icon-button" type="button" aria-label="前の期間">←</button>
@@ -158,7 +159,7 @@
                   </div>
                 </div>
               </div>
-              <p id="chart-scroll-hint" class="chart-scroll-hint">mouse wheel, swipe, dragで日付を横移動</p>
+              <p id="chart-scroll-hint" class="chart-scroll-hint">mouse wheel, swipe, dragで日付を横移動. 月表示では端から前後の月へ移動</p>
               <div class="chart-footer">
                 <p id="day-detail" class="day-detail" aria-live="polite"></p>
                 <p id="empty-message" class="empty-message" hidden>

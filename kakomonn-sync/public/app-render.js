@@ -145,7 +145,7 @@ function selectDay(date) {
 }
 
 function positionSelectedDate() {
-  if (state.view !== "month" || state.selectedDate === "") {
+  if (state.view === "week" || state.selectedDate === "") {
     elements.chartScroller.scrollLeft = 0;
     return;
   }
@@ -227,9 +227,10 @@ function renderChart() {
   state.selectedDate = chooseSelectedDate(days);
   elements.scaleMaximum.textContent = formatScale(maximum);
   elements.scaleMiddle.textContent = formatScale(maximum / 2);
-  elements.chartFrame.classList.toggle("is-month", state.view === "month");
-  elements.barChart.classList.toggle("is-month", state.view === "month");
-  elements.barChart.style.setProperty("--day-count", String(days.length));
+  const expanded = state.view !== "week";
+  elements.chartFrame.classList.toggle("is-expanded", expanded);
+  elements.barChart.classList.toggle("is-expanded", expanded);
+  elements.chartFrame.style.setProperty("--day-count", String(days.length));
   elements.barChart.replaceChildren();
 
   for (const day of days) {

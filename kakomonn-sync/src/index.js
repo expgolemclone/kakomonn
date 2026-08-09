@@ -719,12 +719,34 @@ export class DailyCount extends DurableObject {
       throw new TypeError("invalid history range");
     }
 
+    return this.readHistory(site, today, { mode: "range", range });
+  }
+
+  getAllHistory(site, today) {
+    if (!isSite(site) || dateOrdinal(today) === null) {
+      throw new TypeError("invalid all-history request");
+    }
+
+    return this.readHistory(site, today, { mode: "all" });
+  }
+
+  readHistory(site, today, request) {
     return this.ctx.storage.transactionSync(() => {
       const ensured = this.ensureDate(site, today);
       if (ensured.stale) {
         throw new Error("history date moved backwards");
       }
       const availability = ensured.availability;
+      const range =
+        request.mode === "all"
+          ? {
+              from: availability.correct,
+              to: today,
+              fromOrdinal: dateOrdinal(availability.correct),
+              toOrdinal: dateOrdinal(today),
+            }
+          : request.range;
+      const { from, to } = range;
 
       const counts = new Map(
         this.ctx.storage.sql
@@ -956,10 +978,15 @@ function parseHistoryRequest(url, today) {
   }
   const anchor = url.searchParams.get("anchor");
   const view = url.searchParams.get("view");
+  if (view === "all") {
+    return anchor === "today"
+      ? { all: true, site: url.searchParams.get("site") }
+      : null;
+  }
   const range = historyRangeFor(view, anchor === "today" ? today : anchor);
   return range === null
     ? null
-    : { range, site: url.searchParams.get("site") };
+    : { all: false, range, site: url.searchParams.get("site") };
 }
 
 function parseStateSite(url) {
@@ -1029,13 +1056,11 @@ export async function handleRequest(request, env, fetcher = fetch) {
     if (history === null) {
       return errorResponse("invalid_request", 400);
     }
+    if (history.all) {
+      return jsonResponse(await stub.getAllHistory(history.site, today));
+    }
     return jsonResponse(
-      await stub.getHistory(
-        history.site,
-        today,
-        history.range.from,
-        history.range.to
-      )
+      await stub.getHistory(history.site, today, history.range.from, history.range.to)
     );
   }
 

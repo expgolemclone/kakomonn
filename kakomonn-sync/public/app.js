@@ -32,6 +32,7 @@ const elements = {
   siteEmpty: required("site-empty"),
   siteSelect: required("site-select"),
   settingsButton: required("settings-button"),
+  allView: required("all-view"),
   weekView: required("week-view"),
   monthView: required("month-view"),
   previousPeriod: required("previous-period"),
@@ -74,7 +75,7 @@ const state = {
   today: "",
   availableFrom: { correct: "", answered: "" },
   anchorDate: "",
-  view: "month",
+  view: "all",
   selectedDate: "",
   history: null,
   loading: false,
@@ -127,18 +128,32 @@ function rangeFor(view, anchorDate) {
       to: dateFromOrdinal(fromOrdinal + 6),
     };
   }
-  const { year, month } = dateParts(anchorDate);
-  const prefix = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
-  return {
-    from: `${prefix}-01`,
-    to: `${prefix}-${String(daysInMonth(year, month)).padStart(2, "0")}`,
-  };
+  if (view === "month") {
+    const { year, month } = dateParts(anchorDate);
+    const prefix = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+    return {
+      from: `${prefix}-01`,
+      to: `${prefix}-${String(daysInMonth(year, month)).padStart(2, "0")}`,
+    };
+  }
+  throw new TypeError(`Unsupported history view: ${view}`);
+}
+
+function displayedRange() {
+  if (state.view === "all") {
+    return { from: state.history.from, to: state.history.to };
+  }
+  return rangeFor(state.view, state.anchorDate);
 }
 
 function shiftAnchor(view, anchorDate, amount) {
-  return view === "week"
-    ? dateFromOrdinal(dateOrdinal(anchorDate) + amount * 7)
-    : shiftMonth(anchorDate, amount);
+  if (view === "week") {
+    return dateFromOrdinal(dateOrdinal(anchorDate) + amount * 7);
+  }
+  if (view === "month") {
+    return shiftMonth(anchorDate, amount);
+  }
+  throw new TypeError(`Unsupported history view: ${view}`);
 }
 
 function formatFullDate(value) {
@@ -152,6 +167,9 @@ function formatShortDate(value) {
 }
 
 function formatPeriod(view, range) {
+  if (view === "all") {
+    return "全期間";
+  }
   if (view === "month") {
     const { year, month } = dateParts(range.from);
     return `${year}年${month}月`;
@@ -255,7 +273,10 @@ function isHistory(value, expectedSite, expectedView, requestedAnchor) {
     return false;
   }
   const anchorDate = requestedAnchor === "today" ? value.today : requestedAnchor;
-  const expectedRange = rangeFor(expectedView, anchorDate);
+  const expectedRange =
+    expectedView === "all"
+      ? { from: value.availableFrom.correct, to: value.today }
+      : rangeFor(expectedView, anchorDate);
   if (value.from !== expectedRange.from || value.to !== expectedRange.to) {
     return false;
   }

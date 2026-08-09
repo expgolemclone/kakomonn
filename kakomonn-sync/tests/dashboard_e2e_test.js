@@ -16,7 +16,7 @@ const site = "chushoks.kakomonn.com";
 const otherSite = "nurse.kakomonn.com";
 const today = "2026-07-18";
 const availableFrom = {
-  correct: "2026-07-01",
+  correct: "2026-06-01",
   answered: "2026-07-15",
 };
 const correctCounts = new Map([
@@ -55,6 +55,9 @@ function dateFromOrdinal(ordinal) {
 }
 
 function historyRange(view, anchorDate) {
+  if (view === "all") {
+    return { from: availableFrom.correct, to: anchorDate };
+  }
   const anchorOrdinal = dateOrdinal(anchorDate);
   if (view === "week") {
     const weekday = new Date(anchorOrdinal * 86_400_000).getUTCDay();
@@ -64,12 +67,15 @@ function historyRange(view, anchorDate) {
       to: dateFromOrdinal(fromOrdinal + 6),
     };
   }
-  const [year, month] = anchorDate.split("-").map(Number);
-  const prefix = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
-  return {
-    from: `${prefix}-01`,
-    to: `${prefix}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`,
-  };
+  if (view === "month") {
+    const [year, month] = anchorDate.split("-").map(Number);
+    const prefix = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+    return {
+      from: `${prefix}-01`,
+      to: `${prefix}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`,
+    };
+  }
+  throw new TypeError(`Unsupported history view: ${view}`);
 }
 
 async function getAvailablePort() {
@@ -299,6 +305,16 @@ async function main() {
     await page.locator("#auth-token").fill(token);
     await page.locator("#auth-submit").click();
     await page.locator("#dashboard").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#all-view").getAttribute("aria-pressed"), "true");
+    assert.equal(await page.locator("#period-title").textContent(), "全期間");
+    assert.equal(await page.locator("#bar-chart .bar-slot").count(), 48);
+    assert.equal(await page.locator("#total-count").textContent(), "30");
+    assert.equal(await page.locator("#total-answered").textContent(), "40");
+    assert.equal(await page.locator("#average-count").textContent(), "0.6");
+    assert.equal(await page.locator("#average-answered").textContent(), "10.0");
+    assert.equal(await page.locator("#previous-period").isDisabled(), true);
+    assert.equal(await page.locator("#next-period").isDisabled(), true);
+    assert.equal(await page.locator("#today-button").isDisabled(), true);
     await page.locator("#week-view").click();
     await page.waitForFunction(
       () =>
@@ -370,6 +386,28 @@ async function main() {
     assert.equal(await page.locator("#total-answered").textContent(), "40");
     assert.equal(await page.locator("#average-count").textContent(), "1.7");
     assert.equal(await page.locator("#average-answered").textContent(), "10.0");
+
+    const chartScroller = page.locator("#chart-scroller");
+    await chartScroller.evaluate((element) => {
+      element.scrollLeft = 0;
+    });
+    await chartScroller.hover();
+    await page.mouse.wheel(0, -120);
+    await page.waitForFunction(
+      () => document.querySelector("#period-title")?.textContent === "2026年6月"
+    );
+    assert.equal(await page.locator("#bar-chart .bar-slot").count(), 30);
+    assert.equal(await page.locator("#previous-period").isDisabled(), true);
+
+    await page.waitForTimeout(350);
+    await chartScroller.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth - element.clientWidth;
+    });
+    await chartScroller.hover();
+    await page.mouse.wheel(0, 120);
+    await page.waitForFunction(
+      () => document.querySelector("#period-title")?.textContent === "2026年7月"
+    );
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForFunction(

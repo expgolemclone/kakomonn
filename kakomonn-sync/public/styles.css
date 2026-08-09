@@ -442,7 +442,7 @@ button:disabled {
 
 .view-switch {
   display: inline-grid;
-  grid-template-columns: repeat(2, 48px);
+  grid-template-columns: minmax(68px, auto) repeat(2, 48px);
   border: 1px solid var(--line);
 }
 
@@ -690,8 +690,8 @@ button:disabled {
   height: 430px;
 }
 
-.chart-frame.is-month {
-  min-width: 1360px;
+.chart-frame.is-expanded {
+  min-width: max(1360px, calc(42px + var(--day-count) * 42px));
 }
 
 .scale {
@@ -813,7 +813,7 @@ button:disabled {
   list-style: none;
 }
 
-.bar-chart.is-month {
+.bar-chart.is-expanded {
   grid-template-columns: repeat(var(--day-count), minmax(27px, 1fr));
   gap: 6px;
 }
@@ -1129,7 +1129,7 @@ dialog h2 {
 
   .view-switch {
     width: 100%;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .period-actions {
@@ -1212,8 +1212,8 @@ dialog h2 {
     height: 380px;
   }
 
-  .chart-frame.is-month {
-    min-width: 1360px;
+  .chart-frame.is-expanded {
+    min-width: max(1360px, calc(42px + var(--day-count) * 42px));
   }
 
   .chart-scroll-hint {

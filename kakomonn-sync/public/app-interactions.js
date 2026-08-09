@@ -1,6 +1,13 @@
 let mouseDrag = null;
 let touchDrag = null;
 let suppressClick = false;
+let edgeWheelDirection = 0;
+let edgeWheelDistance = 0;
+let wheelNavigationLocked = false;
+let wheelNavigationUnlockTimer = 0;
+
+const EDGE_WHEEL_THRESHOLD = 80;
+const WHEEL_NAVIGATION_IDLE_MS = 300;
 
 elements.chartScroller.addEventListener("pointerdown", (event) => {
   if (event.pointerType !== "mouse" || event.button !== 0) {
@@ -141,24 +148,69 @@ function wheelDeltaInPixels(event) {
   return Math.sign(pixelDelta) * Math.max(Math.abs(pixelDelta), minimumStep);
 }
 
-function scrollChartWithWheel(event) {
-  const maxScrollLeft =
-    elements.chartScroller.scrollWidth - elements.chartScroller.clientWidth;
-  if (maxScrollLeft <= 0) {
-    return;
+function resetEdgeWheel() {
+  edgeWheelDirection = 0;
+  edgeWheelDistance = 0;
+}
+
+function holdWheelNavigationLock() {
+  wheelNavigationLocked = true;
+  window.clearTimeout(wheelNavigationUnlockTimer);
+  wheelNavigationUnlockTimer = window.setTimeout(() => {
+    wheelNavigationLocked = false;
+  }, WHEEL_NAVIGATION_IDLE_MS);
+}
+
+function navigatePeriodWithWheel(event, direction) {
+  const navigationButton =
+    direction < 0 ? elements.previousPeriod : elements.nextPeriod;
+  if (state.view !== "month" || state.loading || navigationButton.disabled) {
+    resetEdgeWheel();
+    return false;
   }
 
+  event.preventDefault();
+  event.stopPropagation();
+  if (wheelNavigationLocked) {
+    holdWheelNavigationLock();
+    return true;
+  }
+  if (edgeWheelDirection !== direction) {
+    edgeWheelDirection = direction;
+    edgeWheelDistance = 0;
+  }
+  edgeWheelDistance += Math.abs(wheelDeltaInPixels(event));
+  if (edgeWheelDistance < EDGE_WHEEL_THRESHOLD) {
+    return true;
+  }
+
+  resetEdgeWheel();
+  holdWheelNavigationLock();
+  void loadRange(
+    state.view,
+    shiftAnchor(state.view, state.anchorDate, direction)
+  );
+  return true;
+}
+
+function scrollChartWithWheel(event) {
   const delta = wheelDeltaInPixels(event);
   if (delta === 0) {
     return;
   }
 
+  const maxScrollLeft = Math.max(
+    0,
+    elements.chartScroller.scrollWidth - elements.chartScroller.clientWidth
+  );
   const before = elements.chartScroller.scrollLeft;
   const target = Math.min(maxScrollLeft, Math.max(0, before + delta));
   if (target === before) {
+    navigatePeriodWithWheel(event, Math.sign(delta));
     return;
   }
 
+  resetEdgeWheel();
   event.preventDefault();
   event.stopPropagation();
   elements.chartScroller.scrollLeft = target;
@@ -199,25 +251,28 @@ elements.authForm.addEventListener("submit", async (event) => {
   }
 });
 
+function anchorForViewChange() {
+  const range = displayedRange();
+  return range.from <= state.today && range.to >= state.today
+    ? "today"
+    : state.anchorDate;
+}
+
+elements.allView.addEventListener("click", () => {
+  if (state.view !== "all") {
+    void loadRange("all", "today");
+  }
+});
+
 elements.weekView.addEventListener("click", () => {
   if (state.view !== "week") {
-    const range = rangeFor(state.view, state.anchorDate);
-    const anchor =
-      range.from <= state.today && range.to >= state.today
-        ? "today"
-        : state.anchorDate;
-    void loadRange("week", anchor);
+    void loadRange("week", anchorForViewChange());
   }
 });
 
 elements.monthView.addEventListener("click", () => {
   if (state.view !== "month") {
-    const range = rangeFor(state.view, state.anchorDate);
-    const anchor =
-      range.from <= state.today && range.to >= state.today
-        ? "today"
-        : state.anchorDate;
-    void loadRange("month", anchor);
+    void loadRange("month", anchorForViewChange());
   }
 });
 
@@ -325,7 +380,7 @@ elements.forgetToken.addEventListener("click", () => {
   state.anchorDate = "";
   state.selectedDate = "";
   state.history = null;
-  state.view = "month";
+  state.view = "all";
   elements.settingsDialog.close();
   showAuth("この端末から同期tokenを削除しました.");
 });

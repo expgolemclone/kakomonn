@@ -51,6 +51,7 @@ function stubFor(name) {
     getState: (date, site = SITE) => raw.getState(site, date),
     getHistory: (today, from, to, site = SITE) =>
       raw.getHistory(site, today, from, to),
+    getAllHistory: (today, site = SITE) => raw.getAllHistory(site, today),
     recordAnswer: (date, id, answerResult, site = SITE) =>
       raw.recordAnswer(site, date, id, answerResult),
     listSites: () => raw.listSites(),
@@ -186,6 +187,29 @@ describe("DailyCount", () => {
     expect(
       await stub.recordAnswer("2026-07-17", operationId(2), "incorrect")
     ).toEqual(result("2026-07-17", 1, 2));
+  });
+
+  it("returns every tracked day without the ranged history limit", async () => {
+    const stub = stubFor("all-history");
+    await stub.recordAnswer("2026-01-01", operationId(1), "correct");
+    await stub.getState("2026-03-01");
+
+    const history = await stub.getAllHistory("2026-03-01");
+    expect(history).toMatchObject({
+      site: SITE,
+      today: "2026-03-01",
+      from: "2026-01-01",
+      to: "2026-03-01",
+    });
+    expect(history.days).toHaveLength(60);
+    expect(history.days[0]).toEqual({
+      date: "2026-01-01",
+      counts: { correct: 1, answered: 1 },
+    });
+    expect(history.days.at(-1)).toEqual({
+      date: "2026-03-01",
+      counts: { correct: 0, answered: 0 },
+    });
   });
 
   it("rejects a different outcome for a processed operation", async () => {
@@ -525,12 +549,28 @@ describe("HTTP API", () => {
       date: current.date,
       counts: { correct: 0, answered: 0 },
     });
+
+    const allResponse = await SELF.fetch(
+      `https://example.test/v3/history?site=${SITE}&view=all&anchor=today`,
+      { headers: AUTHORIZATION }
+    );
+    expect(allResponse.status).toBe(200);
+    await expect(allResponse.json()).resolves.toMatchObject({
+      site: SITE,
+      today: current.date,
+      from: current.date,
+      to: current.date,
+      days: [
+        { date: current.date, counts: { correct: 0, answered: 0 } },
+      ],
+    });
   });
 
   it("rejects invalid history periods, methods, and removed routes", async () => {
     const invalidRequests = [
       "https://example.test/v3/history",
       `https://example.test/v3/history?site=${SITE}&view=day&anchor=today`,
+      `https://example.test/v3/history?site=${SITE}&view=all&anchor=2026-07-01`,
       `https://example.test/v3/history?site=${SITE}&view=month&anchor=2026-02-30`,
       `https://example.test/v3/history?site=${SITE}&view=week&anchor=today&anchor=2026-07-01`,
       `https://example.test/v3/history?site=${SITE}&view=week&anchor=today&extra=1`,
@@ -759,6 +799,7 @@ describe("history period", () => {
   });
 
   it("rejects unsupported views and invalid anchors", () => {
+    expect(historyRangeFor("all", "2026-07-18")).toBeNull();
     expect(historyRangeFor("day", "2026-07-18")).toBeNull();
     expect(historyRangeFor("month", "2026-02-30")).toBeNull();
   });

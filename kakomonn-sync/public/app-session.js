@@ -2,19 +2,28 @@ function renderNavigation() {
   if (state.today === "" || state.anchorDate === "") {
     return;
   }
-  const currentRange = rangeFor(state.view, state.anchorDate);
-  const previousRange = rangeFor(state.view, shiftAnchor(state.view, state.anchorDate, -1));
+  const currentRange = displayedRange();
+  const previousRange =
+    state.view === "all"
+      ? null
+      : rangeFor(state.view, shiftAnchor(state.view, state.anchorDate, -1));
+  elements.allView.setAttribute("aria-pressed", String(state.view === "all"));
   elements.weekView.setAttribute("aria-pressed", String(state.view === "week"));
   elements.monthView.setAttribute("aria-pressed", String(state.view === "month"));
   elements.periodTitle.textContent = formatPeriod(state.view, currentRange);
   elements.previousPeriod.disabled =
     state.loading ||
+    state.view === "all" ||
     state.availableFrom.correct === "" ||
     previousRange.to < state.availableFrom.correct;
-  elements.nextPeriod.disabled = state.loading || currentRange.to >= state.today;
+  elements.nextPeriod.disabled =
+    state.loading || state.view === "all" || currentRange.to >= state.today;
   elements.todayButton.disabled =
-    state.loading || (currentRange.from <= state.today && currentRange.to >= state.today);
+    state.loading ||
+    state.view === "all" ||
+    (currentRange.from <= state.today && currentRange.to >= state.today);
   elements.refreshButton.disabled = state.loading;
+  elements.allView.disabled = state.loading;
   elements.weekView.disabled = state.loading;
   elements.monthView.disabled = state.loading;
   elements.siteSelect.disabled = state.loading;
@@ -30,7 +39,7 @@ function formatAverage(value) {
 }
 
 function renderDashboard() {
-  const range = rangeFor(state.view, state.anchorDate);
+  const range = displayedRange();
   const correctDays = state.history.days.filter((day) => day.counts.correct !== null);
   const answeredDays = state.history.days.filter((day) => day.counts.answered !== null);
   const correctTotal = correctDays.reduce((sum, day) => sum + day.counts.correct, 0);
@@ -70,9 +79,9 @@ async function loadSession(token, resetAnchor, preferredSite = "") {
     : sites.includes(storedSite)
       ? storedSite
       : sites[0];
-  const currentRange =
-    state.anchorDate === "" ? null : rangeFor(state.view, state.anchorDate);
+  const currentRange = state.anchorDate === "" ? null : displayedRange();
   const anchor =
+    state.view === "all" ||
     resetAnchor ||
     currentRange === null ||
     (currentRange.from <= state.today && currentRange.to >= state.today)

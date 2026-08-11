@@ -24,10 +24,6 @@
     ]
   },
   "exports": {
-    "DailyCount": {
-      "type": "durable-object",
-      "state": "deleted"
-    },
     "LearningState": {
       "type": "durable-object",
       "storage": "sqlite"

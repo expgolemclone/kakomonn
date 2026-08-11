@@ -979,7 +979,13 @@ async function clickNextQuestion(mcp) {
     }`,
   );
   assert.equal(hitTest.targetId, "kakomonn-reader-next", JSON.stringify(hitTest));
-  await mcp.tool("click", { uid: nextButton });
+  await evaluate(
+    mcp,
+    `() => {
+      document.querySelector("#kakomonn-reader-next").click();
+      return true;
+    }`,
+  );
 
   return waitUntil("the FSRS scheduled next question", async () => {
     const state = await readReaderState(mcp);

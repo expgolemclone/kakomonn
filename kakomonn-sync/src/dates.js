@@ -1,5 +1,6 @@
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 86_400_000;
+const TOKYO_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 export function getTokyoDate(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -39,4 +40,20 @@ export function recentTokyoDates(today, days) {
   return Array.from({ length: days }, (_, index) =>
     isoDateFromOrdinal(ordinal - days + 1 + index)
   );
+}
+
+export function tokyoDateRangeMs(firstDate, lastDate = firstDate) {
+  const firstOrdinal = dateOrdinal(firstDate);
+  const lastOrdinal = dateOrdinal(lastDate);
+  if (
+    firstOrdinal === null ||
+    lastOrdinal === null ||
+    lastOrdinal < firstOrdinal
+  ) {
+    throw new TypeError("invalid Tokyo date range");
+  }
+  return {
+    startMs: firstOrdinal * DAY_MS - TOKYO_OFFSET_MS,
+    endMs: (lastOrdinal + 1) * DAY_MS - TOKYO_OFFSET_MS,
+  };
 }

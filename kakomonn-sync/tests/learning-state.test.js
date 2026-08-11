@@ -67,20 +67,24 @@ describe("LearningState schema", () => {
   it("installs query indexes idempotently for existing objects", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       initializeLearningSchema(state.storage);
+      state.storage.sql.exec(
+        "CREATE INDEX IF NOT EXISTS attempts_by_site ON attempts (site)"
+      );
       initializeLearningSchema(state.storage);
       const indexes = state.storage.sql
         .exec(
           `SELECT name FROM sqlite_master
-           WHERE type = 'index' AND name IN (?, ?, ?)
+           WHERE type = 'index' AND name IN (?, ?, ?, ?)
            ORDER BY name`,
           "attempts_by_site",
+          "attempts_by_site_answered_at_question",
           "cards_by_site_due",
           "cards_by_site_stability",
         )
         .toArray()
         .map((row) => row.name);
       expect(indexes).toEqual([
-        "attempts_by_site",
+        "attempts_by_site_answered_at_question",
         "cards_by_site_due",
         "cards_by_site_stability",
       ]);
@@ -176,7 +180,8 @@ describe("attempt idempotency", () => {
       expect(attempts.count).toBe(1);
     });
     await expect(stub().getState(SITE, NOW + 60_000)).resolves.toMatchObject({
-      attempted: 1,
+      solved: 1,
+      todaySolved: 1,
     });
   });
 
@@ -194,12 +199,65 @@ describe("attempt idempotency", () => {
     expect(retry.totals.mastered).toBe(2);
     await expect(stub().getState(SITE, NOW + 2_000)).resolves.toMatchObject({
       mastered: 2,
-      attempted: 2,
+      solved: 2,
+      todaySolved: 2,
     });
 
     await runInRawDurableObject(stub(), (_instance, state) => {
       const attempts = state.storage.sql.exec("SELECT COUNT(*) AS count FROM attempts WHERE site = ?", SITE).toArray()[0];
       expect(attempts.count).toBe(2);
+    });
+  });
+
+  it("counts each question once in lifetime and daily solved totals", async () => {
+    const first = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(66),
+      "correct",
+      NOW
+    );
+    const repeated = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(67),
+      "incorrect",
+      NOW + 1_000
+    );
+    const secondQuestion = await stub().recordAttempt(
+      SITE,
+      "2",
+      operationId(68),
+      "incorrect",
+      NOW + 2_000
+    );
+
+    expect(first.totals).toMatchObject({ solved: 1, todaySolved: 1 });
+    expect(repeated.totals).toMatchObject({ solved: 1, todaySolved: 1 });
+    expect(secondQuestion.totals).toMatchObject({ solved: 2, todaySolved: 2 });
+    await expect(stub().getState(SITE, NOW + 2_000)).resolves.toMatchObject({
+      solved: 2,
+      todaySolved: 2,
+    });
+  });
+
+  it("uses the Asia Tokyo date boundary for daily solved totals", async () => {
+    const beforeMidnight = Date.parse("2026-08-10T14:59:59.999Z");
+    const afterMidnight = Date.parse("2026-08-10T15:00:00.000Z");
+    await stub().recordAttempt(SITE, "1", operationId(69), "correct", beforeMidnight);
+    await stub().recordAttempt(SITE, "1", operationId(70), "correct", afterMidnight);
+    await stub().recordAttempt(SITE, "2", operationId(71), "incorrect", afterMidnight + 1);
+
+    await expect(stub().getState(SITE, afterMidnight + 1)).resolves.toMatchObject({
+      today: "2026-08-11",
+      solved: 2,
+      todaySolved: 2,
+    });
+    await expect(stub().getHistory(SITE, 2, afterMidnight + 1)).resolves.toMatchObject({
+      days: [
+        { date: "2026-08-10", solved: 1 },
+        { date: "2026-08-11", solved: 2 },
+      ],
     });
   });
 
@@ -340,7 +398,22 @@ describe("mastery history and milestones", () => {
     await stub().recordAttempt(SITE, "1", operationId(9), "correct", NOW);
     const history = await stub().getHistory(SITE, 7, NOW);
     expect(history.days).toHaveLength(7);
-    expect(history.days.at(-1)).toEqual({ date: "2026-08-10", mastered: 1 });
+    expect(history.days.at(-1)).toEqual({
+      date: "2026-08-10",
+      mastered: 1,
+      solved: 1,
+    });
+  });
+
+  it("keeps solved questions in totals after catalog removal", async () => {
+    await stub().recordAttempt(SITE, "1", operationId(72), "correct", NOW);
+    await stub().replaceCatalog(SITE, ["2", "3", "4"], 1, NOW + 1_000);
+
+    await expect(stub().getState(SITE, NOW + 1_000)).resolves.toMatchObject({
+      solved: 1,
+      todaySolved: 1,
+      catalog: { questionCount: 3 },
+    });
   });
 
   it("celebrates 300 once across 300 -> 299 -> 300 and then celebrates 350", async () => {
@@ -518,13 +591,16 @@ describe("v4 HTTP contract", () => {
       headers: AUTHORIZATION,
     });
     expect(state.status).toBe(200);
-    await expect(state.json()).resolves.toMatchObject({
+    const stateBody = await state.json();
+    expect(stateBody).toMatchObject({
       site: SITE,
       mastered: 0,
-      attempted: 0,
+      solved: 0,
+      todaySolved: 0,
       todayDelta: 0,
       catalog: { questionCount: 4, generation: 1 },
     });
+    expect(stateBody).not.toHaveProperty("attempted");
 
     const history = await SELF.fetch(
       `https://example.test/v4/history?site=${SITE}&days=7`,
@@ -691,7 +767,8 @@ describe("server source of truth", () => {
     await expect(secondClient.json()).resolves.toMatchObject({
       site: SITE,
       mastered: 0,
-      attempted: 1,
+      solved: 1,
+      todaySolved: 1,
       todayDelta: 0,
     });
 
@@ -715,7 +792,8 @@ describe("server source of truth", () => {
     await expect(refreshed.json()).resolves.toMatchObject({
       site: SITE,
       mastered: 1,
-      attempted: 2,
+      solved: 2,
+      todaySolved: 2,
       todayDelta: 1,
     });
   });

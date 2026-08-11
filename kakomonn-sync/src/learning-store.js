@@ -1,5 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
-import { getTokyoDate, recentTokyoDates } from "./dates.js";
+import {
+  dateOrdinal,
+  getTokyoDate,
+  recentTokyoDates,
+  tokyoDateRangeMs,
+} from "./dates.js";
 import {
   createNewCard,
   masteryDelta,
@@ -85,10 +90,42 @@ function masteredCount(storage, site) {
     .toArray()[0].count;
 }
 
-function attemptedCount(storage, site) {
+function solvedCount(storage, site) {
   return storage.sql
-    .exec("SELECT COUNT(*) AS count FROM attempts WHERE site = ?", site)
+    .exec(
+      "SELECT COUNT(DISTINCT question_id) AS count FROM attempts WHERE site = ?",
+      site
+    )
     .toArray()[0].count;
+}
+
+function solvedCountsByDate(storage, site, dates) {
+  const { startMs, endMs } = tokyoDateRangeMs(dates[0], dates.at(-1));
+  const counts = new Map(
+    storage.sql
+      .exec(
+        `SELECT CAST((answered_at_ms + 32400000) / 86400000 AS INTEGER) AS date_ordinal,
+                COUNT(DISTINCT question_id) AS solved
+         FROM attempts
+         WHERE site = ? AND answered_at_ms >= ? AND answered_at_ms < ?
+         GROUP BY date_ordinal`,
+        site,
+        startMs,
+        endMs
+      )
+      .toArray()
+      .map((row) => [row.date_ordinal, row.solved])
+  );
+  return new Map(dates.map((date) => [date, counts.get(dateOrdinal(date)) ?? 0]));
+}
+
+function learningTotals(storage, site, nowMs) {
+  const today = getTokyoDate(new Date(nowMs));
+  return {
+    mastered: masteredCount(storage, site),
+    solved: solvedCount(storage, site),
+    todaySolved: solvedCountsByDate(storage, site, [today]).get(today),
+  };
 }
 
 function milestoneFor(storage, site, mastered, delta) {
@@ -115,7 +152,7 @@ function milestoneFor(storage, site, mastered, delta) {
   return mastered;
 }
 
-function attemptResponse(row, mastered = row.resulting_mastered_count) {
+function attemptResponse(row, totals) {
   return {
     attempt: {
       questionId: row.question_id,
@@ -124,7 +161,7 @@ function attemptResponse(row, mastered = row.resulting_mastered_count) {
       stability: row.resulting_stability,
       masteryDelta: row.mastery_delta,
     },
-    totals: { mastered },
+    totals,
     completedMilestone: row.completed_milestone,
   };
 }
@@ -171,7 +208,10 @@ export class LearningState extends DurableObject {
         ) {
           return { error: "operation_conflict" };
         }
-        return attemptResponse(existing, masteredCount(this.ctx.storage, site));
+        return attemptResponse(
+          existing,
+          learningTotals(this.ctx.storage, site, nowMs)
+        );
       }
 
       const catalogQuestion = this.ctx.storage.sql
@@ -229,15 +269,18 @@ export class LearningState extends DurableObject {
         mastered,
         completedMilestone
       );
-      return attemptResponse({
-        question_id: questionId,
-        result,
-        previous_stability: previousStability,
-        resulting_stability: nextCard.stability,
-        mastery_delta: delta,
-        resulting_mastered_count: mastered,
-        completed_milestone: completedMilestone,
-      });
+      return attemptResponse(
+        {
+          question_id: questionId,
+          result,
+          previous_stability: previousStability,
+          resulting_stability: nextCard.stability,
+          mastery_delta: delta,
+          resulting_mastered_count: mastered,
+          completed_milestone: completedMilestone,
+        },
+        learningTotals(this.ctx.storage, site, nowMs)
+      );
     });
   }
 
@@ -248,6 +291,12 @@ export class LearningState extends DurableObject {
     return this.ctx.storage.transactionSync(() => {
       const today = getTokyoDate(new Date(nowMs));
       const mastered = masteredCount(this.ctx.storage, site);
+      const solved = solvedCount(this.ctx.storage, site);
+      const todaySolved = solvedCountsByDate(
+        this.ctx.storage,
+        site,
+        [today]
+      ).get(today);
       const todayRow = this.ctx.storage.sql
         .exec(
           "SELECT mastered_count FROM mastery_history WHERE site = ? AND date = ?",
@@ -274,7 +323,8 @@ export class LearningState extends DurableObject {
         site,
         today,
         mastered,
-        attempted: attemptedCount(this.ctx.storage, site),
+        solved,
+        todaySolved,
         todayDelta,
         catalog:
           catalog === undefined
@@ -295,6 +345,7 @@ export class LearningState extends DurableObject {
     return this.ctx.storage.transactionSync(() => {
       const today = getTokyoDate(new Date(nowMs));
       const dates = recentTokyoDates(today, days);
+      const solvedByDate = solvedCountsByDate(this.ctx.storage, site, dates);
       const baseline = this.ctx.storage.sql
         .exec(
           `SELECT mastered_count FROM mastery_history
@@ -320,7 +371,7 @@ export class LearningState extends DurableObject {
         if (rows.has(date)) {
           mastered = rows.get(date);
         }
-        return { date, mastered };
+        return { date, mastered, solved: solvedByDate.get(date) };
       });
       return { site, timeZone: "Asia/Tokyo", today, days: history };
     });

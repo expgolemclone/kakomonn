@@ -278,6 +278,7 @@
           throw new SyncRequestError("invalid_response");
         }
         masteredCount = result.totals.mastered;
+        todaySolvedCount = result.totals.todaySolved;
         renderCount();
         if (result.completedMilestone !== null) {
           await savePendingCelebration(operation, result.completedMilestone);
@@ -526,4 +527,3 @@
     event.preventDefault();
     void handleNextQuestion();
   }
-

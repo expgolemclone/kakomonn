@@ -54,7 +54,7 @@
             <div class="mastery-meta">
               <span id="today-delta">今日 --</span>
               <span id="goal-label">目標 --</span>
-              <span>解いた問題数 <strong id="attempted-count">--</strong>問</span>
+              <span>解いた問題数 <strong id="solved-count">--</strong>問</span>
             </div>
           </section>
 
@@ -72,14 +72,20 @@
           </section>
 
           <figure class="history-card" aria-labelledby="history-title">
-            <figcaption>
-              <p class="eyebrow">7 DAY STOCK</p>
-              <h2 id="history-title">定着問題数の7日推移</h2>
+            <figcaption class="chart-heading">
+              <div>
+                <p class="eyebrow">7 DAY LEARNING</p>
+                <h2 id="history-title">定着問題数と解いた問題数の7日推移</h2>
+              </div>
+              <div class="chart-legend" aria-label="グラフの凡例">
+                <span><i class="legend-bar" aria-hidden="true"></i>定着問題数</span>
+                <span><i class="legend-line" aria-hidden="true"></i>解いた問題数</span>
+              </div>
             </figcaption>
             <div class="chart-wrap">
-              <svg id="mastery-chart" viewBox="0 0 700 260" role="img" aria-label="定着問題数の7日推移"></svg>
+              <svg id="mastery-chart" viewBox="0 0 700 270" role="img" aria-labelledby="history-chart-title history-chart-description"></svg>
             </div>
-            <p id="history-empty" class="muted" hidden>まだ定着推移はありません.</p>
+            <p id="history-empty" class="muted" hidden>まだ学習記録はありません.</p>
           </figure>
 
           <p id="dashboard-status" class="message" role="status" aria-live="polite"></p>

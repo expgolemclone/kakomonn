@@ -497,7 +497,7 @@ async function main() {
     assert.equal(await page.evaluate(() => typeof window.Audio), "function");
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
-      "定着 0問",
+      "定着 0問 / 今日 0問",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-start").count(),
@@ -1143,7 +1143,7 @@ async function main() {
       await page.waitForFunction(
         () =>
           document.querySelector("#kakomonn-reader-count").textContent ===
-          "定着 1問",
+          "定着 1問 / 今日 1問",
       );
     } catch (error) {
       error.readerState = await page.evaluate(() => ({
@@ -1182,6 +1182,8 @@ async function main() {
     await page.evaluate(() => {
       window.__syncMock.mastered = 7;
       window.__syncMock.attemptCount = 7;
+      window.__syncMock.solved = 7;
+      window.__syncMock.todaySolved = 7;
       window.__syncMock.holdNextRequest = true;
       window.dispatchEvent(new Event("focus"));
     });
@@ -1196,7 +1198,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "定着 7問",
+        "定着 7問 / 今日 7問",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
@@ -1364,7 +1366,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-count").innerText(),
-      "定着 --問",
+      "定着 --問 / 今日 --問",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").focus();
     await setupPage.keyboard.type("qwert asdfg n gg yy xz ");
@@ -1379,7 +1381,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-count").innerText(),
-      "定着 0問",
+      "定着 0問 / 今日 0問",
     );
     assert.equal(
       await setupPage.evaluate(
@@ -1554,17 +1556,19 @@ async function main() {
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "定着 1問",
+        "定着 1問 / 今日 1問",
     );
     await iosPage.evaluate(() => {
       window.__syncMock.mastered = 6;
       window.__syncMock.attemptCount = 6;
+      window.__syncMock.solved = 6;
+      window.__syncMock.todaySolved = 6;
       window.dispatchEvent(new Event("focus"));
     });
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "定着 6問",
+        "定着 6問 / 今日 6問",
     );
     assert.equal(
       await iosPage.evaluate(

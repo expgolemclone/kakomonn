@@ -145,7 +145,13 @@
   );
 
   function renderCount() {
-    countBadge.textContent = `定着 ${masteredCount === null ? "--" : masteredCount}問`;
+    const mastered = masteredCount === null ? "--" : masteredCount;
+    const todaySolved = todaySolvedCount === null ? "--" : todaySolvedCount;
+    countBadge.textContent = `定着 ${mastered}問 / 今日 ${todaySolved}問`;
+    countBadge.setAttribute(
+      "aria-label",
+      `定着問題数 ${mastered}問, 今日解いた問題数 ${todaySolved}問`
+    );
   }
 
   function setStatus(message) {
@@ -160,4 +166,3 @@
       this.status = status;
     }
   }
-

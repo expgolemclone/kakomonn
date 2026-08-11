@@ -450,6 +450,10 @@ function assertSyncState(state) {
   assert.match(state.today, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(Number.isSafeInteger(state.mastered), true);
   assert.equal(state.mastered >= 0, true);
+  assert.equal(Number.isSafeInteger(state.solved), true);
+  assert.equal(state.solved >= 0, true);
+  assert.equal(Number.isSafeInteger(state.todaySolved), true);
+  assert.equal(state.todaySolved >= 0, true);
   assert.equal(Number.isSafeInteger(state.todayDelta), true);
   assert.equal(
     state.catalog === null ||
@@ -804,7 +808,7 @@ async function configureSyncToken(
   await mcp.tool("fill", { uid: tokenInput, value: token });
   await mcp.tool("click", { uid: saveButton });
 
-  const expectedCount = `定着 ${baseline.mastered}問`;
+  const expectedCount = `定着 ${baseline.mastered}問 / 今日 ${baseline.todaySolved}問`;
   return waitUntil("the production sync baseline", async () => {
     const state = await readReaderState(mcp);
     return state.settingsHidden && state.count === expectedCount ? state : null;
@@ -1089,13 +1093,19 @@ async function main() {
       baseline,
       expectedBuildFingerprint,
     );
-    assert.equal(configuredState.count, `定着 ${baseline.mastered}問`);
+    assert.equal(
+      configuredState.count,
+      `定着 ${baseline.mastered}問 / 今日 ${baseline.todaySolved}問`,
+    );
     await submitCorrectAnswer(mcp);
     await copyMarkdownInRealEdge(mcp);
     const browserState = await clickNextQuestion(mcp);
     const finalState = await requestSyncState(token);
     assert.equal(finalState.today, baseline.today);
-    assert.equal(browserState.count, `定着 ${finalState.mastered}問`);
+    assert.equal(
+      browserState.count,
+      `定着 ${finalState.mastered}問 / 今日 ${finalState.todaySolved}問`,
+    );
     assert.equal(
       Math.abs(finalState.mastered - baseline.mastered) <= 1,
       true,

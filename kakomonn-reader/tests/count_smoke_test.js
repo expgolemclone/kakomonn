@@ -109,7 +109,14 @@ async function runQuestionIdCase(browser, startPath) {
       window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v4/next"),
     );
     await frame.waitForURL(`https://${site}/questions/456`);
-    assert.equal(await page.locator("#kakomonn-reader-count").innerText(), "定着 1問");
+    assert.equal(
+      await page.locator("#kakomonn-reader-count").innerText(),
+      "定着 1問 / 今日 1問"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-count").getAttribute("aria-label"),
+      "定着問題数 1問, 今日解いた問題数 1問"
+    );
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
@@ -164,6 +171,10 @@ async function runRetryCase(browser) {
       window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v4/next"),
     );
     await frame.waitForURL(`https://${site}/questions/456`);
+    assert.equal(
+      await page.locator("#kakomonn-reader-count").innerText(),
+      "定着 1問 / 今日 1問"
+    );
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
@@ -595,7 +606,10 @@ async function runMasteryLossCase(browser) {
       document.querySelector("#kakomonn-reader-status")?.textContent ===
       "定着 -1.出題できる問題はありません",
     );
-    assert.equal(await page.locator("#kakomonn-reader-count").innerText(), "定着 0問");
+    assert.equal(
+      await page.locator("#kakomonn-reader-count").innerText(),
+      "定着 0問 / 今日 1問"
+    );
     assert.deepEqual(errors, []);
   } finally {
     await context.close();

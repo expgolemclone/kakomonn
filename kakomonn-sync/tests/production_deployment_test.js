@@ -103,7 +103,28 @@ test("production serves only the authenticated v4 API backed by LearningState", 
     const stateBody = await stateResponse.json();
     assert.equal(stateBody.site, site);
     assert.equal(Number.isSafeInteger(stateBody.mastered), true);
-    assert.equal(Number.isSafeInteger(stateBody.attempted), true);
+    assert.equal(Number.isSafeInteger(stateBody.solved), true);
+    assert.equal(stateBody.solved >= 0, true);
+    assert.equal(Number.isSafeInteger(stateBody.todaySolved), true);
+    assert.equal(stateBody.todaySolved >= 0, true);
+    assert.equal(Object.hasOwn(stateBody, "attempted"), false);
     assert.equal(Number.isSafeInteger(stateBody.todayDelta), true);
+
+    const historyResponse = await authorizedGet(
+      `/v4/history?${new URLSearchParams({ site, days: "7" })}`,
+    );
+    assert.equal(historyResponse.status, 200);
+    const historyBody = await historyResponse.json();
+    assert.equal(historyBody.days.length, 7);
+    assert.equal(
+      historyBody.days.every(
+        (day) =>
+          Number.isSafeInteger(day.mastered) &&
+          day.mastered >= 0 &&
+          Number.isSafeInteger(day.solved) &&
+          day.solved >= 0,
+      ),
+      true,
+    );
   }
 });

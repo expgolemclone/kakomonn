@@ -13,7 +13,7 @@ const el = {
   authPanel: byId("auth-panel"), authForm: byId("auth-form"), authToken: byId("auth-token"), authMessage: byId("auth-message"),
   dashboard: byId("dashboard"), siteEmpty: byId("site-empty"), loadError: byId("load-error"), errorMessage: byId("error-message"), retryButton: byId("retry-button"),
   settingsButton: byId("settings-button"), settingsDialog: byId("settings-dialog"), settingsForm: byId("settings-form"), settingsToken: byId("settings-token"), settingsMessage: byId("settings-message"), settingsClose: byId("settings-close"), forgetToken: byId("forget-token"),
-  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), masteredCount: byId("mastered-count"), attemptedCount: byId("attempted-count"), todayDelta: byId("today-delta"), goalLabel: byId("goal-label"), dailyGoal: byId("daily-goal"), saveGoal: byId("save-goal"), goalProgress: byId("goal-progress"), masteryChart: byId("mastery-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
+  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), masteredCount: byId("mastered-count"), solvedCount: byId("solved-count"), todayDelta: byId("today-delta"), goalLabel: byId("goal-label"), dailyGoal: byId("daily-goal"), saveGoal: byId("save-goal"), goalProgress: byId("goal-progress"), masteryChart: byId("mastery-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
 };
 
 const state = { token: "", site: "", sites: [], mastery: null, history: null, settings: null };
@@ -37,10 +37,10 @@ function validSite(value) {
   return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(value);
 }
 function validState(value, site) {
-  return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && Number.isSafeInteger(value.mastered) && value.mastered >= 0 && Number.isSafeInteger(value.attempted) && value.attempted >= 0 && Number.isSafeInteger(value.todayDelta);
+  return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && Number.isSafeInteger(value.mastered) && value.mastered >= 0 && Number.isSafeInteger(value.solved) && value.solved >= 0 && Number.isSafeInteger(value.todaySolved) && value.todaySolved >= 0 && Number.isSafeInteger(value.todayDelta);
 }
 function validHistory(value, site) {
-  return value && value.site === site && Array.isArray(value.days) && value.days.length === 7 && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && Number.isSafeInteger(day.mastered) && day.mastered >= 0);
+  return value && value.site === site && Array.isArray(value.days) && value.days.length === 7 && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && Number.isSafeInteger(day.mastered) && day.mastered >= 0 && Number.isSafeInteger(day.solved) && day.solved >= 0);
 }
 function validSettings(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 1 && Number.isSafeInteger(value.dailyMasteryGoal) && value.dailyMasteryGoal >= 1 && value.dailyMasteryGoal <= 100;
@@ -81,35 +81,78 @@ function svgNode(name, attrs = {}, text = "") {
   return node;
 }
 
+function niceAxis(value) {
+  if (value <= 4) {
+    const maximum = Math.max(1, value);
+    return { maximum, divisions: maximum };
+  }
+  const targetStep = value / 4;
+  const power = 10 ** Math.floor(Math.log10(targetStep));
+  const fraction = targetStep / power;
+  const step = (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * power;
+  return { maximum: step * 4, divisions: 4 };
+}
+
+function renderAxisLabels(axis, x, className, anchor, top, bottom) {
+  for (let i = 0; i <= axis.divisions; i += 1) {
+    const yy = bottom - ((bottom - top) * i) / axis.divisions;
+    const value = (axis.maximum * i) / axis.divisions;
+    el.masteryChart.append(
+      svgNode(
+        "text",
+        { x, y: yy + 4, class: `axis-label ${className}`, "text-anchor": anchor },
+        String(value)
+      )
+    );
+  }
+}
+
 function renderChart(days) {
   el.masteryChart.replaceChildren();
-  const values = days.map((day) => day.mastered);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = Math.max(1, max - min);
-  const left = 50, right = 670, top = 24, bottom = 210;
+  const masteredValues = days.map((day) => day.mastered);
+  const solvedValues = days.map((day) => day.solved);
+  const masteredAxis = niceAxis(Math.max(...masteredValues));
+  const solvedAxis = niceAxis(Math.max(...solvedValues));
+  const left = 58, right = 642, top = 28, bottom = 218;
   const x = (index) => left + ((right - left) * index) / Math.max(1, days.length - 1);
-  const y = (value) => bottom - ((value - min) / span) * (bottom - top);
-  for (let i = 0; i < 3; i += 1) {
-    const yy = top + ((bottom - top) * i) / 2;
+  const masteredY = (value) => bottom - (value / masteredAxis.maximum) * (bottom - top);
+  const solvedY = (value) => bottom - (value / solvedAxis.maximum) * (bottom - top);
+  el.masteryChart.append(
+    svgNode("title", { id: "history-chart-title" }, "定着問題数と解いた問題数の7日推移"),
+    svgNode(
+      "desc",
+      { id: "history-chart-description" },
+      days.map((day) => `${day.date}, 定着${day.mastered}問, 解いた問題${day.solved}問`).join(". ")
+    )
+  );
+  for (let i = 0; i <= 4; i += 1) {
+    const yy = top + ((bottom - top) * i) / 4;
     el.masteryChart.append(svgNode("line", { x1: left, y1: yy, x2: right, y2: yy, class: "grid-line" }));
   }
-  const points = days.map((day, index) => `${x(index)},${y(day.mastered)}`).join(" ");
-  el.masteryChart.append(svgNode("polyline", { points, class: "stock-line", fill: "none" }));
+  renderAxisLabels(masteredAxis, left - 10, "mastery-axis-label", "end", top, bottom);
+  renderAxisLabels(solvedAxis, right + 10, "solved-axis-label", "start", top, bottom);
+  const barWidth = Math.min(50, ((right - left) / Math.max(1, days.length - 1)) * 0.56);
   days.forEach((day, index) => {
-    const xx = x(index), yy = y(day.mastered);
-    el.masteryChart.append(svgNode("circle", { cx: xx, cy: yy, r: 5, class: "stock-point" }));
-    el.masteryChart.append(svgNode("text", { x: xx, y: yy - 12, class: "value-label", "text-anchor": "middle" }, String(day.mastered)));
-    const [, month, date] = day.date.split("-");
-    el.masteryChart.append(svgNode("text", { x: xx, y: 240, class: "date-label", "text-anchor": "middle" }, `${Number(month)}/${Number(date)}`));
+    const xx = x(index), yy = masteredY(day.mastered);
+    el.masteryChart.append(svgNode("rect", { x: xx - barWidth / 2, y: yy, width: barWidth, height: bottom - yy, rx: 5, class: "mastery-bar" }));
+    el.masteryChart.append(svgNode("text", { x: xx, y: bottom - yy >= 30 ? yy + 18 : yy - 8, class: "mastery-value-label", "text-anchor": "middle" }, String(day.mastered)));
   });
-  el.historyEmpty.hidden = values.some((value) => value !== 0);
+  const solvedPoints = days.map((day, index) => `${x(index)},${solvedY(day.solved)}`).join(" ");
+  el.masteryChart.append(svgNode("polyline", { points: solvedPoints, class: "solved-line", fill: "none" }));
+  days.forEach((day, index) => {
+    const xx = x(index), yy = solvedY(day.solved);
+    el.masteryChart.append(svgNode("circle", { cx: xx, cy: yy, r: 5, class: "solved-point" }));
+    el.masteryChart.append(svgNode("text", { x: xx, y: yy - 12, class: "solved-value-label", "text-anchor": "middle" }, String(day.solved)));
+    const [, month, date] = day.date.split("-");
+    el.masteryChart.append(svgNode("text", { x: xx, y: 252, class: "date-label", "text-anchor": "middle" }, `${Number(month)}/${Number(date)}`));
+  });
+  el.historyEmpty.hidden = [...masteredValues, ...solvedValues].some((value) => value !== 0);
 }
 
 function renderDashboard() {
   const mastery = state.mastery;
   el.masteredCount.textContent = String(mastery.mastered);
-  el.attemptedCount.textContent = String(mastery.attempted);
+  el.solvedCount.textContent = String(mastery.solved);
   el.todayDelta.textContent = `今日 ${signed(mastery.todayDelta)}`;
   renderGoal();
   renderChart(state.history.days);

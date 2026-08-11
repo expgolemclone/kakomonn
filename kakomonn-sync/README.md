@@ -1,6 +1,6 @@
 # kakomonn-sync
 
-`kakomonn-reader`のサイト別の定着状態と解答履歴を端末間で共有し,直近7日間の定着問題数をgraphで表示するCloudflare Workerです. 認証済み端末へAzure Speechの短期tokenも発行します.
+`kakomonn-reader`のサイト別の定着状態と解答履歴を端末間で共有し,直近7日間の定着問題数と日別解答問題数をgraphで表示するCloudflare Workerです. 認証済み端末へAzure Speechの短期tokenも発行します.
 
 ## 学習ログ
 
@@ -52,8 +52,8 @@ npm run deploy:kakomonn-sync
 APIは`/v4`だけを提供し,LearningState Durable Objectを唯一のsource of truthとします.
 
 - `GET /v4/sites`は,問題catalogを登録済みのサイト一覧を返します.
-- `GET /v4/state?site=<host>`は,定着問題数,解答数,今日の定着純増,問題catalog情報を返します.
-- `GET /v4/history?site=<host>&days=<1-31>`は,日本時間の日別定着問題数を返します.
+- `GET /v4/state?site=<host>`は,定着問題数,解いた問題数,今日解いた問題数,今日の定着純増,問題catalog情報を返します.
+- `GET /v4/history?site=<host>&days=<1-31>`は,日本時間の日別定着問題数と解いた問題数を返します.
 - `POST /v4/attempts`は,`site`,`questionId`,`operationId`,`result`を受け取ります.同じ操作の再送は重複記録せず,異なるpayloadで同じ操作IDを使用した場合は拒否します.
 - `GET /v4/next`は,FSRSに基づく次の問題を返します.
 - `POST /v4/questions`は,siteの問題catalogを世代番号付きで置き換えます.
@@ -63,6 +63,8 @@ APIは`/v4`だけを提供し,LearningState Durable Objectを唯一のsource of 
 `kakomonn-reader`はSpeech tokenを約9分間再利用し,`ja-JP-NanamiNeural`のMP3をAzureから直接取得します.Workerは音声dataを中継せず,Workers AI,Durable Objects,R2も音声処理には使用しません.Azure Speech F0の無料枠を超過した場合は読み上げを停止し,別の音声へ切り替えません.
 
 定着問題数には現在の問題catalogに含まれるcardだけを数えます.catalogから外れたcardは再登録時に学習状態を復元できるよう保存しますが,定着数と次問候補には含めません.catalog置換で定着数が変化した場合は,その日の定着履歴へ新しい値を記録します.
+
+解いた問題数はsite内の問題IDの種類数です.同じ問題を複数回解いても累計では1問として数え,日別では同じ日に繰り返しても1問として数えます.別の日に同じ問題を解いた場合は,各日の解いた問題数へ1問ずつ数えます.正答,誤答,スキップはいずれも解答履歴へ含めます.過去に解いた問題は,現在の問題catalogから外れても累計へ含めます.
 
 ## 互換性方針
 

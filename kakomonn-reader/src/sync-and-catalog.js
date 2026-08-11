@@ -31,6 +31,10 @@
       /^\d{4}-\d{2}-\d{2}$/.test(value.today) &&
       Number.isSafeInteger(value.mastered) &&
       value.mastered >= 0 &&
+      Number.isSafeInteger(value.solved) &&
+      value.solved >= 0 &&
+      Number.isSafeInteger(value.todaySolved) &&
+      value.todaySolved >= 0 &&
       Number.isSafeInteger(value.todayDelta) &&
       validCatalog
     );
@@ -53,6 +57,10 @@
       typeof value.totals === "object" &&
       Number.isSafeInteger(value.totals.mastered) &&
       value.totals.mastered >= 0 &&
+      Number.isSafeInteger(value.totals.solved) &&
+      value.totals.solved >= 0 &&
+      Number.isSafeInteger(value.totals.todaySolved) &&
+      value.totals.todaySolved >= 0 &&
       (value.completedMilestone === null ||
         (Number.isSafeInteger(value.completedMilestone) &&
           value.completedMilestone > 0 &&
@@ -372,6 +380,7 @@
       throw new SyncRequestError("invalid_response");
     }
     masteredCount = state.mastered;
+    todaySolvedCount = state.todaySolved;
     renderCount();
   }
 
@@ -838,4 +847,3 @@
       setStatus("待機中");
     }
   }
-

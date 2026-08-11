@@ -221,6 +221,7 @@
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
   let masteredCount = null;
+  let todaySolvedCount = null;
   let syncToken = "";
   let syncReady = false;
   let syncInProgress = false;

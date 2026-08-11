@@ -7,9 +7,11 @@ const publicDir = path.resolve(__dirname, "..", "public");
 const token = "test-dashboard-token";
 const site = "chushoks.kakomonn.com";
 const otherSite = "shindans.kakomonn.com";
+const solvedHistory = [18, 22, 19, 26, 31, 24, 28];
 const history = [306, 307, 307, 309, 310, 308, 312].map((mastered, index) => ({
   date: `2026-08-${String(index + 4).padStart(2, "0")}`,
   mastered,
+  solved: solvedHistory[index],
 }));
 
 function fixtureHTML() {
@@ -86,7 +88,8 @@ async function installApiMock(page) {
             site: requestedSite,
             today: "2026-08-10",
             mastered: requestedSite === siteValue ? 312 : 99,
-            attempted: requestedSite === siteValue ? 842 : 120,
+            solved: requestedSite === siteValue ? 640 : 100,
+            todaySolved: requestedSite === siteValue ? 28 : 4,
             todayDelta: requestedSite === siteValue ? 4 : 1,
             catalog: { questionCount: 999, updatedAtMs: Date.now() },
           });
@@ -131,14 +134,21 @@ async function assertDashboard(page) {
 
   assert.equal(await page.locator("#mastery-title").innerText(), "定着問題数");
   assert.equal(await page.locator("#mastered-count").innerText(), "312");
-  assert.equal(await page.locator("#attempted-count").innerText(), "842");
-  assert.equal(await page.locator(".mastery-meta").innerText(), "今日 +4\n目標 +5\n解いた問題数 842問");
+  assert.equal(await page.locator("#solved-count").innerText(), "640");
+  assert.equal(await page.locator(".mastery-meta").innerText(), "今日 +4\n目標 +5\n解いた問題数 640問");
   assert.equal(await page.locator("#today-delta").innerText(), "今日 +4");
   assert.equal(await page.locator("#goal-label").innerText(), "目標 +5");
   assert.equal(await page.locator("#goal-progress").innerText(), "今日 +4 / +5");
-  assert.equal(await page.locator("#mastery-chart polyline.stock-line").count(), 1);
-  assert.equal(await page.locator("#mastery-chart circle.stock-point").count(), 7);
-  assert.equal(await page.locator("#mastery-chart .value-label").count(), 7);
+  assert.equal(await page.locator("#history-title").innerText(), "定着問題数と解いた問題数の7日推移");
+  assert.equal(await page.locator("#mastery-chart rect.mastery-bar").count(), 7);
+  assert.equal(await page.locator("#mastery-chart polyline.solved-line").count(), 1);
+  assert.equal(await page.locator("#mastery-chart circle.solved-point").count(), 7);
+  assert.equal(await page.locator("#mastery-chart .mastery-value-label").count(), 7);
+  assert.equal(await page.locator("#mastery-chart .solved-value-label").count(), 7);
+  assert.equal(await page.locator("#mastery-chart .mastery-axis-label").count(), 5);
+  assert.equal(await page.locator("#mastery-chart .solved-axis-label").count(), 5);
+  assert.equal(await page.locator(".chart-legend").innerText(), "定着問題数\n解いた問題数");
+  assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-10, 定着312問, 解いた問題28問/);
 
   const text = await page.locator("body").innerText();
   assert.equal(text.includes("正解数"), false);

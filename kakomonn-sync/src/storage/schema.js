@@ -79,13 +79,14 @@ export function initializeLearningSchema(storage) {
         ) WITHOUT ROWID;
       `);
     }
+    storage.sql.exec("DROP INDEX IF EXISTS attempts_by_site");
     storage.sql.exec(`
       CREATE INDEX IF NOT EXISTS cards_by_site_stability
         ON cards (site, stability);
       CREATE INDEX IF NOT EXISTS cards_by_site_due
         ON cards (site, due_ms, question_id);
-      CREATE INDEX IF NOT EXISTS attempts_by_site
-        ON attempts (site);
+      CREATE INDEX IF NOT EXISTS attempts_by_site_answered_at_question
+        ON attempts (site, answered_at_ms, question_id);
     `);
   });
 }

@@ -12,6 +12,8 @@ const AZURE_SPEECH_TOKEN = "test-azure-speech-token";
 function installSyncMockInWindow({
   initialMasteredCount,
   initialAttemptCount,
+  initialSolvedCount,
+  initialTodaySolvedCount,
   initialDate,
   expectedToken,
   expectedSite,
@@ -50,10 +52,15 @@ function installSyncMockInWindow({
       },
     ]),
   );
+  const solvedQuestionIds = new Set(
+    initialProcessedOperations.map((item) => item.questionId ?? "45124")
+  );
 
   const mock = {
     mastered: initialMasteredCount,
     attemptCount: initialAttemptCount,
+    solved: initialSolvedCount,
+    todaySolved: initialTodaySolvedCount,
     date: initialDate,
     token: expectedToken,
     calls: [],
@@ -79,6 +86,8 @@ function installSyncMockInWindow({
     site: expectedSite,
     today: mock.date,
     mastered: mock.mastered,
+    solved: mock.solved,
+    todaySolved: mock.todaySolved,
     todayDelta: 0,
     catalog:
       mock.catalogQuestionCount === null
@@ -295,6 +304,11 @@ function installSyncMockInWindow({
           }
           if (item === undefined) {
             mock.attemptCount += 1;
+            if (!solvedQuestionIds.has(questionId)) {
+              solvedQuestionIds.add(questionId);
+              mock.solved += 1;
+              mock.todaySolved += 1;
+            }
             const delta = mock.nextMasteryDelta;
             mock.nextMasteryDelta = 0;
             mock.mastered += delta;
@@ -323,7 +337,11 @@ function installSyncMockInWindow({
               stability: item.stability,
               masteryDelta: item.masteryDelta,
             },
-            totals: { mastered: item.resultingMastered },
+            totals: {
+              mastered: mock.mastered,
+              solved: mock.solved,
+              todaySolved: mock.todaySolved,
+            },
             completedMilestone: item.completedMilestone,
           });
           return;
@@ -354,6 +372,8 @@ function installSyncMockInWindow({
 function createSyncMockConfiguration({
   mastered = 0,
   attemptCount = 0,
+  solved = attemptCount,
+  todaySolved = solved,
   date = "2026-08-10",
   token = "test-sync-token",
   configured = true,
@@ -370,6 +390,8 @@ function createSyncMockConfiguration({
   return {
     initialMasteredCount: mastered,
     initialAttemptCount: attemptCount,
+    initialSolvedCount: solved,
+    initialTodaySolvedCount: todaySolved,
     initialDate: date,
     expectedToken: token,
     expectedSite: site,

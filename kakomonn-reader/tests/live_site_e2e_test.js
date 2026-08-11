@@ -370,7 +370,7 @@ async function runCase(
     await waitForSyncReady(page);
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
-      "定着 0問",
+      "定着 0問 / 今日 0問",
     );
     assert.deepEqual(
       await frame.locator("body").evaluate((body) => {
@@ -490,7 +490,7 @@ async function runCase(
       await page.waitForFunction(
         () =>
           document.querySelector("#kakomonn-reader-count")?.textContent ===
-          "定着 1問",
+          "定着 1問 / 今日 1問",
         null,
         { timeout: 10_000 },
       );
@@ -498,7 +498,7 @@ async function runCase(
       await page.waitForTimeout(1_500);
       assert.equal(
         await page.locator("#kakomonn-reader-count").innerText(),
-        "定着 0問",
+        "定着 0問 / 今日 1問",
       );
     }
 

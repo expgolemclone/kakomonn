@@ -214,7 +214,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count")?.textContent ===
-        "定着 0問",
+        "定着 0問 / 今日 0問",
     );
     assert.deepEqual(
       await childFrame.evaluate(() => {
@@ -453,7 +453,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count")?.textContent ===
-        "定着 1問",
+        "定着 1問 / 今日 1問",
     );
     assert.equal(
       await page.evaluate(

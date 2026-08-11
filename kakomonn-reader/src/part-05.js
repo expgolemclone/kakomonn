@@ -243,7 +243,7 @@
           await savePendingCelebration(operation, result.completedMilestone);
         }
 
-        const next = await requestNextQuestion(syncToken);
+        const next = await requestNextQuestion(syncToken, operation.questionId);
         syncReady = true;
         navigationInProgress = false;
         if (result.attempt.masteryDelta === 1) {

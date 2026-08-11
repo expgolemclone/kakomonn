@@ -67,7 +67,10 @@ const mockBody = `
       ></div>
     </div>
   </div>
-  <div class="problem_detail">
+  <div id="mock-page-header" style="height: 360px">ページ上部</div>
+  <div class="sect_problem">
+    <div class="ttl_box03"><h2 class="main">問題</h2></div>
+    <div class="problem_detail">
     <p class="when">
       中小企業診断士試験 令和2年度（2020年） 問19（経済学・経済政策 問19）
       <span><a href="#report">（訂正依頼・報告はこちら）</a></span>
@@ -91,20 +94,27 @@ const mockBody = `
       <li><label><input type="radio" name="answer">2</label></li>
     </ul>
     <button type="button">解答する</button>
-    <input id="shortcut-text-input" type="text">
+      <input id="shortcut-text-input" type="text">
+      <div class="answer-right">
+        <p id="correct-result" hidden>正解！素晴らしいです</p>
+      </div>
+      <div class="answer-mistake">
+        <p id="incorrect-result" hidden>残念...</p>
+      </div>
+      <div id="explst"></div>
+    </div>
   </div>
-  <p id="correct-result" hidden>正解！素晴らしいです</p>
-  <p id="incorrect-result" hidden>残念...</p>
-  <h2>この過去問の解説</h2>
-  <div>解答結果</div>
-  <div id="js-answer-result-box"></div>
-  <div id="js-commentary-wrap">
+  <div class="sect_commentary">
+    <h2>この過去問の解説</h2>
+    <div>解答結果</div>
+    <div id="js-answer-result-box"></div>
+    <div id="js-commentary-wrap">
     <div class="item">
-      <p class="none_text" id="explanation-lock">
+      <p class="none_text" id="explanation-lock" style="display:none">
         解説は問題に回答すると<br>表示されます。
       </p>
       <p class="num"><span>01</span></p>
-      <div class="text" id="explanation" hidden>
+      <div class="text" id="explanation">
         <div class="expound-top">
           <p>これは動作確認用の解説です.</p>
           <figure>
@@ -123,11 +133,11 @@ const mockBody = `
     <div class="advertisement-label">Advertisement</div>
     <div class="advertisement-box"></div>
     <div class="item">
-      <p class="none_text">
+      <p class="none_text" style="display:none">
         解説は問題に回答すると<br>表示されます。
       </p>
       <p class="num"><span>02</span></p>
-      <div class="text" hidden>
+      <div class="text">
         <div class="expound-top">
           <p>これは二つ目の解説です.</p>
           <figure>
@@ -141,6 +151,7 @@ const mockBody = `
           </figure>
         </div>
       </div>
+    </div>
     </div>
   </div>
   <a href="#report">（訂正依頼・報告はこちら）</a>
@@ -406,6 +417,34 @@ async function main() {
     const page = await context.newPage();
     const errors = await preparePage(page, "audio");
     const childFrame = await loadMockQuestion(page, script);
+    const initialProblemPresentation = await childFrame.evaluate(() => {
+      const problemHeading = document.querySelector(
+        ".sect_problem > .ttl_box03 > h2.main",
+      );
+      return {
+        answerRightDisplay: getComputedStyle(
+          document.querySelector(".answer-right"),
+        ).display,
+        commentaryDisplay: getComputedStyle(
+          document.querySelector(".sect_commentary"),
+        ).display,
+        explanationText: document.querySelector("#explanation").textContent,
+        headingTop: problemHeading.getBoundingClientRect().top,
+        phase: document.documentElement.dataset.kakomonnReaderPhase,
+        scrollY: window.scrollY,
+      };
+    });
+    assert.equal(initialProblemPresentation.answerRightDisplay, "none");
+    assert.equal(initialProblemPresentation.commentaryDisplay, "none");
+    assert.equal(
+      initialProblemPresentation.explanationText.includes(
+        "これは動作確認用の解説です.",
+      ),
+      true,
+    );
+    assert.equal(Math.abs(initialProblemPresentation.headingTop) <= 1, true);
+    assert.equal(initialProblemPresentation.phase, "question");
+    assert.equal(initialProblemPresentation.scrollY > 300, true);
     assert.equal(await page.evaluate(() => typeof window.Audio), "function");
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
@@ -805,6 +844,9 @@ async function main() {
 
     const shortcutTextInput = childFrame.locator("#shortcut-text-input");
     await shortcutTextInput.focus();
+    const scrollBeforeTextInput = await childFrame
+      .locator("body")
+      .evaluate(() => window.scrollY);
     await page.keyboard.type("qwert asdfg sk gg yy xz ");
     assert.equal(
       await shortcutTextInput.inputValue(),
@@ -815,7 +857,7 @@ async function main() {
       choice.classList.contains("is-active")), false);
     assert.equal(
       await childFrame.locator("body").evaluate(() => window.scrollY),
-      100,
+      scrollBeforeTextInput,
     );
     assert.equal(
       await childFrame.evaluate(() => window.__answerButtonClicks),
@@ -885,6 +927,15 @@ async function main() {
     );
     await page.waitForFunction(
       () => document.querySelector("#kakomonn-reader-next").disabled === false,
+    );
+    assert.deepEqual(
+      await childFrame.evaluate(() => ({
+        commentaryDisplay: getComputedStyle(
+          document.querySelector(".sect_commentary"),
+        ).display,
+        phase: document.documentElement.dataset.kakomonnReaderPhase ?? null,
+      })),
+      { commentaryDisplay: "block", phase: null },
     );
     await page.waitForFunction(
       (url) =>

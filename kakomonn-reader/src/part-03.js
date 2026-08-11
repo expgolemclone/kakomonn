@@ -104,7 +104,9 @@
 
   function extractReadableSections() {
     const lines = getVisibleLines();
-    const explanationLocked = hasVisibleExplanationLock(lines);
+    const explanationLocked =
+      getCurrentAnswerResult() === "unknown" ||
+      hasVisibleExplanationLock(lines);
 
     return {
       questionText: extractQuestionText(),

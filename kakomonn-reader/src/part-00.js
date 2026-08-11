@@ -50,7 +50,7 @@
   const SPEECH_TIMEOUT_MS = 30000;
   const FRAME_LOAD_DELAY_MS = 900;
   const EXPLANATION_CHANGE_DELAY_MS = 700;
-  const FRAME_SCROLL_RESET_DELAYS_MS = [0, 120, 600];
+  const FRAME_PROBLEM_SCROLL_DELAYS_MS = [0, 120, 600];
   const COPY_FEEDBACK_DURATION_MS = 1400;
   const SHORTCUT_SEQUENCE_TIMEOUT_MS = 400;
   const TIME_LIMIT_MS = 5 * 60 * 1000;
@@ -119,6 +119,13 @@
     #js-commentary-wrap > .item > .text,
     #js-commentary-wrap > .item > .reference {
       background-color: var(--kakomonn-frame-raised) !important;
+    }
+
+    :root[data-kakomonn-reader-phase="question"] .answer-right,
+    :root[data-kakomonn-reader-phase="question"] .answer-mistake,
+    :root[data-kakomonn-reader-phase="question"] #explst,
+    :root[data-kakomonn-reader-phase="question"] .sect_commentary {
+      display: none !important;
     }
 
     .problem_detail > ul.list > li.is-active > div,
@@ -206,7 +213,7 @@
   let timeLimitTimeout = null;
   let timeLimitInterval = null;
   let timeLimitSourceDocument = null;
-  let frameScrollResetTimers = [];
+  let frameProblemScrollTimers = [];
   let copyFeedbackTimer = null;
   let frameMutationObserver = null;
   let lastExplanationText = "";

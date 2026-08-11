@@ -397,6 +397,51 @@ async function runCase(
         toggleCount: 0,
       },
     );
+    await page.waitForFunction(
+      () => {
+        const documentNode = document.querySelector(
+          "#kakomonn-reader-frame",
+        )?.contentDocument;
+        const problemHeading = documentNode?.querySelector(
+          ".sect_problem > .ttl_box03 > h2.main",
+        );
+        return (
+          documentNode?.documentElement.dataset.kakomonnReaderPhase ===
+            "question" &&
+          problemHeading?.textContent.trim() === "問題" &&
+          Math.abs(problemHeading.getBoundingClientRect().top) <= 1
+        );
+      },
+      null,
+      { timeout: readerReadyTimeout },
+    );
+    const initialPresentation = await frame.locator("body").evaluate((body) => {
+      const documentNode = body.ownerDocument;
+      return {
+        answerDisplay: getComputedStyle(
+          documentNode.querySelector(".answer-right"),
+        ).display,
+        commentaryDisplay: getComputedStyle(
+          documentNode.querySelector(".sect_commentary"),
+        ).display,
+        explanationExists:
+          documentNode.querySelector("#js-commentary-wrap .text") !== null,
+        scrollY: documentNode.defaultView.scrollY,
+      };
+    });
+    assert.deepEqual(
+      {
+        answerDisplay: initialPresentation.answerDisplay,
+        commentaryDisplay: initialPresentation.commentaryDisplay,
+        explanationExists: initialPresentation.explanationExists,
+      },
+      {
+        answerDisplay: "none",
+        commentaryDisplay: "none",
+        explanationExists: true,
+      },
+    );
+    assert.equal(initialPresentation.scrollY > 0, true);
 
     await submitAnswer(page, frame, answerText, inputMethod);
     console.log(JSON.stringify({ phase: "answer-submitted", answerText }));

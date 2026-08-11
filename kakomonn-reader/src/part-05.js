@@ -57,8 +57,8 @@
     nextQuestionButton.disabled = !answeredQuestionCanSync();
   }
 
-  function getCurrentAnswerResult() {
-    const resultBox = frameDocument?.querySelector("#js-answer-result-box");
+  function answerResultFromDocument(documentNode) {
+    const resultBox = documentNode?.querySelector("#js-answer-result-box");
     if (resultBox === null || resultBox === undefined) {
       return "unknown";
     }
@@ -68,6 +68,28 @@
       return "unknown";
     }
     return correctResult ? "correct" : "incorrect";
+  }
+
+  function getCurrentAnswerResult() {
+    return answerResultFromDocument(frameDocument);
+  }
+
+  function synchronizeAnswerPresentation(
+    sourceDocument = frameDocument
+  ) {
+    if (
+      sourceDocument?.documentElement === undefined ||
+      frameDocument !== sourceDocument
+    ) {
+      return;
+    }
+
+    if (answerResultFromDocument(sourceDocument) === "unknown") {
+      sourceDocument.documentElement.dataset.kakomonnReaderPhase = "question";
+      return;
+    }
+
+    delete sourceDocument.documentElement.dataset.kakomonnReaderPhase;
   }
 
   function createOperationId() {
@@ -782,7 +804,7 @@
       explanationTimer = null;
     }
 
-    clearFrameScrollResetTimers();
+    clearFrameProblemScrollTimers();
     clearCopyFeedbackTimer();
     frameMutationObserver?.disconnect();
     frameMutationObserver = null;
@@ -825,7 +847,7 @@
     }
 
     if (nextDocument === boundFrameDocument) {
-      scheduleFrameScrollReset(nextDocument);
+      scheduleFrameProblemScroll(nextDocument);
       return;
     }
 
@@ -833,8 +855,9 @@
     boundFrameDocument = nextDocument;
     navigationInProgress = false;
     frameDocument = nextDocument;
+    synchronizeAnswerPresentation(frameDocument);
     applyFrameDarkMode(frameDocument);
-    scheduleFrameScrollReset(frameDocument);
+    scheduleFrameProblemScroll(frameDocument);
     frame.contentWindow.addEventListener("click", onFrameClick, true);
     frame.contentWindow.addEventListener(
       "keydown",

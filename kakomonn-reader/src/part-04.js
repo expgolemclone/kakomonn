@@ -16,7 +16,11 @@
   }
 
   function checkForNewExplanation() {
-    if (!speechEnabled || !currentQuestionText) {
+    if (
+      !speechEnabled ||
+      !currentQuestionText ||
+      getCurrentAnswerResult() === "unknown"
+    ) {
       return;
     }
 
@@ -54,7 +58,10 @@
 
   function observeExplanationChanges() {
     frameMutationObserver?.disconnect();
-    frameMutationObserver = new MutationObserver(scheduleExplanationCheck);
+    frameMutationObserver = new MutationObserver(() => {
+      synchronizeAnswerPresentation();
+      scheduleExplanationCheck();
+    });
     frameMutationObserver.observe(frameDocument.body, {
       subtree: true,
       childList: true,
@@ -208,12 +215,12 @@
     void handleNextQuestion();
   }
 
-  function clearFrameScrollResetTimers() {
-    for (const timer of frameScrollResetTimers) {
+  function clearFrameProblemScrollTimers() {
+    for (const timer of frameProblemScrollTimers) {
       clearTimeout(timer);
     }
 
-    frameScrollResetTimers = [];
+    frameProblemScrollTimers = [];
   }
 
   function resetFrameScrollToTop(sourceDocument = frameDocument) {
@@ -244,22 +251,68 @@
     }
   }
 
-  function scheduleFrameScrollReset(sourceDocument = frameDocument) {
-    clearFrameScrollResetTimers();
+  function findProblemHeading(sourceDocument) {
+    const headings = sourceDocument.querySelectorAll(
+      ".sect_problem > .ttl_box03 > h2.main"
+    );
+    return (
+      Array.from(headings).find(
+        (heading) => normalizeInlineText(heading.textContent ?? "") === "問題"
+      ) ?? null
+    );
+  }
 
-    for (const delay of FRAME_SCROLL_RESET_DELAYS_MS) {
+  function scrollFrameToProblemHeading(sourceDocument = frameDocument) {
+    if (
+      !sourceDocument?.body ||
+      frameDocument !== sourceDocument ||
+      !frame.contentWindow
+    ) {
+      return false;
+    }
+
+    const problemHeading = findProblemHeading(sourceDocument);
+    if (problemHeading === null) {
+      return false;
+    }
+
+    try {
+      const frameWindow = frame.contentWindow;
+      if ("scrollRestoration" in frameWindow.history) {
+        frameWindow.history.scrollRestoration = "manual";
+      }
+
+      const activeElement = sourceDocument.activeElement;
+      if (activeElement instanceof frameWindow.HTMLElement) {
+        activeElement.blur();
+      }
+
+      const headingTop =
+        frameWindow.scrollY + problemHeading.getBoundingClientRect().top;
+      frameWindow.scrollTo({ behavior: "auto", left: 0, top: headingTop });
+      return true;
+    } catch {
+      setStatus("問題の位置へ移動できません");
+      return false;
+    }
+  }
+
+  function scheduleFrameProblemScroll(sourceDocument = frameDocument) {
+    clearFrameProblemScrollTimers();
+
+    for (const delay of FRAME_PROBLEM_SCROLL_DELAYS_MS) {
       if (delay === 0) {
-        resetFrameScrollToTop(sourceDocument);
+        scrollFrameToProblemHeading(sourceDocument);
         continue;
       }
 
       const timer = window.setTimeout(() => {
-        frameScrollResetTimers = frameScrollResetTimers.filter(
+        frameProblemScrollTimers = frameProblemScrollTimers.filter(
           (scheduledTimer) => scheduledTimer !== timer
         );
-        resetFrameScrollToTop(sourceDocument);
+        scrollFrameToProblemHeading(sourceDocument);
       }, delay);
-      frameScrollResetTimers.push(timer);
+      frameProblemScrollTimers.push(timer);
     }
   }
 
@@ -532,7 +585,10 @@
       return { state: "unavailable", markdown: "" };
     }
 
-    if (hasVisibleExplanationLock(getVisibleLines())) {
+    if (
+      answerResultFromDocument(documentNode) === "unknown" ||
+      hasVisibleExplanationLock(getVisibleLines())
+    ) {
       return { state: "locked", markdown: "" };
     }
 

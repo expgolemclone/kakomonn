@@ -37,6 +37,7 @@ async function installApiMock(page) {
         ["kakomonn-dashboard.sync-token", tokenValue],
         ["kakomonn-dashboard.site", siteValue],
       ]);
+      let settingsValue = { dailyMasteryGoal: 5 };
       Object.defineProperty(window, "localStorage", {
         configurable: true,
         value: {
@@ -55,6 +56,7 @@ async function installApiMock(page) {
         window.__apiCalls.push({
           pathname: url.pathname,
           search: url.search,
+          method: init.method ?? "GET",
           authorization: headers.get("Authorization"),
         });
         const respond = (status, body) =>
@@ -85,6 +87,13 @@ async function installApiMock(page) {
             today: "2026-08-10",
             days: historyValue,
           });
+        }
+        if (url.pathname === "/v4/settings" && (init.method ?? "GET") === "GET") {
+          return respond(200, settingsValue);
+        }
+        if (url.pathname === "/v4/settings" && init.method === "PUT") {
+          settingsValue = JSON.parse(init.body);
+          return respond(200, settingsValue);
         }
         return respond(404, { error: "not_found" });
       };
@@ -123,16 +132,20 @@ async function assertDashboard(page) {
   assert.equal(calls.some((call) => call.pathname.startsWith("/v3/")), false);
   assert.equal(calls.filter((call) => call.pathname === "/v4/state").length, 1);
   assert.equal(calls.filter((call) => call.pathname === "/v4/history").length, 1);
+  assert.equal(calls.filter((call) => call.pathname === "/v4/settings" && call.method === "GET").length, 1);
   assert.deepEqual(errors, []);
 
   await page.locator("#daily-goal").fill("7");
   await page.locator("#save-goal").click();
+  await page.waitForFunction(() => document.querySelector("#goal-label")?.textContent === "目標 +7");
   assert.equal(await page.locator("#goal-label").innerText(), "目標 +7");
   assert.equal(await page.locator("#goal-progress").innerText(), "今日 +4 / +7");
   assert.equal(
     await page.evaluate(() => localStorage.getItem("今日の定着純増目標")),
-    "7",
+    null,
   );
+  const updatedCalls = await page.evaluate(() => window.__apiCalls);
+  assert.equal(updatedCalls.filter((call) => call.pathname === "/v4/settings" && call.method === "PUT").length, 1);
 }
 
 async function main() {

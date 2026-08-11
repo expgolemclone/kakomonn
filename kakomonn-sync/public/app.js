@@ -1,7 +1,5 @@
 const TOKEN_KEY = "kakomonn-dashboard.sync-token";
 const SITE_KEY = "kakomonn-dashboard.site";
-const GOAL_KEY = "今日の定着純増目標";
-const DEFAULT_GOAL = 5;
 const API_TIMEOUT_MS = 15000;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -18,7 +16,7 @@ const el = {
   siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), masteredCount: byId("mastered-count"), attemptedCount: byId("attempted-count"), todayDelta: byId("today-delta"), goalLabel: byId("goal-label"), dailyGoal: byId("daily-goal"), saveGoal: byId("save-goal"), goalProgress: byId("goal-progress"), masteryChart: byId("mastery-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
 };
 
-const state = { token: "", site: "", sites: [], mastery: null, history: null };
+const state = { token: "", site: "", sites: [], mastery: null, history: null, settings: null };
 
 class DashboardError extends Error {
   constructor(code, status = 0) { super(code); this.code = code; this.status = status; }
@@ -43,33 +41,32 @@ function validState(value, site) {
 function validHistory(value, site) {
   return value && value.site === site && Array.isArray(value.days) && value.days.length === 7 && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && Number.isSafeInteger(day.mastered) && day.mastered >= 0);
 }
+function validSettings(value) {
+  return value && Object.keys(value).length === 1 && Number.isSafeInteger(value.dailyMasteryGoal) && value.dailyMasteryGoal >= 1 && value.dailyMasteryGoal <= 100;
+}
 
-async function requestJSON(path, token) {
+async function requestJSON(path, token, { method = "GET", body } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   let response;
   try {
-    response = await fetch(path, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: controller.signal });
+    const headers = { Authorization: `Bearer ${token}` };
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    response = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: controller.signal });
   } catch (error) {
     throw new DashboardError(error?.name === "AbortError" ? "timeout" : "network_error");
   } finally {
     clearTimeout(timer);
   }
-  let body;
-  try { body = await response.json(); } catch { throw new DashboardError("invalid_response", response.status); }
-  if (!response.ok) throw new DashboardError(typeof body?.error === "string" ? body.error : "request_failed", response.status);
-  return body;
+  let responseBody;
+  try { responseBody = await response.json(); } catch { throw new DashboardError("invalid_response", response.status); }
+  if (!response.ok) throw new DashboardError(typeof responseBody?.error === "string" ? responseBody.error : "request_failed", response.status);
+  return responseBody;
 }
 
 function signed(value) { return `${value >= 0 ? "+" : ""}${value}`; }
-function readGoal() {
-  const raw = storageGet(GOAL_KEY);
-  if (raw === null) return DEFAULT_GOAL;
-  const value = Number(raw);
-  return Number.isSafeInteger(value) && value >= 1 && value <= 100 ? value : DEFAULT_GOAL;
-}
 function renderGoal() {
-  const goal = readGoal();
+  const goal = state.settings.dailyMasteryGoal;
   const delta = state.mastery?.todayDelta ?? 0;
   el.dailyGoal.value = String(goal);
   el.goalLabel.textContent = `目標 +${goal}`;
@@ -141,12 +138,13 @@ async function loadSites(token) {
 
 async function loadSelectedSite() {
   const parameters = new URLSearchParams({ site: state.site });
-  const [mastery, history] = await Promise.all([
+  const [mastery, history, settings] = await Promise.all([
     requestJSON(`/v4/state?${parameters}`, state.token),
     requestJSON(`/v4/history?${new URLSearchParams({ site: state.site, days: "7" })}`, state.token),
+    requestJSON("/v4/settings", state.token),
   ]);
-  if (!validState(mastery, state.site) || !validHistory(history, state.site)) throw new DashboardError("invalid_response");
-  state.mastery = mastery; state.history = history;
+  if (!validState(mastery, state.site) || !validHistory(history, state.site) || !validSettings(settings)) throw new DashboardError("invalid_response");
+  state.mastery = mastery; state.history = history; state.settings = settings;
   renderDashboard();
 }
 
@@ -185,10 +183,20 @@ el.siteSelect.addEventListener("change", async () => {
 });
 el.refreshButton.addEventListener("click", async () => { try { await loadSelectedSite(); } catch (error) { showError(error); } });
 el.retryButton.addEventListener("click", async () => { try { await connect(state.token, { persist: false }); } catch (error) { showError(error); } });
-el.saveGoal.addEventListener("click", () => {
+el.saveGoal.addEventListener("click", async () => {
   const goal = Number(el.dailyGoal.value);
   if (!Number.isSafeInteger(goal) || goal < 1 || goal > 100) { el.dashboardStatus.textContent = "目標は1から100の整数で入力してください."; return; }
-  storageSet(GOAL_KEY, String(goal)); renderGoal(); el.dashboardStatus.textContent = "今日の定着純増目標を保存しました.";
+  el.saveGoal.disabled = true;
+  el.dashboardStatus.textContent = "目標を同期中";
+  try {
+    const settings = await requestJSON("/v4/settings", state.token, { method: "PUT", body: { dailyMasteryGoal: goal } });
+    if (!validSettings(settings)) throw new DashboardError("invalid_response");
+    state.settings = settings; renderGoal(); el.dashboardStatus.textContent = "今日の定着純増目標を同期しました.";
+  } catch (error) {
+    el.dashboardStatus.textContent = error?.code === "unauthorized" ? "同期tokenを確認してください." : "目標を同期できませんでした.";
+  } finally {
+    el.saveGoal.disabled = false;
+  }
 });
 
 el.settingsButton.addEventListener("click", () => { el.settingsMessage.textContent = ""; el.settingsToken.value = ""; el.settingsDialog.showModal(); });
@@ -199,7 +207,7 @@ el.settingsForm.addEventListener("submit", async (event) => {
   try { await connect(token); el.settingsDialog.close(); } catch (error) { el.settingsMessage.textContent = error?.code === "unauthorized" ? "同期tokenが正しくありません." : "tokenを変更できませんでした."; }
 });
 el.forgetToken.addEventListener("click", () => {
-  storageRemove(TOKEN_KEY); storageRemove(SITE_KEY); state.token = ""; state.site = ""; state.sites = []; state.mastery = null; state.history = null;
+  storageRemove(TOKEN_KEY); storageRemove(SITE_KEY); state.token = ""; state.site = ""; state.sites = []; state.mastery = null; state.history = null; state.settings = null;
   el.settingsDialog.close(); el.settingsButton.hidden = true; el.dashboard.hidden = true; el.siteEmpty.hidden = true; el.loadError.hidden = true; el.authPanel.hidden = false;
 });
 

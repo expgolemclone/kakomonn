@@ -9,9 +9,11 @@ import { isSite } from "./auth.js";
 
 export const LEARNING_STATE_OBJECT_NAME = "primary";
 export const MASTERY_MILESTONE_INTERVAL = 50;
+export const DEFAULT_DAILY_MASTERY_GOAL = 5;
 export const OPERATION_ID_PATTERN = /^[0-9a-f]{32}$/;
 export const QUESTION_ID_PATTERN = /^\d+$/;
 const ANSWER_RESULTS = new Set(["correct", "incorrect"]);
+const SETTINGS_STORAGE_KEY = "settings";
 
 function tableDefinition(storage, tableName) {
   return storage.sql
@@ -394,6 +396,38 @@ export class LearningState extends DurableObject {
       });
       return { site, timeZone: "Asia/Tokyo", today, days: history };
     });
+  }
+
+  async getSettings() {
+    const settings = await this.ctx.storage.get(SETTINGS_STORAGE_KEY);
+    if (settings === undefined) {
+      return { dailyMasteryGoal: DEFAULT_DAILY_MASTERY_GOAL };
+    }
+    if (
+      settings === null ||
+      typeof settings !== "object" ||
+      Array.isArray(settings) ||
+      Object.keys(settings).length !== 1 ||
+      !Number.isSafeInteger(settings.dailyMasteryGoal) ||
+      settings.dailyMasteryGoal < 1 ||
+      settings.dailyMasteryGoal > 100
+    ) {
+      throw new Error("invalid LearningState settings");
+    }
+    return settings;
+  }
+
+  async updateSettings(dailyMasteryGoal) {
+    if (
+      !Number.isSafeInteger(dailyMasteryGoal) ||
+      dailyMasteryGoal < 1 ||
+      dailyMasteryGoal > 100
+    ) {
+      throw new TypeError("invalid settings");
+    }
+    const settings = { dailyMasteryGoal };
+    await this.ctx.storage.put(SETTINGS_STORAGE_KEY, settings);
+    return settings;
   }
 
   nextQuestion(site, nowMs = Date.now(), excludeQuestionId = null) {

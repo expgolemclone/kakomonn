@@ -9,7 +9,6 @@
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "none",
     "run_worker_first": [
-      "/v3/*",
       "/v4/*"
     ]
   },
@@ -19,27 +18,19 @@
   "durable_objects": {
     "bindings": [
       {
-        "name": "DAILY_COUNT",
-        "class_name": "DailyCount"
-      },
-      {
         "name": "LEARNING_STATE",
         "class_name": "LearningState"
       }
     ]
   },
-  "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": [
-        "DailyCount"
-      ]
+  "exports": {
+    "DailyCount": {
+      "type": "durable-object",
+      "state": "deleted"
     },
-    {
-      "tag": "v2",
-      "new_sqlite_classes": [
-        "LearningState"
-      ]
+    "LearningState": {
+      "type": "durable-object",
+      "storage": "sqlite"
     }
-  ]
+  }
 }

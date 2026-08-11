@@ -36,6 +36,7 @@ async function reset() {
     }
   });
   await raw.replaceCatalog(SITE, ["1", "2", "3", "4"], 0, NOW);
+  await raw.updateSettings(5);
 }
 
 async function seedReviewCard(
@@ -381,6 +382,83 @@ describe("mastery history and milestones", () => {
 
 
 describe("v4 HTTP contract", () => {
+  it("shares the daily mastery goal between independent clients", async () => {
+    const fresh = env.LEARNING_STATE.get(
+      env.LEARNING_STATE.idFromName("settings-default")
+    );
+    await expect(fresh.getSettings()).resolves.toEqual({ dailyMasteryGoal: 5 });
+
+    const firstClient = await SELF.fetch("https://example.test/v4/settings", {
+      headers: AUTHORIZATION,
+    });
+    expect(firstClient.status).toBe(200);
+    await expect(firstClient.json()).resolves.toEqual({ dailyMasteryGoal: 5 });
+
+    const update = await SELF.fetch("https://example.test/v4/settings", {
+      method: "PUT",
+      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+      body: JSON.stringify({ dailyMasteryGoal: 12 }),
+    });
+    expect(update.status).toBe(200);
+    await expect(update.json()).resolves.toEqual({ dailyMasteryGoal: 12 });
+
+    const secondClient = await SELF.fetch("https://example.test/v4/settings", {
+      headers: AUTHORIZATION,
+    });
+    expect(secondClient.status).toBe(200);
+    await expect(secondClient.json()).resolves.toEqual({ dailyMasteryGoal: 12 });
+  });
+
+  it("rejects invalid settings requests", async () => {
+    for (const body of [
+      { dailyMasteryGoal: 0 },
+      { dailyMasteryGoal: 101 },
+      { dailyMasteryGoal: 1.5 },
+      { dailyMasteryGoal: 5, extra: true },
+    ]) {
+      const response = await SELF.fetch("https://example.test/v4/settings", {
+        method: "PUT",
+        headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({ error: "invalid_request" });
+    }
+
+    const query = await SELF.fetch("https://example.test/v4/settings?extra=1", {
+      headers: AUTHORIZATION,
+    });
+    expect(query.status).toBe(400);
+    await expect(query.json()).resolves.toEqual({ error: "invalid_request" });
+
+    const method = await SELF.fetch("https://example.test/v4/settings", {
+      method: "POST",
+      headers: AUTHORIZATION,
+    });
+    expect(method.status).toBe(405);
+    expect(method.headers.get("Allow")).toBe("GET, PUT");
+  });
+
+  it("does not expose removed API versions", async () => {
+    const response = await SELF.fetch(`https://example.test/v3/state?site=${SITE}`, {
+      headers: AUTHORIZATION,
+    });
+    expect(response.status).toBe(404);
+  });
+
+  it("requires the configured bearer token", async () => {
+    const url = "https://example.test/v4/sites";
+    const missing = await SELF.fetch(url);
+    const incorrect = await SELF.fetch(url, {
+      headers: { Authorization: "Bearer incorrect-token" },
+    });
+
+    expect(missing.status).toBe(401);
+    await expect(missing.json()).resolves.toEqual({ error: "unauthorized" });
+    expect(incorrect.status).toBe(401);
+    await expect(incorrect.json()).resolves.toEqual({ error: "unauthorized" });
+  });
+
   it("lists catalog-backed sites and returns state and history", async () => {
     const sites = await SELF.fetch("https://example.test/v4/sites", {
       headers: AUTHORIZATION,

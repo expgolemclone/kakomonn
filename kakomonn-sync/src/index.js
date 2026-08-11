@@ -1,11 +1,3 @@
-import {
-  DailyCount,
-  getTokyoDate,
-  handleRequest as handleV3Request,
-  historyRangeFor,
-  initializeSchema,
-  issueSpeechToken as issueV3SpeechToken,
-} from "./legacy-v3.js";
 import { LearningState, getLearningStateStub } from "./learning-store.js";
 import { isAuthorized } from "./auth.js";
 import { errorResponse, jsonResponse } from "./http.js";
@@ -14,37 +6,33 @@ import { handleState } from "./api-state.js";
 import { handleHistory } from "./api-history.js";
 import { handleNext } from "./api-next.js";
 import { handleQuestions } from "./api-questions.js";
-import { issueSpeechToken as issueV4SpeechToken } from "./speech.js";
+import { handleSettings } from "./api-settings.js";
+import { issueSpeechToken } from "./speech.js";
 
-export {
-  DailyCount,
-  LearningState,
-  getTokyoDate,
-  historyRangeFor,
-  initializeSchema,
-  issueV3SpeechToken,
-};
-export const issueSpeechToken = issueV3SpeechToken;
+export { LearningState, issueSpeechToken };
 export * from "./fsrs.js";
 export { initializeLearningSchema } from "./learning-store.js";
 
-async function handleV4Request(request, env, fetcher = fetch) {
+export async function handleRequest(request, env, fetcher = fetch) {
   const url = new URL(request.url);
   const routes = new Map([
-    ["/v4/sites", "GET"],
-    ["/v4/state", "GET"],
-    ["/v4/history", "GET"],
-    ["/v4/attempts", "POST"],
-    ["/v4/next", "GET"],
-    ["/v4/questions", "POST"],
-    ["/v4/speech-token", "POST"],
+    ["/v4/sites", ["GET"]],
+    ["/v4/state", ["GET"]],
+    ["/v4/history", ["GET"]],
+    ["/v4/attempts", ["POST"]],
+    ["/v4/next", ["GET"]],
+    ["/v4/questions", ["POST"]],
+    ["/v4/settings", ["GET", "PUT"]],
+    ["/v4/speech-token", ["POST"]],
   ]);
-  const expectedMethod = routes.get(url.pathname);
-  if (expectedMethod === undefined) {
+  const expectedMethods = routes.get(url.pathname);
+  if (expectedMethods === undefined) {
     return errorResponse("not_found", 404);
   }
-  if (request.method !== expectedMethod) {
-    return errorResponse("method_not_allowed", 405, { Allow: expectedMethod });
+  if (!expectedMethods.includes(request.method)) {
+    return errorResponse("method_not_allowed", 405, {
+      Allow: expectedMethods.join(", "),
+    });
   }
   const authorized = await isAuthorized(request, env);
   if (authorized === null) {
@@ -69,11 +57,17 @@ async function handleV4Request(request, env, fetcher = fetch) {
   if (url.pathname === "/v4/next") {
     return handleNext(url, env);
   }
+  if (url.pathname === "/v4/settings") {
+    if (url.search !== "") {
+      return errorResponse("invalid_request", 400);
+    }
+    return handleSettings(request, env);
+  }
   if (url.pathname === "/v4/speech-token") {
     if (url.search !== "") {
       return errorResponse("invalid_request", 400);
     }
-    return issueV4SpeechToken(env, fetcher);
+    return issueSpeechToken(env, fetcher);
   }
   if (url.search !== "") {
     return errorResponse("invalid_request", 400);
@@ -82,14 +76,6 @@ async function handleV4Request(request, env, fetcher = fetch) {
     return handleAttempts(request, env);
   }
   return handleQuestions(request, env);
-}
-
-export async function handleRequest(request, env, fetcher = fetch) {
-  const pathname = new URL(request.url).pathname;
-  if (pathname.startsWith("/v4/")) {
-    return handleV4Request(request, env, fetcher);
-  }
-  return handleV3Request(request, env, fetcher);
 }
 
 export default {

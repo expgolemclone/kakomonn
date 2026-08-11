@@ -22,15 +22,17 @@
   const countBadge = document.createElement("div");
   countBadge.id = "kakomonn-reader-count";
 
-  const stopButton = document.createElement("button");
-  stopButton.id = "kakomonn-reader-stop";
-  stopButton.type = "button";
-  stopButton.textContent = "スキップ";
-  stopButton.setAttribute(
+  const skipButton = document.createElement("button");
+  skipButton.id = "kakomonn-reader-skip";
+  skipButton.type = "button";
+  skipButton.textContent = "スキップ";
+  skipButton.setAttribute(
     "aria-label",
-    "現在の読み上げをスキップ,ショートカットはsk"
+    "現在の問題を誤答としてスキップ, ショートカットはn"
   );
-  stopButton.title = "ショートカット: sk";
+  skipButton.setAttribute("aria-keyshortcuts", "N");
+  skipButton.title = "ショートカット: n";
+  skipButton.hidden = true;
 
   const syncSettingsButton = document.createElement("button");
   syncSettingsButton.id = "kakomonn-reader-sync-settings-button";
@@ -48,7 +50,7 @@
   controls.append(
     statusBadge,
     countBadge,
-    stopButton,
+    skipButton,
     syncSettingsButton,
     timeLimitProgress
   );
@@ -994,7 +996,6 @@
     }
     speechRunId += 1;
     cancelActiveSpeech();
-    stopButton.style.display = "none";
 
     if (speechEnabled) {
       setStatus("待機中");

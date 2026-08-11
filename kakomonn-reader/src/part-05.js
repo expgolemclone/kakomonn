@@ -16,7 +16,25 @@
     return getCurrentAnswerResult() !== "unknown" && currentQuestionId() !== null;
   }
 
+  function updateSkipButton() {
+    const unansweredQuestionReady =
+      frameDocument?.body !== undefined &&
+      currentQuestionControls() !== null &&
+      currentQuestionId() !== null &&
+      getCurrentAnswerResult() === "unknown";
+    skipButton.hidden = !unansweredQuestionReady;
+    skipButton.disabled =
+      !syncReady ||
+      syncInProgress ||
+      nextQuestionOperationInProgress ||
+      navigationInProgress ||
+      pendingAnswer !== null ||
+      pendingCelebration !== null ||
+      !syncSettings.hidden;
+  }
+
   function updateNextQuestionButton() {
+    updateSkipButton();
     if (syncInProgress) {
       nextQuestionButton.textContent = "学習記録を同期中";
       nextQuestionButton.disabled = true;
@@ -312,46 +330,66 @@
     return syncPromise;
   }
 
-  async function advanceWithoutAttempt() {
-    if (
-      !syncReady ||
-      syncInProgress ||
-      nextQuestionOperationInProgress ||
-      navigationInProgress ||
-      pendingAnswer !== null ||
-      pendingCelebration !== null
-    ) {
-      return false;
-    }
+  async function recordCurrentQuestionAndAdvance(result, status) {
     const questionId = currentQuestionId();
     if (questionId === null) {
-      setStatus("問題IDを取得できないため次問移動を停止しました");
+      setStatus("問題IDを取得できないため解答記録と次問移動を停止しました");
       updateSyncDependentControls();
       return false;
     }
     nextQuestionOperationInProgress = true;
     navigationInProgress = true;
-    setStatus("次の問題を準備中");
+    stopSpeech();
+    setStatus(status);
     updateSyncDependentControls();
     try {
-      const next = await requestNextQuestion(syncToken, questionId);
-      navigationInProgress = false;
-      if (next.question === null) {
-        setStatus("出題できる問題はありません");
-        return true;
-      }
-      return navigateToScheduledQuestion(next.question.url);
-    } catch (error) {
-      navigationInProgress = false;
-      if (error?.code === "unauthorized") {
-        syncReady = false;
-      }
-      setStatus(`${syncErrorMessage(error)}.再試行してください`);
-      return false;
-    } finally {
+      await createPendingAnswer(result);
+    } catch {
       nextQuestionOperationInProgress = false;
+      navigationInProgress = false;
+      setStatus("解答記録を準備できません");
       updateSyncDependentControls();
+      return false;
     }
+    nextQuestionOperationInProgress = false;
+    navigationInProgress = false;
+    await submitPendingAnswer();
+    return true;
+  }
+
+  async function handleSkipQuestion() {
+    if (
+      navigationInProgress ||
+      nextQuestionOperationInProgress
+    ) {
+      return false;
+    }
+    if (syncInProgress) {
+      const activeSync = syncPromise;
+      if (activeSync === null) {
+        return false;
+      }
+      await activeSync;
+      if (syncInProgress || navigationInProgress || nextQuestionOperationInProgress) {
+        return false;
+      }
+    }
+    if (!syncReady) {
+      await refreshRemoteState();
+      return false;
+    }
+    if (pendingAnswer !== null) {
+      await submitPendingAnswer();
+      return false;
+    }
+    if (pendingCelebration !== null) {
+      await maybeContinuePendingCelebration();
+      return false;
+    }
+    if (getCurrentAnswerResult() !== "unknown") {
+      return false;
+    }
+    return recordCurrentQuestionAndAdvance("incorrect", "誤答としてスキップ中");
   }
 
   async function handleNextQuestion() {
@@ -381,34 +419,13 @@
       return;
     }
 
-    const questionId = currentQuestionId();
-    if (questionId === null) {
-      setStatus("問題IDを取得できないため解答記録と次問移動を停止しました");
-      updateNextQuestionButton();
-      return;
-    }
     const answerResult = getCurrentAnswerResult();
     if (answerResult === "unknown") {
       setStatus("正誤を確認できません");
       updateNextQuestionButton();
       return;
     }
-    nextQuestionOperationInProgress = true;
-    navigationInProgress = true;
-    setStatus("解答記録を保存中");
-    updateSyncDependentControls();
-    try {
-      await createPendingAnswer(answerResult);
-    } catch {
-      nextQuestionOperationInProgress = false;
-      navigationInProgress = false;
-      setStatus("問題IDを取得できないため解答を記録できません");
-      updateSyncDependentControls();
-      return;
-    }
-    nextQuestionOperationInProgress = false;
-    navigationInProgress = false;
-    await submitPendingAnswer();
+    await recordCurrentQuestionAndAdvance(answerResult, "解答記録を保存中");
   }
 
   function readPendingCurrentPage() {
@@ -665,9 +682,6 @@
     if (sourceDocument !== frameDocument || !syncSettings.hidden) {
       return false;
     }
-    if (key === "s") {
-      return activateDisplayChoice(DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf("s"));
-    }
     if (key === "g") {
       return activateDisplayChoice(DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf("g"));
     }
@@ -678,7 +692,7 @@
     shortcutSequenceKey = key;
     shortcutSequenceDocument = frameDocument;
     shortcutSequenceTimer = window.setTimeout(() => {
-      if (key === "s" || key === "g") {
+      if (key === "g") {
         commitPendingShortcut();
       } else {
         clearShortcutSequence();
@@ -694,11 +708,6 @@
       return false;
     }
 
-    if (shortcutSequenceKey === "s" && key === "k") {
-      clearShortcutSequence();
-      stopSpeech();
-      return true;
-    }
     if (shortcutSequenceKey === "g" && key === "g") {
       clearShortcutSequence();
       resetFrameScrollToTop();
@@ -746,13 +755,16 @@
 
     let handled = completeShortcutSequence(key);
     if (!handled) {
-      if (key === "s" || key === "g" || key === "y") {
+      if (key === "g" || key === "y") {
         startShortcutSequence(key);
         handled = true;
       } else if (event.key === "Enter") {
         handled = handleEnterShortcut();
       } else if (event.key === " ") {
         handled = toggleSpeechPause();
+      } else if (key === "n" && !skipButton.hidden && !skipButton.disabled) {
+        skipButton.click();
+        handled = true;
       } else {
         const answerChoiceIndex = ANSWER_CHOICE_SHORTCUT_KEYS.indexOf(key);
         const displayChoiceIndex = DISPLAY_CHOICE_SHORTCUT_KEYS.indexOf(key);
@@ -897,7 +909,9 @@
   });
 
   copyButton.addEventListener("click", copyReadableSections);
-  stopButton.addEventListener("click", stopSpeech);
+  skipButton.addEventListener("click", () => {
+    void handleSkipQuestion();
+  });
   syncSettingsButton.addEventListener("click", () => {
     openSyncSettings(!syncToken);
   });

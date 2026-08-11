@@ -286,7 +286,6 @@
     } catch {
       if (runId === speechRunId) {
         clearActiveSpeechAudio();
-        stopButton.style.display = "none";
         speechEnabled = false;
         currentPageReadPending = true;
         setStatus(SPEECH_GESTURE_STATUS);
@@ -318,7 +317,6 @@
     }
 
     activeSpeechRequest = null;
-    stopButton.style.display = "none";
     setStatus(`${label}完了`);
   }
 
@@ -353,7 +351,6 @@
     } catch (error) {
       if (runId === speechRunId && error?.code !== "request_aborted") {
         activeSpeechRequest = null;
-        stopButton.style.display = "none";
         setStatus(speechErrorMessage(error));
       }
       return;
@@ -372,7 +369,6 @@
       if (runId === speechRunId) {
         speechPaused = false;
         setStatus(`${label} ${index + 1}/${chunks.length}`);
-        stopButton.style.display = "block";
       }
     };
 
@@ -389,7 +385,6 @@
       }
 
       clearActiveSpeechAudio();
-      stopButton.style.display = "none";
       setStatus("音声を再生できません");
     };
 

@@ -6,6 +6,7 @@ const path = require("node:path");
 const { chromium } = require("playwright");
 const {
   installSyncMock,
+  PENDING_ANSWER_KEY,
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,
 } = require("./sync_mock");
@@ -394,6 +395,54 @@ async function speechTokenCallCount(page) {
   );
 }
 
+async function assertIncorrectSkip(context, script, inputMethod) {
+  const page = await context.newPage();
+  const errors = await preparePage(page, "none");
+  const frame = await loadMockQuestion(page, script);
+  try {
+    await page.waitForFunction(
+      () => document.querySelector("#kakomonn-reader-skip")?.disabled === false,
+    );
+    await frame.evaluate(() => {
+      document.querySelector("#next")?.remove();
+      document.querySelector("#scroll-next")?.remove();
+    });
+    if (inputMethod === "keyboard") {
+      await frame.locator("input[name='answer']").first().focus();
+      await page.keyboard.press("n");
+    } else {
+      await page.locator("#kakomonn-reader-skip").click();
+    }
+    await page.waitForFunction(
+      () => window.__syncMock.attemptCount === 1,
+    );
+    const calls = await page.evaluate(() => ({
+      attempts: window.__syncMock.calls.filter(
+        (call) => new URL(call.url).pathname === "/v4/attempts",
+      ),
+      next: window.__syncMock.calls.filter(
+        (call) => new URL(call.url).pathname === "/v4/next",
+      ),
+    }));
+    assert.equal(calls.attempts.length, 1);
+    assert.equal(calls.attempts[0].body.questionId, "45124");
+    assert.equal(calls.attempts[0].body.result, "incorrect");
+    assert.equal(calls.next.length, 1);
+    assert.equal(
+      new URL(calls.next[0].url).searchParams.get("excludeQuestionId"),
+      "45124",
+    );
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href === "https://chushoks.kakomonn.com/questions/45125",
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
 async function main() {
   execFileSync("python3", ["build.py"], {
     cwd: projectRoot,
@@ -473,18 +522,18 @@ async function main() {
       "ショートカット: yy",
     );
     assert.equal(
-      await page.locator("#kakomonn-reader-stop").innerText(),
+      await page.locator("#kakomonn-reader-skip").innerText(),
       "スキップ",
     );
     assert.equal(
       await page
-        .locator("#kakomonn-reader-stop")
+        .locator("#kakomonn-reader-skip")
         .getAttribute("aria-keyshortcuts"),
-      null,
+      "N",
     );
     assert.equal(
-      await page.locator("#kakomonn-reader-stop").getAttribute("title"),
-      "ショートカット: sk",
+      await page.locator("#kakomonn-reader-skip").getAttribute("title"),
+      "ショートカット: n",
     );
     const readerLayout = await page.evaluate(() => {
       const controls = document
@@ -678,10 +727,9 @@ async function main() {
     assert.equal(await displayChoices.first().evaluate((choice) =>
       choice.classList.contains("is-active")), false);
     await page.keyboard.press("s");
-    await page.waitForTimeout(200);
     assert.equal(await displayChoices.nth(1).evaluate((choice) =>
-      choice.classList.contains("is-active")), false);
-    await page.waitForTimeout(300);
+      choice.classList.contains("is-active")), true);
+    await page.waitForTimeout(500);
     assert.equal(await displayChoices.nth(1).evaluate((choice) =>
       choice.classList.contains("is-active")), true);
 
@@ -847,10 +895,10 @@ async function main() {
     const scrollBeforeTextInput = await childFrame
       .locator("body")
       .evaluate(() => window.scrollY);
-    await page.keyboard.type("qwert asdfg sk gg yy xz ");
+    await page.keyboard.type("qwert asdfg n gg yy xz ");
     assert.equal(
       await shortcutTextInput.inputValue(),
-      "qwert asdfg sk gg yy xz ",
+      "qwert asdfg n gg yy xz ",
     );
     assert.equal(await answerInputs.first().isChecked(), true);
     assert.equal(await displayChoices.first().evaluate((choice) =>
@@ -1120,6 +1168,16 @@ async function main() {
       ),
       1,
     );
+    await page.waitForFunction(
+      ({ pendingAnswerKey, nextURL }) =>
+        window.__getGMValue(pendingAnswerKey) === null &&
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href === nextURL,
+      {
+        pendingAnswerKey: PENDING_ANSWER_KEY,
+        nextURL: "https://chushoks.kakomonn.com/questions/45125",
+      },
+    );
 
     await page.evaluate(() => {
       window.__syncMock.mastered = 7;
@@ -1147,6 +1205,9 @@ async function main() {
 
     assert.deepEqual(errors, []);
 
+    await assertIncorrectSkip(context, script, "keyboard");
+    await assertIncorrectSkip(context, script, "button");
+
     const speechShortcutPage = await context.newPage();
     const speechShortcutErrors = await preparePage(
       speechShortcutPage,
@@ -1168,8 +1229,8 @@ async function main() {
       () => window.__audioPauseCalls,
     );
     await speechShortcutInput.focus();
-    await speechShortcutPage.keyboard.type("sk ");
-    assert.equal(await speechShortcutInput.inputValue(), "sk ");
+    await speechShortcutPage.keyboard.type("n ");
+    assert.equal(await speechShortcutInput.inputValue(), "n ");
     assert.equal(
       await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
       "問題文 1/1",
@@ -1193,7 +1254,7 @@ async function main() {
       pauseCallsBeforeInput + 1,
     );
     assert.equal(
-      await speechShortcutPage.locator("#kakomonn-reader-stop").isVisible(),
+      await speechShortcutPage.locator("#kakomonn-reader-skip").isVisible(),
       true,
     );
 
@@ -1209,23 +1270,20 @@ async function main() {
     );
 
     await speechShortcutPage.keyboard.press("s");
-    await speechShortcutPage.keyboard.press("k");
     assert.equal(
-      await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
-      "待機中",
-    );
-    assert.equal(
-      await speechShortcutPage.locator("#kakomonn-reader-stop").isVisible(),
-      false,
+      await speechShortcutFrame.locator(".problem_detail > ul.list > li").nth(1).evaluate(
+        (choice) => choice.classList.contains("is-active"),
+      ),
+      true,
     );
     assert.equal(
       await speechShortcutPage.evaluate(() => window.__audioPauseCalls),
-      pauseCallsBeforeInput + 2,
+      pauseCallsBeforeInput + 1,
     );
     await speechShortcutPage.waitForTimeout(150);
     assert.equal(
       await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
-      "待機中",
+      "問題文 1/1",
     );
     assert.deepEqual(speechShortcutErrors, []);
     await speechShortcutPage.close();
@@ -1309,10 +1367,10 @@ async function main() {
       "定着 --問",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").focus();
-    await setupPage.keyboard.type("qwert asdfg sk gg yy xz ");
+    await setupPage.keyboard.type("qwert asdfg n gg yy xz ");
     assert.equal(
       await setupPage.locator("#kakomonn-reader-sync-token").inputValue(),
-      "qwert asdfg sk gg yy xz ",
+      "qwert asdfg n gg yy xz ",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").fill("test-sync-token");
     await setupPage.keyboard.press("Enter");

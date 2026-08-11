@@ -46,6 +46,7 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .mastery-number strong { font-size: clamp(4.5rem, 14vw, 9rem); line-height: .86; letter-spacing: -.07em; color: var(--accent); font-variant-numeric: tabular-nums; }
 .mastery-number span { color: var(--muted); font-size: 1.2rem; }
 .mastery-meta { grid-column: 1 / -1; display: flex; gap: 24px; font-size: clamp(1rem, 2.5vw, 1.3rem); font-weight: 750; }
+.mastery-meta strong { color: var(--accent-2); font-variant-numeric: tabular-nums; }
 .goal-card { margin-top: 18px; padding: 24px 28px; display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; }
 .goal-card h2 { margin: 0; }
 .goal-controls { display: flex; align-items: end; gap: 8px; }

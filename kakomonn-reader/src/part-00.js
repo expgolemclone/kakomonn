@@ -340,7 +340,7 @@
 
     #kakomonn-reader-count,
     #kakomonn-reader-status,
-    #kakomonn-reader-stop,
+    #kakomonn-reader-skip,
     #kakomonn-reader-sync-settings-button {
       border: 0;
       border-radius: 999px;
@@ -366,9 +366,9 @@
       white-space: nowrap;
     }
 
-    #kakomonn-reader-stop {
+    #kakomonn-reader-skip {
       pointer-events: auto;
-      display: none;
+      cursor: pointer;
     }
 
     #kakomonn-reader-sync-settings-button {
@@ -376,6 +376,7 @@
       cursor: pointer;
     }
 
+    #kakomonn-reader-skip:disabled,
     #kakomonn-reader-sync-settings-button:disabled {
       cursor: default;
       opacity: 0.55;
@@ -450,7 +451,7 @@
 
       #kakomonn-reader-count,
       #kakomonn-reader-status,
-      #kakomonn-reader-stop,
+      #kakomonn-reader-skip,
       #kakomonn-reader-sync-settings-button {
         padding-right: 8px;
         padding-left: 8px;
@@ -570,7 +571,7 @@
 
     #kakomonn-reader-next:focus-visible,
     #kakomonn-reader-copy:focus-visible,
-    #kakomonn-reader-stop:focus-visible,
+    #kakomonn-reader-skip:focus-visible,
     #kakomonn-reader-sync-settings-button:focus-visible,
     #kakomonn-reader-sync-token:focus-visible,
     #kakomonn-reader-sync-settings-save:focus-visible,

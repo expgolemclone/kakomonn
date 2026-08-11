@@ -15,7 +15,7 @@ const el = {
   authPanel: byId("auth-panel"), authForm: byId("auth-form"), authToken: byId("auth-token"), authMessage: byId("auth-message"),
   dashboard: byId("dashboard"), siteEmpty: byId("site-empty"), loadError: byId("load-error"), errorMessage: byId("error-message"), retryButton: byId("retry-button"),
   settingsButton: byId("settings-button"), settingsDialog: byId("settings-dialog"), settingsForm: byId("settings-form"), settingsToken: byId("settings-token"), settingsMessage: byId("settings-message"), settingsClose: byId("settings-close"), forgetToken: byId("forget-token"),
-  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), masteredCount: byId("mastered-count"), todayDelta: byId("today-delta"), goalLabel: byId("goal-label"), dailyGoal: byId("daily-goal"), saveGoal: byId("save-goal"), goalProgress: byId("goal-progress"), masteryChart: byId("mastery-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
+  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), masteredCount: byId("mastered-count"), attemptedCount: byId("attempted-count"), todayDelta: byId("today-delta"), goalLabel: byId("goal-label"), dailyGoal: byId("daily-goal"), saveGoal: byId("save-goal"), goalProgress: byId("goal-progress"), masteryChart: byId("mastery-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
 };
 
 const state = { token: "", site: "", sites: [], mastery: null, history: null };
@@ -38,7 +38,7 @@ function validSite(value) {
   return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(value);
 }
 function validState(value, site) {
-  return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && Number.isSafeInteger(value.mastered) && value.mastered >= 0 && Number.isSafeInteger(value.todayDelta);
+  return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && Number.isSafeInteger(value.mastered) && value.mastered >= 0 && Number.isSafeInteger(value.attempted) && value.attempted >= 0 && Number.isSafeInteger(value.todayDelta);
 }
 function validHistory(value, site) {
   return value && value.site === site && Array.isArray(value.days) && value.days.length === 7 && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && Number.isSafeInteger(day.mastered) && day.mastered >= 0);
@@ -111,6 +111,7 @@ function renderChart(days) {
 function renderDashboard() {
   const mastery = state.mastery;
   el.masteredCount.textContent = String(mastery.mastered);
+  el.attemptedCount.textContent = String(mastery.attempted);
   el.todayDelta.textContent = `今日 ${signed(mastery.todayDelta)}`;
   renderGoal();
   renderChart(state.history.days);

@@ -207,7 +207,7 @@
 
     if (expectedPhase === "question") {
       setStatus("問題の制限時間が終了しました");
-      void advanceWithoutAttempt();
+      void handleSkipQuestion();
       return;
     }
 

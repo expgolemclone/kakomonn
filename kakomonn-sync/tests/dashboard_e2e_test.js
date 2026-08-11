@@ -73,6 +73,7 @@ async function installApiMock(page) {
             site: siteValue,
             today: "2026-08-10",
             mastered: 312,
+            attempted: 842,
             todayDelta: 4,
             catalog: { questionCount: 999, updatedAtMs: Date.now() },
           });
@@ -104,6 +105,8 @@ async function assertDashboard(page) {
 
   assert.equal(await page.locator("#mastery-title").innerText(), "定着問題数");
   assert.equal(await page.locator("#mastered-count").innerText(), "312");
+  assert.equal(await page.locator("#attempted-count").innerText(), "842");
+  assert.equal(await page.locator(".mastery-meta").innerText(), "今日 +4\n目標 +5\n解いた問題数 842問");
   assert.equal(await page.locator("#today-delta").innerText(), "今日 +4");
   assert.equal(await page.locator("#goal-label").innerText(), "目標 +5");
   assert.equal(await page.locator("#goal-progress").innerText(), "今日 +4 / +5");
@@ -115,6 +118,7 @@ async function assertDashboard(page) {
   assert.equal(text.includes("正解数"), false);
   assert.equal(text.includes("回答数"), false);
   assert.equal(text.includes("正答率"), false);
+  assert.equal(await page.locator(".goal-card").innerText().then((value) => value.includes("解いた問題数")), false);
   const calls = await page.evaluate(() => window.__apiCalls);
   assert.equal(calls.some((call) => call.pathname.startsWith("/v3/")), false);
   assert.equal(calls.filter((call) => call.pathname === "/v4/state").length, 1);

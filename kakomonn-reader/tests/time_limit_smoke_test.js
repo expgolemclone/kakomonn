@@ -27,7 +27,6 @@ function questionHTML(number) {
           <p class="ttl">制限時間を確認する問題です.</p>
           <ul class="list"><li><label><input type="radio" name="answer">選択肢1</label></li></ul>
           <button type="button">解答する</button>
-          <a href="${nextURL}">次の問題へ</a>
         </main>
       </body>
     </html>`;
@@ -76,7 +75,7 @@ async function readerFrame(page) {
   return page.frames().find((frame) => frame !== page.mainFrame());
 }
 
-async function questionExpirySkipsWithoutRecording(browser, script) {
+async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
   const { browserErrors, page } = await preparePage(browser, script);
   try {
     assert.equal(
@@ -101,7 +100,19 @@ async function questionExpirySkipsWithoutRecording(browser, script) {
         (call) => new URL(call.url).pathname === "/v4/attempts"
       )
     );
-    assert.equal(answerCalls.length, 0);
+    assert.equal(answerCalls.length, 1);
+    assert.equal(answerCalls[0].body.result, "incorrect");
+    assert.equal(answerCalls[0].body.questionId, "100");
+    assert.equal(await page.evaluate(() => window.__syncMock.attemptCount), 1);
+    const nextCall = await page.evaluate(() =>
+      window.__syncMock.calls.find(
+        (call) => new URL(call.url).pathname === "/v4/next"
+      )
+    );
+    assert.equal(
+      new URL(nextCall.url).searchParams.get("excludeQuestionId"),
+      "100"
+    );
     assert.deepEqual(browserErrors, []);
   } finally {
     await page.close();
@@ -155,7 +166,7 @@ async function main() {
   const script = await readFile(scriptPath, "utf8");
   const browser = await chromium.launch({ headless: true });
   try {
-    await questionExpirySkipsWithoutRecording(browser, script);
+    await questionExpiryRecordsIncorrectAndSkips(browser, script);
     await explanationExpiryRecordsAndAdvances(browser, script);
   } finally {
     await browser.close();

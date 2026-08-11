@@ -148,6 +148,9 @@ describe("attempt idempotency", () => {
       expect(card.reps).toBe(1);
       expect(attempts.count).toBe(1);
     });
+    await expect(stub().getState(SITE, NOW + 60_000)).resolves.toMatchObject({
+      attempted: 1,
+    });
   });
 
   it("returns current mastery stock when an old operation is retried after another device updates the site", async () => {
@@ -162,7 +165,10 @@ describe("attempt idempotency", () => {
     expect(retry.attempt).toEqual(first.attempt);
     expect(retry.completedMilestone).toBe(first.completedMilestone);
     expect(retry.totals.mastered).toBe(2);
-    await expect(stub().getState(SITE, NOW + 2_000)).resolves.toMatchObject({ mastered: 2 });
+    await expect(stub().getState(SITE, NOW + 2_000)).resolves.toMatchObject({
+      mastered: 2,
+      attempted: 2,
+    });
 
     await runInRawDurableObject(stub(), (_instance, state) => {
       const attempts = state.storage.sql.exec("SELECT COUNT(*) AS count FROM attempts WHERE site = ?", SITE).toArray()[0];
@@ -389,6 +395,7 @@ describe("v4 HTTP contract", () => {
     await expect(state.json()).resolves.toMatchObject({
       site: SITE,
       mastered: 0,
+      attempted: 0,
       todayDelta: 0,
       catalog: { questionCount: 4, generation: 1 },
     });
@@ -558,6 +565,7 @@ describe("server source of truth", () => {
     await expect(secondClient.json()).resolves.toMatchObject({
       site: SITE,
       mastered: 0,
+      attempted: 1,
       todayDelta: 0,
     });
 
@@ -581,6 +589,7 @@ describe("server source of truth", () => {
     await expect(refreshed.json()).resolves.toMatchObject({
       site: SITE,
       mastered: 1,
+      attempted: 2,
       todayDelta: 1,
     });
   });

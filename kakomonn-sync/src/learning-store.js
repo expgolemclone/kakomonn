@@ -155,6 +155,12 @@ function masteredCount(storage, site) {
     .toArray()[0].count;
 }
 
+function attemptedCount(storage, site) {
+  return storage.sql
+    .exec("SELECT COUNT(*) AS count FROM attempts WHERE site = ?", site)
+    .toArray()[0].count;
+}
+
 function milestoneFor(storage, site, mastered, delta) {
   if (delta !== 1 || mastered % MASTERY_MILESTONE_INTERVAL !== 0) {
     return null;
@@ -338,6 +344,7 @@ export class LearningState extends DurableObject {
         site,
         today,
         mastered,
+        attempted: attemptedCount(this.ctx.storage, site),
         todayDelta,
         catalog:
           catalog === undefined

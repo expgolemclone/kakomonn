@@ -17,6 +17,7 @@ const el = {
 };
 
 const state = { token: "", site: "", sites: [], mastery: null, history: null, settings: null };
+let loadGeneration = 0;
 
 class DashboardError extends Error {
   constructor(code, status = 0) { super(code); this.code = code; this.status = status; }
@@ -42,7 +43,7 @@ function validHistory(value, site) {
   return value && value.site === site && Array.isArray(value.days) && value.days.length === 7 && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && Number.isSafeInteger(day.mastered) && day.mastered >= 0);
 }
 function validSettings(value) {
-  return value && Object.keys(value).length === 1 && Number.isSafeInteger(value.dailyMasteryGoal) && value.dailyMasteryGoal >= 1 && value.dailyMasteryGoal <= 100;
+  return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 1 && Number.isSafeInteger(value.dailyMasteryGoal) && value.dailyMasteryGoal >= 1 && value.dailyMasteryGoal <= 100;
 }
 
 async function requestJSON(path, token, { method = "GET", body } = {}) {
@@ -132,20 +133,40 @@ function showError(error) {
 
 async function loadSites(token) {
   const body = await requestJSON("/v4/sites", token);
-  if (!Array.isArray(body.sites) || body.sites.some((site) => !validSite(site))) throw new DashboardError("invalid_response");
+  if (body === null || typeof body !== "object" || !Array.isArray(body.sites) || body.sites.some((site) => !validSite(site))) throw new DashboardError("invalid_response");
   return body.sites;
 }
 
-async function loadSelectedSite() {
-  const parameters = new URLSearchParams({ site: state.site });
+async function fetchSiteData(site, token) {
+  const parameters = new URLSearchParams({ site });
   const [mastery, history, settings] = await Promise.all([
-    requestJSON(`/v4/state?${parameters}`, state.token),
-    requestJSON(`/v4/history?${new URLSearchParams({ site: state.site, days: "7" })}`, state.token),
-    requestJSON("/v4/settings", state.token),
+    requestJSON(`/v4/state?${parameters}`, token),
+    requestJSON(`/v4/history?${new URLSearchParams({ site, days: "7" })}`, token),
+    requestJSON("/v4/settings", token),
   ]);
-  if (!validState(mastery, state.site) || !validHistory(history, state.site) || !validSettings(settings)) throw new DashboardError("invalid_response");
+  if (!validState(mastery, site) || !validHistory(history, site) || !validSettings(settings)) throw new DashboardError("invalid_response");
+  return { mastery, history, settings };
+}
+
+function applySiteData({ mastery, history, settings }) {
   state.mastery = mastery; state.history = history; state.settings = settings;
   renderDashboard();
+}
+
+async function loadSelectedSite() {
+  const generation = ++loadGeneration;
+  const site = state.site;
+  const token = state.token;
+  let data;
+  try {
+    data = await fetchSiteData(site, token);
+  } catch (error) {
+    if (generation !== loadGeneration || site !== state.site || token !== state.token) return false;
+    throw error;
+  }
+  if (generation !== loadGeneration || site !== state.site || token !== state.token) return false;
+  applySiteData(data);
+  return true;
 }
 
 function renderSiteOptions() {
@@ -156,24 +177,44 @@ function renderSiteOptions() {
 }
 
 async function connect(token, { persist = true } = {}) {
-  state.token = token;
-  state.sites = await loadSites(token);
-  if (persist) storageSet(TOKEN_KEY, token);
-  if (state.sites.length === 0) {
-    el.authPanel.hidden = true; el.dashboard.hidden = true; el.loadError.hidden = true; el.siteEmpty.hidden = false; el.settingsButton.hidden = false; return;
+  const generation = ++loadGeneration;
+  let sites;
+  try {
+    sites = await loadSites(token);
+  } catch (error) {
+    if (generation !== loadGeneration) return false;
+    throw error;
   }
+  if (generation !== loadGeneration) return false;
   const saved = storageGet(SITE_KEY);
-  state.site = state.sites.includes(saved) ? saved : state.sites[0];
-  storageSet(SITE_KEY, state.site);
+  const site = sites.includes(saved) ? saved : (sites[0] ?? "");
+  let data = null;
+  if (site !== "") {
+    try {
+      data = await fetchSiteData(site, token);
+    } catch (error) {
+      if (generation !== loadGeneration) return false;
+      throw error;
+    }
+  }
+  if (generation !== loadGeneration) return false;
+  if (persist) storageSet(TOKEN_KEY, token);
+  if (site === "") storageRemove(SITE_KEY); else storageSet(SITE_KEY, site);
+  state.token = token; state.sites = sites; state.site = site;
+  state.mastery = null; state.history = null; state.settings = null;
+  if (sites.length === 0) {
+    el.authPanel.hidden = true; el.dashboard.hidden = true; el.loadError.hidden = true; el.siteEmpty.hidden = false; el.settingsButton.hidden = false; return true;
+  }
   renderSiteOptions();
-  await loadSelectedSite();
+  applySiteData(data);
+  return true;
 }
 
 el.authForm.addEventListener("submit", async (event) => {
   event.preventDefault(); const token = el.authToken.value.trim();
   if (!token) { el.authMessage.textContent = "同期tokenを入力してください."; return; }
   el.authMessage.textContent = "接続中";
-  try { await connect(token); el.authToken.value = ""; el.authMessage.textContent = ""; } catch (error) { el.authMessage.textContent = error?.code === "unauthorized" ? "同期tokenが正しくありません." : "接続できませんでした."; }
+  try { if (await connect(token)) { el.authToken.value = ""; el.authMessage.textContent = ""; } } catch (error) { el.authMessage.textContent = error?.code === "unauthorized" ? "同期tokenが正しくありません." : "接続できませんでした."; }
 });
 
 el.siteSelect.addEventListener("change", async () => {
@@ -186,16 +227,24 @@ el.retryButton.addEventListener("click", async () => { try { await connect(state
 el.saveGoal.addEventListener("click", async () => {
   const goal = Number(el.dailyGoal.value);
   if (!Number.isSafeInteger(goal) || goal < 1 || goal > 100) { el.dashboardStatus.textContent = "目標は1から100の整数で入力してください."; return; }
+  loadGeneration += 1;
+  const token = state.token;
   el.saveGoal.disabled = true;
+  el.siteSelect.disabled = true;
+  el.refreshButton.disabled = true;
+  el.settingsButton.disabled = true;
   el.dashboardStatus.textContent = "目標を同期中";
   try {
-    const settings = await requestJSON("/v4/settings", state.token, { method: "PUT", body: { dailyMasteryGoal: goal } });
+    const settings = await requestJSON("/v4/settings", token, { method: "PUT", body: { dailyMasteryGoal: goal } });
     if (!validSettings(settings)) throw new DashboardError("invalid_response");
-    state.settings = settings; renderGoal(); el.dashboardStatus.textContent = "今日の定着純増目標を同期しました.";
+    if (token === state.token) { state.settings = settings; renderGoal(); el.dashboardStatus.textContent = "今日の定着純増目標を同期しました."; }
   } catch (error) {
-    el.dashboardStatus.textContent = error?.code === "unauthorized" ? "同期tokenを確認してください." : "目標を同期できませんでした.";
+    if (token === state.token) el.dashboardStatus.textContent = error?.code === "unauthorized" ? "同期tokenを確認してください." : "目標を同期できませんでした.";
   } finally {
     el.saveGoal.disabled = false;
+    el.siteSelect.disabled = false;
+    el.refreshButton.disabled = false;
+    el.settingsButton.disabled = false;
   }
 });
 
@@ -204,9 +253,10 @@ el.settingsClose.addEventListener("click", () => el.settingsDialog.close());
 el.settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault(); const token = el.settingsToken.value.trim();
   if (!token) { el.settingsMessage.textContent = "同期tokenを入力してください."; return; }
-  try { await connect(token); el.settingsDialog.close(); } catch (error) { el.settingsMessage.textContent = error?.code === "unauthorized" ? "同期tokenが正しくありません." : "tokenを変更できませんでした."; }
+  try { if (await connect(token)) el.settingsDialog.close(); } catch (error) { el.settingsMessage.textContent = error?.code === "unauthorized" ? "同期tokenが正しくありません." : "tokenを変更できませんでした."; }
 });
 el.forgetToken.addEventListener("click", () => {
+  loadGeneration += 1;
   storageRemove(TOKEN_KEY); storageRemove(SITE_KEY); state.token = ""; state.site = ""; state.sites = []; state.mastery = null; state.history = null; state.settings = null;
   el.settingsDialog.close(); el.settingsButton.hidden = true; el.dashboard.hidden = true; el.siteEmpty.hidden = true; el.loadError.hidden = true; el.authPanel.hidden = false;
 });

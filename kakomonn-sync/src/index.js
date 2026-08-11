@@ -1,12 +1,12 @@
 import { LearningState, getLearningStateStub } from "./learning-store.js";
 import { isAuthorized } from "./auth.js";
 import { errorResponse, jsonResponse } from "./http.js";
-import { handleAttempts } from "./api-attempts.js";
-import { handleState } from "./api-state.js";
-import { handleHistory } from "./api-history.js";
-import { handleNext } from "./api-next.js";
-import { handleQuestions } from "./api-questions.js";
-import { handleSettings } from "./api-settings.js";
+import { handleAttempts } from "./api/attempts.js";
+import { handleState } from "./api/state.js";
+import { handleHistory } from "./api/history.js";
+import { handleNext } from "./api/next.js";
+import { handleQuestions } from "./api/questions.js";
+import { handleSettings } from "./api/settings.js";
 import { issueSpeechToken } from "./speech.js";
 
 export { LearningState, issueSpeechToken };

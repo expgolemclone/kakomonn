@@ -1,8 +1,7 @@
-import { isSite } from "./auth.js";
-import { getLearningStateStub } from "./learning-store.js";
-import { errorResponse, jsonResponse } from "./http.js";
-
-const QUESTION_ID_PATTERN = /^\d+$/;
+import { isSite } from "../auth.js";
+import { QUESTION_ID_PATTERN } from "../contracts.js";
+import { getLearningStateStub } from "../learning-store.js";
+import { errorResponse, jsonResponse } from "../http.js";
 
 export async function handleNext(url, env) {
   const keys = [...url.searchParams.keys()];

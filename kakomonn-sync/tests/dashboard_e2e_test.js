@@ -6,6 +6,7 @@ const { chromium } = require("playwright");
 const publicDir = path.resolve(__dirname, "..", "public");
 const token = "test-dashboard-token";
 const site = "chushoks.kakomonn.com";
+const otherSite = "shindans.kakomonn.com";
 const history = [306, 307, 307, 309, 310, 308, 312].map((mastered, index) => ({
   date: `2026-08-${String(index + 4).padStart(2, "0")}`,
   mastered,
@@ -32,12 +33,18 @@ async function launchBrowser() {
 
 async function installApiMock(page) {
   await page.evaluate(
-    ({ tokenValue, siteValue, historyValue }) => {
+    ({ tokenValue, siteValue, otherSiteValue, historyValue }) => {
       const storage = new Map([
         ["kakomonn-dashboard.sync-token", tokenValue],
         ["kakomonn-dashboard.site", siteValue],
       ]);
       let settingsValue = { dailyMasteryGoal: 5 };
+      window.__delayedSite = "";
+      window.__delayedResolvers = [];
+      window.__releaseDelayedSite = () => {
+        window.__delayedSite = "";
+        for (const resolve of window.__delayedResolvers.splice(0)) resolve();
+      };
       Object.defineProperty(window, "localStorage", {
         configurable: true,
         value: {
@@ -68,24 +75,34 @@ async function installApiMock(page) {
           return respond(401, { error: "unauthorized" });
         }
         if (url.pathname === "/v4/sites") {
-          return respond(200, { sites: [siteValue] });
+          return respond(200, { sites: [siteValue, otherSiteValue] });
         }
         if (url.pathname === "/v4/state") {
+          const requestedSite = url.searchParams.get("site");
+          if (requestedSite === window.__delayedSite) {
+            await new Promise((resolve) => window.__delayedResolvers.push(resolve));
+          }
           return respond(200, {
-            site: siteValue,
+            site: requestedSite,
             today: "2026-08-10",
-            mastered: 312,
-            attempted: 842,
-            todayDelta: 4,
+            mastered: requestedSite === siteValue ? 312 : 99,
+            attempted: requestedSite === siteValue ? 842 : 120,
+            todayDelta: requestedSite === siteValue ? 4 : 1,
             catalog: { questionCount: 999, updatedAtMs: Date.now() },
           });
         }
         if (url.pathname === "/v4/history") {
+          const requestedSite = url.searchParams.get("site");
+          if (requestedSite === window.__delayedSite) {
+            await new Promise((resolve) => window.__delayedResolvers.push(resolve));
+          }
           return respond(200, {
-            site: siteValue,
+            site: requestedSite,
             timeZone: "Asia/Tokyo",
             today: "2026-08-10",
-            days: historyValue,
+            days: requestedSite === siteValue
+              ? historyValue
+              : historyValue.map((day) => ({ ...day, mastered: 99 })),
           });
         }
         if (url.pathname === "/v4/settings" && (init.method ?? "GET") === "GET") {
@@ -98,7 +115,7 @@ async function installApiMock(page) {
         return respond(404, { error: "not_found" });
       };
     },
-    { tokenValue: token, siteValue: site, historyValue: history },
+    { tokenValue: token, siteValue: site, otherSiteValue: otherSite, historyValue: history },
   );
 }
 
@@ -146,6 +163,26 @@ async function assertDashboard(page) {
   );
   const updatedCalls = await page.evaluate(() => window.__apiCalls);
   assert.equal(updatedCalls.filter((call) => call.pathname === "/v4/settings" && call.method === "PUT").length, 1);
+
+  await page.evaluate((siteValue) => { window.__delayedSite = siteValue; }, otherSite);
+  await page.locator("#site-select").selectOption(otherSite);
+  await page.locator("#site-select").selectOption(site);
+  await page.waitForFunction(() => document.querySelector("#mastered-count")?.textContent === "312");
+  await page.evaluate(() => window.__releaseDelayedSite());
+  await page.waitForTimeout(50);
+  assert.equal(await page.locator("#dashboard").isVisible(), true);
+  assert.equal(await page.locator("#load-error").isVisible(), false);
+
+  await page.locator("#settings-button").click();
+  await page.locator("#settings-token").fill("incorrect-token");
+  await page.locator("#settings-form button[type=submit]").click();
+  await page.waitForFunction(() => document.querySelector("#settings-message")?.textContent === "同期tokenが正しくありません.");
+  await page.locator("#settings-close").click();
+  await page.locator("#refresh-button").click();
+  await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "更新日 2026-08-10");
+  const finalCalls = await page.evaluate(() => window.__apiCalls);
+  const finalStateCall = finalCalls.filter((call) => call.pathname === "/v4/state").at(-1);
+  assert.equal(finalStateCall.authorization, `Bearer ${token}`);
 }
 
 async function main() {

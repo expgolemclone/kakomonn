@@ -1,3 +1,5 @@
+"""Validate metadata in the generated kakomonn-reader userscript."""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -6,7 +8,7 @@ import re
 import sys
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 HEADER_START = "// ==UserScript=="
 HEADER_END = "// ==/UserScript=="

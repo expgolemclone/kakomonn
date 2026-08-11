@@ -8,6 +8,17 @@ ROOT = Path(__file__).resolve().parent
 SOURCE_DIR = ROOT / "src"
 OUTPUT_PATH = ROOT / "kakomonn-reader.user.js"
 BUILD_FINGERPRINT_PLACEHOLDER = "__KAKOMONN_READER_BUILD_FINGERPRINT__"
+SOURCE_NAMES = (
+    "metadata-and-style.js",
+    "ui.js",
+    "sync-and-catalog.js",
+    "content-extraction.js",
+    "speech.js",
+    "page-lifecycle.js",
+    "markdown-copy.js",
+    "navigation.js",
+    "shortcuts-and-bootstrap.js",
+)
 
 
 def render_userscript(parts: list[Path]) -> bytes:
@@ -24,16 +35,13 @@ def render_userscript(parts: list[Path]) -> bytes:
 
 
 def main() -> None:
-    parts = sorted(SOURCE_DIR.glob("part-*.js"))
-    if not parts:
-        raise RuntimeError("source parts were not found")
-
-    expected_names = [f"part-{index:02d}.js" for index in range(len(parts))]
-    actual_names = [part.name for part in parts]
-    if actual_names != expected_names:
+    actual_names = sorted(path.name for path in SOURCE_DIR.glob("*.js"))
+    if actual_names != sorted(SOURCE_NAMES):
         raise RuntimeError(
-            f"source parts must be contiguous: expected {expected_names}, got {actual_names}"
+            f"reader sources must match the manifest: expected {sorted(SOURCE_NAMES)}, "
+            f"got {actual_names}"
         )
+    parts = [SOURCE_DIR / name for name in SOURCE_NAMES]
 
     output = render_userscript(parts)
     if not output.startswith(b"// ==UserScript=="):

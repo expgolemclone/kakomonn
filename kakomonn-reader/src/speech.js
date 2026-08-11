@@ -1,156 +1,3 @@
-    const choiceElements = Array.from(choicesElement.children).filter(
-      (child) => child.matches("li")
-    );
-    if (
-      choiceElements.length < 2 ||
-      choiceElements.length !== choiceControls.length
-    ) {
-      return "";
-    }
-
-    const text = normalizeText(visibleStructuredText(questionElement));
-    if (!text) {
-      return "";
-    }
-
-    return text;
-  }
-  // END QUESTION EXTRACTION
-
-  function extractQuestionText() {
-    return extractQuestionTextFromDocument(frameDocument);
-  }
-
-  const EXPLANATION_LOCK_TEXT = "解説は問題に回答すると表示されます";
-
-  function normalizePageStateText(rawText) {
-    return compactLine(rawText).replace(/[。．]+$/u, "");
-  }
-
-  function hasVisibleExplanationLock(lines) {
-    for (let startIndex = 0; startIndex < lines.length; startIndex += 1) {
-      let combinedText = "";
-
-      for (
-        let lineOffset = 0;
-        lineOffset < 3 && startIndex + lineOffset < lines.length;
-        lineOffset += 1
-      ) {
-        combinedText += normalizePageStateText(
-          lines[startIndex + lineOffset]
-        );
-
-        if (combinedText === EXPLANATION_LOCK_TEXT) {
-          return true;
-        }
-
-        if (!EXPLANATION_LOCK_TEXT.startsWith(combinedText)) {
-          break;
-        }
-      }
-    }
-
-    return false;
-  }
-
-  function isExplanationHeading(line) {
-    return /^この過去問の解説(?:（\d+件）)?$/.test(compactLine(line));
-  }
-
-  function isExplanationEnd(line) {
-    const compact = compactLine(line);
-    return (
-      compact.startsWith("（訂正依頼・報告はこちら）") ||
-      /^前の問題(?:（問\d+）)?へ$/.test(compact) ||
-      /^令和.+問題一覧$/.test(compact) ||
-      compact === "TOP"
-    );
-  }
-
-  function isExplanationNoise(line) {
-    const compact = compactLine(line);
-    return (
-      compact === "解答結果" ||
-      compact === "解説は問題に回答すると" ||
-      compact === "表示されます。" ||
-      compact === "表示されます" ||
-      /^\d{2}$/.test(compact) ||
-      /^参考になった数\d+$/.test(compact) ||
-      compact === "参考になった" ||
-      compact === "参考にならなかった" ||
-      compact === "この解説の修正を提案する" ||
-      compact.toLowerCase() === "advertisement" ||
-      compact === "次の問題は下へ"
-    );
-  }
-
-  function extractExplanationText(lines) {
-    const headingIndex = findFirstIndex(lines, 0, isExplanationHeading);
-    if (headingIndex < 0) {
-      return "";
-    }
-
-    const endIndex = findFirstIndex(lines, headingIndex + 1, isExplanationEnd);
-    if (endIndex < 0) {
-      return "";
-    }
-
-    const explanationLines = lines
-      .slice(headingIndex + 1, endIndex)
-      .filter((line) => !isExplanationNoise(line));
-
-    return normalizeText(explanationLines.join("\n"));
-  }
-
-  function extractReadableSections() {
-    const lines = getVisibleLines();
-    const explanationLocked =
-      getCurrentAnswerResult() === "unknown" ||
-      hasVisibleExplanationLock(lines);
-
-    return {
-      questionText: extractQuestionText(),
-      explanationText: explanationLocked ? "" : extractExplanationText(lines),
-    };
-  }
-
-  function splitText(text) {
-    const sentences = text.match(/[^。！？!?]+[。！？!?]?/g) ?? [];
-    const chunks = [];
-    let current = "";
-
-    for (const sentence of sentences) {
-      if ((current + sentence).length <= MAX_CHUNK_LENGTH) {
-        current += sentence;
-        continue;
-      }
-
-      if (current) {
-        chunks.push(current);
-        current = "";
-      }
-
-      if (sentence.length <= MAX_CHUNK_LENGTH) {
-        current = sentence;
-        continue;
-      }
-
-      for (
-        let offset = 0;
-        offset < sentence.length;
-        offset += MAX_CHUNK_LENGTH
-      ) {
-        chunks.push(sentence.slice(offset, offset + MAX_CHUNK_LENGTH));
-      }
-    }
-
-    if (current) {
-      chunks.push(current);
-    }
-
-    return chunks;
-  }
-
   function initializeSpeechPlayback(runId, onReady, onUnavailable) {
     setStatus("音声準備中");
     speechAudio.src = SILENT_AUDIO_DATA_URL;
@@ -419,3 +266,20 @@
 
     if (explanationText) {
       currentQuestionText = "";
+      speakText(
+        `解説。${explanationText}`,
+        "解説",
+        EXPLANATION_SPEECH_RATE
+      );
+      return;
+    }
+
+    if (!questionText) {
+      setStatus("問題文を取得できません");
+      return;
+    }
+
+    currentQuestionText = questionText;
+    speakText(`問題文。${questionText}`, "問題文", QUESTION_SPEECH_RATE);
+  }
+

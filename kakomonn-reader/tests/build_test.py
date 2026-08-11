@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import runpy
 import subprocess
 import sys
 from pathlib import Path
@@ -16,9 +17,9 @@ BUILD_FINGERPRINT_PLACEHOLDER = "__KAKOMONN_READER_BUILD_FINGERPRINT__"
 def main() -> None:
     subprocess.run([sys.executable, str(BUILD_SCRIPT)], check=True)
 
+    source_names = runpy.run_path(str(BUILD_SCRIPT))["SOURCE_NAMES"]
     source = "".join(
-        part.read_text(encoding="utf-8")
-        for part in sorted(SOURCE_DIR.glob("part-*.js"))
+        (SOURCE_DIR / name).read_text(encoding="utf-8") for name in source_names
     )
     if source.count(BUILD_FINGERPRINT_PLACEHOLDER) != 1:
         raise AssertionError("build fingerprint placeholder must occur exactly once")

@@ -1,6 +1,6 @@
-import { isSite } from "./auth.js";
-import { getLearningStateStub } from "./learning-store.js";
-import { errorResponse, jsonResponse } from "./http.js";
+import { isSite } from "../auth.js";
+import { getLearningStateStub } from "../learning-store.js";
+import { errorResponse, jsonResponse } from "../http.js";
 
 function singleSite(url) {
   const keys = [...url.searchParams.keys()];

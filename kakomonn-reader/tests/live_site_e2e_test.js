@@ -247,7 +247,7 @@ async function runLiveCatalogCrawlCase(browser, script) {
   const page = await context.newPage();
   const pageErrors = [];
   const catalogPageTasks = [];
-  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  page.on("pageerror", (error) => pageErrors.push(error.stack ?? String(error)));
   page.on("response", (response) => {
     const url = new URL(response.url());
     if (url.hostname !== "chushoks.kakomonn.com" || !/^\/list1\/\d+$/.test(url.pathname)) {
@@ -342,7 +342,7 @@ async function runCase(
   await blockThirdPartyAds(context);
   const page = await context.newPage();
   const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  page.on("pageerror", (error) => pageErrors.push(error.stack ?? String(error)));
 
   try {
     console.log(JSON.stringify({ phase: "goto", answerText }));

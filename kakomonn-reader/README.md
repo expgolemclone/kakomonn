@@ -11,9 +11,9 @@
 - 問題pageを開くたびに, `問題`見出しがpage topへ来る位置まで自動でscrollします. `z`で100px下へ,`x`で100px上へscrollし,`gg`でpage topへ戻ります. 検索欄や計算欄などへ入力中はkeyboard shortcutを無効にします.
 - `Enter`は未解答なら解答を実行し,解答後は次問へ進みます. 下部の`次の問題へ`をクリックまたはタップして進むこともできます.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
-- 正解数と解答数の日次累計. 値は`kakomonn-sync`へ保存され,Win11 EdgeとiPhone Safariで共有されます.同期Workerのrootでは正解数を主指標,解答数を参考指標にした週と月の日別推移も確認できます.
+- FSRS stabilityが30日以上になった定着問題数と解答履歴. 値は`kakomonn-sync`へ保存され,Win11 EdgeとiPhone Safariで共有されます.同期Workerのrootでは定着問題数,今日の定着純増,解いた問題数,直近7日間の定着推移を確認できます.
 - 解答後に, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でクリップボードへコピー. `yy`でもコピーできます.
-- 50,100,150問のように50問進むごとに,ランダムな祝福ページを表示します.祝福ページから今週の学習ログを開き,そこから戻ると準備済みの次の問題を再開します.
+- 定着問題数が50,100,150問のように50問増えるごとに,ランダムな祝福ページを表示します.祝福ページから直近7日間の学習ログを開き,そこから戻ると準備済みの次の問題を再開します.
 
 ## ビルド
 
@@ -21,7 +21,7 @@
 python3 build.py
 ```
 
-`src/part-*.js`を順番に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyなどのユーザースクリプトマネージャーには, 生成されたファイルを登録してください.
+`src/`にはmetadataとstyle,UI,syncとcatalog,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyなどのユーザースクリプトマネージャーには, 生成されたファイルを登録してください.
 
 ## Release
 
@@ -47,13 +47,13 @@ iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 両�
 
 ## 学習記録の同期設定
 
-読み上げを利用する場合は,先に[`kakomonn-sync`](../kakomonn-sync/README.md)へAzure Speech F0のkeyを設定してCloudflareへデプロイし,生成されたAPI URLを`src/part-00.js`の`SYNC_API_URL`と`@connect`へ設定してビルドします. Speech resourceは,音声endpointと同じ`Japan East`に作成します.
+読み上げを利用する場合は,先に[`kakomonn-sync`](../kakomonn-sync/README.md)へAzure Speech F0のkeyを設定してCloudflareへデプロイし,生成されたAPI URLを`src/metadata-and-style.js`の`SYNC_API_URL`と`@connect`へ設定してビルドします. Speech resourceは,音声endpointと同じ`Japan East`に作成します.
 
 初回起動時に同期トークンの入力画面が開きます.Win11とiPhoneへ,Worker Secretの`SYNC_TOKEN`と同じ値を入力してください.トークンは各ユーザースクリプトマネージャーの専用ストレージへ保存され,対象サイトの`localStorage`には保存されません.
 
 正解と不正解のどちらでも,解答記録の同期に失敗した場合は次問へ進まず,同じ操作IDで再試行します.通信が復旧した後に`同期を再試行`を押してください.同じ操作の再送は二重加算されません.
 
-祝福は,正解数が50問の区切りへ到達した操作を送信した端末だけに表示されます.別端末が同期によって50,100,150問を観測しただけでは表示されません.祝福サイトはCloudflare Workers Static Assetsへ公開した`CONGRATULATIONS_URL`を使用します.
+祝福は,定着問題数が50問の区切りへ到達した操作を送信した端末だけに表示されます.別端末が同期によって50,100,150問を観測しただけでは表示されません.祝福サイトはCloudflare Workers Static Assetsへ公開した`CONGRATULATIONS_URL`を使用します.
 
 ## バージョン管理
 
@@ -65,7 +65,6 @@ iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 両�
 
 ```bash
 npm ci
-npm ci --prefix congratulations
 npm run build:kakomonn-reader
 ```
 
@@ -77,7 +76,7 @@ $edgeExecutable = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application
 Start-Process -FilePath $edgeExecutable -ArgumentList "--user-data-dir=$env:KAKOMONN_EDGE_USER_DATA_DIR",'edge://inspect/#remote-debugging'
 ```
 
-専用profileの`edge://inspect/#remote-debugging`でリモートデバッグを有効にしてから次の完全testを実行します. `KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ,ES2020構文,local smoke test,実サイトE2Eに続けて,専用profileの実Edge,実Tampermonkey,デプロイ済みの同期Workerを一続きで検証します. 最後のE2Eは専用Edgeに表示されるリモートデバッグの`許可`をWindows UI Automationで自動操作し,Tampermonkeyへ保存されたbuild fingerprintが生成fileと一致することを確認してから,Edgeの通常clickで正解を1件送信し,問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに,本番の正解数と解答数を1件ずつ増やし,外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
+専用profileの`edge://inspect/#remote-debugging`でリモートデバッグを有効にしてから次の完全testを実行します. `KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ,ES2020構文,local smoke test,実サイトE2Eに続けて,専用profileの実Edge,実Tampermonkey,デプロイ済みの同期Workerを一続きで検証します. 最後のE2Eは専用Edgeに表示されるリモートデバッグの`許可`をWindows UI Automationで自動操作し,Tampermonkeyへ保存されたbuild fingerprintが生成fileと一致することを確認してから,Edgeの通常clickで解答記録を1件送信し,問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに,本番の解答履歴と定着状態を更新し,外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
 
 ```powershell
 $env:KAKOMONN_SYNC_TOKEN='<SYNC_TOKEN>'

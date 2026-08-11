@@ -62,6 +62,8 @@ APIは`/v4`だけを提供し,LearningState Durable Objectを唯一のsource of 
 
 `kakomonn-reader`はSpeech tokenを約9分間再利用し,`ja-JP-NanamiNeural`のMP3をAzureから直接取得します.Workerは音声dataを中継せず,Workers AI,Durable Objects,R2も音声処理には使用しません.Azure Speech F0の無料枠を超過した場合は読み上げを停止し,別の音声へ切り替えません.
 
+定着問題数には現在の問題catalogに含まれるcardだけを数えます.catalogから外れたcardは再登録時に学習状態を復元できるよう保存しますが,定着数と次問候補には含めません.catalog置換で定着数が変化した場合は,その日の定着履歴へ新しい値を記録します.
+
 ## 互換性方針
 
 v1,v2,v3 API,DailyCount class,旧SQLite schema移行は提供しません.DailyCount namespaceと保存dataは廃棄し,LearningStateへ移行しません.旧APIへのfallback,旧形式の自動変換,互換routeは追加しません.API契約を変更する場合はversionを上げ,clientとserverを同時に更新します.廃止versionのdataは現行versionへ暗黙移行せず,必要な移行を個別に設計して明示的に実行します.

@@ -215,7 +215,6 @@ export async function runRelease({
 
   logger("Installing locked dependencies");
   runCommand("npm", ["ci"]);
-  runCommand("npm", ["ci", "--prefix", "congratulations"]);
 
   logger("Running the complete Windows test suite and live E2E");
   runCommand("npm", ["test"]);

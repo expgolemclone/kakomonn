@@ -1,6 +1,9 @@
 {
   "name": "kakomonn",
   "private": true,
+  "workspaces": [
+    "congratulations"
+  ],
   "engines": {
     "node": ">=22.12.0"
   },
@@ -12,18 +15,18 @@
     "test:local": "npm run test:release-script && npm run test:live-sync-script && npm run test:kakomonn-reader && npm run test:kakomonn-sync && npm run test:congratulations",
     "test:release-script": "node --test tests/release-kakomonn-reader.test.mjs",
     "test:live-sync-script": "node --test kakomonn-reader/tests/live_sync_e2e_unit_test.js",
-    "test:kakomonn-reader": "npm run build:kakomonn-reader && python3 kakomonn-reader/tests/build_test.py && es-check es2020 kakomonn-reader/kakomonn-reader.user.js && python3 tests/userscript_metadata_test.py kakomonn-reader/kakomonn-reader.user.js",
+    "test:kakomonn-reader": "npm run build:kakomonn-reader && python3 kakomonn-reader/tests/build_test.py && es-check es2020 kakomonn-reader/kakomonn-reader.user.js && python3 kakomonn-reader/tests/userscript_metadata_test.py kakomonn-reader/kakomonn-reader.user.js",
     "test:kakomonn-sync": "vitest run --config kakomonn-sync/vitest.config.mjs",
-    "test:kakomonn-sync-production": "node --use-system-ca --test kakomonn-sync/tests/production_deployment_test.js",
+    "test:kakomonn-sync-production": "node --use-system-ca --env-file-if-exists=.env --test kakomonn-sync/tests/production_deployment_test.js",
     "test:kakomonn-dashboard": "node kakomonn-sync/tests/dashboard_e2e_test.js",
-    "test:congratulations": "npm --prefix congratulations test",
+    "test:congratulations": "npm test --workspace congratulations",
     "test:smoke": "node kakomonn-reader/tests/smoke_test.js && node kakomonn-reader/tests/count_smoke_test.js && node kakomonn-reader/tests/time_limit_smoke_test.js && node kakomonn-reader/tests/webkit_smoke_test.js && node kakomonn-sync/tests/dashboard_e2e_test.js",
     "test:kakomonn-webkit": "node kakomonn-reader/tests/webkit_smoke_test.js",
     "test:kakomonn-live-site": "node kakomonn-reader/tests/live_site_e2e_test.js",
     "test:kakomonn-live-sync": "npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader/tests/live_sync_e2e_test.js",
     "release:kakomonn-reader": "node scripts/release-kakomonn-reader.mjs",
     "deploy:kakomonn-sync": "npm run test:kakomonn-sync && npm run test:kakomonn-dashboard && wrangler deploy --config kakomonn-sync/wrangler.jsonc && npm run test:kakomonn-sync-production",
-    "deploy:congratulations": "npm --prefix congratulations run build && wrangler deploy --config congratulations/wrangler.jsonc"
+    "deploy:congratulations": "npm run build --workspace congratulations && wrangler deploy --config congratulations/wrangler.jsonc"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.20.3",

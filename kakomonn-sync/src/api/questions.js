@@ -1,6 +1,7 @@
-import { isSite } from "./auth.js";
-import { QUESTION_ID_PATTERN, getLearningStateStub } from "./learning-store.js";
-import { errorResponse, jsonResponse } from "./http.js";
+import { isSite } from "../auth.js";
+import { QUESTION_ID_PATTERN } from "../contracts.js";
+import { getLearningStateStub } from "../learning-store.js";
+import { errorResponse, jsonResponse } from "../http.js";
 
 export async function handleQuestions(request, env) {
   let body;

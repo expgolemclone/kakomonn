@@ -1,8 +1,7 @@
-import { getLearningStateStub, OPERATION_ID_PATTERN, QUESTION_ID_PATTERN } from "./learning-store.js";
-import { isSite } from "./auth.js";
-import { errorResponse, jsonResponse } from "./http.js";
-
-const RESULTS = new Set(["correct", "incorrect"]);
+import { ANSWER_RESULTS, OPERATION_ID_PATTERN, QUESTION_ID_PATTERN } from "../contracts.js";
+import { getLearningStateStub } from "../learning-store.js";
+import { isSite } from "../auth.js";
+import { errorResponse, jsonResponse } from "../http.js";
 
 export async function handleAttempts(request, env) {
   let body;
@@ -26,7 +25,7 @@ export async function handleAttempts(request, env) {
     !QUESTION_ID_PATTERN.test(body.questionId) ||
     typeof body.operationId !== "string" ||
     !OPERATION_ID_PATTERN.test(body.operationId) ||
-    !RESULTS.has(body.result)
+    !ANSWER_RESULTS.has(body.result)
   ) {
     return errorResponse("invalid_request", 400);
   }

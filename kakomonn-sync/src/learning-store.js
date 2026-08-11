@@ -6,99 +6,21 @@ import {
   scheduleAnswer,
 } from "./fsrs.js";
 import { isSite } from "./auth.js";
+import {
+  ANSWER_RESULTS,
+  isDailyMasterySettings,
+  OPERATION_ID_PATTERN,
+  QUESTION_ID_PATTERN,
+} from "./contracts.js";
+import { initializeLearningSchema } from "./storage/schema.js";
+
+export { initializeLearningSchema } from "./storage/schema.js";
 
 export const LEARNING_STATE_OBJECT_NAME = "primary";
 export const MASTERY_MILESTONE_INTERVAL = 50;
 export const DEFAULT_DAILY_MASTERY_GOAL = 5;
-export const OPERATION_ID_PATTERN = /^[0-9a-f]{32}$/;
-export const QUESTION_ID_PATTERN = /^\d+$/;
-const ANSWER_RESULTS = new Set(["correct", "incorrect"]);
+export { OPERATION_ID_PATTERN, QUESTION_ID_PATTERN } from "./contracts.js";
 const SETTINGS_STORAGE_KEY = "settings";
-
-function tableDefinition(storage, tableName) {
-  return storage.sql
-    .exec("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", tableName)
-    .toArray()[0]?.sql;
-}
-
-export function initializeLearningSchema(storage) {
-  storage.transactionSync(() => {
-    const required = [
-      "cards",
-      "attempts",
-      "mastery_history",
-      "questions",
-      "learning_metadata",
-      "catalog_metadata",
-    ];
-    const existing = required.filter((name) => tableDefinition(storage, name) !== undefined);
-    if (existing.length === required.length) {
-      return;
-    }
-    if (existing.length !== 0) {
-      throw new Error("incomplete LearningState schema");
-    }
-    storage.sql.exec(`
-      CREATE TABLE cards (
-        site TEXT NOT NULL,
-        question_id TEXT NOT NULL,
-        due_ms INTEGER NOT NULL,
-        stability REAL NOT NULL,
-        difficulty REAL NOT NULL,
-        scheduled_days INTEGER NOT NULL,
-        learning_steps INTEGER NOT NULL,
-        reps INTEGER NOT NULL,
-        lapses INTEGER NOT NULL,
-        state INTEGER NOT NULL,
-        last_review_ms INTEGER,
-        PRIMARY KEY (site, question_id)
-      ) WITHOUT ROWID;
-
-      CREATE TABLE attempts (
-        site TEXT NOT NULL,
-        operation_id TEXT NOT NULL,
-        question_id TEXT NOT NULL,
-        answered_at_ms INTEGER NOT NULL,
-        result TEXT NOT NULL CHECK (result IN ('correct', 'incorrect')),
-        previous_stability REAL NOT NULL,
-        resulting_stability REAL NOT NULL,
-        mastery_delta INTEGER NOT NULL CHECK (mastery_delta IN (-1, 0, 1)),
-        resulting_mastered_count INTEGER NOT NULL CHECK (resulting_mastered_count >= 0),
-        completed_milestone INTEGER CHECK (
-          completed_milestone IS NULL OR
-          (completed_milestone > 0 AND completed_milestone % 50 = 0)
-        ),
-        PRIMARY KEY (operation_id)
-      ) WITHOUT ROWID;
-
-      CREATE TABLE mastery_history (
-        site TEXT NOT NULL,
-        date TEXT NOT NULL,
-        mastered_count INTEGER NOT NULL CHECK (mastered_count >= 0),
-        PRIMARY KEY (site, date)
-      ) WITHOUT ROWID;
-
-      CREATE TABLE questions (
-        site TEXT NOT NULL,
-        question_id TEXT NOT NULL,
-        PRIMARY KEY (site, question_id)
-      ) WITHOUT ROWID;
-
-      CREATE TABLE learning_metadata (
-        site TEXT PRIMARY KEY,
-        highest_mastery_milestone INTEGER NOT NULL DEFAULT 0
-          CHECK (highest_mastery_milestone >= 0)
-      ) WITHOUT ROWID;
-
-      CREATE TABLE catalog_metadata (
-        site TEXT PRIMARY KEY,
-        question_count INTEGER NOT NULL CHECK (question_count > 0),
-        updated_at_ms INTEGER NOT NULL,
-        generation INTEGER NOT NULL CHECK (generation > 0)
-      ) WITHOUT ROWID;
-    `);
-  });
-}
 
 function rowToCard(row) {
   if (row === undefined) {
@@ -153,7 +75,13 @@ function saveCard(storage, site, questionId, card) {
 
 function masteredCount(storage, site) {
   return storage.sql
-    .exec("SELECT COUNT(*) AS count FROM cards WHERE site = ? AND stability >= 30", site)
+    .exec(
+      `SELECT COUNT(*) AS count
+       FROM cards c
+       JOIN questions q ON q.site = c.site AND q.question_id = c.question_id
+       WHERE c.site = ? AND c.stability >= 30`,
+      site
+    )
     .toArray()[0].count;
 }
 
@@ -403,15 +331,7 @@ export class LearningState extends DurableObject {
     if (settings === undefined) {
       return { dailyMasteryGoal: DEFAULT_DAILY_MASTERY_GOAL };
     }
-    if (
-      settings === null ||
-      typeof settings !== "object" ||
-      Array.isArray(settings) ||
-      Object.keys(settings).length !== 1 ||
-      !Number.isSafeInteger(settings.dailyMasteryGoal) ||
-      settings.dailyMasteryGoal < 1 ||
-      settings.dailyMasteryGoal > 100
-    ) {
+    if (!isDailyMasterySettings(settings)) {
       throw new Error("invalid LearningState settings");
     }
     return settings;
@@ -498,6 +418,7 @@ export class LearningState extends DurableObject {
       throw new TypeError("invalid question catalog");
     }
     return this.ctx.storage.transactionSync(() => {
+      const masteredBefore = masteredCount(this.ctx.storage, site);
       const metadata = this.ctx.storage.sql
         .exec("SELECT generation FROM catalog_metadata WHERE site = ?", site)
         .toArray()[0];
@@ -526,6 +447,17 @@ export class LearningState extends DurableObject {
         nowMs,
         generation
       );
+      const masteredAfter = masteredCount(this.ctx.storage, site);
+      if (masteredAfter !== masteredBefore) {
+        this.ctx.storage.sql.exec(
+          `INSERT INTO mastery_history (site, date, mastered_count)
+           VALUES (?, ?, ?)
+           ON CONFLICT(site, date) DO UPDATE SET mastered_count = excluded.mastered_count`,
+          site,
+          getTokyoDate(new Date(nowMs)),
+          masteredAfter
+        );
+      }
       return {
         site,
         questionCount: questionIds.length,

@@ -5,6 +5,7 @@ import {
 } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { masteryDelta, ratingForResult } from "../src/fsrs.js";
+import { initializeLearningSchema } from "../src/storage/schema.js";
 import { Rating } from "ts-fsrs";
 
 const SITE = "chushoks.kakomonn.com";
@@ -61,6 +62,31 @@ async function seedReviewCard(
 }
 
 beforeEach(reset);
+
+describe("LearningState schema", () => {
+  it("installs query indexes idempotently for existing objects", async () => {
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      initializeLearningSchema(state.storage);
+      initializeLearningSchema(state.storage);
+      const indexes = state.storage.sql
+        .exec(
+          `SELECT name FROM sqlite_master
+           WHERE type = 'index' AND name IN (?, ?, ?)
+           ORDER BY name`,
+          "attempts_by_site",
+          "cards_by_site_due",
+          "cards_by_site_stability",
+        )
+        .toArray()
+        .map((row) => row.name);
+      expect(indexes).toEqual([
+        "attempts_by_site",
+        "cards_by_site_due",
+        "cards_by_site_stability",
+      ]);
+    });
+  });
+});
 
 describe("FSRS integration", () => {
   it("maps correct to Rating.Good and incorrect to Rating.Again", () => {
@@ -287,6 +313,28 @@ describe("next question scheduler", () => {
 });
 
 describe("mastery history and milestones", () => {
+  it("counts only current catalog cards and records catalog-driven stock changes", async () => {
+    await seedReviewCard("1", 35);
+    await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({ mastered: 1 });
+
+    await stub().replaceCatalog(SITE, ["2", "3", "4"], 1, NOW);
+    await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
+      mastered: 0,
+      catalog: { questionCount: 3, generation: 2 },
+    });
+    await expect(stub().getHistory(SITE, 1, NOW)).resolves.toMatchObject({
+      days: [{ date: "2026-08-10", mastered: 0 }],
+    });
+
+    const nextDay = NOW + 86_400_000;
+    await stub().replaceCatalog(SITE, ["1", "2", "3", "4"], 2, nextDay);
+    await expect(stub().getState(SITE, nextDay)).resolves.toMatchObject({
+      mastered: 1,
+      todayDelta: 1,
+      catalog: { questionCount: 4, generation: 3 },
+    });
+  });
+
   it("stores the daily stock only when the KPI changes and fills a 7 day stock series", async () => {
     await seedReviewCard("1", 29);
     await stub().recordAttempt(SITE, "1", operationId(9), "correct", NOW);

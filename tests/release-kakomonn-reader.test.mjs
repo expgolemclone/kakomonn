@@ -182,7 +182,6 @@ test("publishes the synchronized main only after the complete test suite", async
     .map((call) => call.args.join(" "));
   assert.deepEqual(npmCalls, [
     "ci",
-    "ci --prefix congratulations",
     "test",
     "run build:kakomonn-reader",
   ]);

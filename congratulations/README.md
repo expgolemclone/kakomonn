@@ -2,7 +2,7 @@
 
 kakomonn-readerが当日50問ごとのmilestoneへ到達した時に表示する,静的な祝福site集です.13作品は同じ品質基準とaccessibility contractを共有しながら,それぞれ異なる世界観,配色,造形,motionで達成を祝います.
 
-root shellは達成数に対応するtierからsiteを均等確率で1つ選び,全画面iframeで表示します.250問を超えた場合は250tierを使い,全作品のtitle,本文,visualには実際の達成数を表示します.画面下の`週間の記録を見る`を押すと,同期Workerの今週の学習ログを同じtabで開きます.
+root shellは達成数に対応するtierからsiteを均等確率で1つ選び,全画面iframeで表示します.250問を超えた場合は250tierを使い,全作品のtitle,本文,visualには実際の達成数を表示します.画面下の`週間の記録を見る`を押すと,同期Workerの直近7日間の学習ログを同じtabで開きます.
 
 ## 実装contract
 
@@ -24,15 +24,14 @@ root shellは達成数に対応するtierからsiteを均等確率で1つ選び,
 
 抽選対象は`celebrations.json`へ明示します.manifestには50から250までの5個のtierが必要です.存在しないentry,重複ID,空tier,tierとfolderが一致しないentryはbuild errorになります.
 
-`playful/zundamon-dance`は公式画像のhotlinkへ依存するため,抽選対象へ登録していません.
+`experiments/zundamon-dance`は公式画像のhotlinkへ依存する実験作品のため,buildと抽選対象へ登録していません.
 
 ## 開発
 
 ```bash
-cd congratulations
 npm ci
 npx playwright install chromium
-npm start
+npm start --workspace congratulations
 ```
 
 `http://127.0.0.1:4173/?milestone=50`を開きます.
@@ -40,14 +39,14 @@ npm start
 登録済みの全siteと共通shellを確認する場合は,次のcommandを実行します.Vite開発serverとPlaywright Chromiumが起動し,1つのwindowへ14個のtabを開きます.編集内容はHMRで反映され,browserを閉じるか`Ctrl+C`を入力するとserverも終了します.
 
 ```bash
-npm run preview:all
+npm run preview:all --workspace congratulations
 ```
 
 ## buildと検証
 
 ```bash
-npm run build
-npm test
+npm run build --workspace congratulations
+npm test --workspace congratulations
 ```
 
 Viteのmulti-page buildは`dist/`へ全siteを出力します.`npm test`はmanifest,全entry,50から250までのtier,250問を超えた場合の選択,320px幅,desktop,mobile,reduced motion,replay,実達成数,scroll量,共通の学習ログ導線をChromiumで検証します.

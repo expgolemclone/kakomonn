@@ -1,8 +1,8 @@
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SITE = "chushoks.kakomonn.com";
-const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE}.pending-answer`;
+const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE}.v4.pending-attempt`;
 const LEGACY_PENDING_CORRECT_KEY = `kakomonn-reader.${SITE}.pending-correct`;
-const PENDING_CELEBRATION_KEY = `kakomonn-reader.${SITE}.pending-celebration`;
+const PENDING_CELEBRATION_KEY = `kakomonn-reader.${SITE}.v4.pending-celebration`;
 const SYNC_API_ORIGIN = "https://kakomonn-count-sync.expgolem-lab.workers.dev";
 const CONGRATULATIONS_ORIGIN =
   "https://kakomonn-congratulations.expgolem-lab.workers.dev";
@@ -10,59 +10,50 @@ const AZURE_SPEECH_ORIGIN = "https://japaneast.tts.speech.microsoft.com";
 const AZURE_SPEECH_TOKEN = "test-azure-speech-token";
 
 function installSyncMockInWindow({
-  initialCorrectCount,
-  initialAnsweredCount,
+  initialMasteredCount,
+  initialAttemptCount,
   initialDate,
   expectedToken,
   expectedSite,
   hasStoredToken,
   initialPendingAnswer,
-  initialLegacyPendingCorrect,
   initialPendingCelebration,
   initialProcessedOperations,
   returnsPromise,
   tokenKey,
   pendingAnswerKey,
-  legacyPendingCorrectKey,
   celebrationKey,
   expectedOrigin,
   expectedSpeechOrigin,
   expectedSpeechToken,
   writeClipboardToSystem,
+  initialNextQuestionId,
+  initialCatalogQuestionCount,
+  initialCatalogGeneration,
 }) {
   const values = new Map();
-  if (hasStoredToken) {
-    values.set(tokenKey, expectedToken);
-  }
-  if (initialPendingAnswer !== null) {
-    values.set(pendingAnswerKey, initialPendingAnswer);
-  }
-  if (initialLegacyPendingCorrect !== null) {
-    values.set(legacyPendingCorrectKey, initialLegacyPendingCorrect);
-  }
-  if (initialPendingCelebration !== null) {
-    values.set(celebrationKey, initialPendingCelebration);
-  }
+  if (hasStoredToken) values.set(tokenKey, expectedToken);
+  if (initialPendingAnswer !== null) values.set(pendingAnswerKey, initialPendingAnswer);
+  if (initialPendingCelebration !== null) values.set(celebrationKey, initialPendingCelebration);
 
-  const processedOperationResults = new Map(
-    initialProcessedOperations.map(
-      ({ operationId, result = "correct", resultingCount = null }) => [
-        operationId,
-        {
-          result,
-          completedMilestone:
-            result === "correct" &&
-            resultingCount > 0 &&
-            resultingCount % 50 === 0
-              ? resultingCount
-              : null,
-        },
-      ],
-    ),
+  const processed = new Map(
+    initialProcessedOperations.map((item) => [
+      item.operationId,
+      {
+        questionId: item.questionId ?? "45124",
+        result: item.result ?? "correct",
+        previousStability: item.previousStability ?? 29,
+        stability: item.stability ?? 31,
+        masteryDelta: item.masteryDelta ?? 0,
+        resultingMastered: item.resultingMastered ?? initialMasteredCount,
+        completedMilestone: item.completedMilestone ?? null,
+      },
+    ]),
   );
+
   const mock = {
-    count: initialCorrectCount,
-    answeredCount: initialAnsweredCount,
+    mastered: initialMasteredCount,
+    attemptCount: initialAttemptCount,
     date: initialDate,
     token: expectedToken,
     calls: [],
@@ -75,33 +66,41 @@ function installSyncMockInWindow({
     holdNextRequest: false,
     releaseHeldRequest: null,
     clipboardWrites: [],
+    nextQuestionId: initialNextQuestionId,
+    nextMasteryDelta: 0,
+    nextCompletedMilestone: null,
+    catalogUpdatedAtMs: Date.now(),
+    catalogQuestionCount: initialCatalogQuestionCount,
+    catalogGeneration: initialCatalogGeneration,
+    conflictNextCatalogUpdate: false,
   };
 
   const syncState = () => ({
     site: expectedSite,
-    date: mock.date,
-    counts: {
-      correct: mock.count,
-      answered: mock.answeredCount,
-    },
-    milestoneInterval: 50,
+    today: mock.date,
+    mastered: mock.mastered,
+    todayDelta: 0,
+    catalog:
+      mock.catalogQuestionCount === null
+        ? null
+        : {
+            questionCount: mock.catalogQuestionCount,
+            updatedAtMs: mock.catalogUpdatedAtMs,
+            generation: mock.catalogGeneration,
+          },
   });
 
   window.__syncMock = mock;
   window.GM = {
     async setClipboard(value) {
-      if (window.__clipboardWriteFails) {
-        throw new Error("mock clipboard write failed");
-      }
+      if (window.__clipboardWriteFails) throw new Error("mock clipboard write failed");
       mock.clipboardWrites.push(value);
       window.__copiedTexts?.push(value);
-      if (writeClipboardToSystem) {
-        await navigator.clipboard.writeText(value);
-      }
+      if (writeClipboardToSystem) await navigator.clipboard.writeText(value);
       return true;
     },
     async getValue(key, defaultValue) {
-      return values.has(key) ? values.get(key) : defaultValue;
+      return values.has(key) ? structuredClone(values.get(key)) : defaultValue;
     },
     async setValue(key, value) {
       if (mock.failNextSetValue) {
@@ -137,10 +136,7 @@ function installSyncMockInWindow({
         : null;
       const respondJSON = (status, body) => {
         window.setTimeout(() => {
-          const response = {
-            status,
-            responseText: JSON.stringify(body),
-          };
+          const response = { status, responseText: JSON.stringify(body) };
           details.onload?.(response);
           resolveRequest?.(response);
         }, 0);
@@ -182,7 +178,6 @@ function installSyncMockInWindow({
           failRequest();
           return;
         }
-
         const requestURL = new URL(call.url);
         if (requestURL.origin === expectedSpeechOrigin) {
           if (
@@ -208,77 +203,131 @@ function installSyncMockInWindow({
         const pathname = requestURL.pathname;
         if (
           call.method === "GET" &&
-          pathname === "/v3/state" &&
+          pathname === "/v4/state" &&
           requestURL.searchParams.get("site") === expectedSite
         ) {
           respondJSON(200, syncState());
           return;
         }
-
-        if (call.method === "POST" && pathname === "/v3/speech-token") {
+        if (call.method === "POST" && pathname === "/v4/speech-token") {
+          respondJSON(200, { token: expectedSpeechToken, expiresInSeconds: 600 });
+          return;
+        }
+        if (
+          call.method === "GET" &&
+          pathname === "/v4/next" &&
+          requestURL.searchParams.get("site") === expectedSite &&
+          requestURL.searchParams.getAll("site").length === 1 &&
+          requestURL.searchParams.getAll("excludeQuestionId").length <= 1
+        ) {
+          const questionId = mock.nextQuestionId;
           respondJSON(200, {
-            token: expectedSpeechToken,
-            expiresInSeconds: 600,
+            question:
+              questionId === null
+                ? null
+                : {
+                    questionId,
+                    url: `https://${expectedSite}/questions/${questionId}`,
+                    kind: "new",
+                    dueMs: null,
+                  },
           });
           return;
         }
-
-        if (call.method === "POST" && pathname === "/v3/answers") {
-          if (call.body?.date !== mock.date) {
-            respondJSON(409, {
-              error: "date_changed",
-              state: syncState(),
-            });
+        if (call.method === "POST" && pathname === "/v4/questions") {
+          if (mock.conflictNextCatalogUpdate) {
+            mock.conflictNextCatalogUpdate = false;
+            mock.catalogUpdatedAtMs = Date.now();
+            mock.catalogQuestionCount = call.body?.questionIds?.length ?? 1;
+            mock.catalogGeneration += 1;
+            respondJSON(409, { error: "catalog_conflict" });
             return;
           }
-
-          const operationId = call.body?.operationId;
-          const result = call.body?.result;
           if (
-            !/^[0-9a-f]{32}$/.test(operationId) ||
             call.body?.site !== expectedSite ||
-            (result !== "correct" && result !== "incorrect")
+            !Array.isArray(call.body?.questionIds) ||
+            call.body.questionIds.length === 0 ||
+            !Number.isSafeInteger(call.body?.expectedGeneration) ||
+            call.body.expectedGeneration < 0 ||
+            Object.keys(call.body ?? {}).sort().join(",") !==
+              "expectedGeneration,questionIds,site"
           ) {
             respondJSON(400, { error: "invalid_request" });
             return;
           }
-
-          let processed = processedOperationResults.get(operationId);
-          if (processed !== undefined && processed.result !== result) {
-            respondJSON(409, {
-              error: "operation_conflict",
-              state: syncState(),
-            });
+          if (call.body.expectedGeneration !== mock.catalogGeneration) {
+            respondJSON(409, { error: "catalog_conflict" });
             return;
           }
-          if (processed === undefined) {
-            mock.answeredCount += 1;
-            if (result === "correct") {
-              mock.count += 1;
-            }
-            processed = {
-              result,
-              completedMilestone:
-                result === "correct" && mock.count > 0 && mock.count % 50 === 0
-                  ? mock.count
-                  : null,
-            };
-            processedOperationResults.set(operationId, processed);
+          mock.catalogUpdatedAtMs = Date.now();
+          mock.catalogQuestionCount = call.body.questionIds.length;
+          mock.catalogGeneration += 1;
+          respondJSON(200, {
+            site: expectedSite,
+            questionCount: call.body.questionIds.length,
+            updatedAtMs: mock.catalogUpdatedAtMs,
+            generation: mock.catalogGeneration,
+          });
+          return;
+        }
+        if (call.method === "POST" && pathname === "/v4/attempts") {
+          const operationId = call.body?.operationId;
+          const questionId = call.body?.questionId;
+          const result = call.body?.result;
+          if (
+            !/^[0-9a-f]{32}$/.test(operationId ?? "") ||
+            !/^\d+$/.test(questionId ?? "") ||
+            call.body?.site !== expectedSite ||
+            (result !== "correct" && result !== "incorrect") ||
+            Object.keys(call.body ?? {}).sort().join(",") !==
+              "operationId,questionId,result,site"
+          ) {
+            respondJSON(400, { error: "invalid_request" });
+            return;
           }
-
+          let item = processed.get(operationId);
+          if (
+            item !== undefined &&
+            (item.result !== result || item.questionId !== questionId)
+          ) {
+            respondJSON(409, { error: "operation_conflict" });
+            return;
+          }
+          if (item === undefined) {
+            mock.attemptCount += 1;
+            const delta = mock.nextMasteryDelta;
+            mock.nextMasteryDelta = 0;
+            mock.mastered += delta;
+            item = {
+              questionId,
+              result,
+              previousStability: delta === -1 ? 35 : delta === 1 ? 29 : 10,
+              stability: delta === -1 ? 5 : delta === 1 ? 31 : 11,
+              masteryDelta: delta,
+              resultingMastered: mock.mastered,
+              completedMilestone: mock.nextCompletedMilestone,
+            };
+            mock.nextCompletedMilestone = null;
+            processed.set(operationId, item);
+          }
           if (mock.commitThenFailNextAnswer) {
             mock.commitThenFailNextAnswer = false;
             failRequest();
             return;
           }
-
           respondJSON(200, {
-            state: syncState(),
-            completedMilestone: processed.completedMilestone,
+            attempt: {
+              questionId: item.questionId,
+              result: item.result,
+              previousStability: item.previousStability,
+              stability: item.stability,
+              masteryDelta: item.masteryDelta,
+            },
+            totals: { mastered: item.resultingMastered },
+            completedMilestone: item.completedMilestone,
           });
           return;
         }
-
         respondJSON(404, { error: "not_found" });
       };
 
@@ -291,7 +340,6 @@ function installSyncMockInWindow({
       } else {
         window.setTimeout(executeRequest, 0);
       }
-
       if (requestPromise !== null) {
         requestPromise.abort = () => {};
         return requestPromise;
@@ -304,47 +352,47 @@ function installSyncMockInWindow({
 }
 
 function createSyncMockConfiguration({
-  count = 0,
-  answeredCount = count,
-  date = "2026-07-17",
+  mastered = 0,
+  attemptCount = 0,
+  date = "2026-08-10",
   token = "test-sync-token",
   configured = true,
   pendingAnswer = null,
-  legacyPendingCorrect = null,
   pendingCelebration = null,
   processedOperations = [],
   userscriptsPromise = false,
   systemClipboard = false,
   site = SITE,
+  nextQuestionId = "45125",
+  catalogQuestionCount = 999,
+  catalogGeneration = catalogQuestionCount === null ? 0 : 1,
 } = {}) {
   return {
-    initialCorrectCount: count,
-    initialAnsweredCount: answeredCount,
+    initialMasteredCount: mastered,
+    initialAttemptCount: attemptCount,
     initialDate: date,
     expectedToken: token,
     expectedSite: site,
     hasStoredToken: configured,
     initialPendingAnswer: pendingAnswer,
-    initialLegacyPendingCorrect: legacyPendingCorrect,
     initialPendingCelebration: pendingCelebration,
     initialProcessedOperations: processedOperations,
     returnsPromise: userscriptsPromise,
     tokenKey: SYNC_TOKEN_KEY,
-    pendingAnswerKey: `kakomonn-reader.${site}.pending-answer`,
-    legacyPendingCorrectKey: `kakomonn-reader.${site}.pending-correct`,
-    celebrationKey: `kakomonn-reader.${site}.pending-celebration`,
+    pendingAnswerKey: `kakomonn-reader.${site}.v4.pending-attempt`,
+    celebrationKey: `kakomonn-reader.${site}.v4.pending-celebration`,
     expectedOrigin: SYNC_API_ORIGIN,
     expectedSpeechOrigin: AZURE_SPEECH_ORIGIN,
     expectedSpeechToken: AZURE_SPEECH_TOKEN,
     writeClipboardToSystem: systemClipboard,
+    initialNextQuestionId: nextQuestionId,
+    initialCatalogQuestionCount: catalogQuestionCount,
+    initialCatalogGeneration: catalogGeneration,
   };
 }
 
 async function installSyncMock(page, options = {}) {
-  await page.evaluate(
-    installSyncMockInWindow,
-    createSyncMockConfiguration(options),
-  );
+  await page.evaluate(installSyncMockInWindow, createSyncMockConfiguration(options));
 }
 
 module.exports = {

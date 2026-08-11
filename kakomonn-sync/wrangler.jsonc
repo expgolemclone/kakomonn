@@ -8,7 +8,10 @@
     "directory": "./public",
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "none",
-    "run_worker_first": ["/v3/*"]
+    "run_worker_first": [
+      "/v3/*",
+      "/v4/*"
+    ]
   },
   "observability": {
     "enabled": true
@@ -18,13 +21,25 @@
       {
         "name": "DAILY_COUNT",
         "class_name": "DailyCount"
+      },
+      {
+        "name": "LEARNING_STATE",
+        "class_name": "LearningState"
       }
     ]
   },
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": ["DailyCount"]
+      "new_sqlite_classes": [
+        "DailyCount"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "LearningState"
+      ]
     }
   ]
 }

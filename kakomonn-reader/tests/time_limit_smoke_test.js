@@ -59,7 +59,7 @@ async function preparePage(browser, script) {
   await page.goto(currentURL, { waitUntil: "domcontentloaded" });
   await page.evaluate(
     installSyncMockInWindow,
-    createSyncMockConfiguration({ configured: true })
+    createSyncMockConfiguration({ configured: true, nextQuestionId: "101" })
   );
   await page.addScriptTag({ content: script });
   await page.locator("#kakomonn-reader-time-limit").waitFor({
@@ -98,7 +98,7 @@ async function questionExpirySkipsWithoutRecording(browser, script) {
     );
     const answerCalls = await page.evaluate(() =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v3/answers"
+        (call) => new URL(call.url).pathname === "/v4/attempts"
       )
     );
     assert.equal(answerCalls.length, 0);
@@ -128,13 +128,13 @@ async function explanationExpiryRecordsAndAdvances(browser, script) {
     await page.waitForFunction(
       () =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v3/answers"
+          (call) => new URL(call.url).pathname === "/v4/attempts"
         ).length === 1
     );
     const recorded = await page.evaluate(() => ({
-      answered: window.__syncMock.answeredCount,
+      answered: window.__syncMock.attemptCount,
       body: window.__syncMock.calls.find(
-        (call) => new URL(call.url).pathname === "/v3/answers"
+        (call) => new URL(call.url).pathname === "/v4/attempts"
       ).body,
     }));
     assert.equal(recorded.answered, 1);

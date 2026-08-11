@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         過去問マイルストーン＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @description  問題文と解説の読み上げ, コピー, 端末間で共有する日次学習記録と50問ごとの祝福を提供します.
+// @description  問題文と解説の読み上げ, コピー, FSRSに基づく定着問題数の端末間同期と祝福を提供します.
 // @match        https://*.kakomonn.com/*
 // @connect      kakomonn-count-sync.expgolem-lab.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com
@@ -42,11 +42,9 @@
     return;
   }
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
-  const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE_ID}.pending-answer`;
-  const LEGACY_PENDING_CORRECT_KEY =
-    `kakomonn-reader.${SITE_ID}.pending-correct`;
+  const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE_ID}.v4.pending-attempt`;
   const PENDING_CELEBRATION_KEY =
-    `kakomonn-reader.${SITE_ID}.pending-celebration`;
+    `kakomonn-reader.${SITE_ID}.v4.pending-celebration`;
   const START_PARAMETER = "count50";
   const SYNC_TIMEOUT_MS = 15000;
   const SPEECH_TIMEOUT_MS = 30000;
@@ -215,8 +213,7 @@
   let currentQuestionText = "";
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
-  let correctCount = null;
-  let activeCountDate = "";
+  let masteredCount = null;
   let syncToken = "";
   let syncReady = false;
   let syncInProgress = false;

@@ -203,10 +203,10 @@ test("accepts a dedicated Edge E2E user data directory with remote debugging", (
       },
       existsSync: (candidatePath) =>
         candidatePath ===
-        path.join(dedicatedUserDataDir, "DevToolsActivePort"),
+        path.win32.join(dedicatedUserDataDir, "DevToolsActivePort"),
       platform: "win32",
     }),
-    path.resolve(dedicatedUserDataDir),
+    path.win32.resolve(dedicatedUserDataDir),
   );
 });
 

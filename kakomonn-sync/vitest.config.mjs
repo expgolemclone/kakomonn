@@ -15,6 +15,14 @@ export default defineConfig({
     }),
   ],
   test: {
+    deps: {
+      optimizer: {
+        ssr: {
+          enabled: true,
+          include: ["ts-fsrs"],
+        },
+      },
+    },
     include: ["kakomonn-sync/tests/**/*.test.js"],
   },
 });

@@ -5,209 +5,115 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#090b12">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="description" content="過去問サイト別の正解数と解答数を週と月で振り返る学習ログ">
-    <title>過去問 学習ログ</title>
+    <meta name="description" content="FSRSに基づく定着問題数を確認する過去問学習dashboard">
+    <title>過去問 定着dashboard</title>
     <link rel="stylesheet" href="/styles.css">
     <script defer src="/app.js"></script>
-    <script defer src="/app-render.js"></script>
-    <script defer src="/app-session.js"></script>
-    <script defer src="/app-interactions.js"></script>
   </head>
   <body>
-    <div class="noise" aria-hidden="true"></div>
     <div class="page-shell">
       <header class="site-header">
-        <div class="brand-lockup">
-          <p class="subject-label">KAKOMONN NETWORK / DAILY ARCHIVE</p>
-          <h1><span>過去問</span><em>演習記録</em></h1>
+        <div>
+          <p class="eyebrow">KAKOMONN / FSRS MASTERY</p>
+          <h1>過去問 <span>定着dashboard</span></h1>
         </div>
-        <div class="header-utility">
-          <p><span class="live-dot" aria-hidden="true"></span>JSTで日次集計</p>
-          <button id="settings-button" class="text-button" type="button" hidden>
-            同期設定
-          </button>
+        <div class="header-actions">
+          <span>Asia/Tokyo</span>
+          <button id="settings-button" class="text-button" type="button" hidden>同期設定</button>
         </div>
       </header>
 
       <main>
-        <section id="auth-panel" class="auth-panel" aria-labelledby="auth-title">
-          <div class="auth-copy">
-            <p class="section-label">DEVICE LINK / 初回のみ</p>
-            <h2 id="auth-title">学習記録へ<br>接続する</h2>
-            <p class="auth-description">
-              過去問readerで使っている同期tokenを入力します. tokenはこのbrowserだけに保存します.
-            </p>
-            <form id="auth-form" novalidate>
-              <label for="auth-token">同期token</label>
-              <div class="token-row">
-                <input
-                  id="auth-token"
-                  name="token"
-                  type="password"
-                  autocomplete="current-password"
-                  spellcheck="false"
-                  required
-                >
-                <button id="auth-submit" class="primary-button" type="submit">記録を開く</button>
-              </div>
-            </form>
-            <p id="auth-message" class="form-message" role="alert"></p>
-          </div>
-          <div class="auth-signal" aria-hidden="true">
-            <p>7 DAY STUDY SIGNAL</p>
-            <div class="signal-bars">
-              <i></i>
-              <i></i>
-              <i></i>
-              <i></i>
-              <i></i>
-              <i></i>
-              <i></i>
+        <section id="auth-panel" class="panel auth-panel" aria-labelledby="auth-title">
+          <p class="eyebrow">DEVICE LINK</p>
+          <h2 id="auth-title">学習記録へ接続</h2>
+          <p>過去問readerと同じ同期tokenを入力します. tokenはこのbrowserだけに保存します.</p>
+          <form id="auth-form" class="auth-form" novalidate>
+            <label for="auth-token">同期token</label>
+            <div class="input-row">
+              <input id="auth-token" type="password" autocomplete="current-password" spellcheck="false" required>
+              <button class="primary-button" type="submit">開く</button>
             </div>
-            <strong>継続を可視化する</strong>
-          </div>
+          </form>
+          <p id="auth-message" class="message" role="alert"></p>
         </section>
 
-        <section id="dashboard" class="ledger" aria-labelledby="period-title" hidden>
-          <div class="ledger-controls">
-            <div class="site-selection">
-              <label for="site-select">サイト</label>
-              <select id="site-select" aria-label="表示する過去問サイト"></select>
-            </div>
-            <div class="view-switch" role="group" aria-label="表示期間">
-              <button id="all-view" type="button" aria-pressed="true">全期間</button>
-              <button id="week-view" type="button" aria-pressed="false">週</button>
-              <button id="month-view" type="button" aria-pressed="false">月</button>
-            </div>
-            <div class="period-navigation">
-              <button id="previous-period" class="icon-button" type="button" aria-label="前の期間">←</button>
-              <div class="period-heading">
-                <p>ACTIVE RANGE</p>
-                <h2 id="period-title"></h2>
-              </div>
-              <button id="next-period" class="icon-button" type="button" aria-label="次の期間">→</button>
-            </div>
-            <div class="period-actions">
-              <button id="today-button" class="text-button" type="button">今日へ</button>
-              <button id="refresh-button" class="text-button" type="button">再読み込み</button>
-            </div>
+        <section id="dashboard" hidden>
+          <div class="toolbar">
+            <label for="site-select">サイト</label>
+            <select id="site-select"></select>
+            <button id="refresh-button" class="text-button" type="button">再読み込み</button>
           </div>
 
-          <div class="dashboard-grid">
-            <dl class="period-summary" aria-label="選択期間の集計">
-              <div class="summary-block summary-total">
-                <dt>合計</dt>
-                <dd>
-                  <span class="summary-primary">
-                    <strong id="total-count">--</strong><small>正解</small>
-                  </span>
-                  <span class="summary-reference">
-                    <strong id="total-answered">--</strong><small>解答</small>
-                  </span>
-                </dd>
-              </div>
-              <div class="summary-block summary-average">
-                <dt>1日平均</dt>
-                <dd>
-                  <span class="summary-primary">
-                    <strong id="average-count">--</strong><small>正解</small>
-                  </span>
-                  <span class="summary-reference">
-                    <strong id="average-answered">--</strong><small>解答</small>
-                  </span>
-                </dd>
-              </div>
-              <div class="summary-note">
-                <dt>集計範囲</dt>
-                <dd id="tracking-note"></dd>
-              </div>
-              <div class="sheet-code" aria-hidden="true">
-                <span>KAKOMONN</span>
-                <span>LOG / JST</span>
-              </div>
-            </dl>
+          <section class="mastery-card" aria-labelledby="mastery-title">
+            <div>
+              <p class="eyebrow">PRIMARY KPI</p>
+              <h2 id="mastery-title">定着問題数</h2>
+            </div>
+            <div class="mastery-number"><strong id="mastered-count">--</strong><span>問</span></div>
+            <div class="mastery-meta">
+              <span id="today-delta">今日 --</span>
+              <span id="goal-label">目標 --</span>
+            </div>
+          </section>
 
-            <figure class="chart-figure" aria-labelledby="chart-caption">
-              <figcaption id="chart-caption">
-                <span class="chart-title">日ごとの学習記録</span>
-                <span class="chart-legend" aria-label="graphの凡例">
-                  <span><i class="legend-correct" aria-hidden="true"></i>正解</span>
-                  <span><i class="legend-answered" aria-hidden="true"></i>解答</span>
-                  <span><i class="legend-accuracy" aria-hidden="true"></i>正答率</span>
-                </span>
-              </figcaption>
-              <div id="chart-scroller" class="chart-scroller" tabindex="0" aria-label="正解数, 解答数, 正答率のgraph. 横にswipeして移動できます">
-                <div id="chart-frame" class="chart-frame">
-                  <div class="scale" aria-hidden="true">
-                    <span id="scale-maximum">--</span>
-                    <span id="scale-middle">--</span>
-                    <span>0</span>
-                  </div>
-                  <div class="plot">
-                    <div class="grid-lines" aria-hidden="true"><i></i><i></i><i></i></div>
-                    <ol id="bar-chart" class="bar-chart"></ol>
-                    <div id="accuracy-layer" class="accuracy-layer" aria-hidden="true">
-                      <svg id="accuracy-line" class="accuracy-line" preserveAspectRatio="none">
-                        <g id="accuracy-points"></g>
-                      </svg>
-                      <div class="accuracy-scale">
-                        <span>100%</span>
-                        <span>50%</span>
-                        <span>0%</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <p id="chart-scroll-hint" class="chart-scroll-hint">mouse wheel, swipe, dragで日付を横移動. 月表示では端から前後の月へ移動</p>
-              <div class="chart-footer">
-                <p id="day-detail" class="day-detail" aria-live="polite"></p>
-                <p id="empty-message" class="empty-message" hidden>
-                  この期間はまだ解答記録がありません. 過去問を解くと, ここに棒が立ちます.
-                </p>
-              </div>
-            </figure>
-          </div>
-          <p id="dashboard-status" class="dashboard-status" role="status" aria-live="polite"></p>
+          <section class="goal-card" aria-labelledby="goal-title">
+            <div>
+              <p class="eyebrow">TODAY</p>
+              <h2 id="goal-title">今日の定着純増目標</h2>
+            </div>
+            <div class="goal-controls">
+              <label for="daily-goal">目標</label>
+              <input id="daily-goal" type="number" min="1" max="100" step="1" inputmode="numeric">
+              <button id="save-goal" class="primary-button" type="button">保存</button>
+            </div>
+            <p id="goal-progress" class="goal-progress">今日 -- / --</p>
+          </section>
+
+          <figure class="history-card" aria-labelledby="history-title">
+            <figcaption>
+              <p class="eyebrow">7 DAY STOCK</p>
+              <h2 id="history-title">定着問題数の7日推移</h2>
+            </figcaption>
+            <div class="chart-wrap">
+              <svg id="mastery-chart" viewBox="0 0 700 260" role="img" aria-label="定着問題数の7日推移"></svg>
+            </div>
+            <p id="history-empty" class="muted" hidden>まだ定着推移はありません.</p>
+          </figure>
+
+          <p id="dashboard-status" class="message" role="status" aria-live="polite"></p>
         </section>
 
-        <section id="site-empty" class="error-panel" aria-labelledby="site-empty-title" hidden>
-          <p class="section-label">NO STUDY SITES</p>
-          <h2 id="site-empty-title">学習記録はまだありません</h2>
-          <p>過去問readerで問題ページを開くと, サイト別の学習記録がここに表示されます.</p>
+        <section id="site-empty" class="panel" hidden>
+          <p class="eyebrow">NO STUDY SITES</p>
+          <h2>学習記録はまだありません</h2>
+          <p>過去問readerで問題catalogを同期すると, ここにサイトが表示されます.</p>
         </section>
 
-        <section id="load-error" class="error-panel" aria-labelledby="error-title" hidden>
-          <p class="section-label">LOAD ERROR</p>
-          <h2 id="error-title">学習記録を表示できません</h2>
+        <section id="load-error" class="panel" hidden>
+          <p class="eyebrow">LOAD ERROR</p>
+          <h2>学習記録を表示できません</h2>
           <p id="error-message"></p>
           <button id="retry-button" class="primary-button" type="button">再読み込み</button>
         </section>
       </main>
 
       <footer>
-        <p>正解数と解答数は日本時間で記録します.</p>
-        <span>PAST QUESTIONS / PRIVATE STUDY LOG</span>
+        <p>定着 = FSRS stabilityが30日以上の問題.</p>
       </footer>
     </div>
 
     <dialog id="settings-dialog" aria-labelledby="settings-title">
       <form id="settings-form" method="dialog" novalidate>
         <button id="settings-close" class="dialog-close" type="button" aria-label="同期設定を閉じる">×</button>
-        <p class="section-label">DEVICE SETTINGS</p>
+        <p class="eyebrow">DEVICE SETTINGS</p>
         <h2 id="settings-title">同期token</h2>
         <label for="settings-token">新しい同期token</label>
-        <input
-          id="settings-token"
-          name="token"
-          type="password"
-          autocomplete="current-password"
-          spellcheck="false"
-        >
-        <p id="settings-message" class="form-message" role="alert"></p>
+        <input id="settings-token" type="password" autocomplete="current-password" spellcheck="false">
+        <p id="settings-message" class="message" role="alert"></p>
         <div class="dialog-actions">
           <button id="forget-token" class="danger-button" type="button">この端末から削除</button>
-          <button id="save-token" class="primary-button" type="submit">tokenを変更</button>
+          <button class="primary-button" type="submit">tokenを変更</button>
         </div>
       </form>
     </dialog>

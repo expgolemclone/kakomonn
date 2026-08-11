@@ -193,7 +193,10 @@ async function main() {
         },
       });
     });
-    await installSyncMock(page, { userscriptsPromise: true });
+    await installSyncMock(page, {
+      nextQuestionId: "86957",
+      userscriptsPromise: true,
+    });
     await page.addScriptTag({ content: script });
     await page.locator("#kakomonn-reader-frame").waitFor({ state: "attached" });
 
@@ -211,7 +214,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count")?.textContent ===
-        "0問,次は50問",
+        "定着 0問",
     );
     assert.deepEqual(
       await childFrame.evaluate(() => {
@@ -430,6 +433,7 @@ async function main() {
         );
       }
     });
+    await page.evaluate(() => { window.__syncMock.nextMasteryDelta = 1; });
     await nextButton.tap({ force: true });
     await page.waitForTimeout(250);
     const inputEvents = await page.evaluate(
@@ -449,7 +453,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count")?.textContent ===
-        "1問,次は50問",
+        "定着 1問",
     );
     assert.equal(
       await page.evaluate(
@@ -457,7 +461,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v3/answers",
+              new URL(call.url).pathname === "/v4/attempts",
           ).length,
       ),
       1,

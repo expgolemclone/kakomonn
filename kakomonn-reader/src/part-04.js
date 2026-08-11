@@ -100,24 +100,6 @@
     return url.href;
   }
 
-  function findNextQuestionURL() {
-    if (!frameDocument?.body) {
-      return null;
-    }
-
-    const links = frameDocument.querySelectorAll("a[href]");
-    const nextURLs = new Set();
-
-    for (const link of links) {
-      const nextURL = getNextQuestionURL(link);
-      if (nextURL !== null) {
-        nextURLs.add(nextURL);
-      }
-    }
-
-    return nextURLs.size === 1 ? nextURLs.values().next().value : null;
-  }
-
   function clearTimeLimit(hide = true) {
     if (timeLimitTimeout !== null) {
       window.clearTimeout(timeLimitTimeout);
@@ -215,14 +197,10 @@
     renderTimeLimit();
     clearTimeLimit(false);
     timeLimitProgress.value = 0;
-    if (findNextQuestionURL() === null) {
-      setStatus("時間切れですが次の問題リンクがありません");
-      return;
-    }
 
     if (expectedPhase === "question") {
       setStatus("問題の制限時間が終了しました");
-      proceedToNextQuestion();
+      void advanceWithoutAttempt();
       return;
     }
 

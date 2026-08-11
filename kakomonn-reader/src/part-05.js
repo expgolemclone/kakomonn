@@ -1,66 +1,60 @@
-  function answeredQuestionHasNextURL() {
-    return (
-      getCurrentAnswerResult() !== "unknown" && findNextQuestionURL() !== null
-    );
+  function currentQuestionId() {
+    const questionId = extractQuestionIdFromURL(currentFrameURL);
+    if (questionId !== null) {
+      return questionId;
+    }
+    if (currentFrameURL !== `https://${SITE_ID}/questions`) {
+      return null;
+    }
+    const randomQuestionId = frameDocument?.querySelector(
+      'input[type="hidden"][name="StudyRandumId"]',
+    )?.value;
+    return /^\d+$/.test(randomQuestionId ?? "") ? randomQuestionId : null;
+  }
+
+  function answeredQuestionCanSync() {
+    return getCurrentAnswerResult() !== "unknown" && currentQuestionId() !== null;
   }
 
   function updateNextQuestionButton() {
     if (syncInProgress) {
       nextQuestionButton.textContent = "学習記録を同期中";
-      nextQuestionButton.disabled =
-        !syncReady ||
-        navigationInProgress ||
-        nextQuestionOperationInProgress ||
-        !syncSettings.hidden ||
-        !answeredQuestionHasNextURL();
+      nextQuestionButton.disabled = true;
       return;
     }
-
     if (nextQuestionOperationInProgress) {
       nextQuestionButton.textContent = "解答記録を処理中";
       nextQuestionButton.disabled = true;
       return;
     }
-
     if (!syncReady) {
       nextQuestionButton.textContent = "同期を再試行";
       nextQuestionButton.disabled = !syncToken;
       return;
     }
-
     if (pendingAnswer !== null) {
       nextQuestionButton.textContent =
-        pendingAnswer.phase === "queued"
-          ? "同期を再試行"
-          : "次の問題を準備中";
-      nextQuestionButton.disabled =
-        pendingAnswer.phase === "awaiting_navigation" &&
-        currentFrameURL === pendingAnswer.pageURL &&
-        findNextQuestionURL() === null;
+        pendingAnswer.phase === "queued" ? "同期を再試行" : "次の問題を準備中";
+      nextQuestionButton.disabled = navigationInProgress;
       return;
     }
-
     if (pendingCelebration !== null) {
-      const sourcePageActive =
-        currentFrameURL === pendingCelebration.sourcePageURL;
-      nextQuestionButton.textContent = sourcePageActive
-        ? "次の問題を準備中"
-        : "祝福を表示";
-      nextQuestionButton.disabled =
-        celebrationTransitionPromise !== null ||
-        navigationInProgress ||
-        (sourcePageActive && findNextQuestionURL() === null);
+      nextQuestionButton.textContent = "祝福を表示";
+      nextQuestionButton.disabled = celebrationTransitionPromise !== null;
       return;
     }
-
     if (navigationInProgress) {
       nextQuestionButton.textContent = "移動中…";
       nextQuestionButton.disabled = true;
       return;
     }
-
+    if (currentQuestionId() === null) {
+      nextQuestionButton.textContent = "問題IDを取得できません";
+      nextQuestionButton.disabled = true;
+      return;
+    }
     nextQuestionButton.textContent = "次の問題へ";
-    nextQuestionButton.disabled = !answeredQuestionHasNextURL();
+    nextQuestionButton.disabled = !answeredQuestionCanSync();
   }
 
   function getCurrentAnswerResult() {
@@ -68,14 +62,11 @@
     if (resultBox === null || resultBox === undefined) {
       return "unknown";
     }
-
     const correctResult = resultBox.classList.contains("is-correct");
     const incorrectResult = resultBox.classList.contains("is-wrong");
-
     if (correctResult === incorrectResult) {
       return "unknown";
     }
-
     return correctResult ? "correct" : "incorrect";
   }
 
@@ -83,34 +74,29 @@
     if (typeof globalThis.crypto?.getRandomValues !== "function") {
       throw new Error("secure random values are unavailable");
     }
-
     const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-      ""
-    );
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
   }
 
-  function proceedToNextQuestion() {
-    const nextURL = findNextQuestionURL();
-    if (nextURL === null) {
+  function navigateToScheduledQuestion(nextURL) {
+    if (!isScheduledQuestionURL(nextURL)) {
       navigationInProgress = false;
-      setStatus("次の問題リンクがありません");
-      updateNextQuestionButton();
-      return;
+      setStatus("次の問題URLが不正です");
+      updateSyncDependentControls();
+      return false;
     }
-
     navigationInProgress = true;
     stopSpeech();
     setStatus("次の問題を反映中");
-    updateNextQuestionButton();
-    updateCopyButton();
-
+    updateSyncDependentControls();
     try {
       frame.src = nextURL;
+      return true;
     } catch {
       navigationInProgress = false;
       setStatus("次の問題へ移動できません");
       updateSyncDependentControls();
+      return false;
     }
   }
 
@@ -127,39 +113,27 @@
     if (pendingAnswerTransitionPromise !== null) {
       return pendingAnswerTransitionPromise;
     }
-
     const operation = pendingAnswer;
     pendingAnswerTransitionPromise = (async () => {
-      if (currentFrameURL !== operation.pageURL) {
-        try {
-          if (
-            pendingAnswer !== null &&
-            pendingAnswer.operationId === operation.operationId &&
-            pendingAnswer.phase === "awaiting_navigation"
-          ) {
-            await clearPendingAnswer();
-          }
-          setStatus(
-            pendingCelebration === null
-              ? "解答記録を同期しました"
-              : `${pendingCelebration.milestone}問達成.祝福を準備中`
-          );
-          return true;
-        } catch {
-          setStatus("完了した解答記録を削除できません.再試行してください");
-          return false;
-        }
+      if (currentFrameURL === operation.nextURL) {
+        await clearPendingAnswer();
+        setStatus(
+          pendingCelebration === null
+            ? "解答記録を同期しました"
+            : `${pendingCelebration.milestone}問定着.祝福を準備中`
+        );
+        return true;
       }
-
       if (frameDocument === null || navigationInProgress) {
         return false;
       }
-      proceedToNextQuestion();
-      return navigationInProgress;
+      return navigateToScheduledQuestion(operation.nextURL);
     })();
-
     try {
       return await pendingAnswerTransitionPromise;
+    } catch {
+      setStatus("次の問題への遷移を完了できません.再試行してください");
+      return false;
     } finally {
       pendingAnswerTransitionPromise = null;
       updateSyncDependentControls();
@@ -169,7 +143,6 @@
 
   async function savePendingCelebration(operation, milestone) {
     const celebration = {
-      date: operation.date,
       milestone,
       site: SITE_ID,
       sourcePageURL: operation.pageURL,
@@ -177,7 +150,6 @@
     if (!isPendingCelebration(celebration)) {
       throw new Error("invalid pending celebration");
     }
-
     await GM.setValue(PENDING_CELEBRATION_KEY, celebration);
     pendingCelebration = celebration;
   }
@@ -199,37 +171,11 @@
     ) {
       return false;
     }
-
-    if (pendingCelebration.date !== activeCountDate) {
-      celebrationTransitionPromise = (async () => {
-        try {
-          await clearPendingCelebration();
-          setStatus("前日の祝福データを破棄しました");
-          return false;
-        } catch {
-          setStatus("前日の祝福データを破棄できません.再試行してください");
-          return false;
-        } finally {
-          celebrationTransitionPromise = null;
-          updateSyncDependentControls();
-        }
-      })();
-      return celebrationTransitionPromise;
-    }
-
-    if (currentFrameURL === pendingCelebration.sourcePageURL) {
-      if (navigationInProgress) {
-        return false;
-      }
-      proceedToNextQuestion();
-      return true;
-    }
-
     const milestone = pendingCelebration.milestone;
     celebrationTransitionPromise = (async () => {
       navigationInProgress = true;
       stopSpeech();
-      setStatus(`${milestone}問達成`);
+      setStatus(`${milestone}問定着`);
       updateSyncDependentControls();
       try {
         await clearPendingCelebration();
@@ -248,11 +194,15 @@
   }
 
   async function createPendingAnswer(result) {
+    const questionId = currentQuestionId();
+    if (questionId === null) {
+      throw new SyncRequestError("question_id_missing");
+    }
     const operation = {
       operationId: createOperationId(),
-      date: activeCountDate,
+      questionId,
       phase: "queued",
-      pageURL: currentFrameURL,
+      pageURL: `https://${SITE_ID}/questions/${questionId}`,
       result,
       site: SITE_ID,
     };
@@ -265,7 +215,7 @@
 
   async function submitPendingAnswer() {
     if (pendingAnswer === null || syncPromise !== null) {
-      return;
+      return false;
     }
     if (pendingAnswer.phase === "awaiting_navigation") {
       return maybeContinuePendingAnswerNavigation();
@@ -280,46 +230,53 @@
 
     syncPromise = (async () => {
       try {
-        const result = await requestAnswerResult(syncToken, {
-          date: operation.date,
-          operationId: operation.operationId,
-          result: operation.result,
-          site: operation.site,
-        });
-        applyRemoteState(result.state);
-        if (result.completedMilestone !== null) {
-          await savePendingCelebration(
-            operation,
-            result.completedMilestone
-          );
+        const result = await requestAttemptResult(syncToken, operation);
+        if (
+          result.attempt.questionId !== operation.questionId ||
+          result.attempt.result !== operation.result
+        ) {
+          throw new SyncRequestError("invalid_response");
         }
-        await markPendingAnswerAwaitingNavigation(operation);
-        syncReady = true;
-        navigationInProgress = false;
-        setStatus("解答記録を同期しました.次の問題を準備中");
-        return true;
-      } catch (error) {
-        if (error?.code === "date_changed" && isSyncState(error.state)) {
-          applyRemoteState(error.state);
-          try {
-            await markPendingAnswerAwaitingNavigation(operation);
-            await reconcilePendingDates();
-          } catch {
-            navigationInProgress = false;
-            setStatus("前日の未同期分を破棄できません.再試行してください");
-            return false;
-          }
-          syncReady = true;
-          navigationInProgress = false;
-          setStatus("前日の未同期分を破棄しました");
-          return false;
+        masteredCount = result.totals.mastered;
+        renderCount();
+        if (result.completedMilestone !== null) {
+          await savePendingCelebration(operation, result.completedMilestone);
         }
 
+        const next = await requestNextQuestion(syncToken);
+        syncReady = true;
+        navigationInProgress = false;
+        if (result.attempt.masteryDelta === 1) {
+          setStatus("定着 +1");
+        } else if (result.attempt.masteryDelta === -1) {
+          setStatus("定着 -1");
+        } else {
+          setStatus("解答記録を同期しました");
+        }
+
+        if (next.question === null) {
+          await clearPendingAnswer();
+          setStatus(
+            result.attempt.masteryDelta === 1
+              ? "定着 +1.出題できる問題はありません"
+              : result.attempt.masteryDelta === -1
+                ? "定着 -1.出題できる問題はありません"
+                : "出題できる問題はありません"
+          );
+          return true;
+        }
+        await markPendingAnswerAwaitingNavigation(operation, next.question.url);
+        return true;
+      } catch (error) {
         navigationInProgress = false;
         if (error?.code === "unauthorized") {
           syncReady = false;
         }
-        setStatus(`${syncErrorMessage(error)}.再試行してください`);
+        if (error?.code === "question_id_missing") {
+          setStatus("問題IDを取得できないため解答を記録できません");
+        } else {
+          setStatus(`${syncErrorMessage(error)}.再試行してください`);
+        }
         return false;
       } finally {
         nextQuestionOperationInProgress = false;
@@ -330,8 +287,49 @@
         void maybeContinuePendingCelebration();
       }
     })();
-
     return syncPromise;
+  }
+
+  async function advanceWithoutAttempt() {
+    if (
+      !syncReady ||
+      syncInProgress ||
+      nextQuestionOperationInProgress ||
+      navigationInProgress ||
+      pendingAnswer !== null ||
+      pendingCelebration !== null
+    ) {
+      return false;
+    }
+    const questionId = currentQuestionId();
+    if (questionId === null) {
+      setStatus("問題IDを取得できないため次問移動を停止しました");
+      updateSyncDependentControls();
+      return false;
+    }
+    nextQuestionOperationInProgress = true;
+    navigationInProgress = true;
+    setStatus("次の問題を準備中");
+    updateSyncDependentControls();
+    try {
+      const next = await requestNextQuestion(syncToken, questionId);
+      navigationInProgress = false;
+      if (next.question === null) {
+        setStatus("出題できる問題はありません");
+        return true;
+      }
+      return navigateToScheduledQuestion(next.question.url);
+    } catch (error) {
+      navigationInProgress = false;
+      if (error?.code === "unauthorized") {
+        syncReady = false;
+      }
+      setStatus(`${syncErrorMessage(error)}.再試行してください`);
+      return false;
+    } finally {
+      nextQuestionOperationInProgress = false;
+      updateSyncDependentControls();
+    }
   }
 
   async function handleNextQuestion() {
@@ -344,11 +342,7 @@
         return;
       }
       await activeSync;
-      if (
-        syncInProgress ||
-        navigationInProgress ||
-        nextQuestionOperationInProgress
-      ) {
+      if (syncInProgress || navigationInProgress || nextQuestionOperationInProgress) {
         return;
       }
     }
@@ -365,6 +359,12 @@
       return;
     }
 
+    const questionId = currentQuestionId();
+    if (questionId === null) {
+      setStatus("問題IDを取得できないため解答記録と次問移動を停止しました");
+      updateNextQuestionButton();
+      return;
+    }
     const answerResult = getCurrentAnswerResult();
     if (answerResult === "unknown") {
       setStatus("正誤を確認できません");
@@ -380,11 +380,12 @@
     } catch {
       nextQuestionOperationInProgress = false;
       navigationInProgress = false;
-      setStatus("未同期の解答記録を保存できません");
+      setStatus("問題IDを取得できないため解答を記録できません");
       updateSyncDependentControls();
       return;
     }
-
+    nextQuestionOperationInProgress = false;
+    navigationInProgress = false;
     await submitPendingAnswer();
   }
 

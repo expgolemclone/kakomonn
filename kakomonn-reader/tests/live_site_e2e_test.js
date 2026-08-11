@@ -8,6 +8,8 @@ const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const fixedQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const fixedNextQuestionUrl = "https://chushoks.kakomonn.com/questions/86957";
+const randomScheduledQuestionUrl =
+  "https://chushoks.kakomonn.com/questions/45125";
 const crossDomainQuestionUrls = [
   "https://nurse.kakomonn.com/questions/84233",
   "https://ktjoho.kakomonn.com/questions/87404",
@@ -191,12 +193,12 @@ async function clickNextQuestion(page, frame, expectedNextUrl) {
   );
 }
 
-async function readStoredCount(page) {
-  return page.evaluate(() => window.__syncMock?.count ?? null);
+async function readStoredMastered(page) {
+  return page.evaluate(() => window.__syncMock?.mastered ?? null);
 }
 
 async function readStoredAnsweredCount(page) {
-  return page.evaluate(() => window.__syncMock?.answeredCount ?? null);
+  return page.evaluate(() => window.__syncMock?.attemptCount ?? null);
 }
 
 function normalizeContent(value) {
@@ -239,10 +241,102 @@ async function blockThirdPartyAds(context) {
   });
 }
 
+async function runLiveCatalogCrawlCase(browser, script) {
+  const context = await browser.newContext();
+  await blockThirdPartyAds(context);
+  const page = await context.newPage();
+  const pageErrors = [];
+  const catalogPageTasks = [];
+  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (url.hostname !== "chushoks.kakomonn.com" || !/^\/list1\/\d+$/.test(url.pathname)) {
+      return;
+    }
+    const requestedPage = Number(url.searchParams.get("page"));
+    if (!Number.isSafeInteger(requestedPage) || requestedPage < 1) {
+      return;
+    }
+    catalogPageTasks.push(
+      response.text().then((html) => {
+        const marker = html.match(/全(\d+)ページ中(\d+)ページ目です[。.]/);
+        assert.notEqual(marker, null, `catalog page marker missing: ${url.href}`);
+        return {
+          listPath: url.pathname,
+          requestedPage,
+          totalPages: Number(marker[1]),
+          currentPage: Number(marker[2]),
+          hasQuestionLink: /href=["'][^"']*\/questions\/\d+["']/.test(html),
+        };
+      }),
+    );
+  });
+
+  try {
+    const response = await page.goto(fixedQuestionUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 60_000,
+    });
+    assert.notEqual(response, null);
+    assert.equal(response.ok(), true, `live page returned HTTP ${response.status()}`);
+    await page.getByText("解答する", { exact: true }).waitFor({
+      state: "visible",
+      timeout: readerReadyTimeout,
+    });
+    await page.evaluate(() => localStorage.clear());
+    await installSyncMock(page, { catalogQuestionCount: null });
+    await page.evaluate((source) => {
+      (0, eval)(source);
+    }, script);
+
+    await page.waitForFunction(
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v4/questions"),
+      null,
+      { timeout: 180_000 },
+    );
+    const catalogCall = await page.evaluate(() =>
+      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v4/questions"),
+    );
+    assert.equal(Array.isArray(catalogCall.body.questionIds), true);
+    assert.equal(catalogCall.body.questionIds.length > 0, true);
+    assert.equal(catalogCall.body.expectedGeneration, 0);
+
+    const catalogPages = await Promise.all(catalogPageTasks);
+    assert.equal(catalogPages.length > 0, true);
+    const groups = new Map();
+    for (const pageInfo of catalogPages) {
+      assert.equal(pageInfo.currentPage, pageInfo.requestedPage);
+      assert.equal(pageInfo.totalPages >= pageInfo.currentPage, true);
+      assert.equal(pageInfo.hasQuestionLink, true);
+      const group = groups.get(pageInfo.listPath) ?? { totalPages: pageInfo.totalPages, pages: new Set() };
+      assert.equal(group.totalPages, pageInfo.totalPages);
+      group.pages.add(pageInfo.currentPage);
+      groups.set(pageInfo.listPath, group);
+    }
+    assert.equal(groups.size > 0, true);
+    for (const [listPath, group] of groups) {
+      assert.deepEqual(
+        [...group.pages].sort((left, right) => left - right),
+        Array.from({ length: group.totalPages }, (_value, index) => index + 1),
+        `incomplete live catalog crawl: ${listPath}`,
+      );
+    }
+    assert.deepEqual(pageErrors, []);
+  } finally {
+    await context.close();
+  }
+}
+
 async function runCase(
   browser,
   script,
-  { answerText, expectedBanner, expectedCount, inputMethod = "click" },
+  {
+    answerText,
+    expectedBanner,
+    expectedResultClass,
+    masteryDelta,
+    inputMethod = "click",
+  },
 ) {
   const context = await browser.newContext();
   await blockThirdPartyAds(context);
@@ -265,7 +359,7 @@ async function runCase(
     await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
-    await installSyncMock(page);
+    await installSyncMock(page, { nextQuestionId: "86957" });
     await page.evaluate((source) => {
       (0, eval)(source);
     }, script);
@@ -276,7 +370,7 @@ async function runCase(
     await waitForSyncReady(page);
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
-      "0問,次は50問",
+      "定着 0問",
     );
     assert.deepEqual(
       await frame.locator("body").evaluate((body) => {
@@ -310,7 +404,6 @@ async function runCase(
       state: "visible",
       timeout: 15_000,
     });
-    const expectedResultClass = expectedCount === 1 ? "is-correct" : "is-wrong";
     const resultClasses =
       (await frame.locator("#js-answer-result-box").getAttribute("class")) ?? "";
     assert.equal(resultClasses.split(/\s+/).includes(expectedResultClass), true);
@@ -343,14 +436,16 @@ async function runCase(
       { timeout: 15_000 },
     );
 
+    await page.evaluate((delta) => { window.__syncMock.nextMasteryDelta = delta; }, masteryDelta);
     await clickNextQuestion(page, frame, fixedNextQuestionUrl);
     console.log(JSON.stringify({ phase: "next-clicked", answerText }));
 
-    if (expectedCount === 1) {
+    const expectedMastered = masteryDelta;
+    if (expectedMastered === 1) {
       await page.waitForFunction(
         () =>
           document.querySelector("#kakomonn-reader-count")?.textContent ===
-          "1問,次は50問",
+          "定着 1問",
         null,
         { timeout: 10_000 },
       );
@@ -358,17 +453,17 @@ async function runCase(
       await page.waitForTimeout(1_500);
       assert.equal(
         await page.locator("#kakomonn-reader-count").innerText(),
-        "0問,次は50問",
+        "定着 0問",
       );
     }
 
-    assert.equal(await readStoredCount(page), expectedCount);
+    assert.equal(await readStoredMastered(page), expectedMastered);
     assert.deepEqual(pageErrors, []);
     console.log(
       JSON.stringify({
         answerText,
         expectedBanner,
-        expectedCount,
+        expectedMastered,
         pageErrors,
         status: "passed",
       }),
@@ -381,7 +476,14 @@ async function runCase(
         pageUrl: page.url(),
         countText: await page.locator("#kakomonn-reader-count").textContent().catch(() => null),
         statusText: await page.locator("#kakomonn-reader-status").textContent().catch(() => null),
-        storedCount: await readStoredCount(page).catch(() => null),
+        nextButton: await page.locator("#kakomonn-reader-next").evaluate((button) => ({
+          disabled: button.disabled,
+          text: button.textContent,
+        })).catch(() => null),
+        resultClasses: await page.locator("#kakomonn-reader-frame").evaluate((frame) => [
+          ...(frame.contentDocument?.querySelector("#js-answer-result-box")?.classList ?? []),
+        ]).catch(() => null),
+        storedMastered: await readStoredMastered(page).catch(() => null),
         syncCalls: await page.evaluate(() => window.__syncMock?.calls ?? []).catch(() => []),
         pageErrors,
       }),
@@ -444,7 +546,7 @@ async function runRandomNavigationCase(browser, script) {
       .waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
-    await installSyncMock(page);
+    await installSyncMock(page, { nextQuestionId: "45125" });
     await page.evaluate((source) => {
       (0, eval)(source);
     }, script);
@@ -492,11 +594,28 @@ async function runRandomNavigationCase(browser, script) {
     );
 
     await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-next")?.disabled === false,
+      () => {
+        const button = document.querySelector("#kakomonn-reader-next");
+        return button?.disabled === false && button.textContent === "次の問題へ";
+      },
       null,
       { timeout: 15_000 },
     );
-    await clickNextQuestion(page, frame, nextQuestionUrl);
+    await page.waitForTimeout(500);
+    const initialFrameUrl = await frame.locator("body").evaluate(() => location.href);
+    await frame.getByRole("link", { name: "次の問題へ", exact: true }).click();
+    await page.waitForFunction(
+      (expectedUrl) =>
+        location.href === expectedUrl &&
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow.location
+          .href === expectedUrl,
+      randomScheduledQuestionUrl,
+      { timeout: 30_000 },
+    );
+    assert.notEqual(
+      await frame.locator("body").evaluate(() => location.href),
+      initialFrameUrl,
+    );
 
     await page.waitForFunction(
       (previousQuestion) => {
@@ -516,12 +635,12 @@ async function runRandomNavigationCase(browser, script) {
     assert.notEqual(nextQuestion, initialQuestion);
 
     await page.waitForFunction(
-      () => window.__syncMock?.answeredCount === 1,
+      () => window.__syncMock?.attemptCount === 1,
       null,
       { timeout: 10_000 },
     );
     assert.equal(await readStoredAnsweredCount(page), 1);
-    assert.equal(await readStoredCount(page), isCorrect ? 1 : 0);
+    assert.equal(await readStoredMastered(page), 0);
     assert.deepEqual(pageErrors, []);
     console.log(
       JSON.stringify({
@@ -546,10 +665,29 @@ async function runRandomNavigationCase(browser, script) {
           .locator("#kakomonn-reader-status")
           .textContent()
           .catch(() => null),
-        storedCount: await readStoredCount(page).catch(() => null),
+        frameUrl: await page
+          .locator("#kakomonn-reader-frame")
+          .evaluate((frame) => frame.contentWindow?.location.href ?? null)
+          .catch(() => null),
+        nextButton: await page
+          .locator("#kakomonn-reader-next")
+          .evaluate((button) => ({ disabled: button.disabled, text: button.textContent }))
+          .catch(() => null),
+        resultClasses: await page
+          .locator("#kakomonn-reader-frame")
+          .evaluate((frame) => [
+            ...(frame.contentDocument?.querySelector("#js-answer-result-box")?.classList ?? []),
+          ])
+          .catch(() => null),
+        storedMastered: await readStoredMastered(page).catch(() => null),
         storedAnsweredCount: await readStoredAnsweredCount(page).catch(
           () => null,
         ),
+        syncCallPaths: await page
+          .evaluate(() =>
+            window.__syncMock?.calls.map((call) => new URL(call.url).pathname) ?? [],
+          )
+          .catch(() => null),
         pageErrors,
       }),
     );
@@ -951,7 +1089,7 @@ async function runCrossDomainActivationCase(browser, script) {
       );
       const stateSites = await page.evaluate(() =>
         window.__syncMock.calls
-          .filter((call) => new URL(call.url).pathname === "/v3/state")
+          .filter((call) => new URL(call.url).pathname === "/v4/state")
           .map((call) => new URL(call.url).searchParams.get("site"))
       );
       assert.equal(stateSites.length >= 1, true);
@@ -965,18 +1103,27 @@ async function runCrossDomainActivationCase(browser, script) {
 
 async function main() {
   const script = fs.readFileSync(scriptPath, "utf8");
-  const browser = await chromium.launch({ headless: true });
+  const executablePath = process.env.KAKOMONN_CHROMIUM_EXECUTABLE;
+  const browser = await chromium.launch({
+    headless: true,
+    ...(executablePath ? { executablePath } : {}),
+    args: executablePath ? ["--no-sandbox"] : [],
+  });
   try {
+    await runLiveCatalogCrawlCase(browser, script);
     await runCase(browser, script, {
       answerText: "輸入の減少は、GDPを増加させる。",
       expectedBanner: "正解！素晴らしいです",
-      expectedCount: 1,
+      expectedResultClass: "is-correct",
+      masteryDelta: 1,
       inputMethod: "keyboard",
     });
     await runCase(browser, script, {
       answerText: "GDPは、フローとストックの混合概念である。",
       expectedBanner: "残念...",
-      expectedCount: 0,
+      expectedResultClass: "is-wrong",
+      masteryDelta: 0,
+      inputMethod: "keyboard",
     });
     await runRandomNavigationCase(browser, script);
     await runImageChoiceInversionCase(browser, script);

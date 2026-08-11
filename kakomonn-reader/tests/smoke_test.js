@@ -192,7 +192,7 @@ async function preparePage(page, speechMode, syncOptions = {}) {
       body: "<!doctype html><html><body></body></html>",
     }),
   );
-  await page.goto("https://chushoks.kakomonn.com/questions/current");
+  await page.goto("https://chushoks.kakomonn.com/questions/45124");
   await page.evaluate((mode) => {
     if (
       ![
@@ -378,7 +378,7 @@ async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v3/speech-token",
+        (call) => new URL(call.url).pathname === "/v4/speech-token",
       ).length,
   );
 }
@@ -409,7 +409,7 @@ async function main() {
     assert.equal(await page.evaluate(() => typeof window.Audio), "function");
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
-      "0問,次は50問",
+      "定着 0問",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-start").count(),
@@ -821,6 +821,7 @@ async function main() {
       await childFrame.evaluate(() => window.__answerButtonClicks),
       1,
     );
+    await page.evaluate(() => { window.__syncMock.nextMasteryDelta = 1; });
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
     assert.equal(
@@ -833,7 +834,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v3/answers",
+              new URL(call.url).pathname === "/v4/attempts",
           ).length,
       ),
       0,
@@ -1019,7 +1020,7 @@ async function main() {
       () => window.__syncMock.releaseHeldRequest !== null,
     );
     assert.equal(await nextQuestionButton.innerText(), "学習記録を同期中");
-    assert.equal(await nextQuestionButton.isDisabled(), false);
+    assert.equal(await nextQuestionButton.isDisabled(), true);
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
     assert.equal(
@@ -1028,17 +1029,22 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v3/answers",
+              new URL(call.url).pathname === "/v4/attempts",
           ).length,
       ),
       0,
     );
     await page.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await page.waitForFunction(
+      () => document.querySelector("#kakomonn-reader-next").disabled === false,
+    );
+    await childFrame.locator("input[name='answer']").first().focus();
+    await page.keyboard.press("Enter");
     try {
       await page.waitForFunction(
         () =>
           document.querySelector("#kakomonn-reader-count").textContent ===
-          "1問,次は50問",
+          "定着 1問",
       );
     } catch (error) {
       error.readerState = await page.evaluate(() => ({
@@ -1046,8 +1052,8 @@ async function main() {
         status: document.querySelector("#kakomonn-reader-status")?.textContent,
         calls: window.__syncMock.calls,
         server: {
-          correct: window.__syncMock.count,
-          answered: window.__syncMock.answeredCount,
+          mastered: window.__syncMock.mastered,
+          attempts: window.__syncMock.attemptCount,
         },
       }));
       throw error;
@@ -1058,15 +1064,15 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v3/answers",
+              new URL(call.url).pathname === "/v4/attempts",
           ).length,
       ),
       1,
     );
 
     await page.evaluate(() => {
-      window.__syncMock.count = 7;
-      window.__syncMock.answeredCount = 7;
+      window.__syncMock.mastered = 7;
+      window.__syncMock.attemptCount = 7;
       window.__syncMock.holdNextRequest = true;
       window.dispatchEvent(new Event("focus"));
     });
@@ -1081,7 +1087,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "7問,次は50問",
+        "定着 7問",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
@@ -1249,7 +1255,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-count").innerText(),
-      "--問,次は50問",
+      "定着 --問",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").focus();
     await setupPage.keyboard.type("qwert asdfg sk gg yy xz ");
@@ -1264,7 +1270,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-count").innerText(),
-      "0問,次は50問",
+      "定着 0問",
     );
     assert.equal(
       await setupPage.evaluate(
@@ -1431,24 +1437,25 @@ async function main() {
       ),
     );
     assert.equal(await speechTokenCallCount(iosPage), 1);
+    await iosPage.evaluate(() => { window.__syncMock.nextMasteryDelta = 1; });
     await iosPage.locator("#kakomonn-reader-next").tap();
     await iosFrame.waitForURL(
-      "https://chushoks.kakomonn.com/questions/next/45125",
+      "https://chushoks.kakomonn.com/questions/45125",
     );
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "1問,次は50問",
+        "定着 1問",
     );
     await iosPage.evaluate(() => {
-      window.__syncMock.count = 6;
-      window.__syncMock.answeredCount = 6;
+      window.__syncMock.mastered = 6;
+      window.__syncMock.attemptCount = 6;
       window.dispatchEvent(new Event("focus"));
     });
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "6問,次は50問",
+        "定着 6問",
     );
     assert.equal(
       await iosPage.evaluate(
@@ -1456,7 +1463,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v3/answers",
+              new URL(call.url).pathname === "/v4/attempts",
           ).length,
       ),
       1,

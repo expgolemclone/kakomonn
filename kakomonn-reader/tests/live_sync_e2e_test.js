@@ -362,35 +362,40 @@ function readWindowsClipboard() {
   return runWindowsPowerShell("Get-Clipboard -Raw");
 }
 
+function platformPath(platform = process.platform) {
+  return platform === "win32" ? path.win32 : path;
+}
+
 function defaultEdgeUserDataDir(
   environment = process.env,
   platform = process.platform,
 ) {
+  const pathApi = platformPath(platform);
   if (platform === "win32") {
     const localAppData = environment.LOCALAPPDATA;
     if (!localAppData) {
       throw new Error("LOCALAPPDATA is not set");
     }
-    return path.join(localAppData, "Microsoft", "Edge", "User Data");
+    return pathApi.join(localAppData, "Microsoft", "Edge", "User Data");
   }
   if (platform === "darwin") {
-    return path.join(
+    return pathApi.join(
       os.homedir(),
       "Library",
       "Application Support",
       "Microsoft Edge",
     );
   }
-  return path.join(os.homedir(), ".config", "microsoft-edge");
+  return pathApi.join(os.homedir(), ".config", "microsoft-edge");
 }
 
-function isSameOrDescendantPath(parentPath, candidatePath) {
-  const relative = path.relative(parentPath, candidatePath);
+function isSameOrDescendantPath(parentPath, candidatePath, pathApi = path) {
+  const relative = pathApi.relative(parentPath, candidatePath);
   return (
     relative === "" ||
-    (!relative.startsWith(`..${path.sep}`) &&
+    (!relative.startsWith(`..${pathApi.sep}`) &&
       relative !== ".." &&
-      !path.isAbsolute(relative))
+      !pathApi.isAbsolute(relative))
   );
 }
 
@@ -405,16 +410,17 @@ function readEdgeUserDataDir({
       "KAKOMONN_EDGE_USER_DATA_DIR must point to a dedicated Edge E2E user data directory",
     );
   }
-  const userDataDir = path.resolve(configuredPath);
-  const standardUserDataDir = path.resolve(
+  const pathApi = platformPath(platform);
+  const userDataDir = pathApi.resolve(configuredPath);
+  const standardUserDataDir = pathApi.resolve(
     defaultEdgeUserDataDir(environment, platform),
   );
-  if (isSameOrDescendantPath(standardUserDataDir, userDataDir)) {
+  if (isSameOrDescendantPath(standardUserDataDir, userDataDir, pathApi)) {
     throw new Error(
       "KAKOMONN_EDGE_USER_DATA_DIR must be outside the standard Edge user data directory",
     );
   }
-  const activePortPath = path.join(userDataDir, "DevToolsActivePort");
+  const activePortPath = pathApi.join(userDataDir, "DevToolsActivePort");
   if (!existsSync(activePortPath)) {
     throw new Error(
       `Remote debugging is not active. Enable it at edge://inspect/#remote-debugging before running the E2E. Missing: ${activePortPath}`,
@@ -441,26 +447,29 @@ function chromeDevToolsMcpEntry() {
 
 function assertSyncState(state) {
   assert.equal(state.site, "chushoks.kakomonn.com");
-  assert.match(state.date, /^\d{4}-\d{2}-\d{2}$/);
-  assert.equal(Number.isSafeInteger(state.counts?.correct), true);
-  assert.equal(Number.isSafeInteger(state.counts?.answered), true);
-  assert.equal(state.counts.answered >= state.counts.correct, true);
-  assert.equal(state.milestoneInterval, 50);
+  assert.match(state.today, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(Number.isSafeInteger(state.mastered), true);
+  assert.equal(state.mastered >= 0, true);
+  assert.equal(Number.isSafeInteger(state.todayDelta), true);
+  assert.equal(
+    state.catalog === null ||
+      (Number.isSafeInteger(state.catalog?.questionCount) &&
+        state.catalog.questionCount > 0 &&
+        Number.isSafeInteger(state.catalog.updatedAtMs) &&
+        state.catalog.updatedAtMs > 0),
+    true,
+  );
   return state;
 }
 
 async function requestSyncState(token) {
   const query = new URLSearchParams({ site: "chushoks.kakomonn.com" });
-  const response = await fetch(`${syncApiOrigin}/v3/state?${query}`, {
+  const response = await fetch(`${syncApiOrigin}/v4/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
   assert.equal(response.status, 200);
   return assertSyncState(await response.json());
-}
-
-function nextMilestone(correctCount) {
-  return (Math.floor(correctCount / 50) + 1) * 50;
 }
 
 function delay(milliseconds) {
@@ -795,9 +804,7 @@ async function configureSyncToken(
   await mcp.tool("fill", { uid: tokenInput, value: token });
   await mcp.tool("click", { uid: saveButton });
 
-  const expectedCount = `${baseline.counts.correct}問,次は${nextMilestone(
-    baseline.counts.correct,
-  )}問`;
+  const expectedCount = `定着 ${baseline.mastered}問`;
   return waitUntil("the production sync baseline", async () => {
     const state = await readReaderState(mcp);
     return state.settingsHidden && state.count === expectedCount ? state : null;
@@ -948,7 +955,7 @@ async function copyMarkdownInRealEdge(mcp) {
   assert.match(copiedMarkdown, /^## 解説$/m);
 }
 
-async function clickNextQuestion(mcp, expectedCorrectCount) {
+async function clickNextQuestion(mcp) {
   await waitUntil("the enabled next question button", async () => {
     const state = await readReaderState(mcp);
     return state.nextDisabled === false && state.nextText === "次の問題へ"
@@ -974,16 +981,19 @@ async function clickNextQuestion(mcp, expectedCorrectCount) {
   assert.equal(hitTest.targetId, "kakomonn-reader-next", JSON.stringify(hitTest));
   await mcp.tool("click", { uid: nextButton });
 
-  const expectedCount = `${expectedCorrectCount}問,次は${nextMilestone(
-    expectedCorrectCount,
-  )}問`;
-  return waitUntil("question 86957 and the incremented count", async () => {
+  return waitUntil("the FSRS scheduled next question", async () => {
     const state = await readReaderState(mcp);
-    return state.outerURL === nextQuestionUrl &&
-      state.frameURL === nextQuestionUrl &&
-      state.count === expectedCount
-      ? state
-      : null;
+    if (
+      state.outerURL !== state.frameURL ||
+      state.outerURL === currentQuestionUrl ||
+      !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
+        state.outerURL,
+      ) ||
+      !/^定着 \d+問$/.test(state.count ?? "")
+    ) {
+      return null;
+    }
+    return state;
   });
 }
 
@@ -1045,9 +1055,9 @@ async function main() {
   const userDataDir = readEdgeUserDataDir();
   const expectedBuildFingerprint = readExpectedBuildFingerprint();
   const baseline = await requestSyncState(token);
-  if ((baseline.counts.correct + 1) % baseline.milestoneInterval === 0) {
+  if (baseline.mastered % 50 === 49) {
     throw new Error(
-      "The next correct answer reaches a milestone. Run the milestone flow separately before this navigation E2E.",
+      "The next attempt could cross a mastery milestone. Run the milestone flow separately before this navigation E2E.",
     );
   }
 
@@ -1073,27 +1083,26 @@ async function main() {
       baseline,
       expectedBuildFingerprint,
     );
-    assert.equal(configuredState.count, `${baseline.counts.correct}問,次は${nextMilestone(baseline.counts.correct)}問`);
+    assert.equal(configuredState.count, `定着 ${baseline.mastered}問`);
     await submitCorrectAnswer(mcp);
     await copyMarkdownInRealEdge(mcp);
-    const browserState = await clickNextQuestion(
-      mcp,
-      baseline.counts.correct + 1,
-    );
+    const browserState = await clickNextQuestion(mcp);
     const finalState = await requestSyncState(token);
-    assert.equal(finalState.date, baseline.date);
-    assert.equal(finalState.counts.correct, baseline.counts.correct + 1);
-    assert.equal(finalState.counts.answered, baseline.counts.answered + 1);
+    assert.equal(finalState.today, baseline.today);
+    assert.equal(browserState.count, `定着 ${finalState.mastered}問`);
+    assert.equal(
+      Math.abs(finalState.mastered - baseline.mastered) <= 1,
+      true,
+      "one FSRS attempt can change mastered stock by at most one",
+    );
     console.log(
       JSON.stringify({
-        answeredAfter: finalState.counts.answered,
-        answeredBefore: baseline.counts.answered,
         browser: "Microsoft Edge with Tampermonkey",
-        correctAfter: finalState.counts.correct,
-        correctBefore: baseline.counts.correct,
         buildFingerprint: expectedBuildFingerprint,
         frameUrl: browserState.frameURL,
         markdownHeading: expectedMarkdownHeading,
+        masteredAfter: finalState.mastered,
+        masteredBefore: baseline.mastered,
         status: "passed",
       }),
     );

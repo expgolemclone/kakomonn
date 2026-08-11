@@ -1,360 +1,214 @@
-const TOKEN_STORAGE_KEY = "kakomonn-dashboard.sync-token";
-const SITE_STORAGE_KEY = "kakomonn-dashboard.site";
-const REQUEST_TIMEOUT_MS = 15_000;
-const DAY_MILLISECONDS = 86_400_000;
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
-const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
+const TOKEN_KEY = "kakomonn-dashboard.sync-token";
+const SITE_KEY = "kakomonn-dashboard.site";
+const GOAL_KEY = "今日の定着純増目標";
+const DEFAULT_GOAL = 5;
+const API_TIMEOUT_MS = 15000;
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+const byId = (id) => {
+  const element = document.getElementById(id);
+  if (element === null) throw new Error(`missing element: ${id}`);
+  return element;
+};
+
+const el = {
+  authPanel: byId("auth-panel"), authForm: byId("auth-form"), authToken: byId("auth-token"), authMessage: byId("auth-message"),
+  dashboard: byId("dashboard"), siteEmpty: byId("site-empty"), loadError: byId("load-error"), errorMessage: byId("error-message"), retryButton: byId("retry-button"),
+  settingsButton: byId("settings-button"), settingsDialog: byId("settings-dialog"), settingsForm: byId("settings-form"), settingsToken: byId("settings-token"), settingsMessage: byId("settings-message"), settingsClose: byId("settings-close"), forgetToken: byId("forget-token"),
+  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), masteredCount: byId("mastered-count"), todayDelta: byId("today-delta"), goalLabel: byId("goal-label"), dailyGoal: byId("daily-goal"), saveGoal: byId("save-goal"), goalProgress: byId("goal-progress"), masteryChart: byId("mastery-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
+};
+
+const state = { token: "", site: "", sites: [], mastery: null, history: null };
 
 class DashboardError extends Error {
-  constructor(code, status = null) {
-    super(code);
-    this.name = "DashboardError";
-    this.code = code;
-    this.status = status;
-  }
+  constructor(code, status = 0) { super(code); this.code = code; this.status = status; }
 }
 
-function required(id) {
-  const element = document.getElementById(id);
-  if (element === null) {
-    throw new Error(`Required element is missing: ${id}`);
-  }
-  return element;
+function storageGet(key) {
+  try { return localStorage.getItem(key); } catch { throw new DashboardError("storage_unavailable"); }
+}
+function storageSet(key, value) {
+  try { localStorage.setItem(key, value); } catch { throw new DashboardError("storage_unavailable"); }
+}
+function storageRemove(key) {
+  try { localStorage.removeItem(key); } catch { throw new DashboardError("storage_unavailable"); }
 }
 
-const elements = {
-  authPanel: required("auth-panel"),
-  authForm: required("auth-form"),
-  authToken: required("auth-token"),
-  authSubmit: required("auth-submit"),
-  authMessage: required("auth-message"),
-  dashboard: required("dashboard"),
-  siteEmpty: required("site-empty"),
-  siteSelect: required("site-select"),
-  settingsButton: required("settings-button"),
-  allView: required("all-view"),
-  weekView: required("week-view"),
-  monthView: required("month-view"),
-  previousPeriod: required("previous-period"),
-  nextPeriod: required("next-period"),
-  todayButton: required("today-button"),
-  refreshButton: required("refresh-button"),
-  periodTitle: required("period-title"),
-  totalCount: required("total-count"),
-  totalAnswered: required("total-answered"),
-  averageCount: required("average-count"),
-  averageAnswered: required("average-answered"),
-  trackingNote: required("tracking-note"),
-  chartScroller: required("chart-scroller"),
-  chartFrame: required("chart-frame"),
-  barChart: required("bar-chart"),
-  accuracyLine: required("accuracy-line"),
-  accuracyPoints: required("accuracy-points"),
-  scaleMaximum: required("scale-maximum"),
-  scaleMiddle: required("scale-middle"),
-  dayDetail: required("day-detail"),
-  emptyMessage: required("empty-message"),
-  dashboardStatus: required("dashboard-status"),
-  loadError: required("load-error"),
-  errorMessage: required("error-message"),
-  retryButton: required("retry-button"),
-  settingsDialog: required("settings-dialog"),
-  settingsForm: required("settings-form"),
-  settingsToken: required("settings-token"),
-  settingsMessage: required("settings-message"),
-  settingsClose: required("settings-close"),
-  forgetToken: required("forget-token"),
-  saveToken: required("save-token"),
-};
-
-const state = {
-  token: "",
-  recoveryToken: "",
-  sites: [],
-  site: "",
-  today: "",
-  availableFrom: { correct: "", answered: "" },
-  anchorDate: "",
-  view: "all",
-  selectedDate: "",
-  history: null,
-  loading: false,
-};
-
-function dateOrdinal(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return null;
-  }
-  const date = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    return null;
-  }
-  return Math.floor(date.getTime() / DAY_MILLISECONDS);
+function validSite(value) {
+  return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(value);
 }
-
-function dateFromOrdinal(ordinal) {
-  return new Date(ordinal * DAY_MILLISECONDS).toISOString().slice(0, 10);
+function validState(value, site) {
+  return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && Number.isSafeInteger(value.mastered) && value.mastered >= 0 && Number.isSafeInteger(value.todayDelta);
 }
-
-function dateParts(value) {
-  const [year, month, day] = value.split("-").map(Number);
-  return { year, month, day };
-}
-
-function weekday(value) {
-  return new Date(`${value}T00:00:00.000Z`).getUTCDay();
-}
-
-function daysInMonth(year, month) {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
-function shiftMonth(value, amount) {
-  const { year, month, day } = dateParts(value);
-  const monthIndex = year * 12 + month - 1 + amount;
-  const nextYear = Math.floor(monthIndex / 12);
-  const nextMonth = ((monthIndex % 12) + 12) % 12 + 1;
-  const nextDay = Math.min(day, daysInMonth(nextYear, nextMonth));
-  return `${String(nextYear).padStart(4, "0")}-${String(nextMonth).padStart(2, "0")}-${String(nextDay).padStart(2, "0")}`;
-}
-
-function rangeFor(view, anchorDate) {
-  if (view === "week") {
-    const anchorOrdinal = dateOrdinal(anchorDate);
-    const mondayOffset = (weekday(anchorDate) + 6) % 7;
-    const fromOrdinal = anchorOrdinal - mondayOffset;
-    return {
-      from: dateFromOrdinal(fromOrdinal),
-      to: dateFromOrdinal(fromOrdinal + 6),
-    };
-  }
-  if (view === "month") {
-    const { year, month } = dateParts(anchorDate);
-    const prefix = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
-    return {
-      from: `${prefix}-01`,
-      to: `${prefix}-${String(daysInMonth(year, month)).padStart(2, "0")}`,
-    };
-  }
-  throw new TypeError(`Unsupported history view: ${view}`);
-}
-
-function displayedRange() {
-  if (state.view === "all") {
-    return { from: state.history.from, to: state.history.to };
-  }
-  return rangeFor(state.view, state.anchorDate);
-}
-
-function shiftAnchor(view, anchorDate, amount) {
-  if (view === "week") {
-    return dateFromOrdinal(dateOrdinal(anchorDate) + amount * 7);
-  }
-  if (view === "month") {
-    return shiftMonth(anchorDate, amount);
-  }
-  throw new TypeError(`Unsupported history view: ${view}`);
-}
-
-function formatFullDate(value) {
-  const { year, month, day } = dateParts(value);
-  return `${year}年${month}月${day}日`;
-}
-
-function formatShortDate(value) {
-  const { month, day } = dateParts(value);
-  return `${month}月${day}日`;
-}
-
-function formatPeriod(view, range) {
-  if (view === "all") {
-    return "全期間";
-  }
-  if (view === "month") {
-    const { year, month } = dateParts(range.from);
-    return `${year}年${month}月`;
-  }
-  const from = dateParts(range.from);
-  const to = dateParts(range.to);
-  if (from.year === to.year && from.month === to.month) {
-    return `${from.year}年${from.month}月${from.day}日 - ${to.day}日`;
-  }
-  if (from.year === to.year) {
-    return `${from.year}年${from.month}月${from.day}日 - ${to.month}月${to.day}日`;
-  }
-  return `${formatFullDate(range.from)} - ${formatFullDate(range.to)}`;
-}
-
-function readStoredToken() {
-  try {
-    return window.localStorage.getItem(TOKEN_STORAGE_KEY) ?? "";
-  } catch {
-    throw new DashboardError("storage_unavailable");
-  }
-}
-
-function writeStoredToken(token) {
-  try {
-    window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
-  } catch {
-    throw new DashboardError("storage_unavailable");
-  }
-}
-
-function removeStoredToken() {
-  try {
-    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-  } catch {
-    throw new DashboardError("storage_unavailable");
-  }
-}
-
-function readStoredSite() {
-  try {
-    return window.localStorage.getItem(SITE_STORAGE_KEY) ?? "";
-  } catch {
-    throw new DashboardError("storage_unavailable");
-  }
-}
-
-function writeStoredSite(site) {
-  try {
-    window.localStorage.setItem(SITE_STORAGE_KEY, site);
-  } catch {
-    throw new DashboardError("storage_unavailable");
-  }
-}
-
-function removeStoredSite() {
-  try {
-    window.localStorage.removeItem(SITE_STORAGE_KEY);
-  } catch {
-    throw new DashboardError("storage_unavailable");
-  }
-}
-
-function isSite(value) {
-  return (
-    typeof value === "string" &&
-    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(value)
-  );
-}
-
-function isCountPair(value, { nullable }) {
-  if (value === null || typeof value !== "object") {
-    return false;
-  }
-  const validCount = (count) =>
-    (nullable && count === null) ||
-    (Number.isSafeInteger(count) && count >= 0);
-  return (
-    validCount(value.correct) &&
-    validCount(value.answered) &&
-    (value.correct === null || value.answered === null || value.answered >= value.correct)
-  );
-}
-
-function isHistory(value, expectedSite, expectedView, requestedAnchor) {
-  if (
-    value === null ||
-    typeof value !== "object" ||
-    value.site !== expectedSite ||
-    value.timeZone !== "Asia/Tokyo" ||
-    dateOrdinal(value.today) === null ||
-    value.availableFrom === null ||
-    typeof value.availableFrom !== "object" ||
-    dateOrdinal(value.availableFrom.correct) === null ||
-    dateOrdinal(value.availableFrom.answered) === null ||
-    value.availableFrom.correct > value.today ||
-    value.availableFrom.answered < value.availableFrom.correct ||
-    dateOrdinal(value.availableFrom.answered) > dateOrdinal(value.today) + 1 ||
-    !Array.isArray(value.days)
-  ) {
-    return false;
-  }
-  const anchorDate = requestedAnchor === "today" ? value.today : requestedAnchor;
-  const expectedRange =
-    expectedView === "all"
-      ? { from: value.availableFrom.correct, to: value.today }
-      : rangeFor(expectedView, anchorDate);
-  if (value.from !== expectedRange.from || value.to !== expectedRange.to) {
-    return false;
-  }
-  const fromOrdinal = dateOrdinal(expectedRange.from);
-  const toOrdinal = dateOrdinal(expectedRange.to);
-  if (value.days.length !== toOrdinal - fromOrdinal + 1) {
-    return false;
-  }
-  return value.days.every((entry, index) => {
-    const expectedDate = dateFromOrdinal(fromOrdinal + index);
-    return (
-      entry !== null &&
-      typeof entry === "object" &&
-      entry.date === expectedDate &&
-      isCountPair(entry.counts, { nullable: true }) &&
-      (entry.counts.correct === null) ===
-        (entry.date < value.availableFrom.correct || entry.date > value.today) &&
-      (entry.counts.answered === null) ===
-        (entry.date < value.availableFrom.answered || entry.date > value.today)
-    );
-  });
+function validHistory(value, site) {
+  return value && value.site === site && Array.isArray(value.days) && value.days.length === 7 && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && Number.isSafeInteger(day.mastered) && day.mastered >= 0);
 }
 
 async function requestJSON(path, token) {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   let response;
   try {
-    response = await fetch(path, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-      credentials: "omit",
-      signal: controller.signal,
-    });
+    response = await fetch(path, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: controller.signal });
   } catch (error) {
-    if (error?.name === "AbortError") {
-      throw new DashboardError("request_timeout");
-    }
-    throw new DashboardError("network_error");
+    throw new DashboardError(error?.name === "AbortError" ? "timeout" : "network_error");
   } finally {
-    window.clearTimeout(timeout);
+    clearTimeout(timer);
   }
   let body;
-  try {
-    body = await response.json();
-  } catch {
-    throw new DashboardError("invalid_response", response.status);
-  }
-  if (!response.ok) {
-    throw new DashboardError(
-      typeof body?.error === "string" ? body.error : "request_failed",
-      response.status
-    );
-  }
+  try { body = await response.json(); } catch { throw new DashboardError("invalid_response", response.status); }
+  if (!response.ok) throw new DashboardError(typeof body?.error === "string" ? body.error : "request_failed", response.status);
   return body;
 }
 
-async function fetchSites(token) {
-  const value = await requestJSON("/v3/sites", token);
-  if (
-    value === null ||
-    typeof value !== "object" ||
-    !Array.isArray(value.sites) ||
-    value.sites.some((site) => !isSite(site)) ||
-    new Set(value.sites).size !== value.sites.length ||
-    value.sites.some((site, index) => index > 0 && value.sites[index - 1] >= site)
-  ) {
-    throw new DashboardError("invalid_response");
-  }
-  return value.sites;
+function signed(value) { return `${value >= 0 ? "+" : ""}${value}`; }
+function readGoal() {
+  const raw = storageGet(GOAL_KEY);
+  if (raw === null) return DEFAULT_GOAL;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= 1 && value <= 100 ? value : DEFAULT_GOAL;
+}
+function renderGoal() {
+  const goal = readGoal();
+  const delta = state.mastery?.todayDelta ?? 0;
+  el.dailyGoal.value = String(goal);
+  el.goalLabel.textContent = `目標 +${goal}`;
+  el.goalProgress.textContent = `今日 ${signed(delta)} / +${goal}`;
 }
 
-async function fetchHistory(token, site, view, anchor) {
-  const query = new URLSearchParams({ site, view, anchor });
-  const value = await requestJSON(`/v3/history?${query}`, token);
-  if (!isHistory(value, site, view, anchor)) {
-    throw new DashboardError("invalid_response");
-  }
-  return value;
+function svgNode(name, attrs = {}, text = "") {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+  if (text) node.textContent = text;
+  return node;
 }
+
+function renderChart(days) {
+  el.masteryChart.replaceChildren();
+  const values = days.map((day) => day.mastered);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(1, max - min);
+  const left = 50, right = 670, top = 24, bottom = 210;
+  const x = (index) => left + ((right - left) * index) / Math.max(1, days.length - 1);
+  const y = (value) => bottom - ((value - min) / span) * (bottom - top);
+  for (let i = 0; i < 3; i += 1) {
+    const yy = top + ((bottom - top) * i) / 2;
+    el.masteryChart.append(svgNode("line", { x1: left, y1: yy, x2: right, y2: yy, class: "grid-line" }));
+  }
+  const points = days.map((day, index) => `${x(index)},${y(day.mastered)}`).join(" ");
+  el.masteryChart.append(svgNode("polyline", { points, class: "stock-line", fill: "none" }));
+  days.forEach((day, index) => {
+    const xx = x(index), yy = y(day.mastered);
+    el.masteryChart.append(svgNode("circle", { cx: xx, cy: yy, r: 5, class: "stock-point" }));
+    el.masteryChart.append(svgNode("text", { x: xx, y: yy - 12, class: "value-label", "text-anchor": "middle" }, String(day.mastered)));
+    const [, month, date] = day.date.split("-");
+    el.masteryChart.append(svgNode("text", { x: xx, y: 240, class: "date-label", "text-anchor": "middle" }, `${Number(month)}/${Number(date)}`));
+  });
+  el.historyEmpty.hidden = values.some((value) => value !== 0);
+}
+
+function renderDashboard() {
+  const mastery = state.mastery;
+  el.masteredCount.textContent = String(mastery.mastered);
+  el.todayDelta.textContent = `今日 ${signed(mastery.todayDelta)}`;
+  renderGoal();
+  renderChart(state.history.days);
+  el.dashboard.hidden = false;
+  el.authPanel.hidden = true;
+  el.siteEmpty.hidden = true;
+  el.loadError.hidden = true;
+  el.settingsButton.hidden = false;
+  el.dashboardStatus.textContent = `更新日 ${mastery.today}`;
+}
+
+function showError(error) {
+  const messages = {
+    unauthorized: "同期tokenが正しくありません.", timeout: "読み込みがタイムアウトしました.", network_error: "networkへ接続できません.", storage_unavailable: "browser storageを利用できません.", invalid_response: "API応答が不正です.", server_misconfigured: "同期APIが設定されていません.",
+  };
+  el.errorMessage.textContent = messages[error?.code] ?? "学習記録を読み込めませんでした.";
+  el.loadError.hidden = false;
+  el.dashboard.hidden = true;
+  el.siteEmpty.hidden = true;
+}
+
+async function loadSites(token) {
+  const body = await requestJSON("/v4/sites", token);
+  if (!Array.isArray(body.sites) || body.sites.some((site) => !validSite(site))) throw new DashboardError("invalid_response");
+  return body.sites;
+}
+
+async function loadSelectedSite() {
+  const parameters = new URLSearchParams({ site: state.site });
+  const [mastery, history] = await Promise.all([
+    requestJSON(`/v4/state?${parameters}`, state.token),
+    requestJSON(`/v4/history?${new URLSearchParams({ site: state.site, days: "7" })}`, state.token),
+  ]);
+  if (!validState(mastery, state.site) || !validHistory(history, state.site)) throw new DashboardError("invalid_response");
+  state.mastery = mastery; state.history = history;
+  renderDashboard();
+}
+
+function renderSiteOptions() {
+  el.siteSelect.replaceChildren(...state.sites.map((site) => {
+    const option = document.createElement("option"); option.value = site; option.textContent = site; return option;
+  }));
+  el.siteSelect.value = state.site;
+}
+
+async function connect(token, { persist = true } = {}) {
+  state.token = token;
+  state.sites = await loadSites(token);
+  if (persist) storageSet(TOKEN_KEY, token);
+  if (state.sites.length === 0) {
+    el.authPanel.hidden = true; el.dashboard.hidden = true; el.loadError.hidden = true; el.siteEmpty.hidden = false; el.settingsButton.hidden = false; return;
+  }
+  const saved = storageGet(SITE_KEY);
+  state.site = state.sites.includes(saved) ? saved : state.sites[0];
+  storageSet(SITE_KEY, state.site);
+  renderSiteOptions();
+  await loadSelectedSite();
+}
+
+el.authForm.addEventListener("submit", async (event) => {
+  event.preventDefault(); const token = el.authToken.value.trim();
+  if (!token) { el.authMessage.textContent = "同期tokenを入力してください."; return; }
+  el.authMessage.textContent = "接続中";
+  try { await connect(token); el.authToken.value = ""; el.authMessage.textContent = ""; } catch (error) { el.authMessage.textContent = error?.code === "unauthorized" ? "同期tokenが正しくありません." : "接続できませんでした."; }
+});
+
+el.siteSelect.addEventListener("change", async () => {
+  if (!state.sites.includes(el.siteSelect.value)) return;
+  state.site = el.siteSelect.value; storageSet(SITE_KEY, state.site);
+  try { await loadSelectedSite(); } catch (error) { showError(error); }
+});
+el.refreshButton.addEventListener("click", async () => { try { await loadSelectedSite(); } catch (error) { showError(error); } });
+el.retryButton.addEventListener("click", async () => { try { await connect(state.token, { persist: false }); } catch (error) { showError(error); } });
+el.saveGoal.addEventListener("click", () => {
+  const goal = Number(el.dailyGoal.value);
+  if (!Number.isSafeInteger(goal) || goal < 1 || goal > 100) { el.dashboardStatus.textContent = "目標は1から100の整数で入力してください."; return; }
+  storageSet(GOAL_KEY, String(goal)); renderGoal(); el.dashboardStatus.textContent = "今日の定着純増目標を保存しました.";
+});
+
+el.settingsButton.addEventListener("click", () => { el.settingsMessage.textContent = ""; el.settingsToken.value = ""; el.settingsDialog.showModal(); });
+el.settingsClose.addEventListener("click", () => el.settingsDialog.close());
+el.settingsForm.addEventListener("submit", async (event) => {
+  event.preventDefault(); const token = el.settingsToken.value.trim();
+  if (!token) { el.settingsMessage.textContent = "同期tokenを入力してください."; return; }
+  try { await connect(token); el.settingsDialog.close(); } catch (error) { el.settingsMessage.textContent = error?.code === "unauthorized" ? "同期tokenが正しくありません." : "tokenを変更できませんでした."; }
+});
+el.forgetToken.addEventListener("click", () => {
+  storageRemove(TOKEN_KEY); storageRemove(SITE_KEY); state.token = ""; state.site = ""; state.sites = []; state.mastery = null; state.history = null;
+  el.settingsDialog.close(); el.settingsButton.hidden = true; el.dashboard.hidden = true; el.siteEmpty.hidden = true; el.loadError.hidden = true; el.authPanel.hidden = false;
+});
+
+(async () => {
+  try {
+    const token = storageGet(TOKEN_KEY) ?? "";
+    if (!token) return;
+    await connect(token, { persist: false });
+  } catch (error) {
+    if (error?.code === "unauthorized") { storageRemove(TOKEN_KEY); el.authMessage.textContent = "保存済みtokenを確認してください."; return; }
+    showError(error);
+  }
+})();

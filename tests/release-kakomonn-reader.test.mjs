@@ -142,7 +142,7 @@ test("makes live Edge and production sync the final npm test gates", () => {
   ]);
   assert.match(
     packageJson.scripts["test:kakomonn-live-sync"],
-    /node kakomonn-reader\/tests\/live_sync_e2e_test\.js$/,
+    /node --use-system-ca kakomonn-reader\/tests\/live_sync_e2e_test\.js$/,
   );
 });
 

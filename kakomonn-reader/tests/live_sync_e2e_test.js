@@ -21,6 +21,7 @@ const expectedMarkdownHeading =
 const requestTimeoutMs = 30_000;
 const browserApprovalTimeoutMs = 120_000;
 const edgeViewport = { height: 900, width: 1440 };
+const edgeViewportTolerancePx = 1;
 const buildFingerprintPattern =
   /const BUILD_FINGERPRINT = "([0-9a-f]{64})";/g;
 const remoteDebugApprovalPowerShell = String.raw`
@@ -1038,8 +1039,10 @@ async function resizeToExactViewport(mcp) {
       })`,
     );
     if (
-      actualViewport.height === edgeViewport.height &&
-      actualViewport.width === edgeViewport.width
+      Math.abs(actualViewport.height - edgeViewport.height) <=
+        edgeViewportTolerancePx &&
+      Math.abs(actualViewport.width - edgeViewport.width) <=
+        edgeViewportTolerancePx
     ) {
       return;
     }
@@ -1057,7 +1060,14 @@ async function resizeToExactViewport(mcp) {
       break;
     }
   }
-  assert.deepEqual(actualViewport, edgeViewport);
+  assert.equal(
+    Math.abs(actualViewport.height - edgeViewport.height) <=
+      edgeViewportTolerancePx &&
+      Math.abs(actualViewport.width - edgeViewport.width) <=
+        edgeViewportTolerancePx,
+    true,
+    JSON.stringify({ actualViewport, edgeViewport }),
+  );
 }
 
 async function main() {

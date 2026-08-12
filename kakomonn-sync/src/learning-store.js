@@ -162,7 +162,7 @@ function assertAttempt(site, questionId, operationId, result) {
   }
 }
 
-export class LearningState extends DurableObject {
+export class StabilityState extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.ctx.blockConcurrencyWhile(async () => {
@@ -358,7 +358,7 @@ export class LearningState extends DurableObject {
       )
       .toArray()[0];
     if (row === undefined) {
-      throw new Error("missing LearningState settings");
+      throw new Error("missing StabilityState settings");
     }
     return { site, dailyStabilityDaysGoal: row.daily_stability_days_goal };
   }
@@ -380,7 +380,7 @@ export class LearningState extends DurableObject {
       )
       .toArray()[0];
     if (updated === undefined) {
-      throw new Error("missing LearningState settings");
+      throw new Error("missing StabilityState settings");
     }
     return { site, dailyStabilityDaysGoal: updated.daily_stability_days_goal };
   }
@@ -514,7 +514,7 @@ export class LearningState extends DurableObject {
   }
 }
 
-export function getLearningStateStub(env) {
+export function getStabilityStateStub(env) {
   const id = env.LEARNING_STATE.idFromName(LEARNING_STATE_OBJECT_NAME);
   return env.LEARNING_STATE.get(id);
 }

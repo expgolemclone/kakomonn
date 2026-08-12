@@ -1,5 +1,5 @@
 import { ANSWER_RESULTS, OPERATION_ID_PATTERN, QUESTION_ID_PATTERN } from "../contracts.js";
-import { getLearningStateStub } from "../learning-store.js";
+import { getStabilityStateStub } from "../learning-store.js";
 import { isSite } from "../auth.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
@@ -29,7 +29,7 @@ export async function handleAttempts(request, env) {
   ) {
     return errorResponse("invalid_request", 400);
   }
-  const result = await getLearningStateStub(env).recordAttempt(
+  const result = await getStabilityStateStub(env).recordAttempt(
     body.site,
     body.questionId,
     body.operationId,

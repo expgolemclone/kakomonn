@@ -74,7 +74,7 @@ async function seedReviewCard(
 
 beforeEach(reset);
 
-describe("LearningState schema", () => {
+describe("StabilityState schema", () => {
   it("installs query indexes idempotently", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       initializeLearningSchema(state.storage, NOW);

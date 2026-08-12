@@ -74,7 +74,7 @@ test("production assets match the repository", async (context) => {
   }
 });
 
-test("production serves only the authenticated v5 API backed by LearningState", async () => {
+test("production serves only the authenticated v5 API backed by StabilityState", async () => {
   const unauthorized = await fetch(new URL("/v5/sites", productionOrigin));
   assert.equal(unauthorized.status, 401);
   assert.deepEqual(await unauthorized.json(), { error: "unauthorized" });

@@ -1,6 +1,6 @@
 import { isSite } from "../auth.js";
 import { QUESTION_ID_PATTERN } from "../contracts.js";
-import { getLearningStateStub } from "../learning-store.js";
+import { getStabilityStateStub } from "../learning-store.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
 export async function handleNext(url, env) {
@@ -22,7 +22,7 @@ export async function handleNext(url, env) {
   ) {
     return errorResponse("invalid_request", 400);
   }
-  const next = await getLearningStateStub(env).nextQuestion(
+  const next = await getStabilityStateStub(env).nextQuestion(
     site,
     Date.now(),
     excludeQuestionId

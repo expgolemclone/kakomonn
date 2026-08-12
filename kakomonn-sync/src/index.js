@@ -1,4 +1,4 @@
-import { LearningState, getLearningStateStub } from "./learning-store.js";
+import { StabilityState, getStabilityStateStub } from "./learning-store.js";
 import { isAuthorized } from "./auth.js";
 import { errorResponse, jsonResponse } from "./http.js";
 import { handleAttempts } from "./api/attempts.js";
@@ -9,7 +9,7 @@ import { handleQuestions } from "./api/questions.js";
 import { handleSettings } from "./api/settings.js";
 import { issueSpeechToken } from "./speech.js";
 
-export { LearningState, issueSpeechToken };
+export { StabilityState, issueSpeechToken };
 export * from "./fsrs.js";
 export { initializeLearningSchema } from "./learning-store.js";
 
@@ -46,7 +46,7 @@ export async function handleRequest(request, env, fetcher = fetch) {
     if (url.search !== "") {
       return errorResponse("invalid_request", 400);
     }
-    return jsonResponse({ sites: await getLearningStateStub(env).listSites() });
+    return jsonResponse({ sites: await getStabilityStateStub(env).listSites() });
   }
   if (url.pathname === "/v5/state") {
     return handleState(url, env);

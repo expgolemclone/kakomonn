@@ -202,14 +202,14 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     ) {
       migrateLegacySchema(storage, getTokyoDate(new Date(nowMs)));
     } else if (existingCurrent.length !== currentTables.length) {
-      throw new Error("incomplete LearningState schema");
+      throw new Error("incomplete StabilityState schema");
     }
 
     const version = storage.sql
       .exec("SELECT version FROM schema_metadata WHERE singleton = 1")
       .toArray()[0]?.version;
     if (version !== CURRENT_SCHEMA_VERSION) {
-      throw new Error("unsupported LearningState schema version");
+      throw new Error("unsupported StabilityState schema version");
     }
     installIndexes(storage);
   });

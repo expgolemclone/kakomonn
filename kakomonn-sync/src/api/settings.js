@@ -1,6 +1,6 @@
 import { isSite } from "../auth.js";
 import { isDailyStabilitySettings } from "../contracts.js";
-import { getLearningStateStub } from "../learning-store.js";
+import { getStabilityStateStub } from "../learning-store.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
 function singleSite(url) {
@@ -17,7 +17,7 @@ function singleSite(url) {
 }
 
 export async function handleSettings(request, url, env) {
-  const stub = getLearningStateStub(env);
+  const stub = getStabilityStateStub(env);
   if (request.method === "GET") {
     const site = singleSite(url);
     if (site === null) {

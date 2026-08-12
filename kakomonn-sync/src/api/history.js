@@ -1,5 +1,5 @@
 import { isSite } from "../auth.js";
-import { getLearningStateStub } from "../learning-store.js";
+import { getStabilityStateStub } from "../learning-store.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
 export async function handleHistory(url, env) {
@@ -22,5 +22,5 @@ export async function handleHistory(url, env) {
   if (!Number.isSafeInteger(days) || days < 1 || days > 31) {
     return errorResponse("invalid_request", 400);
   }
-  return jsonResponse(await getLearningStateStub(env).getHistory(site, days));
+  return jsonResponse(await getStabilityStateStub(env).getHistory(site, days));
 }

@@ -49,7 +49,7 @@ npm run deploy:kakomonn-sync
 
 ## API
 
-APIは`/v5`だけを提供し,LearningState Durable Objectを唯一のsource of truthとします.
+APIは`/v5`だけを提供し,StabilityState Durable Objectを唯一のsource of truthとします.
 
 - `GET /v5/sites`は,問題catalogを登録済みのサイト一覧を返します.
 - `GET /v5/state?site=<host>`は,定着日数,解いた問題数,今日解いた問題数,今日の定着日数純増,問題catalog情報を返します.
@@ -68,4 +68,4 @@ APIは`/v5`だけを提供し,LearningState Durable Objectを唯一のsource of 
 
 ## 互換性方針
 
-v1,v2,v3,v4 APIは提供しません.v4 LearningStateのcard,attempt,catalog,解答履歴はschema v2へ明示的に移行し,30日判定の履歴と目標設定は破棄します.旧APIへのfallbackや互換routeは追加しません.API契約を変更する場合はversionを上げ,clientとserverを同時に更新します.
+v1,v2,v3,v4 APIは提供しません.v4 StabilityStateのcard,attempt,catalog,解答履歴はschema v2へ明示的に移行し,30日判定の履歴と目標設定は破棄します.旧APIへのfallbackや互換routeは追加しません.API契約を変更する場合はversionを上げ,clientとserverを同時に更新します.

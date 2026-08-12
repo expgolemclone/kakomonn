@@ -4,6 +4,7 @@ import {
   getTokyoDate,
   recentTokyoDates,
   tokyoDateRangeMs,
+  dateOrdinal,
 } from "./dates.js";
 import {
   createNewCard,
@@ -327,23 +328,70 @@ export class StabilityState extends DurableObject {
       const rows = new Map(
         this.ctx.storage.sql
           .exec(
-            `SELECT date, closing_stability_days FROM stability_history
+            `SELECT date, opening_stability_days, closing_stability_days
+             FROM stability_history
              WHERE site = ? AND date >= ? AND date <= ? ORDER BY date`,
             site,
             dates[0],
             dates.at(-1)
           )
           .toArray()
-          .map((row) => [row.date, row.closing_stability_days])
+          .map((row) => [row.date, row])
       );
       let current = baseline?.closing_stability_days ?? null;
+      let trackingStarted = baseline !== undefined;
       const history = dates.map((date) => {
-        if (rows.has(date)) {
-          current = rows.get(date);
+        const row = rows.get(date);
+        let stabilityDaysDelta = trackingStarted ? 0 : null;
+        if (row !== undefined) {
+          current = row.closing_stability_days;
+          stabilityDaysDelta =
+            row.closing_stability_days - row.opening_stability_days;
+          trackingStarted = true;
         }
-        return { date, stabilityDays: current, solved: solvedByDate.get(date) };
+        return {
+          date,
+          stabilityDays: current,
+          stabilityDaysDelta,
+          solved: solvedByDate.get(date),
+        };
       });
       return { site, timeZone: "Asia/Tokyo", today, days: history };
+    });
+  }
+
+  getDailyDetails(site, date) {
+    if (!isSite(site) || dateOrdinal(date) === null) {
+      throw new TypeError("invalid daily details request");
+    }
+    return this.ctx.storage.transactionSync(() => {
+      const { startMs, endMs } = tokyoDateRangeMs(date);
+      const stabilityHistory = this.ctx.storage.sql
+        .exec(
+          `SELECT site, date, opening_stability_days, closing_stability_days
+           FROM stability_history WHERE site = ? AND date = ?`,
+          site,
+          date
+        )
+        .toArray();
+      const attempts = this.ctx.storage.sql
+        .exec(
+          `SELECT site, operation_id, question_id, answered_at_ms, result,
+                  previous_stability, resulting_stability
+           FROM attempts
+           WHERE site = ? AND answered_at_ms >= ? AND answered_at_ms < ?
+           ORDER BY answered_at_ms, operation_id`,
+          site,
+          startMs,
+          endMs
+        )
+        .toArray();
+      return {
+        site,
+        date,
+        timeZone: "Asia/Tokyo",
+        tables: { stability_history: stabilityHistory, attempts },
+      };
     });
   }
 

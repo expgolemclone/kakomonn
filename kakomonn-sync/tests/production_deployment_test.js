@@ -126,8 +126,47 @@ test("production serves only the authenticated v5 API backed by StabilityState",
         (day) =>
           (day.stabilityDays === null ||
             (Number.isSafeInteger(day.stabilityDays) && day.stabilityDays >= 0)) &&
+          (day.stabilityDaysDelta === null ||
+            Number.isSafeInteger(day.stabilityDaysDelta)) &&
           Number.isSafeInteger(day.solved) &&
           day.solved >= 0,
+      ),
+      true,
+    );
+
+    const detailsResponse = await authorizedGet(
+      `/v5/daily-details?${new URLSearchParams({ site, date: historyBody.today })}`,
+    );
+    assert.equal(detailsResponse.status, 200);
+    const detailsBody = await detailsResponse.json();
+    assert.deepEqual(Object.keys(detailsBody), ["site", "date", "timeZone", "tables"]);
+    assert.equal(detailsBody.site, site);
+    assert.equal(detailsBody.date, historyBody.today);
+    assert.equal(detailsBody.timeZone, "Asia/Tokyo");
+    assert.deepEqual(Object.keys(detailsBody.tables), ["stability_history", "attempts"]);
+    assert.equal(Array.isArray(detailsBody.tables.stability_history), true);
+    assert.equal(detailsBody.tables.stability_history.length <= 1, true);
+    assert.equal(Array.isArray(detailsBody.tables.attempts), true);
+    assert.equal(
+      detailsBody.tables.stability_history.every(
+        (row) =>
+          row.site === site &&
+          row.date === historyBody.today &&
+          Number.isSafeInteger(row.opening_stability_days) &&
+          Number.isSafeInteger(row.closing_stability_days),
+      ),
+      true,
+    );
+    assert.equal(
+      detailsBody.tables.attempts.every(
+        (row) =>
+          row.site === site &&
+          typeof row.operation_id === "string" &&
+          typeof row.question_id === "string" &&
+          Number.isSafeInteger(row.answered_at_ms) &&
+          (row.result === "correct" || row.result === "incorrect") &&
+          Number.isFinite(row.previous_stability) &&
+          Number.isFinite(row.resulting_stability),
       ),
       true,
     );

@@ -48,23 +48,22 @@
           <section class="stability-card" aria-labelledby="stability-title">
             <div>
               <p class="eyebrow">PRIMARY KPI</p>
-              <h2 id="stability-title">定着日数</h2>
+              <h2 id="stability-title">stabilityDays</h2>
             </div>
             <div class="stability-number"><strong id="stability-days">--</strong><span>日</span></div>
             <div class="stability-meta">
-              <span id="today-delta">今日 --</span>
-              <span id="goal-label">目標 --</span>
-              <span>解いた問題数 <strong id="solved-count">--</strong>問</span>
+              <span id="today-delta">todayStabilityDaysDelta --</span>
+              <span id="goal-label">dailyStabilityDaysGoal --</span>
             </div>
           </section>
 
           <section class="goal-card" aria-labelledby="goal-title">
             <div>
               <p class="eyebrow">TODAY</p>
-              <h2 id="goal-title">今日の定着日数純増目標</h2>
+              <h2 id="goal-title">dailyStabilityDaysGoal</h2>
             </div>
             <div class="goal-controls">
-              <label for="daily-goal">目標</label>
+              <label for="daily-goal">dailyStabilityDaysGoal</label>
               <input id="daily-goal" type="number" min="1" step="1" inputmode="numeric">
               <button id="save-goal" class="primary-button" type="button">保存</button>
             </div>
@@ -75,17 +74,33 @@
             <figcaption class="chart-heading">
               <div>
                 <p class="eyebrow">7 DAY LEARNING</p>
-                <h2 id="history-title">定着日数と解いた問題数の7日推移</h2>
-              </div>
-              <div class="chart-legend" aria-label="グラフの凡例">
-                <span><i class="legend-bar" aria-hidden="true"></i>定着日数</span>
-                <span><i class="legend-line" aria-hidden="true"></i>解いた問題数</span>
+                <h2 id="history-title">stabilityDaysDeltaの7日推移</h2>
               </div>
             </figcaption>
             <div class="chart-wrap">
-              <svg id="stability-chart" viewBox="0 0 700 270" role="img" aria-labelledby="history-chart-title history-chart-description"></svg>
+              <svg id="stability-chart" viewBox="0 0 700 270" role="group" aria-labelledby="history-chart-title history-chart-description"></svg>
             </div>
-            <p id="history-empty" class="muted" hidden>まだ学習記録はありません.</p>
+            <p id="history-empty" class="muted" hidden>stabilityDaysDeltaの変化はありません.</p>
+            <section id="daily-details" class="daily-details" aria-labelledby="daily-details-title">
+              <div class="daily-details-heading">
+                <div>
+                  <p class="eyebrow">RAW DAILY DATA</p>
+                  <h3 id="daily-details-title">日別詳細 <code id="daily-details-date"></code></h3>
+                </div>
+              </div>
+              <p id="daily-details-instruction" class="muted">graphの日付を選択すると, DBのraw dataを表示します.</p>
+              <p id="daily-details-status" class="message" role="status" aria-live="polite"></p>
+              <div id="daily-details-tables" hidden>
+                <section class="raw-table-section" aria-labelledby="stability-history-table-title">
+                  <h4 id="stability-history-table-title"><code>stability_history</code></h4>
+                  <div id="stability-history-table" class="table-scroll"></div>
+                </section>
+                <section class="raw-table-section" aria-labelledby="attempts-table-title">
+                  <h4 id="attempts-table-title"><code>attempts</code></h4>
+                  <div id="attempts-table" class="table-scroll"></div>
+                </section>
+              </div>
+            </section>
           </figure>
 
           <p id="dashboard-status" class="message" role="status" aria-live="polite"></p>
@@ -106,7 +121,8 @@
       </main>
 
       <footer>
-        <p>定着日数 = 現在の問題catalogに含まれる全問題のFSRS stability合計を切り捨てた日数.</p>
+        <p>stabilityDays = 現在の問題catalogに含まれる全問題のFSRS stability合計を切り捨てた日数.</p>
+        <p>stabilityDaysDelta = closing_stability_days - opening_stability_days.</p>
       </footer>
     </div>
 

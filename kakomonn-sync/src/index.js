@@ -4,6 +4,7 @@ import { errorResponse, jsonResponse } from "./http.js";
 import { handleAttempts } from "./api/attempts.js";
 import { handleState } from "./api/state.js";
 import { handleHistory } from "./api/history.js";
+import { handleDailyDetails } from "./api/daily-details.js";
 import { handleNext } from "./api/next.js";
 import { handleQuestions } from "./api/questions.js";
 import { handleSettings } from "./api/settings.js";
@@ -19,6 +20,7 @@ export async function handleRequest(request, env, fetcher = fetch) {
     ["/v5/sites", ["GET"]],
     ["/v5/state", ["GET"]],
     ["/v5/history", ["GET"]],
+    ["/v5/daily-details", ["GET"]],
     ["/v5/attempts", ["POST"]],
     ["/v5/next", ["GET"]],
     ["/v5/questions", ["POST"]],
@@ -53,6 +55,9 @@ export async function handleRequest(request, env, fetcher = fetch) {
   }
   if (url.pathname === "/v5/history") {
     return handleHistory(url, env);
+  }
+  if (url.pathname === "/v5/daily-details") {
+    return handleDailyDetails(url, env);
   }
   if (url.pathname === "/v5/next") {
     return handleNext(url, env);

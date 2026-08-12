@@ -1,6 +1,6 @@
 # kakomonn-sync
 
-`kakomonn-reader`のサイト別の定着状態と解答履歴を端末間で共有し,直近7日間の定着日数と日別解答問題数をgraphで表示するCloudflare Workerです. 認証済み端末へAzure Speechの短期tokenも発行します.
+`kakomonn-reader`のサイト別の定着状態と解答履歴を端末間で共有し, 直近7日間の`stabilityDaysDelta`と日別のraw DB rowを表示するCloudflare Workerです. 認証済み端末へAzure Speechの短期tokenも発行します.
 
 ## 学習ログ
 
@@ -10,7 +10,9 @@ productionのWorker rootを開くと,独立した学習ログを表示します.
 https://kakomonn-count-sync.expgolem-lab.workers.dev/
 ```
 
-初回だけ`kakomonn-reader`と同じ同期tokenを入力します.tokenと最後に表示したサイトだけをこのoriginの`localStorage`へ保存します.今日の定着日数純増目標はsiteごとにWorkerへ保存するため,同じ同期tokenを使用する他の端末でも共有されます.旧目標値は単位が異なるため移行せず,各siteを30日で初期化します.
+初回だけ`kakomonn-reader`と同じ同期tokenを入力します. tokenと最後に表示したサイトだけをこのoriginの`localStorage`へ保存します. `dailyStabilityDaysGoal`はsiteごとにWorkerへ保存するため, 同じ同期tokenを使用する他の端末でも共有されます. 旧目標値は単位が異なるため移行せず, 各siteを30日で初期化します.
+
+dashboardのgraphは`stabilityDaysDelta`だけを表示します. graphの日付を選択すると, 該当する`stability_history`と`attempts`の全columnをDBのcolumn名と保存値のまま確認できます.
 
 ## ローカルテスト
 
@@ -53,7 +55,8 @@ APIは`/v5`だけを提供し,StabilityState Durable Objectを唯一のsource of
 
 - `GET /v5/sites`は,問題catalogを登録済みのサイト一覧を返します.
 - `GET /v5/state?site=<host>`は,定着日数,解いた問題数,今日解いた問題数,今日の定着日数純増,問題catalog情報を返します.
-- `GET /v5/history?site=<host>&days=<1-31>`は,日本時間の日別定着日数と解いた問題数を返します.計測開始前の定着日数は`null`です.
+- `GET /v5/history?site=<host>&days=<1-31>`は, 日本時間の日別`stabilityDays`, `stabilityDaysDelta`, `solved`を返します. 計測開始前の`stabilityDays`と`stabilityDaysDelta`は`null`で, 計測開始後にrowがない日の`stabilityDaysDelta`は`0`です.
+- `GET /v5/daily-details?site=<host>&date=<YYYY-MM-DD>`は, 指定した日本時間の日付に対応する`stability_history`と`attempts`の全raw rowを返します.
 - `POST /v5/attempts`は,`site`,`questionId`,`operationId`,`result`を受け取ります.同じ操作の再送は重複記録せず,異なるpayloadで同じ操作IDを使用した場合は拒否します.
 - `GET /v5/next`は,FSRSに基づく次の問題を返します.
 - `POST /v5/questions`は,siteの問題catalogを世代番号付きで置き換えます.
@@ -62,10 +65,12 @@ APIは`/v5`だけを提供し,StabilityState Durable Objectを唯一のsource of
 
 `kakomonn-reader`はSpeech tokenを約9分間再利用し,`ja-JP-NanamiNeural`のMP3をAzureから直接取得します.Workerは音声dataを中継せず,Workers AI,Durable Objects,R2も音声処理には使用しません.Azure Speech F0の無料枠を超過した場合は読み上げを停止し,別の音声へ切り替えません.
 
-定着日数は,現在の問題catalogに含まれる全cardのFSRS stabilityを合計してから整数へ切り捨てた値です.未回答問題は0日として扱います.catalogから外れたcardは再登録時に学習状態を復元できるよう保存しますが,定着日数と次問候補には含めません.catalog置換で定着日数が変化した場合も,その日の履歴へ新しい値を記録します.
+`stabilityDays`は, 現在の問題catalogに含まれる全cardのFSRS stabilityを合計してから整数へ切り捨てた値です. 未回答問題は0日として扱います. catalogから外れたcardは再登録時に学習状態を復元できるよう保存しますが, `stabilityDays`と次問候補には含めません. catalog置換で`stabilityDays`が変化した場合も, その日の履歴へ新しい値を記録します.
+
+`stabilityDaysDelta`は, 日ごとの`closing_stability_days - opening_stability_days`です. `todayStabilityDaysDelta`は当日の同じ値で, `dailyStabilityDaysGoal`はこの純増に対する目標です.
 
 解いた問題数はsite内の問題IDの種類数です.同じ問題を複数回解いても累計では1問として数え,日別では同じ日に繰り返しても1問として数えます.別の日に同じ問題を解いた場合は,各日の解いた問題数へ1問ずつ数えます.正答,誤答,スキップはいずれも解答履歴へ含めます.過去に解いた問題は,現在の問題catalogから外れても累計へ含めます.
 
 ## 互換性方針
 
-v1,v2,v3,v4 APIは提供しません.v4 StabilityStateのcard,attempt,catalog,解答履歴はschema v2へ明示的に移行し,30日判定の履歴と目標設定は破棄します.旧APIへのfallbackや互換routeは追加しません.API契約を変更する場合はversionを上げ,clientとserverを同時に更新します.
+v1, v2, v3, v4 APIは提供しません. v4 StabilityStateのcard, attempt, catalog, 解答履歴はschema v2へ明示的に移行し, 30日判定の履歴と目標設定は破棄します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.

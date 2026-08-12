@@ -396,13 +396,20 @@ describe("stability history", () => {
     expect(initial.days.slice(0, 6).every((day) => day.stabilityDays === null)).toBe(
       true
     );
+    expect(
+      initial.days.slice(0, 6).every((day) => day.stabilityDaysDelta === null)
+    ).toBe(true);
     expect(initial.days.at(-1).stabilityDays).toBe(0);
+    expect(initial.days.at(-1).stabilityDaysDelta).toBe(0);
 
     await stub().recordAttempt(SITE, "1", operationId(12), "correct", NOW);
     const afterGap = await stub().getHistory(SITE, 3, NOW + 2 * DAY_MS);
     expect(afterGap.days[0].stabilityDays).not.toBeNull();
+    expect(afterGap.days[0].stabilityDaysDelta).toBeGreaterThan(0);
     expect(afterGap.days[1].stabilityDays).toBe(afterGap.days[0].stabilityDays);
     expect(afterGap.days[2].stabilityDays).toBe(afterGap.days[0].stabilityDays);
+    expect(afterGap.days[1].stabilityDaysDelta).toBe(0);
+    expect(afterGap.days[2].stabilityDaysDelta).toBe(0);
   });
 
   it("starts a new opening total at the Tokyo date boundary", async () => {
@@ -418,6 +425,104 @@ describe("stability history", () => {
     );
     const after = await stub().getState(SITE, nextDay);
     expect(after.todayStabilityDaysDelta).toBe(after.stabilityDays - before);
+    expect(
+      (await stub().getHistory(SITE, 2, nextDay)).days.at(-1)
+        .stabilityDaysDelta
+    ).toBeLessThan(0);
+  });
+});
+
+describe("daily raw details", () => {
+  it("returns raw table rows for one Tokyo date in stable order", async () => {
+    const later = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(16),
+      "correct",
+      NOW + 2000
+    );
+    const earlier = await stub().recordAttempt(
+      SITE,
+      "2",
+      operationId(17),
+      "incorrect",
+      NOW + 1000
+    );
+
+    await expect(stub().getDailyDetails(SITE, "2026-08-10")).resolves.toEqual({
+      site: SITE,
+      date: "2026-08-10",
+      timeZone: "Asia/Tokyo",
+      tables: {
+        stability_history: [
+          {
+            site: SITE,
+            date: "2026-08-10",
+            opening_stability_days: 0,
+            closing_stability_days: earlier.totals.stabilityDays,
+          },
+        ],
+        attempts: [
+          {
+            site: SITE,
+            operation_id: operationId(17),
+            question_id: "2",
+            answered_at_ms: NOW + 1000,
+            result: "incorrect",
+            previous_stability: 0,
+            resulting_stability: earlier.attempt.stability,
+          },
+          {
+            site: SITE,
+            operation_id: operationId(16),
+            question_id: "1",
+            answered_at_ms: NOW + 2000,
+            result: "correct",
+            previous_stability: 0,
+            resulting_stability: later.attempt.stability,
+          },
+        ],
+      },
+    });
+  });
+
+  it("returns empty raw tables when the date has no rows", async () => {
+    await expect(stub().getDailyDetails(SITE, "2026-08-09")).resolves.toEqual({
+      site: SITE,
+      date: "2026-08-09",
+      timeZone: "Asia/Tokyo",
+      tables: { stability_history: [], attempts: [] },
+    });
+  });
+
+  it("uses Tokyo midnight when selecting attempts", async () => {
+    const beforeMidnight = Date.parse("2026-08-10T14:59:59.999Z");
+    const afterMidnight = Date.parse("2026-08-10T15:00:00.000Z");
+    await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(18),
+      "correct",
+      beforeMidnight
+    );
+    await stub().recordAttempt(
+      SITE,
+      "2",
+      operationId(19),
+      "correct",
+      afterMidnight
+    );
+
+    expect(
+      (await stub().getDailyDetails(SITE, "2026-08-10")).tables.attempts.map(
+        (row) => row.operation_id
+      )
+    ).toEqual([operationId(18)]);
+    expect(
+      (await stub().getDailyDetails(SITE, "2026-08-11")).tables.attempts.map(
+        (row) => row.operation_id
+      )
+    ).toEqual([operationId(19)]);
   });
 });
 
@@ -491,13 +596,17 @@ describe("v5 HTTP contract", () => {
   });
 
   it("requires the configured bearer token", async () => {
-    const url = "https://example.test/v5/sites";
-    const missing = await SELF.fetch(url);
-    const incorrect = await SELF.fetch(url, {
-      headers: { Authorization: "Bearer incorrect-token" },
-    });
-    expect(missing.status).toBe(401);
-    expect(incorrect.status).toBe(401);
+    for (const url of [
+      "https://example.test/v5/sites",
+      `https://example.test/v5/daily-details?site=${SITE}&date=2026-08-10`,
+    ]) {
+      const missing = await SELF.fetch(url);
+      const incorrect = await SELF.fetch(url, {
+        headers: { Authorization: "Bearer incorrect-token" },
+      });
+      expect(missing.status).toBe(401);
+      expect(incorrect.status).toBe(401);
+    }
   });
 
   it("lists sites and returns state and history", async () => {
@@ -524,7 +633,37 @@ describe("v5 HTTP contract", () => {
       { headers: AUTHORIZATION }
     );
     expect(history.status).toBe(200);
-    expect((await history.json()).days).toHaveLength(7);
+    const historyBody = await history.json();
+    expect(historyBody.days).toHaveLength(7);
+    expect(historyBody.days.at(-1).stabilityDaysDelta).toBe(0);
+
+    const details = await SELF.fetch(
+      `https://example.test/v5/daily-details?site=${SITE}&date=2026-08-10`,
+      { headers: AUTHORIZATION }
+    );
+    expect(details.status).toBe(200);
+    await expect(details.json()).resolves.toMatchObject({
+      site: SITE,
+      date: "2026-08-10",
+      timeZone: "Asia/Tokyo",
+      tables: { stability_history: [expect.any(Object)], attempts: [] },
+    });
+  });
+
+  it("validates the daily details query", async () => {
+    for (const search of [
+      `site=${SITE}`,
+      `site=${SITE}&date=2026-02-30`,
+      `site=${SITE}&date=2026-08-10&date=2026-08-11`,
+      `site=invalid.example&date=2026-08-10`,
+      `site=${SITE}&date=2026-08-10&extra=true`,
+    ]) {
+      const response = await SELF.fetch(
+        `https://example.test/v5/daily-details?${search}`,
+        { headers: AUTHORIZATION }
+      );
+      expect(response.status).toBe(400);
+    }
   });
 
   it("replaces the catalog and serves the canonical next URL", async () => {

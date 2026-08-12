@@ -3,7 +3,7 @@ import { getStabilityStateStub } from "../learning-store.js";
 import { isSite } from "../auth.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
-export async function handleAttempts(request, env) {
+export async function handleAttempts(request, env, mapResponse = (value) => value) {
   let body;
   try {
     body = await request.json();
@@ -41,5 +41,5 @@ export async function handleAttempts(request, env) {
   if (result?.error === "unknown_question") {
     return errorResponse("unknown_question", 409);
   }
-  return jsonResponse(result);
+  return jsonResponse(mapResponse(result));
 }

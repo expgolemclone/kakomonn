@@ -8,6 +8,11 @@ import { handleDailyDetails } from "./api/daily-details.js";
 import { handleNext } from "./api/next.js";
 import { handleQuestions } from "./api/questions.js";
 import { handleSettings } from "./api/settings.js";
+import {
+  v6AttemptResponse,
+  v6HistoryResponse,
+  v6StateResponse,
+} from "./api/v6-responses.js";
 import { issueSpeechToken } from "./speech.js";
 
 export { StabilityState, issueSpeechToken };
@@ -17,17 +22,22 @@ export { initializeLearningSchema } from "./learning-store.js";
 export async function handleRequest(request, env, fetcher = fetch) {
   const url = new URL(request.url);
   const routes = new Map([
-    ["/v5/sites", ["GET"]],
-    ["/v5/state", ["GET"]],
-    ["/v5/history", ["GET"]],
-    ["/v5/daily-details", ["GET"]],
-    ["/v5/attempts", ["POST"]],
-    ["/v5/next", ["GET"]],
-    ["/v5/questions", ["POST"]],
-    ["/v5/settings", ["GET", "PUT"]],
-    ["/v5/speech-token", ["POST"]],
+    ["/sites", ["GET"]],
+    ["/state", ["GET"]],
+    ["/history", ["GET"]],
+    ["/daily-details", ["GET"]],
+    ["/attempts", ["POST"]],
+    ["/next", ["GET"]],
+    ["/questions", ["POST"]],
+    ["/settings", ["GET", "PUT"]],
+    ["/speech-token", ["POST"]],
   ]);
-  const expectedMethods = routes.get(url.pathname);
+  const apiVersion = url.pathname.slice(1, 3);
+  const route = url.pathname.slice(3);
+  if (apiVersion !== "v5" && apiVersion !== "v6") {
+    return errorResponse("not_found", 404);
+  }
+  const expectedMethods = routes.get(route);
   if (expectedMethods === undefined) {
     return errorResponse("not_found", 404);
   }
@@ -44,28 +54,32 @@ export async function handleRequest(request, env, fetcher = fetch) {
     return errorResponse("unauthorized", 401);
   }
 
-  if (url.pathname === "/v5/sites") {
+  if (route === "/sites") {
     if (url.search !== "") {
       return errorResponse("invalid_request", 400);
     }
     return jsonResponse({ sites: await getStabilityStateStub(env).listSites() });
   }
-  if (url.pathname === "/v5/state") {
-    return handleState(url, env);
+  if (route === "/state") {
+    return handleState(url, env, apiVersion === "v6" ? v6StateResponse : undefined);
   }
-  if (url.pathname === "/v5/history") {
-    return handleHistory(url, env);
+  if (route === "/history") {
+    return handleHistory(
+      url,
+      env,
+      apiVersion === "v6" ? v6HistoryResponse : undefined
+    );
   }
-  if (url.pathname === "/v5/daily-details") {
+  if (route === "/daily-details") {
     return handleDailyDetails(url, env);
   }
-  if (url.pathname === "/v5/next") {
+  if (route === "/next") {
     return handleNext(url, env);
   }
-  if (url.pathname === "/v5/settings") {
+  if (route === "/settings") {
     return handleSettings(request, url, env);
   }
-  if (url.pathname === "/v5/speech-token") {
+  if (route === "/speech-token") {
     if (url.search !== "") {
       return errorResponse("invalid_request", 400);
     }
@@ -74,8 +88,12 @@ export async function handleRequest(request, env, fetcher = fetch) {
   if (url.search !== "") {
     return errorResponse("invalid_request", 400);
   }
-  if (url.pathname === "/v5/attempts") {
-    return handleAttempts(request, env);
+  if (route === "/attempts") {
+    return handleAttempts(
+      request,
+      env,
+      apiVersion === "v6" ? v6AttemptResponse : undefined
+    );
   }
   return handleQuestions(request, env);
 }

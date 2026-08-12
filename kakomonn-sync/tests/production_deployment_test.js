@@ -172,3 +172,43 @@ test("production serves only the authenticated v5 API backed by StabilityState",
     );
   }
 });
+
+test("production serves the canonical v6 learning metric contract", async () => {
+  const unauthorized = await fetch(new URL("/v6/sites", productionOrigin));
+  assert.equal(unauthorized.status, 401);
+  assert.deepEqual(await unauthorized.json(), { error: "unauthorized" });
+
+  const sitesResponse = await authorizedGet("/v6/sites");
+  assert.equal(sitesResponse.status, 200);
+  const sitesBody = await sitesResponse.json();
+  assert.equal(Array.isArray(sitesBody.sites), true);
+
+  if (sitesBody.sites.length > 0) {
+    const site = sitesBody.sites[0];
+    const stateResponse = await authorizedGet(
+      `/v6/state?${new URLSearchParams({ site })}`,
+    );
+    assert.equal(stateResponse.status, 200);
+    const stateBody = await stateResponse.json();
+    assert.equal(Number.isSafeInteger(stateBody.stabilityDays), true);
+    assert.equal(Number.isSafeInteger(stateBody.attemptedQuestionCount), true);
+    assert.equal(Number.isSafeInteger(stateBody.todayAttemptedQuestionCount), true);
+    assert.equal(Number.isSafeInteger(stateBody.todayStabilityDaysDelta), true);
+    assert.equal(Object.hasOwn(stateBody, "solved"), false);
+    assert.equal(Object.hasOwn(stateBody, "todaySolved"), false);
+
+    const historyResponse = await authorizedGet(
+      `/v6/history?${new URLSearchParams({ site, days: "7" })}`,
+    );
+    assert.equal(historyResponse.status, 200);
+    const historyBody = await historyResponse.json();
+    assert.equal(
+      historyBody.days.every(
+        (day) =>
+          Number.isSafeInteger(day.attemptedQuestionCount) &&
+          !Object.hasOwn(day, "solved"),
+      ),
+      true,
+    );
+  }
+});

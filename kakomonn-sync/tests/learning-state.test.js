@@ -732,3 +732,70 @@ describe("v5 HTTP contract", () => {
     await expect(response.json()).resolves.toEqual({ error: "catalog_missing" });
   });
 });
+
+describe("v6 HTTP contract", () => {
+  it("returns canonical learning metric names", async () => {
+    const state = await SELF.fetch(`https://example.test/v6/state?site=${SITE}`, {
+      headers: AUTHORIZATION,
+    });
+    await expect(state.json()).resolves.toMatchObject({
+      site: SITE,
+      stabilityDays: 0,
+      attemptedQuestionCount: 0,
+      todayAttemptedQuestionCount: 0,
+      todayStabilityDaysDelta: 0,
+    });
+
+    const history = await SELF.fetch(
+      `https://example.test/v6/history?site=${SITE}&days=7`,
+      { headers: AUTHORIZATION }
+    );
+    const historyBody = await history.json();
+    expect(historyBody.days.at(-1)).toMatchObject({
+      stabilityDays: 0,
+      stabilityDaysDelta: 0,
+      attemptedQuestionCount: 0,
+    });
+
+    const attempt = await SELF.fetch("https://example.test/v6/attempts", {
+      method: "POST",
+      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        site: SITE,
+        questionId: "1",
+        operationId: operationId(16),
+        result: "correct",
+      }),
+    });
+    const attemptBody = await attempt.json();
+    expect(attemptBody.attempt).toEqual({
+      questionId: "1",
+      result: "correct",
+      previousStability: 0,
+      resultingStability: expect.any(Number),
+    });
+    expect(attemptBody.totals).toMatchObject({
+      attemptedQuestionCount: 1,
+      todayAttemptedQuestionCount: 1,
+    });
+    expect(attemptBody.attempt).not.toHaveProperty("stability");
+    expect(attemptBody.totals).not.toHaveProperty("solved");
+    expect(attemptBody.totals).not.toHaveProperty("todaySolved");
+  });
+
+  it("serves unchanged endpoint contracts under v6", async () => {
+    const sites = await SELF.fetch("https://example.test/v6/sites", {
+      headers: AUTHORIZATION,
+    });
+    await expect(sites.json()).resolves.toEqual({ sites: [SITE] });
+
+    const settings = await SELF.fetch(
+      `https://example.test/v6/settings?site=${SITE}`,
+      { headers: AUTHORIZATION }
+    );
+    await expect(settings.json()).resolves.toEqual({
+      site: SITE,
+      dailyStabilityDaysGoal: 30,
+    });
+  });
+});

@@ -51,7 +51,7 @@ npm run deploy:kakomonn-sync
 
 ## API
 
-APIは`/v5`だけを提供し,StabilityState Durable Objectを唯一のsource of truthとします.
+APIはv6への移行中だけ`/v5`と`/v6`を提供し, StabilityState Durable Objectを唯一のsource of truthとします. v6ではattempt済みのdistinct問題数を`attemptedQuestionCount`と`todayAttemptedQuestionCount`, 解答後のcard stabilityを`resultingStability`として返します.
 
 - `GET /v5/sites`は,問題catalogを登録済みのサイト一覧を返します.
 - `GET /v5/state?site=<host>`は,定着日数,解いた問題数,今日解いた問題数,今日の定着日数純増,問題catalog情報を返します.

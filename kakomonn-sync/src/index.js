@@ -1,4 +1,4 @@
-import { StabilityState, getStabilityStateStub } from "./learning-store.js";
+import { LearningState, getStabilityStateStub } from "./learning-store.js";
 import { isAuthorized } from "./auth.js";
 import { errorResponse, jsonResponse } from "./http.js";
 import { handleAttempts } from "./api/attempts.js";
@@ -10,7 +10,7 @@ import { handleQuestions } from "./api/questions.js";
 import { handleSettings } from "./api/settings.js";
 import { issueSpeechToken } from "./speech.js";
 
-export { StabilityState, issueSpeechToken };
+export { LearningState, LearningState as StabilityState, issueSpeechToken };
 export * from "./fsrs.js";
 export { initializeLearningSchema } from "./learning-store.js";
 

@@ -178,7 +178,7 @@ function assertAttempt(site, questionId, operationId, result) {
   }
 }
 
-export class StabilityState extends DurableObject {
+export class LearningState extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.ctx.blockConcurrencyWhile(async () => {
@@ -583,6 +583,8 @@ export class StabilityState extends DurableObject {
       .map((row) => row.site);
   }
 }
+
+export { LearningState as StabilityState };
 
 export function getStabilityStateStub(env) {
   const id = env.LEARNING_STATE.idFromName(LEARNING_STATE_OBJECT_NAME);

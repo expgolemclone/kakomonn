@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         過去問reader連続自動読み上げ
+// @name         過去問マイルストーン＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
 // @description  問題文と解説の読み上げ, コピー, FSRS stability合計日数の端末間同期を提供します.
 // @match        https://*.kakomonn.com/*

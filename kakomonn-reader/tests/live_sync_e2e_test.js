@@ -999,7 +999,7 @@ async function clickNextQuestion(mcp) {
       !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
         state.outerURL,
       ) ||
-      !/^定着 \d+問 \/ 今日 \d+問$/.test(state.count ?? "")
+      !/^定着 \d+日 \/ 今日 \d+問$/.test(state.count ?? "")
     ) {
       return null;
     }

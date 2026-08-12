@@ -4,7 +4,6 @@ import {
   getTokyoDate,
   recentTokyoDates,
   tokyoDateRangeMs,
-  dateOrdinal,
 } from "./dates.js";
 import {
   createNewCard,

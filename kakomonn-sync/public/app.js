@@ -13,7 +13,7 @@ const el = {
   authPanel: byId("auth-panel"), authForm: byId("auth-form"), authToken: byId("auth-token"), authMessage: byId("auth-message"),
   dashboard: byId("dashboard"), siteEmpty: byId("site-empty"), loadError: byId("load-error"), errorMessage: byId("error-message"), retryButton: byId("retry-button"),
   settingsButton: byId("settings-button"), settingsDialog: byId("settings-dialog"), settingsForm: byId("settings-form"), settingsToken: byId("settings-token"), settingsMessage: byId("settings-message"), settingsClose: byId("settings-close"), forgetToken: byId("forget-token"),
-  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), stabilityDays: byId("stability-days"), todayDelta: byId("today-delta"), goalLabel: byId("goal-label"), dailyGoal: byId("daily-goal"), saveGoal: byId("save-goal"), goalProgress: byId("goal-progress"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
+  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), stabilityDaysElement: byId("stability-days"), todayStabilityDaysDeltaElement: byId("today-delta"), goalLabel: byId("goal-label"), dailyStabilityDaysGoalInput: byId("daily-goal"), saveGoal: byId("save-goal"), goalProgress: byId("goal-progress"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
   dailyDetails: byId("daily-details"), dailyDetailsDate: byId("daily-details-date"), dailyDetailsInstruction: byId("daily-details-instruction"), dailyDetailsStatus: byId("daily-details-status"), dailyDetailsTables: byId("daily-details-tables"), stabilityHistoryTable: byId("stability-history-table"), attemptsTable: byId("attempts-table"),
 };
 
@@ -43,10 +43,10 @@ function validSite(value) {
   return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(value);
 }
 function validState(value, site) {
-  return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && Number.isSafeInteger(value.stabilityDays) && value.stabilityDays >= 0 && Number.isSafeInteger(value.solved) && value.solved >= 0 && Number.isSafeInteger(value.todaySolved) && value.todaySolved >= 0 && Number.isSafeInteger(value.todayStabilityDaysDelta);
+  return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && Number.isSafeInteger(value.stabilityDays) && value.stabilityDays >= 0 && Number.isSafeInteger(value.attemptedQuestionCount) && value.attemptedQuestionCount >= 0 && Number.isSafeInteger(value.todayAttemptedQuestionCount) && value.todayAttemptedQuestionCount >= 0 && Number.isSafeInteger(value.todayStabilityDaysDelta);
 }
 function validHistory(value, site) {
-  return value && value.site === site && Array.isArray(value.days) && value.days.length === 7 && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && (day.stabilityDays === null || (Number.isSafeInteger(day.stabilityDays) && day.stabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.solved) && day.solved >= 0);
+  return value && value.site === site && Array.isArray(value.days) && value.days.length === 7 && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && (day.stabilityDays === null || (Number.isSafeInteger(day.stabilityDays) && day.stabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.attemptedQuestionCount) && day.attemptedQuestionCount >= 0);
 }
 function validSettings(value, site) {
   return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 2 && value.site === site && Number.isSafeInteger(value.dailyStabilityDaysGoal) && value.dailyStabilityDaysGoal >= 1;
@@ -83,11 +83,11 @@ async function requestJSON(path, token, { method = "GET", body } = {}) {
 function formatted(value) { return value.toLocaleString("ja-JP"); }
 function signed(value) { return `${value >= 0 ? "+" : ""}${formatted(value)}`; }
 function renderGoal() {
-  const goal = state.settings.dailyStabilityDaysGoal;
-  const delta = state.learning?.todayStabilityDaysDelta ?? 0;
-  el.dailyGoal.value = String(goal);
-  el.goalLabel.textContent = `dailyStabilityDaysGoal +${formatted(goal)}日`;
-  el.goalProgress.textContent = `todayStabilityDaysDelta ${signed(delta)}日 / dailyStabilityDaysGoal +${formatted(goal)}日`;
+  const dailyStabilityDaysGoal = state.settings.dailyStabilityDaysGoal;
+  const todayStabilityDaysDelta = state.learning?.todayStabilityDaysDelta ?? 0;
+  el.dailyStabilityDaysGoalInput.value = String(dailyStabilityDaysGoal);
+  el.goalLabel.textContent = `dailyStabilityDaysGoal +${formatted(dailyStabilityDaysGoal)}日`;
+  el.goalProgress.textContent = `todayStabilityDaysDelta ${signed(todayStabilityDaysDelta)}日 / dailyStabilityDaysGoal +${formatted(dailyStabilityDaysGoal)}日`;
 }
 
 function svgNode(name, attrs = {}, text = "") {
@@ -271,7 +271,7 @@ async function loadDailyDetails(date, { focusChart = false } = {}) {
   if (focusChart) el.stabilityChart.querySelector(`[data-chart-date="${date}"]`)?.focus();
   let details;
   try {
-    details = await requestJSON(`/v5/daily-details?${new URLSearchParams({ site, date })}`, token);
+    details = await requestJSON(`/v6/daily-details?${new URLSearchParams({ site, date })}`, token);
     if (!validDailyDetails(details, site, date)) throw new DashboardError("invalid_response");
   } catch (error) {
     if (generation !== detailGeneration || site !== state.site || token !== state.token || date !== state.selectedDate) return false;
@@ -286,8 +286,8 @@ async function loadDailyDetails(date, { focusChart = false } = {}) {
 
 function renderDashboard() {
   const learning = state.learning;
-  el.stabilityDays.textContent = formatted(learning.stabilityDays);
-  el.todayDelta.textContent = `todayStabilityDaysDelta ${signed(learning.todayStabilityDaysDelta)}日`;
+  el.stabilityDaysElement.textContent = formatted(learning.stabilityDays);
+  el.todayStabilityDaysDeltaElement.textContent = `todayStabilityDaysDelta ${signed(learning.todayStabilityDaysDelta)}日`;
   renderGoal();
   renderChart(state.history.days);
   el.dashboard.hidden = false;
@@ -309,7 +309,7 @@ function showError(error) {
 }
 
 async function loadSites(token) {
-  const body = await requestJSON("/v5/sites", token);
+  const body = await requestJSON("/v6/sites", token);
   if (body === null || typeof body !== "object" || !Array.isArray(body.sites) || body.sites.some((site) => !validSite(site))) throw new DashboardError("invalid_response");
   return body.sites;
 }
@@ -317,9 +317,9 @@ async function loadSites(token) {
 async function fetchSiteData(site, token) {
   const parameters = new URLSearchParams({ site });
   const [learning, history, settings] = await Promise.all([
-    requestJSON(`/v5/state?${parameters}`, token),
-    requestJSON(`/v5/history?${new URLSearchParams({ site, days: "7" })}`, token),
-    requestJSON(`/v5/settings?${parameters}`, token),
+    requestJSON(`/v6/state?${parameters}`, token),
+    requestJSON(`/v6/history?${new URLSearchParams({ site, days: "7" })}`, token),
+    requestJSON(`/v6/settings?${parameters}`, token),
   ]);
   if (!validState(learning, site) || !validHistory(history, site) || !validSettings(settings, site)) throw new DashboardError("invalid_response");
   return { learning, history, settings };
@@ -420,8 +420,8 @@ el.stabilityChart.addEventListener("keydown", (event) => {
   void loadDailyDetails(target.getAttribute("data-chart-date"), { focusChart: true });
 });
 el.saveGoal.addEventListener("click", async () => {
-  const goal = Number(el.dailyGoal.value);
-  if (!Number.isSafeInteger(goal) || goal < 1) { el.dashboardStatus.textContent = "目標は1以上の整数で入力してください."; return; }
+  const dailyStabilityDaysGoal = Number(el.dailyStabilityDaysGoalInput.value);
+  if (!Number.isSafeInteger(dailyStabilityDaysGoal) || dailyStabilityDaysGoal < 1) { el.dashboardStatus.textContent = "目標は1以上の整数で入力してください."; return; }
   loadGeneration += 1;
   const token = state.token;
   const site = state.site;
@@ -431,7 +431,7 @@ el.saveGoal.addEventListener("click", async () => {
   el.settingsButton.disabled = true;
   el.dashboardStatus.textContent = "目標を同期中";
   try {
-    const settings = await requestJSON("/v5/settings", token, { method: "PUT", body: { site, dailyStabilityDaysGoal: goal } });
+    const settings = await requestJSON("/v6/settings", token, { method: "PUT", body: { site, dailyStabilityDaysGoal } });
     if (!validSettings(settings, site)) throw new DashboardError("invalid_response");
     if (token === state.token && site === state.site) { state.settings = settings; renderGoal(); el.dashboardStatus.textContent = "dailyStabilityDaysGoalを同期しました."; }
   } catch (error) {

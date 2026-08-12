@@ -75,7 +75,7 @@ function saveCard(storage, site, questionId, card) {
   );
 }
 
-function stabilityDays(storage, site) {
+function readStabilityDays(storage, site) {
   return storage.sql
     .exec(
       `SELECT CAST(COALESCE(SUM(c.stability), 0) AS INTEGER) AS stability_days
@@ -87,22 +87,23 @@ function stabilityDays(storage, site) {
     .toArray()[0].stability_days;
 }
 
-function solvedCount(storage, site) {
+function readAttemptedQuestionCount(storage, site) {
   return storage.sql
     .exec(
-      "SELECT COUNT(DISTINCT question_id) AS count FROM attempts WHERE site = ?",
+      `SELECT COUNT(DISTINCT question_id) AS attempted_question_count
+       FROM attempts WHERE site = ?`,
       site
     )
-    .toArray()[0].count;
+    .toArray()[0].attempted_question_count;
 }
 
-function solvedCountsByDate(storage, site, dates) {
+function readAttemptedQuestionCountsByDate(storage, site, dates) {
   const { startMs, endMs } = tokyoDateRangeMs(dates[0], dates.at(-1));
-  const counts = new Map(
+  const attemptedQuestionCounts = new Map(
     storage.sql
       .exec(
         `SELECT CAST((answered_at_ms + 32400000) / 86400000 AS INTEGER) AS date_ordinal,
-                COUNT(DISTINCT question_id) AS solved
+                COUNT(DISTINCT question_id) AS attempted_question_count
          FROM attempts
          WHERE site = ? AND answered_at_ms >= ? AND answered_at_ms < ?
          GROUP BY date_ordinal`,
@@ -111,21 +112,36 @@ function solvedCountsByDate(storage, site, dates) {
         endMs
       )
       .toArray()
-      .map((row) => [row.date_ordinal, row.solved])
+      .map((row) => [row.date_ordinal, row.attempted_question_count])
   );
-  return new Map(dates.map((date) => [date, counts.get(dateOrdinal(date)) ?? 0]));
+  return new Map(
+    dates.map((date) => [
+      date,
+      attemptedQuestionCounts.get(dateOrdinal(date)) ?? 0,
+    ])
+  );
 }
 
 function learningTotals(storage, site, nowMs) {
   const today = getTokyoDate(new Date(nowMs));
   return {
-    stabilityDays: stabilityDays(storage, site),
-    solved: solvedCount(storage, site),
-    todaySolved: solvedCountsByDate(storage, site, [today]).get(today),
+    stabilityDays: readStabilityDays(storage, site),
+    attemptedQuestionCount: readAttemptedQuestionCount(storage, site),
+    todayAttemptedQuestionCount: readAttemptedQuestionCountsByDate(
+      storage,
+      site,
+      [today]
+    ).get(today),
   };
 }
 
-function recordDailyStability(storage, site, date, opening, closing) {
+function recordDailyStabilityDays(
+  storage,
+  site,
+  date,
+  openingStabilityDays,
+  closingStabilityDays
+) {
   storage.sql.exec(
     `INSERT INTO stability_history (
        site, date, opening_stability_days, closing_stability_days
@@ -134,8 +150,8 @@ function recordDailyStability(storage, site, date, opening, closing) {
        closing_stability_days = excluded.closing_stability_days`,
     site,
     date,
-    opening,
-    closing
+    openingStabilityDays,
+    closingStabilityDays
   );
 }
 
@@ -145,7 +161,7 @@ function attemptResponse(row, totals) {
       questionId: row.question_id,
       result: row.result,
       previousStability: row.previous_stability,
-      stability: row.resulting_stability,
+      resultingStability: row.resulting_stability,
     },
     totals,
   };
@@ -222,11 +238,11 @@ export class StabilityState extends DurableObject {
       const card = rowToCard(stored) ?? createNewCard(nowMs);
       const previousStability = card.stability;
       const nextCard = scheduleAnswer(card, result, nowMs);
-      const stabilityDaysBefore = stabilityDays(this.ctx.storage, site);
+      const stabilityDaysBefore = readStabilityDays(this.ctx.storage, site);
       saveCard(this.ctx.storage, site, questionId, nextCard);
-      const stabilityDaysAfter = stabilityDays(this.ctx.storage, site);
+      const stabilityDaysAfter = readStabilityDays(this.ctx.storage, site);
       const today = getTokyoDate(new Date(nowMs));
-      recordDailyStability(
+      recordDailyStabilityDays(
         this.ctx.storage,
         site,
         today,
@@ -264,9 +280,12 @@ export class StabilityState extends DurableObject {
     }
     return this.ctx.storage.transactionSync(() => {
       const today = getTokyoDate(new Date(nowMs));
-      const currentStabilityDays = stabilityDays(this.ctx.storage, site);
-      const solved = solvedCount(this.ctx.storage, site);
-      const todaySolved = solvedCountsByDate(
+      const stabilityDays = readStabilityDays(this.ctx.storage, site);
+      const attemptedQuestionCount = readAttemptedQuestionCount(
+        this.ctx.storage,
+        site
+      );
+      const todayAttemptedQuestionCount = readAttemptedQuestionCountsByDate(
         this.ctx.storage,
         site,
         [today]
@@ -292,9 +311,9 @@ export class StabilityState extends DurableObject {
       return {
         site,
         today,
-        stabilityDays: currentStabilityDays,
-        solved,
-        todaySolved,
+        stabilityDays,
+        attemptedQuestionCount,
+        todayAttemptedQuestionCount,
         todayStabilityDaysDelta,
         catalog:
           catalog === undefined
@@ -315,7 +334,11 @@ export class StabilityState extends DurableObject {
     return this.ctx.storage.transactionSync(() => {
       const today = getTokyoDate(new Date(nowMs));
       const dates = recentTokyoDates(today, days);
-      const solvedByDate = solvedCountsByDate(this.ctx.storage, site, dates);
+      const attemptedQuestionCountsByDate = readAttemptedQuestionCountsByDate(
+        this.ctx.storage,
+        site,
+        dates
+      );
       const baseline = this.ctx.storage.sql
         .exec(
           `SELECT closing_stability_days FROM stability_history
@@ -337,22 +360,22 @@ export class StabilityState extends DurableObject {
           .toArray()
           .map((row) => [row.date, row])
       );
-      let current = baseline?.closing_stability_days ?? null;
+      let stabilityDays = baseline?.closing_stability_days ?? null;
       let trackingStarted = baseline !== undefined;
       const history = dates.map((date) => {
         const row = rows.get(date);
         let stabilityDaysDelta = trackingStarted ? 0 : null;
         if (row !== undefined) {
-          current = row.closing_stability_days;
+          stabilityDays = row.closing_stability_days;
           stabilityDaysDelta =
             row.closing_stability_days - row.opening_stability_days;
           trackingStarted = true;
         }
         return {
           date,
-          stabilityDays: current,
+          stabilityDays,
           stabilityDaysDelta,
-          solved: solvedByDate.get(date),
+          attemptedQuestionCount: attemptedQuestionCountsByDate.get(date),
         };
       });
       return { site, timeZone: "Asia/Tokyo", today, days: history };
@@ -500,7 +523,7 @@ export class StabilityState extends DurableObject {
       throw new TypeError("invalid question catalog");
     }
     return this.ctx.storage.transactionSync(() => {
-      const stabilityDaysBefore = stabilityDays(this.ctx.storage, site);
+      const stabilityDaysBefore = readStabilityDays(this.ctx.storage, site);
       const metadata = this.ctx.storage.sql
         .exec("SELECT generation FROM catalog_metadata WHERE site = ?", site)
         .toArray()[0];
@@ -536,8 +559,8 @@ export class StabilityState extends DurableObject {
         site,
         DEFAULT_DAILY_STABILITY_DAYS_GOAL
       );
-      const stabilityDaysAfter = stabilityDays(this.ctx.storage, site);
-      recordDailyStability(
+      const stabilityDaysAfter = readStabilityDays(this.ctx.storage, site);
+      recordDailyStabilityDays(
         this.ctx.storage,
         site,
         getTokyoDate(new Date(nowMs)),

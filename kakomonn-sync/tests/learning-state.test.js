@@ -255,10 +255,10 @@ describe("FSRS stability days", () => {
       result: "correct",
       previousStability: 0,
     });
-    expect(correct.attempt.stability).toBeGreaterThan(0);
+    expect(correct.attempt.resultingStability).toBeGreaterThan(0);
     expect(correct.attempt).not.toHaveProperty("masteryDelta");
     expect(correct).not.toHaveProperty("completedMilestone");
-    expect(correct.totals).toMatchObject({ solved: 1, todaySolved: 1 });
+    expect(correct.totals).toMatchObject({ attemptedQuestionCount: 1, todayAttemptedQuestionCount: 1 });
     expect(correct.totals).toHaveProperty("stabilityDays");
 
     await seedReviewCard("2", 35, NOW - 1000, NOW);
@@ -270,11 +270,11 @@ describe("FSRS stability days", () => {
       NOW + 1000
     );
     expect(incorrect.attempt.result).toBe("incorrect");
-    expect(incorrect.attempt.stability).toBeLessThan(35);
+    expect(incorrect.attempt.resultingStability).toBeLessThan(35);
   });
 });
 
-describe("attempt idempotency and solved totals", () => {
+describe("attempt idempotency and attempted question totals", () => {
   it("does not apply the same operation twice", async () => {
     const first = await stub().recordAttempt(
       SITE,
@@ -332,7 +332,7 @@ describe("attempt idempotency and solved totals", () => {
     expect(retry.totals).toEqual(second.totals);
   });
 
-  it("counts distinct solved questions by lifetime and Tokyo date", async () => {
+  it("counts distinct attempted questions by lifetime and Tokyo date", async () => {
     const beforeMidnight = Date.parse("2026-08-10T14:59:59.999Z");
     const afterMidnight = Date.parse("2026-08-10T15:00:00.000Z");
     await stub().recordAttempt(SITE, "1", operationId(6), "correct", beforeMidnight);
@@ -347,13 +347,13 @@ describe("attempt idempotency and solved totals", () => {
 
     await expect(stub().getState(SITE, afterMidnight + 1)).resolves.toMatchObject({
       today: "2026-08-11",
-      solved: 2,
-      todaySolved: 2,
+      attemptedQuestionCount: 2,
+      todayAttemptedQuestionCount: 2,
     });
     await expect(stub().getHistory(SITE, 2, afterMidnight + 1)).resolves.toMatchObject({
       days: [
-        { date: "2026-08-10", solved: 1 },
-        { date: "2026-08-11", solved: 2 },
+        { date: "2026-08-10", attemptedQuestionCount: 1 },
+        { date: "2026-08-11", attemptedQuestionCount: 2 },
       ],
     });
   });
@@ -470,7 +470,7 @@ describe("daily raw details", () => {
             answered_at_ms: NOW + 1000,
             result: "incorrect",
             previous_stability: 0,
-            resulting_stability: earlier.attempt.stability,
+            resulting_stability: earlier.attempt.resultingStability,
           },
           {
             site: SITE,
@@ -479,7 +479,7 @@ describe("daily raw details", () => {
             answered_at_ms: NOW + 2000,
             result: "correct",
             previous_stability: 0,
-            resulting_stability: later.attempt.stability,
+            resulting_stability: later.attempt.resultingStability,
           },
         ],
       },
@@ -547,8 +547,8 @@ describe("site settings", () => {
     });
   });
 
-  it("serves and validates the v5 settings contract", async () => {
-    const first = await SELF.fetch(`https://example.test/v5/settings?site=${SITE}`, {
+  it("serves and validates the v6 settings contract", async () => {
+    const first = await SELF.fetch(`https://example.test/v6/settings?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(first.status).toBe(200);
@@ -557,7 +557,7 @@ describe("site settings", () => {
       dailyStabilityDaysGoal: 30,
     });
 
-    const updated = await SELF.fetch("https://example.test/v5/settings", {
+    const updated = await SELF.fetch("https://example.test/v6/settings", {
       method: "PUT",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({ site: SITE, dailyStabilityDaysGoal: 1000 }),
@@ -574,7 +574,7 @@ describe("site settings", () => {
       { site: SITE, dailyStabilityDaysGoal: 5, extra: true },
       { site: "invalid.example", dailyStabilityDaysGoal: 5 },
     ]) {
-      const response = await SELF.fetch("https://example.test/v5/settings", {
+      const response = await SELF.fetch("https://example.test/v6/settings", {
         method: "PUT",
         headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -584,9 +584,9 @@ describe("site settings", () => {
   });
 });
 
-describe("v5 HTTP contract", () => {
+describe("v6 HTTP contract", () => {
   it("does not expose older API versions", async () => {
-    for (const version of ["v3", "v4"]) {
+    for (const version of ["v3", "v4", "v5"]) {
       const response = await SELF.fetch(
         `https://example.test/${version}/state?site=${SITE}`,
         { headers: AUTHORIZATION }
@@ -597,8 +597,8 @@ describe("v5 HTTP contract", () => {
 
   it("requires the configured bearer token", async () => {
     for (const url of [
-      "https://example.test/v5/sites",
-      `https://example.test/v5/daily-details?site=${SITE}&date=2026-08-10`,
+      "https://example.test/v6/sites",
+      `https://example.test/v6/daily-details?site=${SITE}&date=2026-08-10`,
     ]) {
       const missing = await SELF.fetch(url);
       const incorrect = await SELF.fetch(url, {
@@ -610,26 +610,26 @@ describe("v5 HTTP contract", () => {
   });
 
   it("lists sites and returns state and history", async () => {
-    const sites = await SELF.fetch("https://example.test/v5/sites", {
+    const sites = await SELF.fetch("https://example.test/v6/sites", {
       headers: AUTHORIZATION,
     });
     await expect(sites.json()).resolves.toEqual({ sites: [SITE] });
 
-    const state = await SELF.fetch(`https://example.test/v5/state?site=${SITE}`, {
+    const state = await SELF.fetch(`https://example.test/v6/state?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(state.status).toBe(200);
     await expect(state.json()).resolves.toMatchObject({
       site: SITE,
       stabilityDays: 0,
-      solved: 0,
-      todaySolved: 0,
+      attemptedQuestionCount: 0,
+      todayAttemptedQuestionCount: 0,
       todayStabilityDaysDelta: 0,
       catalog: { questionCount: 4, generation: 1 },
     });
 
     const history = await SELF.fetch(
-      `https://example.test/v5/history?site=${SITE}&days=7`,
+      `https://example.test/v6/history?site=${SITE}&days=7`,
       { headers: AUTHORIZATION }
     );
     expect(history.status).toBe(200);
@@ -638,7 +638,7 @@ describe("v5 HTTP contract", () => {
     expect(historyBody.days.at(-1).stabilityDaysDelta).toBe(0);
 
     const details = await SELF.fetch(
-      `https://example.test/v5/daily-details?site=${SITE}&date=2026-08-10`,
+      `https://example.test/v6/daily-details?site=${SITE}&date=2026-08-10`,
       { headers: AUTHORIZATION }
     );
     expect(details.status).toBe(200);
@@ -659,7 +659,7 @@ describe("v5 HTTP contract", () => {
       `site=${SITE}&date=2026-08-10&extra=true`,
     ]) {
       const response = await SELF.fetch(
-        `https://example.test/v5/daily-details?${search}`,
+        `https://example.test/v6/daily-details?${search}`,
         { headers: AUTHORIZATION }
       );
       expect(response.status).toBe(400);
@@ -667,7 +667,7 @@ describe("v5 HTTP contract", () => {
   });
 
   it("replaces the catalog and serves the canonical next URL", async () => {
-    const replace = await SELF.fetch("https://example.test/v5/questions", {
+    const replace = await SELF.fetch("https://example.test/v6/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -678,7 +678,7 @@ describe("v5 HTTP contract", () => {
     });
     expect(replace.status).toBe(200);
 
-    const next = await SELF.fetch(`https://example.test/v5/next?site=${SITE}`, {
+    const next = await SELF.fetch(`https://example.test/v6/next?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     await expect(next.json()).resolves.toEqual({
@@ -692,7 +692,7 @@ describe("v5 HTTP contract", () => {
   });
 
   it("rejects unknown questions and extra attempt fields", async () => {
-    const unknown = await SELF.fetch("https://example.test/v5/attempts", {
+    const unknown = await SELF.fetch("https://example.test/v6/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -705,7 +705,7 @@ describe("v5 HTTP contract", () => {
     expect(unknown.status).toBe(409);
     await expect(unknown.json()).resolves.toEqual({ error: "unknown_question" });
 
-    const extra = await SELF.fetch("https://example.test/v5/attempts", {
+    const extra = await SELF.fetch("https://example.test/v6/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -725,7 +725,7 @@ describe("v5 HTTP contract", () => {
       state.storage.sql.exec("DELETE FROM catalog_metadata WHERE site = ?", SITE);
     });
     const response = await SELF.fetch(
-      `https://example.test/v5/next?site=${SITE}`,
+      `https://example.test/v6/next?site=${SITE}`,
       { headers: AUTHORIZATION }
     );
     expect(response.status).toBe(409);
@@ -733,7 +733,7 @@ describe("v5 HTTP contract", () => {
   });
 });
 
-describe("v6 HTTP contract", () => {
+describe("v6 canonical learning metric fields", () => {
   it("returns canonical learning metric names", async () => {
     const state = await SELF.fetch(`https://example.test/v6/state?site=${SITE}`, {
       headers: AUTHORIZATION,

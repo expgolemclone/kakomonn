@@ -214,8 +214,9 @@
         ) {
           throw new SyncRequestError("invalid_response");
         }
-        stabilityDaysCount = result.totals.stabilityDays;
-        todaySolvedCount = result.totals.todaySolved;
+        stabilityDays = result.totals.stabilityDays;
+        todayAttemptedQuestionCount =
+          result.totals.todayAttemptedQuestionCount;
         renderCount();
 
         const next = await requestNextQuestion(syncToken, operation.questionId);

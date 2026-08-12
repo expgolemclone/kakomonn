@@ -51,17 +51,17 @@ npm run deploy:kakomonn-sync
 
 ## API
 
-APIはv6への移行中だけ`/v5`と`/v6`を提供し, StabilityState Durable Objectを唯一のsource of truthとします. v6ではattempt済みのdistinct問題数を`attemptedQuestionCount`と`todayAttemptedQuestionCount`, 解答後のcard stabilityを`resultingStability`として返します.
+APIは`/v6`だけを提供し, StabilityState Durable Objectを唯一のsource of truthとします. attempt済みのdistinct問題数を`attemptedQuestionCount`と`todayAttemptedQuestionCount`, 解答後のcard stabilityを`resultingStability`として返します.
 
-- `GET /v5/sites`は,問題catalogを登録済みのサイト一覧を返します.
-- `GET /v5/state?site=<host>`は,定着日数,解いた問題数,今日解いた問題数,今日の定着日数純増,問題catalog情報を返します.
-- `GET /v5/history?site=<host>&days=<1-31>`は, 日本時間の日別`stabilityDays`, `stabilityDaysDelta`, `solved`を返します. 計測開始前の`stabilityDays`と`stabilityDaysDelta`は`null`で, 計測開始後にrowがない日の`stabilityDaysDelta`は`0`です.
-- `GET /v5/daily-details?site=<host>&date=<YYYY-MM-DD>`は, 指定した日本時間の日付に対応する`stability_history`と`attempts`の全raw rowを返します.
-- `POST /v5/attempts`は,`site`,`questionId`,`operationId`,`result`を受け取ります.同じ操作の再送は重複記録せず,異なるpayloadで同じ操作IDを使用した場合は拒否します.
-- `GET /v5/next`は,FSRSに基づく次の問題を返します.
-- `POST /v5/questions`は,siteの問題catalogを世代番号付きで置き換えます.
-- `GET /v5/settings?site=<host>`は,site別の`dailyStabilityDaysGoal`を返します.`PUT /v5/settings`は,siteと1以上の整数で同じ値を更新します.
-- `POST /v5/speech-token`は,有効期間600秒のAzure Speech tokenを返します.
+- `GET /v6/sites`は,問題catalogを登録済みのサイト一覧を返します.
+- `GET /v6/state?site=<host>`は,定着日数,解いた問題数,今日解いた問題数,今日の定着日数純増,問題catalog情報を返します.
+- `GET /v6/history?site=<host>&days=<1-31>`は, 日本時間の日別`stabilityDays`, `stabilityDaysDelta`, `attemptedQuestionCount`を返します. 計測開始前の`stabilityDays`と`stabilityDaysDelta`は`null`で, 計測開始後にrowがない日の`stabilityDaysDelta`は`0`です.
+- `GET /v6/daily-details?site=<host>&date=<YYYY-MM-DD>`は, 指定した日本時間の日付に対応する`stability_history`と`attempts`の全raw rowを返します.
+- `POST /v6/attempts`は,`site`,`questionId`,`operationId`,`result`を受け取ります.同じ操作の再送は重複記録せず,異なるpayloadで同じ操作IDを使用した場合は拒否します.
+- `GET /v6/next`は,FSRSに基づく次の問題を返します.
+- `POST /v6/questions`は,siteの問題catalogを世代番号付きで置き換えます.
+- `GET /v6/settings?site=<host>`は,site別の`dailyStabilityDaysGoal`を返します.`PUT /v6/settings`は,siteと1以上の整数で同じ値を更新します.
+- `POST /v6/speech-token`は,有効期間600秒のAzure Speech tokenを返します.
 
 `kakomonn-reader`はSpeech tokenを約9分間再利用し,`ja-JP-NanamiNeural`のMP3をAzureから直接取得します.Workerは音声dataを中継せず,Workers AI,Durable Objects,R2も音声処理には使用しません.Azure Speech F0の無料枠を超過した場合は読み上げを停止し,別の音声へ切り替えません.
 
@@ -73,4 +73,4 @@ APIはv6への移行中だけ`/v5`と`/v6`を提供し, StabilityState Durable O
 
 ## 互換性方針
 
-v1, v2, v3, v4 APIは提供しません. v4 StabilityStateのcard, attempt, catalog, 解答履歴はschema v2へ明示的に移行し, 30日判定の履歴と目標設定は破棄します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.
+v1, v2, v3, v4, v5 APIは提供しません. v4 StabilityStateのcard, attempt, catalog, 解答履歴はschema v2へ明示的に移行し, 30日判定の履歴と目標設定は破棄します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.

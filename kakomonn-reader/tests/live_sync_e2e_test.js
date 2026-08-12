@@ -450,10 +450,10 @@ function assertSyncState(state) {
   assert.match(state.today, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(Number.isSafeInteger(state.stabilityDays), true);
   assert.equal(state.stabilityDays >= 0, true);
-  assert.equal(Number.isSafeInteger(state.solved), true);
-  assert.equal(state.solved >= 0, true);
-  assert.equal(Number.isSafeInteger(state.todaySolved), true);
-  assert.equal(state.todaySolved >= 0, true);
+  assert.equal(Number.isSafeInteger(state.attemptedQuestionCount), true);
+  assert.equal(state.attemptedQuestionCount >= 0, true);
+  assert.equal(Number.isSafeInteger(state.todayAttemptedQuestionCount), true);
+  assert.equal(state.todayAttemptedQuestionCount >= 0, true);
   assert.equal(Number.isSafeInteger(state.todayStabilityDaysDelta), true);
   assert.equal(
     state.catalog === null ||
@@ -468,7 +468,7 @@ function assertSyncState(state) {
 
 async function requestSyncState(token) {
   const query = new URLSearchParams({ site: "chushoks.kakomonn.com" });
-  const response = await fetch(`${syncApiOrigin}/v5/state?${query}`, {
+  const response = await fetch(`${syncApiOrigin}/v6/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
@@ -808,7 +808,7 @@ async function configureSyncToken(
   await mcp.tool("fill", { uid: tokenInput, value: token });
   await mcp.tool("click", { uid: saveButton });
 
-  const expectedCount = `定着 ${baseline.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${baseline.todaySolved}問`;
+  const expectedCount = `定着 ${baseline.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${baseline.todayAttemptedQuestionCount}問`;
   return waitUntil("the production sync baseline", async () => {
     const state = await readReaderState(mcp);
     return state.settingsHidden && state.count === expectedCount ? state : null;
@@ -1089,7 +1089,7 @@ async function main() {
     );
     assert.equal(
       configuredState.count,
-      `定着 ${baseline.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${baseline.todaySolved}問`,
+      `定着 ${baseline.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${baseline.todayAttemptedQuestionCount}問`,
     );
     await submitCorrectAnswer(mcp);
     await copyMarkdownInRealEdge(mcp);
@@ -1098,7 +1098,7 @@ async function main() {
     assert.equal(finalState.today, baseline.today);
     assert.equal(
       browserState.count,
-      `定着 ${finalState.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${finalState.todaySolved}問`,
+      `定着 ${finalState.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${finalState.todayAttemptedQuestionCount}問`,
     );
     console.log(
       JSON.stringify({

@@ -31,10 +31,10 @@
       /^\d{4}-\d{2}-\d{2}$/.test(value.today) &&
       Number.isSafeInteger(value.stabilityDays) &&
       value.stabilityDays >= 0 &&
-      Number.isSafeInteger(value.solved) &&
-      value.solved >= 0 &&
-      Number.isSafeInteger(value.todaySolved) &&
-      value.todaySolved >= 0 &&
+      Number.isSafeInteger(value.attemptedQuestionCount) &&
+      value.attemptedQuestionCount >= 0 &&
+      Number.isSafeInteger(value.todayAttemptedQuestionCount) &&
+      value.todayAttemptedQuestionCount >= 0 &&
       Number.isSafeInteger(value.todayStabilityDaysDelta) &&
       validCatalog
     );
@@ -50,16 +50,16 @@
       (value.attempt.result === "correct" || value.attempt.result === "incorrect") &&
       Number.isFinite(value.attempt.previousStability) &&
       value.attempt.previousStability >= 0 &&
-      Number.isFinite(value.attempt.stability) &&
-      value.attempt.stability >= 0 &&
+      Number.isFinite(value.attempt.resultingStability) &&
+      value.attempt.resultingStability >= 0 &&
       value.totals !== null &&
       typeof value.totals === "object" &&
       Number.isSafeInteger(value.totals.stabilityDays) &&
       value.totals.stabilityDays >= 0 &&
-      Number.isSafeInteger(value.totals.solved) &&
-      value.totals.solved >= 0 &&
-      Number.isSafeInteger(value.totals.todaySolved) &&
-      value.totals.todaySolved >= 0
+      Number.isSafeInteger(value.totals.attemptedQuestionCount) &&
+      value.totals.attemptedQuestionCount >= 0 &&
+      Number.isSafeInteger(value.totals.todayAttemptedQuestionCount) &&
+      value.totals.todayAttemptedQuestionCount >= 0
     );
   }
 
@@ -266,13 +266,13 @@
 
   function requestSyncState(token) {
     const parameters = new URLSearchParams({ site: SITE_ID });
-    return requestSyncResponse("GET", `/v5/state?${parameters}`, token, isSyncState);
+    return requestSyncResponse("GET", `/v6/state?${parameters}`, token, isSyncState);
   }
 
   function requestAttemptResult(token, operation) {
     return requestSyncResponse(
       "POST",
-      "/v5/attempts",
+      "/v6/attempts",
       token,
       isAttemptResponse,
       {
@@ -289,11 +289,11 @@
     if (excludeQuestionId !== null) {
       parameters.set("excludeQuestionId", excludeQuestionId);
     }
-    return requestSyncResponse("GET", `/v5/next?${parameters}`, token, isNextResponse);
+    return requestSyncResponse("GET", `/v6/next?${parameters}`, token, isNextResponse);
   }
 
   function requestCatalogUpdate(token, questionIds, expectedGeneration) {
-    return requestSyncResponse("POST", "/v5/questions", token, isCatalogResponse, {
+    return requestSyncResponse("POST", "/v6/questions", token, isCatalogResponse, {
       site: SITE_ID,
       questionIds,
       expectedGeneration,
@@ -301,7 +301,7 @@
   }
 
   function requestSpeechTokenResult(token) {
-    return requestSyncResponse("POST", "/v5/speech-token", token, isSpeechTokenResponse);
+    return requestSyncResponse("POST", "/v6/speech-token", token, isSpeechTokenResponse);
   }
 
   function clearAzureSpeechToken() {
@@ -361,8 +361,8 @@
     if (!isSyncState(state)) {
       throw new SyncRequestError("invalid_response");
     }
-    stabilityDaysCount = state.stabilityDays;
-    todaySolvedCount = state.todaySolved;
+    stabilityDays = state.stabilityDays;
+    todayAttemptedQuestionCount = state.todayAttemptedQuestionCount;
     renderCount();
   }
 

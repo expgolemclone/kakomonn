@@ -2,7 +2,7 @@ import { isSite } from "../auth.js";
 import { getStabilityStateStub } from "../learning-store.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
-export async function handleHistory(url, env, mapResponse = (value) => value) {
+export async function handleHistory(url, env) {
   const keys = [...url.searchParams.keys()].sort();
   if (
     keys.length !== 2 ||
@@ -22,7 +22,5 @@ export async function handleHistory(url, env, mapResponse = (value) => value) {
   if (!Number.isSafeInteger(days) || days < 1 || days > 31) {
     return errorResponse("invalid_request", 400);
   }
-  return jsonResponse(
-    mapResponse(await getStabilityStateStub(env).getHistory(site, days))
-  );
+  return jsonResponse(await getStabilityStateStub(env).getHistory(site, days));
 }

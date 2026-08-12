@@ -1,16 +1,16 @@
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SITE = "chushoks.kakomonn.com";
-const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE}.v5.pending-attempt`;
+const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE}.v6.pending-attempt`;
 const LEGACY_PENDING_CORRECT_KEY = `kakomonn-reader.${SITE}.pending-correct`;
 const SYNC_API_ORIGIN = "https://kakomonn-count-sync.expgolem-lab.workers.dev";
 const AZURE_SPEECH_ORIGIN = "https://japaneast.tts.speech.microsoft.com";
 const AZURE_SPEECH_TOKEN = "test-azure-speech-token";
 
 function installSyncMockInWindow({
-  initialStabilityDaysCount,
+  initialStabilityDays,
   initialAttemptCount,
-  initialSolvedCount,
-  initialTodaySolvedCount,
+  initialAttemptedQuestionCount,
+  initialTodayAttemptedQuestionCount,
   initialDate,
   expectedToken,
   expectedSite,
@@ -39,19 +39,19 @@ function installSyncMockInWindow({
         questionId: item.questionId ?? "45124",
         result: item.result ?? "correct",
         previousStability: item.previousStability ?? 29,
-        stability: item.stability ?? 31,
+        resultingStability: item.resultingStability ?? 31,
       },
     ]),
   );
-  const solvedQuestionIds = new Set(
+  const attemptedQuestionIds = new Set(
     initialProcessedOperations.map((item) => item.questionId ?? "45124")
   );
 
   const mock = {
-    stabilityDays: initialStabilityDaysCount,
+    stabilityDays: initialStabilityDays,
     attemptCount: initialAttemptCount,
-    solved: initialSolvedCount,
-    todaySolved: initialTodaySolvedCount,
+    attemptedQuestionCount: initialAttemptedQuestionCount,
+    todayAttemptedQuestionCount: initialTodayAttemptedQuestionCount,
     date: initialDate,
     token: expectedToken,
     calls: [],
@@ -65,7 +65,7 @@ function installSyncMockInWindow({
     releaseHeldRequest: null,
     clipboardWrites: [],
     nextQuestionId: initialNextQuestionId,
-    nextStabilityDaysDelta: 0,
+    nextAttemptStabilityDaysDelta: 0,
     catalogUpdatedAtMs: Date.now(),
     catalogQuestionCount: initialCatalogQuestionCount,
     catalogGeneration: initialCatalogGeneration,
@@ -76,8 +76,8 @@ function installSyncMockInWindow({
     site: expectedSite,
     today: mock.date,
     stabilityDays: mock.stabilityDays,
-    solved: mock.solved,
-    todaySolved: mock.todaySolved,
+    attemptedQuestionCount: mock.attemptedQuestionCount,
+    todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
     todayStabilityDaysDelta: 0,
     catalog:
       mock.catalogQuestionCount === null
@@ -202,19 +202,19 @@ function installSyncMockInWindow({
         const pathname = requestURL.pathname;
         if (
           call.method === "GET" &&
-          pathname === "/v5/state" &&
+          pathname === "/v6/state" &&
           requestURL.searchParams.get("site") === expectedSite
         ) {
           respondJSON(200, syncState());
           return;
         }
-        if (call.method === "POST" && pathname === "/v5/speech-token") {
+        if (call.method === "POST" && pathname === "/v6/speech-token") {
           respondJSON(200, { token: expectedSpeechToken, expiresInSeconds: 600 });
           return;
         }
         if (
           call.method === "GET" &&
-          pathname === "/v5/next" &&
+          pathname === "/v6/next" &&
           requestURL.searchParams.get("site") === expectedSite &&
           requestURL.searchParams.getAll("site").length === 1 &&
           requestURL.searchParams.getAll("excludeQuestionId").length <= 1
@@ -233,7 +233,7 @@ function installSyncMockInWindow({
           });
           return;
         }
-        if (call.method === "POST" && pathname === "/v5/questions") {
+        if (call.method === "POST" && pathname === "/v6/questions") {
           if (mock.conflictNextCatalogUpdate) {
             mock.conflictNextCatalogUpdate = false;
             mock.catalogUpdatedAtMs = Date.now();
@@ -269,7 +269,7 @@ function installSyncMockInWindow({
           });
           return;
         }
-        if (call.method === "POST" && pathname === "/v5/attempts") {
+        if (call.method === "POST" && pathname === "/v6/attempts") {
           const operationId = call.body?.operationId;
           const questionId = call.body?.questionId;
           const result = call.body?.result;
@@ -294,19 +294,30 @@ function installSyncMockInWindow({
           }
           if (item === undefined) {
             mock.attemptCount += 1;
-            if (!solvedQuestionIds.has(questionId)) {
-              solvedQuestionIds.add(questionId);
-              mock.solved += 1;
-              mock.todaySolved += 1;
+            if (!attemptedQuestionIds.has(questionId)) {
+              attemptedQuestionIds.add(questionId);
+              mock.attemptedQuestionCount += 1;
+              mock.todayAttemptedQuestionCount += 1;
             }
-            const delta = mock.nextStabilityDaysDelta;
-            mock.nextStabilityDaysDelta = 0;
-            mock.stabilityDays += delta;
+            const nextAttemptStabilityDaysDelta =
+              mock.nextAttemptStabilityDaysDelta;
+            mock.nextAttemptStabilityDaysDelta = 0;
+            mock.stabilityDays += nextAttemptStabilityDaysDelta;
             item = {
               questionId,
               result,
-              previousStability: delta === -1 ? 35 : delta === 1 ? 29 : 10,
-              stability: delta === -1 ? 5 : delta === 1 ? 31 : 11,
+              previousStability:
+                nextAttemptStabilityDaysDelta === -1
+                  ? 35
+                  : nextAttemptStabilityDaysDelta === 1
+                    ? 29
+                    : 10,
+              resultingStability:
+                nextAttemptStabilityDaysDelta === -1
+                  ? 5
+                  : nextAttemptStabilityDaysDelta === 1
+                    ? 31
+                    : 11,
             };
             processed.set(operationId, item);
           }
@@ -320,12 +331,12 @@ function installSyncMockInWindow({
               questionId: item.questionId,
               result: item.result,
               previousStability: item.previousStability,
-              stability: item.stability,
+              resultingStability: item.resultingStability,
             },
             totals: {
               stabilityDays: mock.stabilityDays,
-              solved: mock.solved,
-              todaySolved: mock.todaySolved,
+              attemptedQuestionCount: mock.attemptedQuestionCount,
+              todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
             },
           });
           return;
@@ -356,8 +367,8 @@ function installSyncMockInWindow({
 function createSyncMockConfiguration({
   stabilityDays = 0,
   attemptCount = 0,
-  solved = attemptCount,
-  todaySolved = solved,
+  attemptedQuestionCount = attemptCount,
+  todayAttemptedQuestionCount = attemptedQuestionCount,
   date = "2026-08-10",
   token = "test-sync-token",
   configured = true,
@@ -371,10 +382,10 @@ function createSyncMockConfiguration({
   catalogGeneration = catalogQuestionCount === null ? 0 : 1,
 } = {}) {
   return {
-    initialStabilityDaysCount: stabilityDays,
+    initialStabilityDays: stabilityDays,
     initialAttemptCount: attemptCount,
-    initialSolvedCount: solved,
-    initialTodaySolvedCount: todaySolved,
+    initialAttemptedQuestionCount: attemptedQuestionCount,
+    initialTodayAttemptedQuestionCount: todayAttemptedQuestionCount,
     initialDate: date,
     expectedToken: token,
     expectedSite: site,
@@ -383,7 +394,7 @@ function createSyncMockConfiguration({
     initialProcessedOperations: processedOperations,
     returnsPromise: userscriptsPromise,
     tokenKey: SYNC_TOKEN_KEY,
-    pendingAnswerKey: `kakomonn-reader.${site}.v5.pending-attempt`,
+    pendingAnswerKey: `kakomonn-reader.${site}.v6.pending-attempt`,
     expectedOrigin: SYNC_API_ORIGIN,
     expectedSpeechOrigin: AZURE_SPEECH_ORIGIN,
     expectedSpeechToken: AZURE_SPEECH_TOKEN,

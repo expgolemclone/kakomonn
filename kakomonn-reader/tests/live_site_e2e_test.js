@@ -197,7 +197,7 @@ async function readStoredStabilityDays(page) {
   return page.evaluate(() => window.__syncMock?.stabilityDays ?? null);
 }
 
-async function readStoredAnsweredCount(page) {
+async function readStoredAttemptCount(page) {
   return page.evaluate(() => window.__syncMock?.attemptCount ?? null);
 }
 
@@ -290,12 +290,12 @@ async function runLiveCatalogCrawlCase(browser, script) {
     }, script);
 
     await page.waitForFunction(
-      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v5/questions"),
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v6/questions"),
       null,
       { timeout: 180_000 },
     );
     const catalogCall = await page.evaluate(() =>
-      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v5/questions"),
+      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v6/questions"),
     );
     assert.equal(Array.isArray(catalogCall.body.questionIds), true);
     assert.equal(catalogCall.body.questionIds.length > 0, true);
@@ -334,7 +334,7 @@ async function runCase(
     answerText,
     expectedBanner,
     expectedResultClass,
-    stabilityDaysDelta,
+    attemptStabilityDaysDelta,
     inputMethod = "click",
   },
 ) {
@@ -481,11 +481,11 @@ async function runCase(
       { timeout: 15_000 },
     );
 
-    await page.evaluate((delta) => { window.__syncMock.nextStabilityDaysDelta = delta; }, stabilityDaysDelta);
+    await page.evaluate((delta) => { window.__syncMock.nextAttemptStabilityDaysDelta = delta; }, attemptStabilityDaysDelta);
     await clickNextQuestion(page, frame, fixedNextQuestionUrl);
     console.log(JSON.stringify({ phase: "next-clicked", answerText }));
 
-    const expectedStabilityDays = stabilityDaysDelta;
+    const expectedStabilityDays = attemptStabilityDaysDelta;
     if (expectedStabilityDays > 0) {
       await page.waitForFunction(
         (days) =>
@@ -684,7 +684,7 @@ async function runRandomNavigationCase(browser, script) {
       null,
       { timeout: 10_000 },
     );
-    assert.equal(await readStoredAnsweredCount(page), 1);
+    assert.equal(await readStoredAttemptCount(page), 1);
     assert.equal(await readStoredStabilityDays(page), 0);
     assert.deepEqual(pageErrors, []);
     console.log(
@@ -725,7 +725,7 @@ async function runRandomNavigationCase(browser, script) {
           ])
           .catch(() => null),
         storedStabilityDays: await readStoredStabilityDays(page).catch(() => null),
-        storedAnsweredCount: await readStoredAnsweredCount(page).catch(
+        storedAttemptCount: await readStoredAttemptCount(page).catch(
           () => null,
         ),
         syncCallPaths: await page
@@ -1134,7 +1134,7 @@ async function runCrossDomainActivationCase(browser, script) {
       );
       const stateSites = await page.evaluate(() =>
         window.__syncMock.calls
-          .filter((call) => new URL(call.url).pathname === "/v5/state")
+          .filter((call) => new URL(call.url).pathname === "/v6/state")
           .map((call) => new URL(call.url).searchParams.get("site"))
       );
       assert.equal(stateSites.length >= 1, true);
@@ -1160,14 +1160,14 @@ async function main() {
       answerText: "輸入の減少は、GDPを増加させる。",
       expectedBanner: "正解！素晴らしいです",
       expectedResultClass: "is-correct",
-      stabilityDaysDelta: 31,
+      attemptStabilityDaysDelta: 31,
       inputMethod: "keyboard",
     });
     await runCase(browser, script, {
       answerText: "GDPは、フローとストックの混合概念である。",
       expectedBanner: "残念...",
       expectedResultClass: "is-wrong",
-      stabilityDaysDelta: 0,
+      attemptStabilityDaysDelta: 0,
       inputMethod: "keyboard",
     });
     await runRandomNavigationCase(browser, script);

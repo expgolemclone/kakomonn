@@ -74,8 +74,8 @@ test("production assets match the repository", async (context) => {
   }
 });
 
-test("production serves only the authenticated v5 API backed by StabilityState", async () => {
-  const unauthorized = await fetch(new URL("/v5/sites", productionOrigin));
+test("production serves only the authenticated v6 API backed by StabilityState", async () => {
+  const unauthorized = await fetch(new URL("/v6/sites", productionOrigin));
   assert.equal(unauthorized.status, 401);
   assert.deepEqual(await unauthorized.json(), { error: "unauthorized" });
 
@@ -83,8 +83,10 @@ test("production serves only the authenticated v5 API backed by StabilityState",
   assert.equal(removedV3.status, 404);
   const removedV4 = await authorizedGet("/v4/sites");
   assert.equal(removedV4.status, 404);
+  const removedV5 = await authorizedGet("/v5/sites");
+  assert.equal(removedV5.status, 404);
 
-  const sitesResponse = await authorizedGet("/v5/sites");
+  const sitesResponse = await authorizedGet("/v6/sites");
   assert.equal(sitesResponse.status, 200);
   const sitesBody = await sitesResponse.json();
   assert.equal(Array.isArray(sitesBody.sites), true);
@@ -93,7 +95,7 @@ test("production serves only the authenticated v5 API backed by StabilityState",
   if (sitesBody.sites.length > 0) {
     const site = sitesBody.sites[0];
     const settingsResponse = await authorizedGet(
-      `/v5/settings?${new URLSearchParams({ site })}`,
+      `/v6/settings?${new URLSearchParams({ site })}`,
     );
     assert.equal(settingsResponse.status, 200);
     const settingsBody = await settingsResponse.json();
@@ -102,21 +104,23 @@ test("production serves only the authenticated v5 API backed by StabilityState",
     assert.equal(Number.isSafeInteger(settingsBody.dailyStabilityDaysGoal), true);
     assert.equal(settingsBody.dailyStabilityDaysGoal >= 1, true);
 
-    const stateResponse = await authorizedGet(`/v5/state?${new URLSearchParams({ site })}`);
+    const stateResponse = await authorizedGet(`/v6/state?${new URLSearchParams({ site })}`);
     assert.equal(stateResponse.status, 200);
     const stateBody = await stateResponse.json();
     assert.equal(stateBody.site, site);
     assert.equal(Number.isSafeInteger(stateBody.stabilityDays), true);
     assert.equal(stateBody.stabilityDays >= 0, true);
-    assert.equal(Number.isSafeInteger(stateBody.solved), true);
-    assert.equal(stateBody.solved >= 0, true);
-    assert.equal(Number.isSafeInteger(stateBody.todaySolved), true);
-    assert.equal(stateBody.todaySolved >= 0, true);
+    assert.equal(Number.isSafeInteger(stateBody.attemptedQuestionCount), true);
+    assert.equal(stateBody.attemptedQuestionCount >= 0, true);
+    assert.equal(Number.isSafeInteger(stateBody.todayAttemptedQuestionCount), true);
+    assert.equal(stateBody.todayAttemptedQuestionCount >= 0, true);
+    assert.equal(Object.hasOwn(stateBody, "solved"), false);
+    assert.equal(Object.hasOwn(stateBody, "todaySolved"), false);
     assert.equal(Object.hasOwn(stateBody, "attempted"), false);
     assert.equal(Number.isSafeInteger(stateBody.todayStabilityDaysDelta), true);
 
     const historyResponse = await authorizedGet(
-      `/v5/history?${new URLSearchParams({ site, days: "7" })}`,
+      `/v6/history?${new URLSearchParams({ site, days: "7" })}`,
     );
     assert.equal(historyResponse.status, 200);
     const historyBody = await historyResponse.json();
@@ -128,14 +132,15 @@ test("production serves only the authenticated v5 API backed by StabilityState",
             (Number.isSafeInteger(day.stabilityDays) && day.stabilityDays >= 0)) &&
           (day.stabilityDaysDelta === null ||
             Number.isSafeInteger(day.stabilityDaysDelta)) &&
-          Number.isSafeInteger(day.solved) &&
-          day.solved >= 0,
+          Number.isSafeInteger(day.attemptedQuestionCount) &&
+          day.attemptedQuestionCount >= 0 &&
+          !Object.hasOwn(day, "solved"),
       ),
       true,
     );
 
     const detailsResponse = await authorizedGet(
-      `/v5/daily-details?${new URLSearchParams({ site, date: historyBody.today })}`,
+      `/v6/daily-details?${new URLSearchParams({ site, date: historyBody.today })}`,
     );
     assert.equal(detailsResponse.status, 200);
     const detailsBody = await detailsResponse.json();
@@ -167,46 +172,6 @@ test("production serves only the authenticated v5 API backed by StabilityState",
           (row.result === "correct" || row.result === "incorrect") &&
           Number.isFinite(row.previous_stability) &&
           Number.isFinite(row.resulting_stability),
-      ),
-      true,
-    );
-  }
-});
-
-test("production serves the canonical v6 learning metric contract", async () => {
-  const unauthorized = await fetch(new URL("/v6/sites", productionOrigin));
-  assert.equal(unauthorized.status, 401);
-  assert.deepEqual(await unauthorized.json(), { error: "unauthorized" });
-
-  const sitesResponse = await authorizedGet("/v6/sites");
-  assert.equal(sitesResponse.status, 200);
-  const sitesBody = await sitesResponse.json();
-  assert.equal(Array.isArray(sitesBody.sites), true);
-
-  if (sitesBody.sites.length > 0) {
-    const site = sitesBody.sites[0];
-    const stateResponse = await authorizedGet(
-      `/v6/state?${new URLSearchParams({ site })}`,
-    );
-    assert.equal(stateResponse.status, 200);
-    const stateBody = await stateResponse.json();
-    assert.equal(Number.isSafeInteger(stateBody.stabilityDays), true);
-    assert.equal(Number.isSafeInteger(stateBody.attemptedQuestionCount), true);
-    assert.equal(Number.isSafeInteger(stateBody.todayAttemptedQuestionCount), true);
-    assert.equal(Number.isSafeInteger(stateBody.todayStabilityDaysDelta), true);
-    assert.equal(Object.hasOwn(stateBody, "solved"), false);
-    assert.equal(Object.hasOwn(stateBody, "todaySolved"), false);
-
-    const historyResponse = await authorizedGet(
-      `/v6/history?${new URLSearchParams({ site, days: "7" })}`,
-    );
-    assert.equal(historyResponse.status, 200);
-    const historyBody = await historyResponse.json();
-    assert.equal(
-      historyBody.days.every(
-        (day) =>
-          Number.isSafeInteger(day.attemptedQuestionCount) &&
-          !Object.hasOwn(day, "solved"),
       ),
       true,
     );

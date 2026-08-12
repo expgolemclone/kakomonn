@@ -8,11 +8,6 @@ import { handleDailyDetails } from "./api/daily-details.js";
 import { handleNext } from "./api/next.js";
 import { handleQuestions } from "./api/questions.js";
 import { handleSettings } from "./api/settings.js";
-import {
-  v6AttemptResponse,
-  v6HistoryResponse,
-  v6StateResponse,
-} from "./api/v6-responses.js";
 import { issueSpeechToken } from "./speech.js";
 
 export { StabilityState, issueSpeechToken };
@@ -32,11 +27,10 @@ export async function handleRequest(request, env, fetcher = fetch) {
     ["/settings", ["GET", "PUT"]],
     ["/speech-token", ["POST"]],
   ]);
-  const apiVersion = url.pathname.slice(1, 3);
-  const route = url.pathname.slice(3);
-  if (apiVersion !== "v5" && apiVersion !== "v6") {
+  if (!url.pathname.startsWith("/v6/")) {
     return errorResponse("not_found", 404);
   }
+  const route = url.pathname.slice(3);
   const expectedMethods = routes.get(route);
   if (expectedMethods === undefined) {
     return errorResponse("not_found", 404);
@@ -61,14 +55,10 @@ export async function handleRequest(request, env, fetcher = fetch) {
     return jsonResponse({ sites: await getStabilityStateStub(env).listSites() });
   }
   if (route === "/state") {
-    return handleState(url, env, apiVersion === "v6" ? v6StateResponse : undefined);
+    return handleState(url, env);
   }
   if (route === "/history") {
-    return handleHistory(
-      url,
-      env,
-      apiVersion === "v6" ? v6HistoryResponse : undefined
-    );
+    return handleHistory(url, env);
   }
   if (route === "/daily-details") {
     return handleDailyDetails(url, env);
@@ -89,11 +79,7 @@ export async function handleRequest(request, env, fetcher = fetch) {
     return errorResponse("invalid_request", 400);
   }
   if (route === "/attempts") {
-    return handleAttempts(
-      request,
-      env,
-      apiVersion === "v6" ? v6AttemptResponse : undefined
-    );
+    return handleAttempts(request, env);
   }
   return handleQuestions(request, env);
 }

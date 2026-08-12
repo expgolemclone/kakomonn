@@ -433,7 +433,7 @@ async function main() {
         );
       }
     });
-    await page.evaluate(() => { window.__syncMock.nextStabilityDaysDelta = 31; });
+    await page.evaluate(() => { window.__syncMock.nextAttemptStabilityDaysDelta = 31; });
     await nextButton.tap({ force: true });
     await page.waitForTimeout(250);
     const inputEvents = await page.evaluate(
@@ -461,7 +461,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v5/attempts",
+              new URL(call.url).pathname === "/v6/attempts",
           ).length,
       ),
       1,

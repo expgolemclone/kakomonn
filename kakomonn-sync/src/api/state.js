@@ -11,10 +11,10 @@ function singleSite(url) {
   return isSite(site) ? site : null;
 }
 
-export async function handleState(url, env, mapResponse = (value) => value) {
+export async function handleState(url, env) {
   const site = singleSite(url);
   if (site === null) {
     return errorResponse("invalid_request", 400);
   }
-  return jsonResponse(mapResponse(await getStabilityStateStub(env).getState(site)));
+  return jsonResponse(await getStabilityStateStub(env).getState(site));
 }

@@ -145,15 +145,18 @@
   );
 
   function renderCount() {
-    const stabilityDays =
-      stabilityDaysCount === null
+    const stabilityDaysText =
+      stabilityDays === null
         ? "--"
-        : stabilityDaysCount.toLocaleString("ja-JP");
-    const todaySolved = todaySolvedCount === null ? "--" : todaySolvedCount;
-    countBadge.textContent = `定着 ${stabilityDays}日 / 今日 ${todaySolved}問`;
+        : stabilityDays.toLocaleString("ja-JP");
+    const todayAttemptedQuestionCountText =
+      todayAttemptedQuestionCount === null
+        ? "--"
+        : todayAttemptedQuestionCount;
+    countBadge.textContent = `定着 ${stabilityDaysText}日 / 今日 ${todayAttemptedQuestionCountText}問`;
     countBadge.setAttribute(
       "aria-label",
-      `定着日数 ${stabilityDays}日, 今日解いた問題数 ${todaySolved}問`
+      `定着日数 ${stabilityDaysText}日, 今日解いた問題数 ${todayAttemptedQuestionCountText}問`
     );
   }
 

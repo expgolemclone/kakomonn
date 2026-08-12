@@ -390,7 +390,7 @@ async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v5/speech-token",
+        (call) => new URL(call.url).pathname === "/v6/speech-token",
       ).length,
   );
 }
@@ -418,10 +418,10 @@ async function assertIncorrectSkip(context, script, inputMethod) {
     );
     const calls = await page.evaluate(() => ({
       attempts: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v5/attempts",
+        (call) => new URL(call.url).pathname === "/v6/attempts",
       ),
       next: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v5/next",
+        (call) => new URL(call.url).pathname === "/v6/next",
       ),
     }));
     assert.equal(calls.attempts.length, 1);
@@ -911,7 +911,7 @@ async function main() {
       await childFrame.evaluate(() => window.__answerButtonClicks),
       1,
     );
-    await page.evaluate(() => { window.__syncMock.nextStabilityDaysDelta = 31; });
+    await page.evaluate(() => { window.__syncMock.nextAttemptStabilityDaysDelta = 31; });
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
     assert.equal(
@@ -924,7 +924,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v5/attempts",
+              new URL(call.url).pathname === "/v6/attempts",
           ).length,
       ),
       0,
@@ -1128,7 +1128,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v5/attempts",
+              new URL(call.url).pathname === "/v6/attempts",
           ).length,
       ),
       0,
@@ -1163,7 +1163,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v5/attempts",
+              new URL(call.url).pathname === "/v6/attempts",
           ).length,
       ),
       1,
@@ -1182,8 +1182,8 @@ async function main() {
     await page.evaluate(() => {
       window.__syncMock.stabilityDays = 7;
       window.__syncMock.attemptCount = 7;
-      window.__syncMock.solved = 7;
-      window.__syncMock.todaySolved = 7;
+      window.__syncMock.attemptedQuestionCount = 7;
+      window.__syncMock.todayAttemptedQuestionCount = 7;
       window.__syncMock.holdNextRequest = true;
       window.dispatchEvent(new Event("focus"));
     });
@@ -1548,7 +1548,7 @@ async function main() {
       ),
     );
     assert.equal(await speechTokenCallCount(iosPage), 1);
-    await iosPage.evaluate(() => { window.__syncMock.nextStabilityDaysDelta = 31; });
+    await iosPage.evaluate(() => { window.__syncMock.nextAttemptStabilityDaysDelta = 31; });
     await iosPage.locator("#kakomonn-reader-next").tap();
     await iosFrame.waitForURL(
       "https://chushoks.kakomonn.com/questions/45125",
@@ -1561,8 +1561,8 @@ async function main() {
     await iosPage.evaluate(() => {
       window.__syncMock.stabilityDays = 6;
       window.__syncMock.attemptCount = 6;
-      window.__syncMock.solved = 6;
-      window.__syncMock.todaySolved = 6;
+      window.__syncMock.attemptedQuestionCount = 6;
+      window.__syncMock.todayAttemptedQuestionCount = 6;
       window.dispatchEvent(new Event("focus"));
     });
     await iosPage.waitForFunction(
@@ -1576,7 +1576,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v5/attempts",
+              new URL(call.url).pathname === "/v6/attempts",
           ).length,
       ),
       1,

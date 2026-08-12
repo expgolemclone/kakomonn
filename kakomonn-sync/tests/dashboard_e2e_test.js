@@ -7,13 +7,13 @@ const publicDir = path.resolve(__dirname, "..", "public");
 const token = "test-dashboard-token";
 const site = "chushoks.kakomonn.com";
 const otherSite = "shindans.kakomonn.com";
-const solvedHistory = [18, 22, 19, 26, 31, 24, 28];
+const attemptedQuestionCountHistory = [18, 22, 19, 26, 31, 24, 28];
 const deltaHistory = [null, 112, -14, 0, 138, 106, 104];
 const history = [null, 9307, 9412, 9550, 9688, 9794, 9912].map((stabilityDays, index) => ({
   date: `2026-08-${String(index + 4).padStart(2, "0")}`,
   stabilityDays,
   stabilityDaysDelta: deltaHistory[index],
-  solved: solvedHistory[index],
+  attemptedQuestionCount: attemptedQuestionCountHistory[index],
 }));
 const dailyDetails = {
   site,
@@ -110,10 +110,10 @@ async function installApiMock(page) {
         if (headers.get("Authorization") !== `Bearer ${tokenValue}`) {
           return respond(401, { error: "unauthorized" });
         }
-        if (url.pathname === "/v5/sites") {
+        if (url.pathname === "/v6/sites") {
           return respond(200, { sites: [siteValue, otherSiteValue] });
         }
-        if (url.pathname === "/v5/state") {
+        if (url.pathname === "/v6/state") {
           const requestedSite = url.searchParams.get("site");
           if (requestedSite === window.__delayedSite) {
             await new Promise((resolve) => window.__delayedResolvers.push(resolve));
@@ -122,13 +122,13 @@ async function installApiMock(page) {
             site: requestedSite,
             today: "2026-08-10",
             stabilityDays: requestedSite === siteValue ? 9912 : 2999,
-            solved: requestedSite === siteValue ? 640 : 100,
-            todaySolved: requestedSite === siteValue ? 28 : 4,
+            attemptedQuestionCount: requestedSite === siteValue ? 640 : 100,
+            todayAttemptedQuestionCount: requestedSite === siteValue ? 28 : 4,
             todayStabilityDaysDelta: requestedSite === siteValue ? 104 : 21,
             catalog: { questionCount: 999, updatedAtMs: Date.now() },
           });
         }
-        if (url.pathname === "/v5/history") {
+        if (url.pathname === "/v6/history") {
           const requestedSite = url.searchParams.get("site");
           if (requestedSite === window.__delayedSite) {
             await new Promise((resolve) => window.__delayedResolvers.push(resolve));
@@ -142,7 +142,7 @@ async function installApiMock(page) {
               : historyValue.map((day) => ({ ...day, stabilityDays: 2999 })),
           });
         }
-        if (url.pathname === "/v5/daily-details") {
+        if (url.pathname === "/v6/daily-details") {
           const requestedSite = url.searchParams.get("site");
           const date = url.searchParams.get("date");
           if (date === window.__delayedDetailDate) {
@@ -157,10 +157,10 @@ async function installApiMock(page) {
             tables: { stability_history: [], attempts: [] },
           });
         }
-        if (url.pathname === "/v5/settings" && (init.method ?? "GET") === "GET") {
+        if (url.pathname === "/v6/settings" && (init.method ?? "GET") === "GET") {
           return respond(200, settingsValues.get(url.searchParams.get("site")));
         }
-        if (url.pathname === "/v5/settings" && init.method === "PUT") {
+        if (url.pathname === "/v6/settings" && init.method === "PUT") {
           const settingsValue = JSON.parse(init.body);
           settingsValues.set(settingsValue.site, settingsValue);
           return respond(200, settingsValue);
@@ -195,7 +195,6 @@ async function assertDashboard(page) {
   assert.equal(await page.locator("#stability-chart rect.delta-bar.zero").count(), 1);
   assert.equal(await page.locator("#stability-chart .delta-value-label").count(), 6);
   assert.equal((await page.locator("#stability-chart .delta-axis-label").count()) >= 2, true);
-  assert.equal(await page.locator("#stability-chart .solved-line").count(), 0);
   assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-04, stabilityDaysDelta 記録なし/);
   assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-10, stabilityDaysDelta \+104日/);
   assert.equal(await page.locator("#daily-details-instruction").isVisible(), true);
@@ -211,9 +210,9 @@ async function assertDashboard(page) {
   assert.equal(await page.locator(".goal-card").innerText().then((value) => value.includes("解いた問題数")), false);
   const calls = await page.evaluate(() => window.__apiCalls);
   assert.equal(calls.some((call) => call.pathname.startsWith("/v4/")), false);
-  assert.equal(calls.filter((call) => call.pathname === "/v5/state").length, 1);
-  assert.equal(calls.filter((call) => call.pathname === "/v5/history").length, 1);
-  assert.equal(calls.filter((call) => call.pathname === "/v5/settings" && call.method === "GET").length, 1);
+  assert.equal(calls.filter((call) => call.pathname === "/v6/state").length, 1);
+  assert.equal(calls.filter((call) => call.pathname === "/v6/history").length, 1);
+  assert.equal(calls.filter((call) => call.pathname === "/v6/settings" && call.method === "GET").length, 1);
   assert.deepEqual(errors, []);
 
   await page.locator('[data-chart-date="2026-08-10"]').click();
@@ -257,7 +256,7 @@ async function assertDashboard(page) {
     null,
   );
   const updatedCalls = await page.evaluate(() => window.__apiCalls);
-  assert.equal(updatedCalls.filter((call) => call.pathname === "/v5/settings" && call.method === "PUT").length, 1);
+  assert.equal(updatedCalls.filter((call) => call.pathname === "/v6/settings" && call.method === "PUT").length, 1);
 
   await page.evaluate((siteValue) => { window.__delayedSite = siteValue; }, otherSite);
   await page.locator("#site-select").selectOption(otherSite);
@@ -277,7 +276,7 @@ async function assertDashboard(page) {
   await page.locator("#refresh-button").click();
   await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "更新日 2026-08-10");
   const finalCalls = await page.evaluate(() => window.__apiCalls);
-  const finalStateCall = finalCalls.filter((call) => call.pathname === "/v5/state").at(-1);
+  const finalStateCall = finalCalls.filter((call) => call.pathname === "/v6/state").at(-1);
   assert.equal(finalStateCall.authorization, `Bearer ${token}`);
 }
 

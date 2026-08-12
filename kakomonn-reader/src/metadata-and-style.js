@@ -39,7 +39,7 @@
     return;
   }
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
-  const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE_ID}.v5.pending-attempt`;
+  const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE_ID}.v6.pending-attempt`;
   const SYNC_TIMEOUT_MS = 15000;
   const SPEECH_TIMEOUT_MS = 30000;
   const FRAME_LOAD_DELAY_MS = 900;
@@ -214,8 +214,8 @@
   let currentQuestionText = "";
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
-  let stabilityDaysCount = null;
-  let todaySolvedCount = null;
+  let stabilityDays = null;
+  let todayAttemptedQuestionCount = null;
   let syncToken = "";
   let syncReady = false;
   let syncInProgress = false;

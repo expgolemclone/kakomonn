@@ -24,11 +24,6 @@
     ]
   },
   "exports": {
-    "LearningState": {
-      "type": "durable-object",
-      "state": "renamed",
-      "renamed_to": "StabilityState"
-    },
     "StabilityState": {
       "type": "durable-object",
       "storage": "sqlite"

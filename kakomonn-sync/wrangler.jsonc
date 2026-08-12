@@ -19,12 +19,17 @@
     "bindings": [
       {
         "name": "LEARNING_STATE",
-        "class_name": "StabilityState"
+        "class_name": "LearningState"
       }
     ]
   },
   "exports": {
     "StabilityState": {
+      "type": "durable-object",
+      "state": "renamed",
+      "renamed_to": "LearningState"
+    },
+    "LearningState": {
       "type": "durable-object",
       "storage": "sqlite"
     }

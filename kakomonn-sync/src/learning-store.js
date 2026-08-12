@@ -7,13 +7,11 @@ import {
 } from "./dates.js";
 import {
   createNewCard,
-  masteryDelta,
   scheduleAnswer,
 } from "./fsrs.js";
 import { isSite } from "./auth.js";
 import {
   ANSWER_RESULTS,
-  isDailyMasterySettings,
   OPERATION_ID_PATTERN,
   QUESTION_ID_PATTERN,
 } from "./contracts.js";
@@ -22,10 +20,9 @@ import { initializeLearningSchema } from "./storage/schema.js";
 export { initializeLearningSchema } from "./storage/schema.js";
 
 export const LEARNING_STATE_OBJECT_NAME = "primary";
-export const MASTERY_MILESTONE_INTERVAL = 50;
-export const DEFAULT_DAILY_MASTERY_GOAL = 5;
+export const DEFAULT_DAILY_STABILITY_DAYS_GOAL = 30;
 export { OPERATION_ID_PATTERN, QUESTION_ID_PATTERN } from "./contracts.js";
-const SETTINGS_STORAGE_KEY = "settings";
+const LEGACY_SETTINGS_STORAGE_KEY = "settings";
 
 function rowToCard(row) {
   if (row === undefined) {
@@ -78,16 +75,16 @@ function saveCard(storage, site, questionId, card) {
   );
 }
 
-function masteredCount(storage, site) {
+function stabilityDays(storage, site) {
   return storage.sql
     .exec(
-      `SELECT COUNT(*) AS count
-       FROM cards c
-       JOIN questions q ON q.site = c.site AND q.question_id = c.question_id
-       WHERE c.site = ? AND c.stability >= 30`,
+      `SELECT CAST(COALESCE(SUM(c.stability), 0) AS INTEGER) AS stability_days
+       FROM questions q
+       LEFT JOIN cards c ON c.site = q.site AND c.question_id = q.question_id
+       WHERE q.site = ?`,
       site
     )
-    .toArray()[0].count;
+    .toArray()[0].stability_days;
 }
 
 function solvedCount(storage, site) {
@@ -122,34 +119,24 @@ function solvedCountsByDate(storage, site, dates) {
 function learningTotals(storage, site, nowMs) {
   const today = getTokyoDate(new Date(nowMs));
   return {
-    mastered: masteredCount(storage, site),
+    stabilityDays: stabilityDays(storage, site),
     solved: solvedCount(storage, site),
     todaySolved: solvedCountsByDate(storage, site, [today]).get(today),
   };
 }
 
-function milestoneFor(storage, site, mastered, delta) {
-  if (delta !== 1 || mastered % MASTERY_MILESTONE_INTERVAL !== 0) {
-    return null;
-  }
-  const row = storage.sql
-    .exec(
-      "SELECT highest_mastery_milestone FROM learning_metadata WHERE site = ?",
-      site
-    )
-    .toArray()[0];
-  const highest = row?.highest_mastery_milestone ?? 0;
-  if (mastered <= highest) {
-    return null;
-  }
+function recordDailyStability(storage, site, date, opening, closing) {
   storage.sql.exec(
-    `INSERT INTO learning_metadata (site, highest_mastery_milestone)
-     VALUES (?, ?)
-     ON CONFLICT(site) DO UPDATE SET highest_mastery_milestone = excluded.highest_mastery_milestone`,
+    `INSERT INTO stability_history (
+       site, date, opening_stability_days, closing_stability_days
+     ) VALUES (?, ?, ?, ?)
+     ON CONFLICT(site, date) DO UPDATE SET
+       closing_stability_days = excluded.closing_stability_days`,
     site,
-    mastered
+    date,
+    opening,
+    closing
   );
-  return mastered;
 }
 
 function attemptResponse(row, totals) {
@@ -159,10 +146,8 @@ function attemptResponse(row, totals) {
       result: row.result,
       previousStability: row.previous_stability,
       stability: row.resulting_stability,
-      masteryDelta: row.mastery_delta,
     },
     totals,
-    completedMilestone: row.completed_milestone,
   };
 }
 
@@ -182,6 +167,7 @@ export class LearningState extends DurableObject {
     super(ctx, env);
     this.ctx.blockConcurrencyWhile(async () => {
       initializeLearningSchema(this.ctx.storage);
+      await this.ctx.storage.delete(LEGACY_SETTINGS_STORAGE_KEY);
     });
   }
 
@@ -194,8 +180,7 @@ export class LearningState extends DurableObject {
     return this.ctx.storage.transactionSync(() => {
       const existing = this.ctx.storage.sql
         .exec(
-          `SELECT site, question_id, result, previous_stability, resulting_stability,
-                  mastery_delta, resulting_mastered_count, completed_milestone
+          `SELECT site, question_id, result, previous_stability, resulting_stability
            FROM attempts WHERE operation_id = ?`,
           operationId
         )
@@ -237,37 +222,29 @@ export class LearningState extends DurableObject {
       const card = rowToCard(stored) ?? createNewCard(nowMs);
       const previousStability = card.stability;
       const nextCard = scheduleAnswer(card, result, nowMs);
-      const delta = masteryDelta(previousStability, nextCard.stability);
+      const stabilityDaysBefore = stabilityDays(this.ctx.storage, site);
       saveCard(this.ctx.storage, site, questionId, nextCard);
-      const mastered = masteredCount(this.ctx.storage, site);
+      const stabilityDaysAfter = stabilityDays(this.ctx.storage, site);
       const today = getTokyoDate(new Date(nowMs));
-      if (delta !== 0) {
-        this.ctx.storage.sql.exec(
-          `INSERT INTO mastery_history (site, date, mastered_count)
-           VALUES (?, ?, ?)
-           ON CONFLICT(site, date) DO UPDATE SET mastered_count = excluded.mastered_count`,
-          site,
-          today,
-          mastered
-        );
-      }
-      const completedMilestone = milestoneFor(this.ctx.storage, site, mastered, delta);
+      recordDailyStability(
+        this.ctx.storage,
+        site,
+        today,
+        stabilityDaysBefore,
+        stabilityDaysAfter
+      );
       this.ctx.storage.sql.exec(
         `INSERT INTO attempts (
            site, operation_id, question_id, answered_at_ms, result,
-           previous_stability, resulting_stability, mastery_delta,
-           resulting_mastered_count, completed_milestone
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           previous_stability, resulting_stability
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         site,
         operationId,
         questionId,
         nowMs,
         result,
         previousStability,
-        nextCard.stability,
-        delta,
-        mastered,
-        completedMilestone
+        nextCard.stability
       );
       return attemptResponse(
         {
@@ -275,9 +252,6 @@ export class LearningState extends DurableObject {
           result,
           previous_stability: previousStability,
           resulting_stability: nextCard.stability,
-          mastery_delta: delta,
-          resulting_mastered_count: mastered,
-          completed_milestone: completedMilestone,
         },
         learningTotals(this.ctx.storage, site, nowMs)
       );
@@ -290,7 +264,7 @@ export class LearningState extends DurableObject {
     }
     return this.ctx.storage.transactionSync(() => {
       const today = getTokyoDate(new Date(nowMs));
-      const mastered = masteredCount(this.ctx.storage, site);
+      const currentStabilityDays = stabilityDays(this.ctx.storage, site);
       const solved = solvedCount(this.ctx.storage, site);
       const todaySolved = solvedCountsByDate(
         this.ctx.storage,
@@ -299,20 +273,16 @@ export class LearningState extends DurableObject {
       ).get(today);
       const todayRow = this.ctx.storage.sql
         .exec(
-          "SELECT mastered_count FROM mastery_history WHERE site = ? AND date = ?",
+          `SELECT opening_stability_days, closing_stability_days
+           FROM stability_history WHERE site = ? AND date = ?`,
           site,
           today
         )
         .toArray()[0];
-      const previous = this.ctx.storage.sql
-        .exec(
-          `SELECT mastered_count FROM mastery_history
-           WHERE site = ? AND date < ? ORDER BY date DESC LIMIT 1`,
-          site,
-          today
-        )
-        .toArray()[0];
-      const todayDelta = todayRow === undefined ? 0 : todayRow.mastered_count - (previous?.mastered_count ?? 0);
+      const todayStabilityDaysDelta =
+        todayRow === undefined
+          ? 0
+          : todayRow.closing_stability_days - todayRow.opening_stability_days;
       const catalog = this.ctx.storage.sql
         .exec(
           "SELECT question_count, updated_at_ms, generation FROM catalog_metadata WHERE site = ?",
@@ -322,10 +292,10 @@ export class LearningState extends DurableObject {
       return {
         site,
         today,
-        mastered,
+        stabilityDays: currentStabilityDays,
         solved,
         todaySolved,
-        todayDelta,
+        todayStabilityDaysDelta,
         catalog:
           catalog === undefined
             ? null
@@ -348,57 +318,71 @@ export class LearningState extends DurableObject {
       const solvedByDate = solvedCountsByDate(this.ctx.storage, site, dates);
       const baseline = this.ctx.storage.sql
         .exec(
-          `SELECT mastered_count FROM mastery_history
+          `SELECT closing_stability_days FROM stability_history
            WHERE site = ? AND date < ? ORDER BY date DESC LIMIT 1`,
           site,
           dates[0]
         )
-        .toArray()[0]?.mastered_count ?? 0;
+        .toArray()[0];
       const rows = new Map(
         this.ctx.storage.sql
           .exec(
-            `SELECT date, mastered_count FROM mastery_history
+            `SELECT date, closing_stability_days FROM stability_history
              WHERE site = ? AND date >= ? AND date <= ? ORDER BY date`,
             site,
             dates[0],
             dates.at(-1)
           )
           .toArray()
-          .map((row) => [row.date, row.mastered_count])
+          .map((row) => [row.date, row.closing_stability_days])
       );
-      let mastered = baseline;
+      let current = baseline?.closing_stability_days ?? null;
       const history = dates.map((date) => {
         if (rows.has(date)) {
-          mastered = rows.get(date);
+          current = rows.get(date);
         }
-        return { date, mastered, solved: solvedByDate.get(date) };
+        return { date, stabilityDays: current, solved: solvedByDate.get(date) };
       });
       return { site, timeZone: "Asia/Tokyo", today, days: history };
     });
   }
 
-  async getSettings() {
-    const settings = await this.ctx.storage.get(SETTINGS_STORAGE_KEY);
-    if (settings === undefined) {
-      return { dailyMasteryGoal: DEFAULT_DAILY_MASTERY_GOAL };
+  getSettings(site) {
+    if (!isSite(site)) {
+      throw new TypeError("invalid settings site");
     }
-    if (!isDailyMasterySettings(settings)) {
-      throw new Error("invalid LearningState settings");
+    const row = this.ctx.storage.sql
+      .exec(
+        `SELECT daily_stability_days_goal FROM site_settings WHERE site = ?`,
+        site
+      )
+      .toArray()[0];
+    if (row === undefined) {
+      throw new Error("missing LearningState settings");
     }
-    return settings;
+    return { site, dailyStabilityDaysGoal: row.daily_stability_days_goal };
   }
 
-  async updateSettings(dailyMasteryGoal) {
+  updateSettings(site, dailyStabilityDaysGoal) {
     if (
-      !Number.isSafeInteger(dailyMasteryGoal) ||
-      dailyMasteryGoal < 1 ||
-      dailyMasteryGoal > 100
+      !isSite(site) ||
+      !Number.isSafeInteger(dailyStabilityDaysGoal) ||
+      dailyStabilityDaysGoal < 1
     ) {
       throw new TypeError("invalid settings");
     }
-    const settings = { dailyMasteryGoal };
-    await this.ctx.storage.put(SETTINGS_STORAGE_KEY, settings);
-    return settings;
+    const updated = this.ctx.storage.sql
+      .exec(
+        `UPDATE site_settings SET daily_stability_days_goal = ? WHERE site = ?
+         RETURNING daily_stability_days_goal`,
+        dailyStabilityDaysGoal,
+        site
+      )
+      .toArray()[0];
+    if (updated === undefined) {
+      throw new Error("missing LearningState settings");
+    }
+    return { site, dailyStabilityDaysGoal: updated.daily_stability_days_goal };
   }
 
   nextQuestion(site, nowMs = Date.now(), excludeQuestionId = null) {
@@ -469,7 +453,7 @@ export class LearningState extends DurableObject {
       throw new TypeError("invalid question catalog");
     }
     return this.ctx.storage.transactionSync(() => {
-      const masteredBefore = masteredCount(this.ctx.storage, site);
+      const stabilityDaysBefore = stabilityDays(this.ctx.storage, site);
       const metadata = this.ctx.storage.sql
         .exec("SELECT generation FROM catalog_metadata WHERE site = ?", site)
         .toArray()[0];
@@ -498,17 +482,21 @@ export class LearningState extends DurableObject {
         nowMs,
         generation
       );
-      const masteredAfter = masteredCount(this.ctx.storage, site);
-      if (masteredAfter !== masteredBefore) {
-        this.ctx.storage.sql.exec(
-          `INSERT INTO mastery_history (site, date, mastered_count)
-           VALUES (?, ?, ?)
-           ON CONFLICT(site, date) DO UPDATE SET mastered_count = excluded.mastered_count`,
-          site,
-          getTokyoDate(new Date(nowMs)),
-          masteredAfter
-        );
-      }
+      this.ctx.storage.sql.exec(
+        `INSERT INTO site_settings (site, daily_stability_days_goal)
+         VALUES (?, ?)
+         ON CONFLICT(site) DO NOTHING`,
+        site,
+        DEFAULT_DAILY_STABILITY_DAYS_GOAL
+      );
+      const stabilityDaysAfter = stabilityDays(this.ctx.storage, site);
+      recordDailyStability(
+        this.ctx.storage,
+        site,
+        getTokyoDate(new Date(nowMs)),
+        stabilityDaysBefore,
+        stabilityDaysAfter
+      );
       return {
         site,
         questionCount: questionIds.length,

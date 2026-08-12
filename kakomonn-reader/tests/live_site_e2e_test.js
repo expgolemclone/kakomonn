@@ -193,8 +193,8 @@ async function clickNextQuestion(page, frame, expectedNextUrl) {
   );
 }
 
-async function readStoredMastered(page) {
-  return page.evaluate(() => window.__syncMock?.mastered ?? null);
+async function readStoredStabilityDays(page) {
+  return page.evaluate(() => window.__syncMock?.stabilityDays ?? null);
 }
 
 async function readStoredAnsweredCount(page) {
@@ -290,12 +290,12 @@ async function runLiveCatalogCrawlCase(browser, script) {
     }, script);
 
     await page.waitForFunction(
-      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v4/questions"),
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v5/questions"),
       null,
       { timeout: 180_000 },
     );
     const catalogCall = await page.evaluate(() =>
-      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v4/questions"),
+      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v5/questions"),
     );
     assert.equal(Array.isArray(catalogCall.body.questionIds), true);
     assert.equal(catalogCall.body.questionIds.length > 0, true);
@@ -334,7 +334,7 @@ async function runCase(
     answerText,
     expectedBanner,
     expectedResultClass,
-    masteryDelta,
+    stabilityDaysDelta,
     inputMethod = "click",
   },
 ) {
@@ -370,7 +370,7 @@ async function runCase(
     await waitForSyncReady(page);
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
-      "定着 0問 / 今日 0問",
+      "定着 0日 / 今日 0問",
     );
     assert.deepEqual(
       await frame.locator("body").evaluate((body) => {
@@ -481,34 +481,34 @@ async function runCase(
       { timeout: 15_000 },
     );
 
-    await page.evaluate((delta) => { window.__syncMock.nextMasteryDelta = delta; }, masteryDelta);
+    await page.evaluate((delta) => { window.__syncMock.nextStabilityDaysDelta = delta; }, stabilityDaysDelta);
     await clickNextQuestion(page, frame, fixedNextQuestionUrl);
     console.log(JSON.stringify({ phase: "next-clicked", answerText }));
 
-    const expectedMastered = masteryDelta;
-    if (expectedMastered === 1) {
+    const expectedStabilityDays = stabilityDaysDelta;
+    if (expectedStabilityDays > 0) {
       await page.waitForFunction(
-        () =>
+        (days) =>
           document.querySelector("#kakomonn-reader-count")?.textContent ===
-          "定着 1問 / 今日 1問",
-        null,
+          `定着 ${days}日 / 今日 1問`,
+        expectedStabilityDays,
         { timeout: 10_000 },
       );
     } else {
       await page.waitForTimeout(1_500);
       assert.equal(
         await page.locator("#kakomonn-reader-count").innerText(),
-        "定着 0問 / 今日 1問",
+        "定着 0日 / 今日 1問",
       );
     }
 
-    assert.equal(await readStoredMastered(page), expectedMastered);
+    assert.equal(await readStoredStabilityDays(page), expectedStabilityDays);
     assert.deepEqual(pageErrors, []);
     console.log(
       JSON.stringify({
         answerText,
         expectedBanner,
-        expectedMastered,
+        expectedStabilityDays,
         pageErrors,
         status: "passed",
       }),
@@ -528,7 +528,7 @@ async function runCase(
         resultClasses: await page.locator("#kakomonn-reader-frame").evaluate((frame) => [
           ...(frame.contentDocument?.querySelector("#js-answer-result-box")?.classList ?? []),
         ]).catch(() => null),
-        storedMastered: await readStoredMastered(page).catch(() => null),
+        storedStabilityDays: await readStoredStabilityDays(page).catch(() => null),
         syncCalls: await page.evaluate(() => window.__syncMock?.calls ?? []).catch(() => []),
         pageErrors,
       }),
@@ -685,7 +685,7 @@ async function runRandomNavigationCase(browser, script) {
       { timeout: 10_000 },
     );
     assert.equal(await readStoredAnsweredCount(page), 1);
-    assert.equal(await readStoredMastered(page), 0);
+    assert.equal(await readStoredStabilityDays(page), 0);
     assert.deepEqual(pageErrors, []);
     console.log(
       JSON.stringify({
@@ -724,7 +724,7 @@ async function runRandomNavigationCase(browser, script) {
             ...(frame.contentDocument?.querySelector("#js-answer-result-box")?.classList ?? []),
           ])
           .catch(() => null),
-        storedMastered: await readStoredMastered(page).catch(() => null),
+        storedStabilityDays: await readStoredStabilityDays(page).catch(() => null),
         storedAnsweredCount: await readStoredAnsweredCount(page).catch(
           () => null,
         ),
@@ -1134,7 +1134,7 @@ async function runCrossDomainActivationCase(browser, script) {
       );
       const stateSites = await page.evaluate(() =>
         window.__syncMock.calls
-          .filter((call) => new URL(call.url).pathname === "/v4/state")
+          .filter((call) => new URL(call.url).pathname === "/v5/state")
           .map((call) => new URL(call.url).searchParams.get("site"))
       );
       assert.equal(stateSites.length >= 1, true);
@@ -1160,14 +1160,14 @@ async function main() {
       answerText: "輸入の減少は、GDPを増加させる。",
       expectedBanner: "正解！素晴らしいです",
       expectedResultClass: "is-correct",
-      masteryDelta: 1,
+      stabilityDaysDelta: 31,
       inputMethod: "keyboard",
     });
     await runCase(browser, script, {
       answerText: "GDPは、フローとストックの混合概念である。",
       expectedBanner: "残念...",
       expectedResultClass: "is-wrong",
-      masteryDelta: 0,
+      stabilityDaysDelta: 0,
       inputMethod: "keyboard",
     });
     await runRandomNavigationCase(browser, script);

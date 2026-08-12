@@ -29,7 +29,6 @@
       nextQuestionOperationInProgress ||
       navigationInProgress ||
       pendingAnswer !== null ||
-      pendingCelebration !== null ||
       !syncSettings.hidden;
   }
 
@@ -54,11 +53,6 @@
       nextQuestionButton.textContent =
         pendingAnswer.phase === "queued" ? "同期を再試行" : "次の問題を準備中";
       nextQuestionButton.disabled = navigationInProgress;
-      return;
-    }
-    if (pendingCelebration !== null) {
-      nextQuestionButton.textContent = "祝福を表示";
-      nextQuestionButton.disabled = celebrationTransitionPromise !== null;
       return;
     }
     if (navigationInProgress) {
@@ -157,11 +151,7 @@
     pendingAnswerTransitionPromise = (async () => {
       if (currentFrameURL === operation.nextURL) {
         await clearPendingAnswer();
-        setStatus(
-          pendingCelebration === null
-            ? "解答記録を同期しました"
-            : `${pendingCelebration.milestone}問定着.祝福を準備中`
-        );
+        setStatus("解答記録を同期しました");
         return true;
       }
       if (frameDocument === null || navigationInProgress) {
@@ -177,60 +167,7 @@
     } finally {
       pendingAnswerTransitionPromise = null;
       updateSyncDependentControls();
-      void maybeContinuePendingCelebration();
     }
-  }
-
-  async function savePendingCelebration(operation, milestone) {
-    const celebration = {
-      milestone,
-      site: SITE_ID,
-      sourcePageURL: operation.pageURL,
-    };
-    if (!isPendingCelebration(celebration)) {
-      throw new Error("invalid pending celebration");
-    }
-    await GM.setValue(PENDING_CELEBRATION_KEY, celebration);
-    pendingCelebration = celebration;
-  }
-
-  function congratulationsURL(milestone) {
-    const url = new URL(CONGRATULATIONS_URL);
-    url.searchParams.set("milestone", String(milestone));
-    return url.href;
-  }
-
-  async function maybeContinuePendingCelebration() {
-    if (
-      pendingCelebration === null ||
-      !syncReady ||
-      pendingAnswer !== null ||
-      syncInProgress ||
-      nextQuestionOperationInProgress ||
-      celebrationTransitionPromise !== null
-    ) {
-      return false;
-    }
-    const milestone = pendingCelebration.milestone;
-    celebrationTransitionPromise = (async () => {
-      navigationInProgress = true;
-      stopSpeech();
-      setStatus(`${milestone}問定着`);
-      updateSyncDependentControls();
-      try {
-        await clearPendingCelebration();
-        location.assign(congratulationsURL(milestone));
-        return true;
-      } catch {
-        navigationInProgress = false;
-        setStatus("祝福ページを開けません.再試行してください");
-        return false;
-      } finally {
-        celebrationTransitionPromise = null;
-        updateSyncDependentControls();
-      }
-    })();
-    return celebrationTransitionPromise;
   }
 
   async function createPendingAnswer(result) {
@@ -277,33 +214,18 @@
         ) {
           throw new SyncRequestError("invalid_response");
         }
-        masteredCount = result.totals.mastered;
+        stabilityDaysCount = result.totals.stabilityDays;
         todaySolvedCount = result.totals.todaySolved;
         renderCount();
-        if (result.completedMilestone !== null) {
-          await savePendingCelebration(operation, result.completedMilestone);
-        }
 
         const next = await requestNextQuestion(syncToken, operation.questionId);
         syncReady = true;
         navigationInProgress = false;
-        if (result.attempt.masteryDelta === 1) {
-          setStatus("定着 +1");
-        } else if (result.attempt.masteryDelta === -1) {
-          setStatus("定着 -1");
-        } else {
-          setStatus("解答記録を同期しました");
-        }
+        setStatus("解答記録を同期しました");
 
         if (next.question === null) {
           await clearPendingAnswer();
-          setStatus(
-            result.attempt.masteryDelta === 1
-              ? "定着 +1.出題できる問題はありません"
-              : result.attempt.masteryDelta === -1
-                ? "定着 -1.出題できる問題はありません"
-                : "出題できる問題はありません"
-          );
+          setStatus("出題できる問題はありません");
           return true;
         }
         await markPendingAnswerAwaitingNavigation(operation, next.question.url);
@@ -325,7 +247,6 @@
         syncPromise = null;
         updateSyncDependentControls();
         void maybeContinuePendingAnswerNavigation();
-        void maybeContinuePendingCelebration();
       }
     })();
     return syncPromise;
@@ -383,10 +304,6 @@
       await submitPendingAnswer();
       return false;
     }
-    if (pendingCelebration !== null) {
-      await maybeContinuePendingCelebration();
-      return false;
-    }
     if (getCurrentAnswerResult() !== "unknown") {
       return false;
     }
@@ -415,11 +332,6 @@
       await submitPendingAnswer();
       return;
     }
-    if (pendingCelebration !== null) {
-      await maybeContinuePendingCelebration();
-      return;
-    }
-
     const answerResult = getCurrentAnswerResult();
     if (answerResult === "unknown") {
       setStatus("正誤を確認できません");
@@ -434,8 +346,7 @@
       !speechEnabled ||
       !currentPageReadPending ||
       !syncReady ||
-      syncInProgress ||
-      pendingCelebration !== null
+      syncInProgress
     ) {
       return;
     }
@@ -451,8 +362,7 @@
       !speechSupported ||
       !currentPageReadPending ||
       !syncReady ||
-      syncInProgress ||
-      pendingCelebration !== null
+      syncInProgress
     ) {
       return false;
     }
@@ -486,8 +396,7 @@
     if (
       !currentPageReadPending ||
       !syncReady ||
-      syncInProgress ||
-      pendingCelebration !== null
+      syncInProgress
     ) {
       return;
     }

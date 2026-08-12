@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         過去問マイルストーン＋連続自動読み上げ
+// @name         過去問reader連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @description  問題文と解説の読み上げ, コピー, FSRSに基づく定着問題数の端末間同期と祝福を提供します.
+// @description  問題文と解説の読み上げ, コピー, FSRS stability合計日数の端末間同期を提供します.
 // @match        https://*.kakomonn.com/*
 // @connect      kakomonn-count-sync.expgolem-lab.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com
@@ -22,7 +22,6 @@
     return;
   }
 
-  const MILESTONE_INTERVAL = 50;
   const BUILD_FINGERPRINT = "__KAKOMONN_READER_BUILD_FINGERPRINT__";
   const SCRIPT_HANDLER =
     typeof GM_info === "object" &&
@@ -31,8 +30,6 @@
       : "";
   const SYNC_API_URL =
     "https://kakomonn-count-sync.expgolem-lab.workers.dev";
-  const CONGRATULATIONS_URL =
-    "https://kakomonn-congratulations.expgolem-lab.workers.dev/";
   const SITE_ID = location.hostname.toLowerCase();
   if (
     !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(
@@ -42,10 +39,7 @@
     return;
   }
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
-  const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE_ID}.v4.pending-attempt`;
-  const PENDING_CELEBRATION_KEY =
-    `kakomonn-reader.${SITE_ID}.v4.pending-celebration`;
-  const START_PARAMETER = "count50";
+  const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE_ID}.v5.pending-attempt`;
   const SYNC_TIMEOUT_MS = 15000;
   const SPEECH_TIMEOUT_MS = 30000;
   const FRAME_LOAD_DELAY_MS = 900;
@@ -220,7 +214,7 @@
   let currentQuestionText = "";
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
-  let masteredCount = null;
+  let stabilityDaysCount = null;
   let todaySolvedCount = null;
   let syncToken = "";
   let syncReady = false;
@@ -228,15 +222,6 @@
   let syncPromise = null;
   let pendingAnswer = null;
   let pendingAnswerTransitionPromise = null;
-  let pendingCelebration = null;
-  let celebrationTransitionPromise = null;
-
-  const initialURL = new URL(location.href);
-  if (initialURL.searchParams.get(START_PARAMETER) === "start") {
-    initialURL.searchParams.delete(START_PARAMETER);
-    history.replaceState(null, "", initialURL.href);
-    currentFrameURL = initialURL.href;
-  }
 
   const style = document.createElement("style");
   style.textContent = `

@@ -74,44 +74,49 @@ test("production assets match the repository", async (context) => {
   }
 });
 
-test("production serves only the authenticated v4 API backed by LearningState", async () => {
-  const unauthorized = await fetch(new URL("/v4/sites", productionOrigin));
+test("production serves only the authenticated v5 API backed by LearningState", async () => {
+  const unauthorized = await fetch(new URL("/v5/sites", productionOrigin));
   assert.equal(unauthorized.status, 401);
   assert.deepEqual(await unauthorized.json(), { error: "unauthorized" });
 
   const removedV3 = await authorizedGet("/v3/sites");
   assert.equal(removedV3.status, 404);
+  const removedV4 = await authorizedGet("/v4/sites");
+  assert.equal(removedV4.status, 404);
 
-  const sitesResponse = await authorizedGet("/v4/sites");
+  const sitesResponse = await authorizedGet("/v5/sites");
   assert.equal(sitesResponse.status, 200);
   const sitesBody = await sitesResponse.json();
   assert.equal(Array.isArray(sitesBody.sites), true);
   assert.equal(sitesBody.sites.every((site) => sitePattern.test(site)), true);
 
-  const settingsResponse = await authorizedGet("/v4/settings");
-  assert.equal(settingsResponse.status, 200);
-  const settingsBody = await settingsResponse.json();
-  assert.deepEqual(Object.keys(settingsBody), ["dailyMasteryGoal"]);
-  assert.equal(Number.isSafeInteger(settingsBody.dailyMasteryGoal), true);
-  assert.equal(settingsBody.dailyMasteryGoal >= 1, true);
-  assert.equal(settingsBody.dailyMasteryGoal <= 100, true);
-
   if (sitesBody.sites.length > 0) {
     const site = sitesBody.sites[0];
-    const stateResponse = await authorizedGet(`/v4/state?${new URLSearchParams({ site })}`);
+    const settingsResponse = await authorizedGet(
+      `/v5/settings?${new URLSearchParams({ site })}`,
+    );
+    assert.equal(settingsResponse.status, 200);
+    const settingsBody = await settingsResponse.json();
+    assert.deepEqual(Object.keys(settingsBody), ["site", "dailyStabilityDaysGoal"]);
+    assert.equal(settingsBody.site, site);
+    assert.equal(Number.isSafeInteger(settingsBody.dailyStabilityDaysGoal), true);
+    assert.equal(settingsBody.dailyStabilityDaysGoal >= 1, true);
+
+    const stateResponse = await authorizedGet(`/v5/state?${new URLSearchParams({ site })}`);
     assert.equal(stateResponse.status, 200);
     const stateBody = await stateResponse.json();
     assert.equal(stateBody.site, site);
-    assert.equal(Number.isSafeInteger(stateBody.mastered), true);
+    assert.equal(Number.isSafeInteger(stateBody.stabilityDays), true);
+    assert.equal(stateBody.stabilityDays >= 0, true);
     assert.equal(Number.isSafeInteger(stateBody.solved), true);
     assert.equal(stateBody.solved >= 0, true);
     assert.equal(Number.isSafeInteger(stateBody.todaySolved), true);
     assert.equal(stateBody.todaySolved >= 0, true);
     assert.equal(Object.hasOwn(stateBody, "attempted"), false);
-    assert.equal(Number.isSafeInteger(stateBody.todayDelta), true);
+    assert.equal(Number.isSafeInteger(stateBody.todayStabilityDaysDelta), true);
 
     const historyResponse = await authorizedGet(
-      `/v4/history?${new URLSearchParams({ site, days: "7" })}`,
+      `/v5/history?${new URLSearchParams({ site, days: "7" })}`,
     );
     assert.equal(historyResponse.status, 200);
     const historyBody = await historyResponse.json();
@@ -119,8 +124,8 @@ test("production serves only the authenticated v4 API backed by LearningState", 
     assert.equal(
       historyBody.days.every(
         (day) =>
-          Number.isSafeInteger(day.mastered) &&
-          day.mastered >= 0 &&
+          (day.stabilityDays === null ||
+            (Number.isSafeInteger(day.stabilityDays) && day.stabilityDays >= 0)) &&
           Number.isSafeInteger(day.solved) &&
           day.solved >= 0,
       ),

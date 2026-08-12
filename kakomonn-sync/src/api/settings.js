@@ -1,21 +1,44 @@
-import { isDailyMasterySettings } from "../contracts.js";
+import { isSite } from "../auth.js";
+import { isDailyStabilitySettings } from "../contracts.js";
 import { getLearningStateStub } from "../learning-store.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
-export async function handleSettings(request, env) {
+function singleSite(url) {
+  const keys = [...url.searchParams.keys()];
+  if (
+    keys.length !== 1 ||
+    keys[0] !== "site" ||
+    url.searchParams.getAll("site").length !== 1
+  ) {
+    return null;
+  }
+  const site = url.searchParams.get("site");
+  return isSite(site) ? site : null;
+}
+
+export async function handleSettings(request, url, env) {
   const stub = getLearningStateStub(env);
   if (request.method === "GET") {
-    return jsonResponse(await stub.getSettings());
+    const site = singleSite(url);
+    if (site === null) {
+      return errorResponse("invalid_request", 400);
+    }
+    return jsonResponse(await stub.getSettings(site));
   }
 
+  if (url.search !== "") {
+    return errorResponse("invalid_request", 400);
+  }
   let body;
   try {
     body = await request.json();
   } catch {
     return errorResponse("invalid_request", 400);
   }
-  if (!isDailyMasterySettings(body)) {
+  if (!isDailyStabilitySettings(body) || !isSite(body.site)) {
     return errorResponse("invalid_request", 400);
   }
-  return jsonResponse(await stub.updateSettings(body.dailyMasteryGoal));
+  return jsonResponse(
+    await stub.updateSettings(body.site, body.dailyStabilityDaysGoal)
+  );
 }

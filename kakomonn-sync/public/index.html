@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#090b12">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="description" content="FSRSに基づく定着問題数を確認する過去問学習dashboard">
+    <meta name="description" content="FSRS stabilityの合計日数を確認する過去問学習dashboard">
     <title>過去問 定着dashboard</title>
     <link rel="stylesheet" href="/styles.css">
     <script defer src="/app.js"></script>
@@ -45,13 +45,13 @@
             <button id="refresh-button" class="text-button" type="button">再読み込み</button>
           </div>
 
-          <section class="mastery-card" aria-labelledby="mastery-title">
+          <section class="stability-card" aria-labelledby="stability-title">
             <div>
               <p class="eyebrow">PRIMARY KPI</p>
-              <h2 id="mastery-title">定着問題数</h2>
+              <h2 id="stability-title">定着日数</h2>
             </div>
-            <div class="mastery-number"><strong id="mastered-count">--</strong><span>問</span></div>
-            <div class="mastery-meta">
+            <div class="stability-number"><strong id="stability-days">--</strong><span>日</span></div>
+            <div class="stability-meta">
               <span id="today-delta">今日 --</span>
               <span id="goal-label">目標 --</span>
               <span>解いた問題数 <strong id="solved-count">--</strong>問</span>
@@ -61,11 +61,11 @@
           <section class="goal-card" aria-labelledby="goal-title">
             <div>
               <p class="eyebrow">TODAY</p>
-              <h2 id="goal-title">今日の定着純増目標</h2>
+              <h2 id="goal-title">今日の定着日数純増目標</h2>
             </div>
             <div class="goal-controls">
               <label for="daily-goal">目標</label>
-              <input id="daily-goal" type="number" min="1" max="100" step="1" inputmode="numeric">
+              <input id="daily-goal" type="number" min="1" step="1" inputmode="numeric">
               <button id="save-goal" class="primary-button" type="button">保存</button>
             </div>
             <p id="goal-progress" class="goal-progress">今日 -- / --</p>
@@ -75,15 +75,15 @@
             <figcaption class="chart-heading">
               <div>
                 <p class="eyebrow">7 DAY LEARNING</p>
-                <h2 id="history-title">定着問題数と解いた問題数の7日推移</h2>
+                <h2 id="history-title">定着日数と解いた問題数の7日推移</h2>
               </div>
               <div class="chart-legend" aria-label="グラフの凡例">
-                <span><i class="legend-bar" aria-hidden="true"></i>定着問題数</span>
+                <span><i class="legend-bar" aria-hidden="true"></i>定着日数</span>
                 <span><i class="legend-line" aria-hidden="true"></i>解いた問題数</span>
               </div>
             </figcaption>
             <div class="chart-wrap">
-              <svg id="mastery-chart" viewBox="0 0 700 270" role="img" aria-labelledby="history-chart-title history-chart-description"></svg>
+              <svg id="stability-chart" viewBox="0 0 700 270" role="img" aria-labelledby="history-chart-title history-chart-description"></svg>
             </div>
             <p id="history-empty" class="muted" hidden>まだ学習記録はありません.</p>
           </figure>
@@ -106,7 +106,7 @@
       </main>
 
       <footer>
-        <p>定着 = FSRS stabilityが30日以上の問題.</p>
+        <p>定着日数 = 現在の問題catalogに含まれる全問題のFSRS stability合計を切り捨てた日数.</p>
       </footer>
     </div>
 

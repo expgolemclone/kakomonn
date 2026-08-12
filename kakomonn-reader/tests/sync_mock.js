@@ -1,16 +1,13 @@
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SITE = "chushoks.kakomonn.com";
-const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE}.v4.pending-attempt`;
+const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE}.v5.pending-attempt`;
 const LEGACY_PENDING_CORRECT_KEY = `kakomonn-reader.${SITE}.pending-correct`;
-const PENDING_CELEBRATION_KEY = `kakomonn-reader.${SITE}.v4.pending-celebration`;
 const SYNC_API_ORIGIN = "https://kakomonn-count-sync.expgolem-lab.workers.dev";
-const CONGRATULATIONS_ORIGIN =
-  "https://kakomonn-congratulations.expgolem-lab.workers.dev";
 const AZURE_SPEECH_ORIGIN = "https://japaneast.tts.speech.microsoft.com";
 const AZURE_SPEECH_TOKEN = "test-azure-speech-token";
 
 function installSyncMockInWindow({
-  initialMasteredCount,
+  initialStabilityDaysCount,
   initialAttemptCount,
   initialSolvedCount,
   initialTodaySolvedCount,
@@ -19,12 +16,10 @@ function installSyncMockInWindow({
   expectedSite,
   hasStoredToken,
   initialPendingAnswer,
-  initialPendingCelebration,
   initialProcessedOperations,
   returnsPromise,
   tokenKey,
   pendingAnswerKey,
-  celebrationKey,
   expectedOrigin,
   expectedSpeechOrigin,
   expectedSpeechToken,
@@ -36,7 +31,6 @@ function installSyncMockInWindow({
   const values = new Map();
   if (hasStoredToken) values.set(tokenKey, expectedToken);
   if (initialPendingAnswer !== null) values.set(pendingAnswerKey, initialPendingAnswer);
-  if (initialPendingCelebration !== null) values.set(celebrationKey, initialPendingCelebration);
 
   const processed = new Map(
     initialProcessedOperations.map((item) => [
@@ -46,9 +40,6 @@ function installSyncMockInWindow({
         result: item.result ?? "correct",
         previousStability: item.previousStability ?? 29,
         stability: item.stability ?? 31,
-        masteryDelta: item.masteryDelta ?? 0,
-        resultingMastered: item.resultingMastered ?? initialMasteredCount,
-        completedMilestone: item.completedMilestone ?? null,
       },
     ]),
   );
@@ -57,7 +48,7 @@ function installSyncMockInWindow({
   );
 
   const mock = {
-    mastered: initialMasteredCount,
+    stabilityDays: initialStabilityDaysCount,
     attemptCount: initialAttemptCount,
     solved: initialSolvedCount,
     todaySolved: initialTodaySolvedCount,
@@ -74,8 +65,7 @@ function installSyncMockInWindow({
     releaseHeldRequest: null,
     clipboardWrites: [],
     nextQuestionId: initialNextQuestionId,
-    nextMasteryDelta: 0,
-    nextCompletedMilestone: null,
+    nextStabilityDaysDelta: 0,
     catalogUpdatedAtMs: Date.now(),
     catalogQuestionCount: initialCatalogQuestionCount,
     catalogGeneration: initialCatalogGeneration,
@@ -85,10 +75,10 @@ function installSyncMockInWindow({
   const syncState = () => ({
     site: expectedSite,
     today: mock.date,
-    mastered: mock.mastered,
+    stabilityDays: mock.stabilityDays,
     solved: mock.solved,
     todaySolved: mock.todaySolved,
-    todayDelta: 0,
+    todayStabilityDaysDelta: 0,
     catalog:
       mock.catalogQuestionCount === null
         ? null
@@ -212,19 +202,19 @@ function installSyncMockInWindow({
         const pathname = requestURL.pathname;
         if (
           call.method === "GET" &&
-          pathname === "/v4/state" &&
+          pathname === "/v5/state" &&
           requestURL.searchParams.get("site") === expectedSite
         ) {
           respondJSON(200, syncState());
           return;
         }
-        if (call.method === "POST" && pathname === "/v4/speech-token") {
+        if (call.method === "POST" && pathname === "/v5/speech-token") {
           respondJSON(200, { token: expectedSpeechToken, expiresInSeconds: 600 });
           return;
         }
         if (
           call.method === "GET" &&
-          pathname === "/v4/next" &&
+          pathname === "/v5/next" &&
           requestURL.searchParams.get("site") === expectedSite &&
           requestURL.searchParams.getAll("site").length === 1 &&
           requestURL.searchParams.getAll("excludeQuestionId").length <= 1
@@ -243,7 +233,7 @@ function installSyncMockInWindow({
           });
           return;
         }
-        if (call.method === "POST" && pathname === "/v4/questions") {
+        if (call.method === "POST" && pathname === "/v5/questions") {
           if (mock.conflictNextCatalogUpdate) {
             mock.conflictNextCatalogUpdate = false;
             mock.catalogUpdatedAtMs = Date.now();
@@ -279,7 +269,7 @@ function installSyncMockInWindow({
           });
           return;
         }
-        if (call.method === "POST" && pathname === "/v4/attempts") {
+        if (call.method === "POST" && pathname === "/v5/attempts") {
           const operationId = call.body?.operationId;
           const questionId = call.body?.questionId;
           const result = call.body?.result;
@@ -309,19 +299,15 @@ function installSyncMockInWindow({
               mock.solved += 1;
               mock.todaySolved += 1;
             }
-            const delta = mock.nextMasteryDelta;
-            mock.nextMasteryDelta = 0;
-            mock.mastered += delta;
+            const delta = mock.nextStabilityDaysDelta;
+            mock.nextStabilityDaysDelta = 0;
+            mock.stabilityDays += delta;
             item = {
               questionId,
               result,
               previousStability: delta === -1 ? 35 : delta === 1 ? 29 : 10,
               stability: delta === -1 ? 5 : delta === 1 ? 31 : 11,
-              masteryDelta: delta,
-              resultingMastered: mock.mastered,
-              completedMilestone: mock.nextCompletedMilestone,
             };
-            mock.nextCompletedMilestone = null;
             processed.set(operationId, item);
           }
           if (mock.commitThenFailNextAnswer) {
@@ -335,14 +321,12 @@ function installSyncMockInWindow({
               result: item.result,
               previousStability: item.previousStability,
               stability: item.stability,
-              masteryDelta: item.masteryDelta,
             },
             totals: {
-              mastered: mock.mastered,
+              stabilityDays: mock.stabilityDays,
               solved: mock.solved,
               todaySolved: mock.todaySolved,
             },
-            completedMilestone: item.completedMilestone,
           });
           return;
         }
@@ -370,7 +354,7 @@ function installSyncMockInWindow({
 }
 
 function createSyncMockConfiguration({
-  mastered = 0,
+  stabilityDays = 0,
   attemptCount = 0,
   solved = attemptCount,
   todaySolved = solved,
@@ -378,7 +362,6 @@ function createSyncMockConfiguration({
   token = "test-sync-token",
   configured = true,
   pendingAnswer = null,
-  pendingCelebration = null,
   processedOperations = [],
   userscriptsPromise = false,
   systemClipboard = false,
@@ -388,7 +371,7 @@ function createSyncMockConfiguration({
   catalogGeneration = catalogQuestionCount === null ? 0 : 1,
 } = {}) {
   return {
-    initialMasteredCount: mastered,
+    initialStabilityDaysCount: stabilityDays,
     initialAttemptCount: attemptCount,
     initialSolvedCount: solved,
     initialTodaySolvedCount: todaySolved,
@@ -397,12 +380,10 @@ function createSyncMockConfiguration({
     expectedSite: site,
     hasStoredToken: configured,
     initialPendingAnswer: pendingAnswer,
-    initialPendingCelebration: pendingCelebration,
     initialProcessedOperations: processedOperations,
     returnsPromise: userscriptsPromise,
     tokenKey: SYNC_TOKEN_KEY,
-    pendingAnswerKey: `kakomonn-reader.${site}.v4.pending-attempt`,
-    celebrationKey: `kakomonn-reader.${site}.v4.pending-celebration`,
+    pendingAnswerKey: `kakomonn-reader.${site}.v5.pending-attempt`,
     expectedOrigin: SYNC_API_ORIGIN,
     expectedSpeechOrigin: AZURE_SPEECH_ORIGIN,
     expectedSpeechToken: AZURE_SPEECH_TOKEN,
@@ -422,10 +403,8 @@ module.exports = {
   createSyncMockConfiguration,
   installSyncMock,
   installSyncMockInWindow,
-  CONGRATULATIONS_ORIGIN,
   LEGACY_PENDING_CORRECT_KEY,
   PENDING_ANSWER_KEY,
-  PENDING_CELEBRATION_KEY,
   SITE,
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,

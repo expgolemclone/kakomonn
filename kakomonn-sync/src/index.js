@@ -16,14 +16,14 @@ export { initializeLearningSchema } from "./learning-store.js";
 export async function handleRequest(request, env, fetcher = fetch) {
   const url = new URL(request.url);
   const routes = new Map([
-    ["/v4/sites", ["GET"]],
-    ["/v4/state", ["GET"]],
-    ["/v4/history", ["GET"]],
-    ["/v4/attempts", ["POST"]],
-    ["/v4/next", ["GET"]],
-    ["/v4/questions", ["POST"]],
-    ["/v4/settings", ["GET", "PUT"]],
-    ["/v4/speech-token", ["POST"]],
+    ["/v5/sites", ["GET"]],
+    ["/v5/state", ["GET"]],
+    ["/v5/history", ["GET"]],
+    ["/v5/attempts", ["POST"]],
+    ["/v5/next", ["GET"]],
+    ["/v5/questions", ["POST"]],
+    ["/v5/settings", ["GET", "PUT"]],
+    ["/v5/speech-token", ["POST"]],
   ]);
   const expectedMethods = routes.get(url.pathname);
   if (expectedMethods === undefined) {
@@ -42,28 +42,25 @@ export async function handleRequest(request, env, fetcher = fetch) {
     return errorResponse("unauthorized", 401);
   }
 
-  if (url.pathname === "/v4/sites") {
+  if (url.pathname === "/v5/sites") {
     if (url.search !== "") {
       return errorResponse("invalid_request", 400);
     }
     return jsonResponse({ sites: await getLearningStateStub(env).listSites() });
   }
-  if (url.pathname === "/v4/state") {
+  if (url.pathname === "/v5/state") {
     return handleState(url, env);
   }
-  if (url.pathname === "/v4/history") {
+  if (url.pathname === "/v5/history") {
     return handleHistory(url, env);
   }
-  if (url.pathname === "/v4/next") {
+  if (url.pathname === "/v5/next") {
     return handleNext(url, env);
   }
-  if (url.pathname === "/v4/settings") {
-    if (url.search !== "") {
-      return errorResponse("invalid_request", 400);
-    }
-    return handleSettings(request, env);
+  if (url.pathname === "/v5/settings") {
+    return handleSettings(request, url, env);
   }
-  if (url.pathname === "/v4/speech-token") {
+  if (url.pathname === "/v5/speech-token") {
     if (url.search !== "") {
       return errorResponse("invalid_request", 400);
     }
@@ -72,7 +69,7 @@ export async function handleRequest(request, env, fetcher = fetch) {
   if (url.search !== "") {
     return errorResponse("invalid_request", 400);
   }
-  if (url.pathname === "/v4/attempts") {
+  if (url.pathname === "/v5/attempts") {
     return handleAttempts(request, env);
   }
   return handleQuestions(request, env);

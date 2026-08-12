@@ -1,6 +1,5 @@
 import { createEmptyCard, fsrs, Rating } from "ts-fsrs";
 
-export const MASTERY_STABILITY_DAYS = 30;
 const scheduler = fsrs({ enable_fuzz: false });
 
 export function ratingForResult(result) {
@@ -11,12 +10,6 @@ export function ratingForResult(result) {
     return Rating.Again;
   }
   throw new TypeError("invalid answer result");
-}
-
-export function masteryDelta(previousStability, resultingStability) {
-  const before = previousStability >= MASTERY_STABILITY_DAYS;
-  const after = resultingStability >= MASTERY_STABILITY_DAYS;
-  return before === after ? 0 : after ? 1 : -1;
 }
 
 export function createNewCard(nowMs) {

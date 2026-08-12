@@ -361,15 +361,10 @@
     updateCopyButton();
     synchronizeTimeLimitPhase();
     void maybeContinuePendingAnswerNavigation();
-    void maybeContinuePendingCelebration();
 
     loadTimer = window.setTimeout(() => {
       loadTimer = null;
       currentPageReadPending = true;
-      if (pendingCelebration !== null) {
-        void maybeContinuePendingCelebration();
-        return;
-      }
       processCurrentPageSpeech();
     }, FRAME_LOAD_DELAY_MS);
   }

@@ -8,9 +8,9 @@ const token = "test-dashboard-token";
 const site = "chushoks.kakomonn.com";
 const otherSite = "shindans.kakomonn.com";
 const solvedHistory = [18, 22, 19, 26, 31, 24, 28];
-const history = [306, 307, 307, 309, 310, 308, 312].map((mastered, index) => ({
+const history = [null, 9307, 9412, 9550, 9688, 9794, 9912].map((stabilityDays, index) => ({
   date: `2026-08-${String(index + 4).padStart(2, "0")}`,
-  mastered,
+  stabilityDays,
   solved: solvedHistory[index],
 }));
 
@@ -40,7 +40,10 @@ async function installApiMock(page) {
         ["kakomonn-dashboard.sync-token", tokenValue],
         ["kakomonn-dashboard.site", siteValue],
       ]);
-      let settingsValue = { dailyMasteryGoal: 5 };
+      const settingsValues = new Map([
+        [siteValue, { site: siteValue, dailyStabilityDaysGoal: 30 }],
+        [otherSiteValue, { site: otherSiteValue, dailyStabilityDaysGoal: 100 }],
+      ]);
       window.__delayedSite = "";
       window.__delayedResolvers = [];
       window.__releaseDelayedSite = () => {
@@ -76,10 +79,10 @@ async function installApiMock(page) {
         if (headers.get("Authorization") !== `Bearer ${tokenValue}`) {
           return respond(401, { error: "unauthorized" });
         }
-        if (url.pathname === "/v4/sites") {
+        if (url.pathname === "/v5/sites") {
           return respond(200, { sites: [siteValue, otherSiteValue] });
         }
-        if (url.pathname === "/v4/state") {
+        if (url.pathname === "/v5/state") {
           const requestedSite = url.searchParams.get("site");
           if (requestedSite === window.__delayedSite) {
             await new Promise((resolve) => window.__delayedResolvers.push(resolve));
@@ -87,14 +90,14 @@ async function installApiMock(page) {
           return respond(200, {
             site: requestedSite,
             today: "2026-08-10",
-            mastered: requestedSite === siteValue ? 312 : 99,
+            stabilityDays: requestedSite === siteValue ? 9912 : 2999,
             solved: requestedSite === siteValue ? 640 : 100,
             todaySolved: requestedSite === siteValue ? 28 : 4,
-            todayDelta: requestedSite === siteValue ? 4 : 1,
+            todayStabilityDaysDelta: requestedSite === siteValue ? 104 : 21,
             catalog: { questionCount: 999, updatedAtMs: Date.now() },
           });
         }
-        if (url.pathname === "/v4/history") {
+        if (url.pathname === "/v5/history") {
           const requestedSite = url.searchParams.get("site");
           if (requestedSite === window.__delayedSite) {
             await new Promise((resolve) => window.__delayedResolvers.push(resolve));
@@ -105,14 +108,15 @@ async function installApiMock(page) {
             today: "2026-08-10",
             days: requestedSite === siteValue
               ? historyValue
-              : historyValue.map((day) => ({ ...day, mastered: 99 })),
+              : historyValue.map((day) => ({ ...day, stabilityDays: 2999 })),
           });
         }
-        if (url.pathname === "/v4/settings" && (init.method ?? "GET") === "GET") {
-          return respond(200, settingsValue);
+        if (url.pathname === "/v5/settings" && (init.method ?? "GET") === "GET") {
+          return respond(200, settingsValues.get(url.searchParams.get("site")));
         }
-        if (url.pathname === "/v4/settings" && init.method === "PUT") {
-          settingsValue = JSON.parse(init.body);
+        if (url.pathname === "/v5/settings" && init.method === "PUT") {
+          const settingsValue = JSON.parse(init.body);
+          settingsValues.set(settingsValue.site, settingsValue);
           return respond(200, settingsValue);
         }
         return respond(404, { error: "not_found" });
@@ -130,54 +134,57 @@ async function assertDashboard(page) {
   await installApiMock(page);
   await page.addStyleTag({ content: stylesSource });
   await page.addScriptTag({ content: appSource });
-  await page.waitForFunction(() => document.querySelector("#mastered-count")?.textContent === "312");
+  await page.waitForFunction(() => document.querySelector("#stability-days")?.textContent === "9,912");
 
-  assert.equal(await page.locator("#mastery-title").innerText(), "定着問題数");
-  assert.equal(await page.locator("#mastered-count").innerText(), "312");
+  assert.equal(await page.locator("#stability-title").innerText(), "定着日数");
+  assert.equal(await page.locator("#stability-days").innerText(), "9,912");
   assert.equal(await page.locator("#solved-count").innerText(), "640");
-  assert.equal(await page.locator(".mastery-meta").innerText(), "今日 +4\n目標 +5\n解いた問題数 640問");
-  assert.equal(await page.locator("#today-delta").innerText(), "今日 +4");
-  assert.equal(await page.locator("#goal-label").innerText(), "目標 +5");
-  assert.equal(await page.locator("#goal-progress").innerText(), "今日 +4 / +5");
-  assert.equal(await page.locator("#history-title").innerText(), "定着問題数と解いた問題数の7日推移");
-  assert.equal(await page.locator("#mastery-chart rect.mastery-bar").count(), 7);
-  assert.equal(await page.locator("#mastery-chart polyline.solved-line").count(), 1);
-  assert.equal(await page.locator("#mastery-chart circle.solved-point").count(), 7);
-  assert.equal(await page.locator("#mastery-chart .mastery-value-label").count(), 7);
-  assert.equal(await page.locator("#mastery-chart .solved-value-label").count(), 7);
-  assert.equal(await page.locator("#mastery-chart .mastery-axis-label").count(), 5);
-  assert.equal(await page.locator("#mastery-chart .solved-axis-label").count(), 5);
-  assert.equal(await page.locator(".chart-legend").innerText(), "定着問題数\n解いた問題数");
-  assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-10, 定着312問, 解いた問題28問/);
+  assert.equal(await page.locator(".stability-meta").innerText(), "今日 +104日\n目標 +30日\n解いた問題数 640問");
+  assert.equal(await page.locator("#today-delta").innerText(), "今日 +104日");
+  assert.equal(await page.locator("#goal-label").innerText(), "目標 +30日");
+  assert.equal(await page.locator("#goal-progress").innerText(), "今日 +104日 / +30日");
+  assert.equal(await page.locator("#history-title").innerText(), "定着日数と解いた問題数の7日推移");
+  assert.equal(await page.locator("#stability-chart rect.stability-bar").count(), 6);
+  assert.equal(await page.locator("#stability-chart polyline.solved-line").count(), 1);
+  assert.equal(await page.locator("#stability-chart circle.solved-point").count(), 7);
+  assert.equal(await page.locator("#stability-chart .stability-value-label").count(), 6);
+  assert.equal(await page.locator("#stability-chart .solved-value-label").count(), 7);
+  assert.equal(await page.locator("#stability-chart .stability-axis-label").count(), 5);
+  assert.equal(await page.locator("#stability-chart .solved-axis-label").count(), 5);
+  assert.equal(await page.locator(".chart-legend").innerText(), "定着日数\n解いた問題数");
+  assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-04, 定着日数記録なし, 解いた問題18問/);
+  assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-10, 定着日数9,912日, 解いた問題28問/);
 
   const text = await page.locator("body").innerText();
   assert.equal(text.includes("正解数"), false);
   assert.equal(text.includes("回答数"), false);
   assert.equal(text.includes("正答率"), false);
+  assert.equal(text.includes("30日以上"), false);
+  assert.equal(text.includes("祝福"), false);
   assert.equal(await page.locator(".goal-card").innerText().then((value) => value.includes("解いた問題数")), false);
   const calls = await page.evaluate(() => window.__apiCalls);
-  assert.equal(calls.some((call) => call.pathname.startsWith("/v3/")), false);
-  assert.equal(calls.filter((call) => call.pathname === "/v4/state").length, 1);
-  assert.equal(calls.filter((call) => call.pathname === "/v4/history").length, 1);
-  assert.equal(calls.filter((call) => call.pathname === "/v4/settings" && call.method === "GET").length, 1);
+  assert.equal(calls.some((call) => call.pathname.startsWith("/v4/")), false);
+  assert.equal(calls.filter((call) => call.pathname === "/v5/state").length, 1);
+  assert.equal(calls.filter((call) => call.pathname === "/v5/history").length, 1);
+  assert.equal(calls.filter((call) => call.pathname === "/v5/settings" && call.method === "GET").length, 1);
   assert.deepEqual(errors, []);
 
-  await page.locator("#daily-goal").fill("7");
+  await page.locator("#daily-goal").fill("250");
   await page.locator("#save-goal").click();
-  await page.waitForFunction(() => document.querySelector("#goal-label")?.textContent === "目標 +7");
-  assert.equal(await page.locator("#goal-label").innerText(), "目標 +7");
-  assert.equal(await page.locator("#goal-progress").innerText(), "今日 +4 / +7");
+  await page.waitForFunction(() => document.querySelector("#goal-label")?.textContent === "目標 +250日");
+  assert.equal(await page.locator("#goal-label").innerText(), "目標 +250日");
+  assert.equal(await page.locator("#goal-progress").innerText(), "今日 +104日 / +250日");
   assert.equal(
-    await page.evaluate(() => localStorage.getItem("今日の定着純増目標")),
+    await page.evaluate(() => localStorage.getItem("今日の定着日数純増目標")),
     null,
   );
   const updatedCalls = await page.evaluate(() => window.__apiCalls);
-  assert.equal(updatedCalls.filter((call) => call.pathname === "/v4/settings" && call.method === "PUT").length, 1);
+  assert.equal(updatedCalls.filter((call) => call.pathname === "/v5/settings" && call.method === "PUT").length, 1);
 
   await page.evaluate((siteValue) => { window.__delayedSite = siteValue; }, otherSite);
   await page.locator("#site-select").selectOption(otherSite);
   await page.locator("#site-select").selectOption(site);
-  await page.waitForFunction(() => document.querySelector("#mastered-count")?.textContent === "312");
+  await page.waitForFunction(() => document.querySelector("#stability-days")?.textContent === "9,912");
   await page.evaluate(() => window.__releaseDelayedSite());
   await page.waitForTimeout(50);
   assert.equal(await page.locator("#dashboard").isVisible(), true);
@@ -191,7 +198,7 @@ async function assertDashboard(page) {
   await page.locator("#refresh-button").click();
   await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "更新日 2026-08-10");
   const finalCalls = await page.evaluate(() => window.__apiCalls);
-  const finalStateCall = finalCalls.filter((call) => call.pathname === "/v4/state").at(-1);
+  const finalStateCall = finalCalls.filter((call) => call.pathname === "/v5/state").at(-1);
   assert.equal(finalStateCall.authorization, `Bearer ${token}`);
 }
 
@@ -210,7 +217,7 @@ async function main() {
   } finally {
     await browser.close();
   }
-  console.log("dashboard mastery E2E passed");
+  console.log("dashboard stability days E2E passed");
 }
 
 main().catch((error) => {

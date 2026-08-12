@@ -390,7 +390,7 @@ async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v4/speech-token",
+        (call) => new URL(call.url).pathname === "/v5/speech-token",
       ).length,
   );
 }
@@ -418,10 +418,10 @@ async function assertIncorrectSkip(context, script, inputMethod) {
     );
     const calls = await page.evaluate(() => ({
       attempts: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v4/attempts",
+        (call) => new URL(call.url).pathname === "/v5/attempts",
       ),
       next: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v4/next",
+        (call) => new URL(call.url).pathname === "/v5/next",
       ),
     }));
     assert.equal(calls.attempts.length, 1);
@@ -497,7 +497,7 @@ async function main() {
     assert.equal(await page.evaluate(() => typeof window.Audio), "function");
     assert.equal(
       await page.locator("#kakomonn-reader-count").innerText(),
-      "定着 0問 / 今日 0問",
+      "定着 0日 / 今日 0問",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-start").count(),
@@ -911,7 +911,7 @@ async function main() {
       await childFrame.evaluate(() => window.__answerButtonClicks),
       1,
     );
-    await page.evaluate(() => { window.__syncMock.nextMasteryDelta = 1; });
+    await page.evaluate(() => { window.__syncMock.nextStabilityDaysDelta = 31; });
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
     assert.equal(
@@ -924,7 +924,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v4/attempts",
+              new URL(call.url).pathname === "/v5/attempts",
           ).length,
       ),
       0,
@@ -1128,7 +1128,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v4/attempts",
+              new URL(call.url).pathname === "/v5/attempts",
           ).length,
       ),
       0,
@@ -1143,7 +1143,7 @@ async function main() {
       await page.waitForFunction(
         () =>
           document.querySelector("#kakomonn-reader-count").textContent ===
-          "定着 1問 / 今日 1問",
+          "定着 31日 / 今日 1問",
       );
     } catch (error) {
       error.readerState = await page.evaluate(() => ({
@@ -1151,7 +1151,7 @@ async function main() {
         status: document.querySelector("#kakomonn-reader-status")?.textContent,
         calls: window.__syncMock.calls,
         server: {
-          mastered: window.__syncMock.mastered,
+          stabilityDays: window.__syncMock.stabilityDays,
           attempts: window.__syncMock.attemptCount,
         },
       }));
@@ -1163,7 +1163,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v4/attempts",
+              new URL(call.url).pathname === "/v5/attempts",
           ).length,
       ),
       1,
@@ -1180,7 +1180,7 @@ async function main() {
     );
 
     await page.evaluate(() => {
-      window.__syncMock.mastered = 7;
+      window.__syncMock.stabilityDays = 7;
       window.__syncMock.attemptCount = 7;
       window.__syncMock.solved = 7;
       window.__syncMock.todaySolved = 7;
@@ -1198,7 +1198,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "定着 7問 / 今日 7問",
+        "定着 7日 / 今日 7問",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
@@ -1366,7 +1366,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-count").innerText(),
-      "定着 --問 / 今日 --問",
+      "定着 --日 / 今日 --問",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").focus();
     await setupPage.keyboard.type("qwert asdfg n gg yy xz ");
@@ -1381,7 +1381,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-count").innerText(),
-      "定着 0問 / 今日 0問",
+      "定着 0日 / 今日 0問",
     );
     assert.equal(
       await setupPage.evaluate(
@@ -1548,7 +1548,7 @@ async function main() {
       ),
     );
     assert.equal(await speechTokenCallCount(iosPage), 1);
-    await iosPage.evaluate(() => { window.__syncMock.nextMasteryDelta = 1; });
+    await iosPage.evaluate(() => { window.__syncMock.nextStabilityDaysDelta = 31; });
     await iosPage.locator("#kakomonn-reader-next").tap();
     await iosFrame.waitForURL(
       "https://chushoks.kakomonn.com/questions/45125",
@@ -1556,10 +1556,10 @@ async function main() {
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "定着 1問 / 今日 1問",
+        "定着 31日 / 今日 1問",
     );
     await iosPage.evaluate(() => {
-      window.__syncMock.mastered = 6;
+      window.__syncMock.stabilityDays = 6;
       window.__syncMock.attemptCount = 6;
       window.__syncMock.solved = 6;
       window.__syncMock.todaySolved = 6;
@@ -1568,7 +1568,7 @@ async function main() {
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-count").textContent ===
-        "定着 6問 / 今日 6問",
+        "定着 6日 / 今日 6問",
     );
     assert.equal(
       await iosPage.evaluate(
@@ -1576,7 +1576,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v4/attempts",
+              new URL(call.url).pathname === "/v5/attempts",
           ).length,
       ),
       1,

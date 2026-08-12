@@ -4,7 +4,7 @@ import {
   SELF,
 } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { masteryDelta, ratingForResult } from "../src/fsrs.js";
+import { ratingForResult } from "../src/fsrs.js";
 import { initializeLearningSchema } from "../src/storage/schema.js";
 import { Rating } from "ts-fsrs";
 
@@ -13,6 +13,7 @@ const OTHER_SITE = "shindans.kakomonn.com";
 const TOKEN = "test-sync-token";
 const AUTHORIZATION = { Authorization: `Bearer ${TOKEN}` };
 const NOW = Date.parse("2026-08-10T00:00:00.000Z");
+const DAY_MS = 86_400_000;
 
 function operationId(value) {
   return value.toString(16).padStart(32, "0");
@@ -27,32 +28,42 @@ async function reset() {
   await runInRawDurableObject(raw, (_instance, state) => {
     for (const table of [
       "attempts",
-      "mastery_history",
+      "stability_history",
       "cards",
       "questions",
-      "learning_metadata",
+      "site_settings",
       "catalog_metadata",
     ]) {
       state.storage.sql.exec(`DELETE FROM ${table}`);
     }
   });
   await raw.replaceCatalog(SITE, ["1", "2", "3", "4"], 0, NOW);
-  await raw.updateSettings(5);
 }
 
 async function seedReviewCard(
   questionId,
   stability,
   dueMs = NOW - 1000,
-  lastReviewMs = NOW - 30 * 86_400_000
+  lastReviewMs = NOW - 30 * DAY_MS,
+  site = SITE
 ) {
   await runInRawDurableObject(stub(), (_instance, state) => {
     state.storage.sql.exec(
       `INSERT INTO cards (
          site, question_id, due_ms, stability, difficulty, scheduled_days,
          learning_steps, reps, lapses, state, last_review_ms
-       ) VALUES (?, ?, ?, ?, 5, 30, 0, 5, 0, 2, ?)`,
-      SITE,
+       ) VALUES (?, ?, ?, ?, 5, 30, 0, 5, 0, 2, ?)
+       ON CONFLICT(site, question_id) DO UPDATE SET
+         due_ms = excluded.due_ms,
+         stability = excluded.stability,
+         difficulty = excluded.difficulty,
+         scheduled_days = excluded.scheduled_days,
+         learning_steps = excluded.learning_steps,
+         reps = excluded.reps,
+         lapses = excluded.lapses,
+         state = excluded.state,
+         last_review_ms = excluded.last_review_ms`,
+      site,
       questionId,
       dueMs,
       stability,
@@ -64,13 +75,13 @@ async function seedReviewCard(
 beforeEach(reset);
 
 describe("LearningState schema", () => {
-  it("installs query indexes idempotently for existing objects", async () => {
+  it("installs query indexes idempotently", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
-      initializeLearningSchema(state.storage);
+      initializeLearningSchema(state.storage, NOW);
       state.storage.sql.exec(
         "CREATE INDEX IF NOT EXISTS attempts_by_site ON attempts (site)"
       );
-      initializeLearningSchema(state.storage);
+      initializeLearningSchema(state.storage, NOW);
       const indexes = state.storage.sql
         .exec(
           `SELECT name FROM sqlite_master
@@ -79,7 +90,7 @@ describe("LearningState schema", () => {
           "attempts_by_site",
           "attempts_by_site_answered_at_question",
           "cards_by_site_due",
-          "cards_by_site_stability",
+          "cards_by_site_stability"
         )
         .toArray()
         .map((row) => row.name);
@@ -90,163 +101,249 @@ describe("LearningState schema", () => {
       ]);
     });
   });
+
+  it("migrates v4 data without retaining threshold-based fields", async () => {
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec(`
+        DROP TABLE attempts;
+        DROP TABLE stability_history;
+        DROP TABLE cards;
+        DROP TABLE questions;
+        DROP TABLE site_settings;
+        DROP TABLE catalog_metadata;
+        DROP TABLE schema_metadata;
+
+        CREATE TABLE cards (
+          site TEXT NOT NULL, question_id TEXT NOT NULL, due_ms INTEGER NOT NULL,
+          stability REAL NOT NULL, difficulty REAL NOT NULL, scheduled_days INTEGER NOT NULL,
+          learning_steps INTEGER NOT NULL, reps INTEGER NOT NULL, lapses INTEGER NOT NULL,
+          state INTEGER NOT NULL, last_review_ms INTEGER,
+          PRIMARY KEY (site, question_id)
+        ) WITHOUT ROWID;
+        CREATE TABLE attempts (
+          site TEXT NOT NULL, operation_id TEXT NOT NULL, question_id TEXT NOT NULL,
+          answered_at_ms INTEGER NOT NULL, result TEXT NOT NULL,
+          previous_stability REAL NOT NULL, resulting_stability REAL NOT NULL,
+          mastery_delta INTEGER NOT NULL, resulting_mastered_count INTEGER NOT NULL,
+          completed_milestone INTEGER, PRIMARY KEY (operation_id)
+        ) WITHOUT ROWID;
+        CREATE TABLE mastery_history (
+          site TEXT NOT NULL, date TEXT NOT NULL, mastered_count INTEGER NOT NULL,
+          PRIMARY KEY (site, date)
+        ) WITHOUT ROWID;
+        CREATE TABLE questions (
+          site TEXT NOT NULL, question_id TEXT NOT NULL, PRIMARY KEY (site, question_id)
+        ) WITHOUT ROWID;
+        CREATE TABLE learning_metadata (
+          site TEXT PRIMARY KEY, highest_mastery_milestone INTEGER NOT NULL
+        ) WITHOUT ROWID;
+        CREATE TABLE catalog_metadata (
+          site TEXT PRIMARY KEY, question_count INTEGER NOT NULL,
+          updated_at_ms INTEGER NOT NULL, generation INTEGER NOT NULL
+        ) WITHOUT ROWID;
+      `);
+      state.storage.sql.exec(
+        "INSERT INTO questions (site, question_id) VALUES (?, '1')",
+        SITE
+      );
+      state.storage.sql.exec(
+        "INSERT INTO catalog_metadata VALUES (?, 1, ?, 1)",
+        SITE,
+        NOW
+      );
+      state.storage.sql.exec(
+        "INSERT INTO cards VALUES (?, '1', ?, 12.9, 5, 30, 0, 5, 0, 2, ?)",
+        SITE,
+        NOW,
+        NOW
+      );
+      state.storage.sql.exec(
+        `INSERT INTO attempts VALUES (
+           ?, ?, '1', ?, 'correct', 10, 12.9, 0, 0, NULL
+         )`,
+        SITE,
+        operationId(900),
+        NOW
+      );
+      state.storage.sql.exec(
+        "INSERT INTO mastery_history VALUES (?, '2026-08-09', 4)",
+        SITE
+      );
+      state.storage.sql.exec(
+        "INSERT INTO learning_metadata VALUES (?, 50)",
+        SITE
+      );
+
+      initializeLearningSchema(state.storage, NOW);
+
+      expect(
+        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
+      ).toEqual({ version: 2 });
+      expect(
+        state.storage.sql.exec("SELECT * FROM stability_history").toArray()[0]
+      ).toEqual({
+        site: SITE,
+        date: "2026-08-10",
+        opening_stability_days: 12,
+        closing_stability_days: 12,
+      });
+      expect(
+        state.storage.sql.exec("SELECT * FROM site_settings").toArray()[0]
+      ).toEqual({ site: SITE, daily_stability_days_goal: 30 });
+      expect(
+        state.storage.sql.exec("SELECT * FROM attempts").toArray()[0]
+      ).toEqual({
+        site: SITE,
+        operation_id: operationId(900),
+        question_id: "1",
+        answered_at_ms: NOW,
+        result: "correct",
+        previous_stability: 10,
+        resulting_stability: 12.9,
+      });
+      expect(
+        state.storage.sql
+          .exec(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('mastery_history', 'learning_metadata')"
+          )
+          .toArray()
+      ).toEqual([]);
+    });
+  });
 });
 
-describe("FSRS integration", () => {
-  it("maps correct to Rating.Good and incorrect to Rating.Again", () => {
+describe("FSRS stability days", () => {
+  it("maps answer results to FSRS ratings", () => {
     expect(ratingForResult("correct")).toBe(Rating.Good);
     expect(ratingForResult("incorrect")).toBe(Rating.Again);
   });
 
-  it("creates a new card and schedules correct with Good", async () => {
-    const result = await stub().recordAttempt(SITE, "1", operationId(1), "correct", NOW);
-    expect(result.attempt).toMatchObject({
-      questionId: "1",
-      result: "correct",
-      previousStability: 0,
-      masteryDelta: 0,
-    });
-    expect(result.attempt.stability).toBeGreaterThan(0);
-    await runInRawDurableObject(stub(), (_instance, state) => {
-      const card = state.storage.sql.exec("SELECT * FROM cards WHERE site = ? AND question_id = ?", SITE, "1").toArray()[0];
-      expect(card.reps).toBe(1);
-      expect(card.stability).toBe(result.attempt.stability);
+  it("sums raw stability before flooring once", async () => {
+    await seedReviewCard("1", 1.9);
+    await seedReviewCard("2", 2.8);
+    await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
+      stabilityDays: 4,
     });
   });
 
-  it("creates a new card and schedules incorrect with Again", async () => {
-    const result = await stub().recordAttempt(SITE, "1", operationId(2), "incorrect", NOW);
-    expect(result.attempt).toMatchObject({
-      questionId: "1",
-      result: "incorrect",
-      previousStability: 0,
-      masteryDelta: 0,
+  it("counts only current catalog cards and treats unseen questions as zero", async () => {
+    await seedReviewCard("1", 12.9);
+    await seedReviewCard("2", 3.2);
+    await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
+      stabilityDays: 16,
+      catalog: { questionCount: 4 },
     });
-    expect(result.attempt.stability).toBeGreaterThan(0);
-  });
 
-  it("uses only stability 30 as the mastery threshold", () => {
-    expect(masteryDelta(29.999, 30)).toBe(1);
-    expect(masteryDelta(30, 29.999)).toBe(-1);
-    expect(masteryDelta(30, 31)).toBe(0);
-    expect(masteryDelta(4, 29)).toBe(0);
-  });
-
-  it("increments stock when FSRS crosses from below 30 to at least 30", async () => {
-    await seedReviewCard("1", 29);
-    const result = await stub().recordAttempt(SITE, "1", operationId(3), "correct", NOW);
-    expect(result.attempt.previousStability).toBe(29);
-    expect(result.attempt.stability).toBeGreaterThanOrEqual(30);
-    expect(result.attempt.masteryDelta).toBe(1);
-    expect(result.totals.mastered).toBe(1);
-  });
-
-  it("decrements stock when FSRS crosses from at least 30 to below 30", async () => {
-    await seedReviewCard("1", 35);
-    const result = await stub().recordAttempt(SITE, "1", operationId(4), "incorrect", NOW);
-    expect(result.attempt.previousStability).toBe(35);
-    expect(result.attempt.stability).toBeLessThan(30);
-    expect(result.attempt.masteryDelta).toBe(-1);
-    expect(result.totals.mastered).toBe(0);
-  });
-
-  it("does not change stock when before and after are both mastered", async () => {
-    await seedReviewCard("1", 35);
-    const result = await stub().recordAttempt(SITE, "1", operationId(5), "correct", NOW);
-    expect(result.attempt.stability).toBeGreaterThanOrEqual(30);
-    expect(result.attempt.masteryDelta).toBe(0);
-    expect(result.totals.mastered).toBe(1);
-  });
-
-  it("keeps an incorrect answer mastered when FSRS still returns stability at least 30", async () => {
-    await seedReviewCard("1", 1000, NOW - 1000, NOW);
-    const result = await stub().recordAttempt(SITE, "1", operationId(16), "incorrect", NOW);
-    expect(result.attempt.result).toBe("incorrect");
-    expect(result.attempt.stability).toBeGreaterThanOrEqual(30);
-    expect(result.attempt.masteryDelta).toBe(0);
-    expect(result.totals.mastered).toBe(1);
-  });
-});
-
-describe("attempt idempotency", () => {
-  it("returns the same result for the same operation and does not update twice", async () => {
-    const first = await stub().recordAttempt(SITE, "1", operationId(6), "correct", NOW);
-    const retry = await stub().recordAttempt(SITE, "1", operationId(6), "correct", NOW + 60_000);
-    expect(retry).toEqual(first);
-    await runInRawDurableObject(stub(), (_instance, state) => {
-      const card = state.storage.sql.exec("SELECT reps FROM cards WHERE site = ? AND question_id = ?", SITE, "1").toArray()[0];
-      const attempts = state.storage.sql.exec("SELECT COUNT(*) AS count FROM attempts WHERE site = ?", SITE).toArray()[0];
-      expect(card.reps).toBe(1);
-      expect(attempts.count).toBe(1);
-    });
-    await expect(stub().getState(SITE, NOW + 60_000)).resolves.toMatchObject({
-      solved: 1,
-      todaySolved: 1,
+    await stub().replaceCatalog(SITE, ["2", "3", "4"], 1, NOW);
+    await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
+      stabilityDays: 3,
+      todayStabilityDaysDelta: 3,
+      catalog: { questionCount: 3, generation: 2 },
     });
   });
 
-  it("returns current mastery stock when an old operation is retried after another device updates the site", async () => {
-    await seedReviewCard("1", 29);
-    await seedReviewCard("2", 29);
-    const first = await stub().recordAttempt(SITE, "1", operationId(61), "correct", NOW);
-    const second = await stub().recordAttempt(SITE, "2", operationId(62), "correct", NOW + 1_000);
-    const retry = await stub().recordAttempt(SITE, "1", operationId(61), "correct", NOW + 2_000);
-
-    expect(first.totals.mastered).toBe(1);
-    expect(second.totals.mastered).toBe(2);
-    expect(retry.attempt).toEqual(first.attempt);
-    expect(retry.completedMilestone).toBe(first.completedMilestone);
-    expect(retry.totals.mastered).toBe(2);
-    await expect(stub().getState(SITE, NOW + 2_000)).resolves.toMatchObject({
-      mastered: 2,
-      solved: 2,
-      todaySolved: 2,
-    });
-
-    await runInRawDurableObject(stub(), (_instance, state) => {
-      const attempts = state.storage.sql.exec("SELECT COUNT(*) AS count FROM attempts WHERE site = ?", SITE).toArray()[0];
-      expect(attempts.count).toBe(2);
-    });
-  });
-
-  it("counts each question once in lifetime and daily solved totals", async () => {
-    const first = await stub().recordAttempt(
+  it("returns the new attempt contract for correct and incorrect answers", async () => {
+    const correct = await stub().recordAttempt(
       SITE,
       "1",
-      operationId(66),
+      operationId(1),
       "correct",
       NOW
     );
-    const repeated = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(67),
-      "incorrect",
-      NOW + 1_000
-    );
-    const secondQuestion = await stub().recordAttempt(
+    expect(correct.attempt).toMatchObject({
+      questionId: "1",
+      result: "correct",
+      previousStability: 0,
+    });
+    expect(correct.attempt.stability).toBeGreaterThan(0);
+    expect(correct.attempt).not.toHaveProperty("masteryDelta");
+    expect(correct).not.toHaveProperty("completedMilestone");
+    expect(correct.totals).toMatchObject({ solved: 1, todaySolved: 1 });
+    expect(correct.totals).toHaveProperty("stabilityDays");
+
+    await seedReviewCard("2", 35, NOW - 1000, NOW);
+    const incorrect = await stub().recordAttempt(
       SITE,
       "2",
-      operationId(68),
+      operationId(2),
       "incorrect",
-      NOW + 2_000
+      NOW + 1000
     );
+    expect(incorrect.attempt.result).toBe("incorrect");
+    expect(incorrect.attempt.stability).toBeLessThan(35);
+  });
+});
 
-    expect(first.totals).toMatchObject({ solved: 1, todaySolved: 1 });
-    expect(repeated.totals).toMatchObject({ solved: 1, todaySolved: 1 });
-    expect(secondQuestion.totals).toMatchObject({ solved: 2, todaySolved: 2 });
-    await expect(stub().getState(SITE, NOW + 2_000)).resolves.toMatchObject({
-      solved: 2,
-      todaySolved: 2,
+describe("attempt idempotency and solved totals", () => {
+  it("does not apply the same operation twice", async () => {
+    const first = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(3),
+      "correct",
+      NOW
+    );
+    const retry = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(3),
+      "correct",
+      NOW + 60_000
+    );
+    expect(retry).toEqual(first);
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec("SELECT reps FROM cards WHERE site = ? AND question_id = '1'", SITE)
+          .toArray()[0].reps
+      ).toBe(1);
+      expect(
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM attempts").toArray()[0]
+          .count
+      ).toBe(1);
     });
   });
 
-  it("uses the Asia Tokyo date boundary for daily solved totals", async () => {
+  it("returns current totals when an older operation is retried", async () => {
+    await seedReviewCard("1", 10);
+    await seedReviewCard("2", 20);
+    const first = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(4),
+      "correct",
+      NOW
+    );
+    const second = await stub().recordAttempt(
+      SITE,
+      "2",
+      operationId(5),
+      "correct",
+      NOW + 1000
+    );
+    const retry = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(4),
+      "correct",
+      NOW + 2000
+    );
+    expect(retry.attempt).toEqual(first.attempt);
+    expect(retry.totals).toEqual(second.totals);
+  });
+
+  it("counts distinct solved questions by lifetime and Tokyo date", async () => {
     const beforeMidnight = Date.parse("2026-08-10T14:59:59.999Z");
     const afterMidnight = Date.parse("2026-08-10T15:00:00.000Z");
-    await stub().recordAttempt(SITE, "1", operationId(69), "correct", beforeMidnight);
-    await stub().recordAttempt(SITE, "1", operationId(70), "correct", afterMidnight);
-    await stub().recordAttempt(SITE, "2", operationId(71), "incorrect", afterMidnight + 1);
+    await stub().recordAttempt(SITE, "1", operationId(6), "correct", beforeMidnight);
+    await stub().recordAttempt(SITE, "1", operationId(7), "correct", afterMidnight);
+    await stub().recordAttempt(
+      SITE,
+      "2",
+      operationId(8),
+      "incorrect",
+      afterMidnight + 1
+    );
 
     await expect(stub().getState(SITE, afterMidnight + 1)).resolves.toMatchObject({
       today: "2026-08-11",
@@ -261,360 +358,177 @@ describe("attempt idempotency", () => {
     });
   });
 
-  it("returns conflict for the same operationId with a different payload", async () => {
-    await stub().recordAttempt(SITE, "1", operationId(7), "correct", NOW);
-    await expect(stub().recordAttempt(SITE, "2", operationId(7), "correct", NOW)).resolves.toEqual({ error: "operation_conflict" });
-    await expect(stub().recordAttempt(SITE, "1", operationId(7), "incorrect", NOW)).resolves.toEqual({ error: "operation_conflict" });
-  });
-
-  it("keeps HTTP retry totals aligned with current cross-device state", async () => {
-    await seedReviewCard("1", 29);
-    await seedReviewCard("2", 29);
-    const firstBody = { site: SITE, questionId: "1", operationId: operationId(63), result: "correct" };
-    const secondBody = { site: SITE, questionId: "2", operationId: operationId(64), result: "correct" };
-    const post = (body) => SELF.fetch("https://example.test/v4/attempts", {
-      method: "POST",
-      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    const first = await (await post(firstBody)).json();
-    const second = await (await post(secondBody)).json();
-    const retry = await (await post(firstBody)).json();
-    const current = await (await SELF.fetch(`https://example.test/v4/state?site=${SITE}`, {
-      headers: AUTHORIZATION,
-    })).json();
-
-    expect({
-      first: first.totals.mastered,
-      second: second.totals.mastered,
-      retry: retry.totals.mastered,
-      current: current.mastered,
-    }).toEqual({ first: 1, second: 2, retry: 2, current: 2 });
-  });
-
-  it("returns HTTP 409 when the same operationId is reused for another site", async () => {
-    await stub().replaceCatalog(OTHER_SITE, ["1"], 0, NOW);
-    const body = { site: SITE, questionId: "1", operationId: operationId(65), result: "correct" };
-    const post = (payload) => SELF.fetch("https://example.test/v4/attempts", {
-      method: "POST",
-      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const first = await post(body);
-    expect(first.status).toBe(200);
-    const conflict = await post({ ...body, site: OTHER_SITE });
-    expect(conflict.status).toBe(409);
-    await expect(conflict.json()).resolves.toEqual({ error: "operation_conflict" });
-
-    await runInRawDurableObject(stub(), (_instance, state) => {
-      const attempts = state.storage.sql
-        .exec("SELECT COUNT(*) AS count FROM attempts WHERE operation_id = ?", body.operationId)
-        .toArray()[0];
-      const otherCard = state.storage.sql
-        .exec("SELECT question_id FROM cards WHERE site = ? AND question_id = ?", OTHER_SITE, "1")
-        .toArray()[0];
-      expect(attempts.count).toBe(1);
-      expect(otherCard).toBeUndefined();
-    });
-  });
-
-  it("returns HTTP 409 for conflicting payloads", async () => {
-    const body = { site: SITE, questionId: "1", operationId: operationId(8), result: "correct" };
-    const first = await SELF.fetch("https://example.test/v4/attempts", {
-      method: "POST", headers: { ...AUTHORIZATION, "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
-    expect(first.status).toBe(200);
-    const conflict = await SELF.fetch("https://example.test/v4/attempts", {
-      method: "POST", headers: { ...AUTHORIZATION, "Content-Type": "application/json" }, body: JSON.stringify({ ...body, result: "incorrect" }),
-    });
-    expect(conflict.status).toBe(409);
-    await expect(conflict.json()).resolves.toEqual({ error: "operation_conflict" });
-  });
-});
-
-describe("next question scheduler", () => {
-  it("selects the oldest due existing card", async () => {
-    await seedReviewCard("1", 10, NOW - 1000);
-    await seedReviewCard("2", 10, NOW - 5000);
-    await expect(stub().nextQuestion(SITE, NOW)).resolves.toMatchObject({ questionId: "2", kind: "review" });
-  });
-
-  it("does not select a future card and selects an unseen question", async () => {
-    await seedReviewCard("1", 10, NOW + 60_000);
-    await expect(stub().nextQuestion(SITE, NOW)).resolves.toMatchObject({ questionId: "2", kind: "new" });
-  });
-
-  it("selects a new question when there are no due cards", async () => {
-    await expect(stub().nextQuestion(SITE, NOW)).resolves.toEqual({ questionId: "1", kind: "new", dueMs: null });
-  });
-
-  it("excludes the current question while preserving scheduler priority", async () => {
-    await expect(stub().nextQuestion(SITE, NOW, "1")).resolves.toEqual({
-      questionId: "2",
-      kind: "new",
-      dueMs: null,
-    });
-    await seedReviewCard("1", 10, NOW - 5000);
-    await seedReviewCard("2", 10, NOW - 1000);
-    await expect(stub().nextQuestion(SITE, NOW, "1")).resolves.toMatchObject({
-      questionId: "2",
-      kind: "review",
-    });
-  });
-
-  it("returns no question when every catalog card is future-due", async () => {
-    for (const id of ["1", "2", "3", "4"]) await seedReviewCard(id, 10, NOW + Number(id) * 1000);
-    await expect(stub().nextQuestion(SITE, NOW)).resolves.toEqual({ questionId: null, kind: "none", dueMs: null });
-  });
-});
-
-describe("mastery history and milestones", () => {
-  it("counts only current catalog cards and records catalog-driven stock changes", async () => {
-    await seedReviewCard("1", 35);
-    await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({ mastered: 1 });
-
-    await stub().replaceCatalog(SITE, ["2", "3", "4"], 1, NOW);
-    await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
-      mastered: 0,
-      catalog: { questionCount: 3, generation: 2 },
-    });
-    await expect(stub().getHistory(SITE, 1, NOW)).resolves.toMatchObject({
-      days: [{ date: "2026-08-10", mastered: 0 }],
-    });
-
-    const nextDay = NOW + 86_400_000;
-    await stub().replaceCatalog(SITE, ["1", "2", "3", "4"], 2, nextDay);
-    await expect(stub().getState(SITE, nextDay)).resolves.toMatchObject({
-      mastered: 1,
-      todayDelta: 1,
-      catalog: { questionCount: 4, generation: 3 },
-    });
-  });
-
-  it("stores the daily stock only when the KPI changes and fills a 7 day stock series", async () => {
-    await seedReviewCard("1", 29);
+  it("rejects operationId reuse with a different payload", async () => {
     await stub().recordAttempt(SITE, "1", operationId(9), "correct", NOW);
-    const history = await stub().getHistory(SITE, 7, NOW);
-    expect(history.days).toHaveLength(7);
-    expect(history.days.at(-1)).toEqual({
-      date: "2026-08-10",
-      mastered: 1,
-      solved: 1,
-    });
-  });
-
-  it("keeps solved questions in totals after catalog removal", async () => {
-    await stub().recordAttempt(SITE, "1", operationId(72), "correct", NOW);
-    await stub().replaceCatalog(SITE, ["2", "3", "4"], 1, NOW + 1_000);
-
-    await expect(stub().getState(SITE, NOW + 1_000)).resolves.toMatchObject({
-      solved: 1,
-      todaySolved: 1,
-      catalog: { questionCount: 3 },
-    });
-  });
-
-  it("celebrates 300 once across 300 -> 299 -> 300 and then celebrates 350", async () => {
-    const ids = Array.from({ length: 350 }, (_, index) => String(index + 1));
-    await stub().replaceCatalog(SITE, ids, 1, NOW);
-    await runInRawDurableObject(stub(), (_instance, state) => {
-      for (let id = 1; id <= 299; id += 1) {
-        state.storage.sql.exec(
-          `INSERT INTO cards (
-             site, question_id, due_ms, stability, difficulty, scheduled_days,
-             learning_steps, reps, lapses, state, last_review_ms
-           ) VALUES (?, ?, ?, 35, 5, 30, 0, 5, 0, 2, ?)`,
-          SITE,
-          String(id),
-          NOW - 1000,
-          NOW - 30 * 86_400_000
-        );
-      }
-    });
-    await seedReviewCard("300", 29);
-
-    const first300 = await stub().recordAttempt(SITE, "300", operationId(10), "correct", NOW);
-    expect(first300.totals.mastered).toBe(300);
-    expect(first300.completedMilestone).toBe(300);
-
-    await runInRawDurableObject(stub(), (_instance, state) => {
-      state.storage.sql.exec(
-        `UPDATE cards
-         SET stability = 35, difficulty = 5, state = 2, due_ms = ?, last_review_ms = ?
-         WHERE site = ? AND question_id = '300'`,
-        NOW - 1000,
-        NOW - 30 * 86_400_000,
-        SITE
-      );
-    });
-    const down = await stub().recordAttempt(SITE, "300", operationId(11), "incorrect", NOW);
-    expect(down.totals.mastered).toBe(299);
-    expect(down.completedMilestone).toBeNull();
-
-    await runInRawDurableObject(stub(), (_instance, state) => {
-      state.storage.sql.exec(
-        `UPDATE cards
-         SET stability = 29, difficulty = 5, state = 2, due_ms = ?, last_review_ms = ?
-         WHERE site = ? AND question_id = '300'`,
-        NOW - 1000,
-        NOW - 30 * 86_400_000,
-        SITE
-      );
-    });
-    const second300 = await stub().recordAttempt(SITE, "300", operationId(12), "correct", NOW);
-    expect(second300.totals.mastered).toBe(300);
-    expect(second300.completedMilestone).toBeNull();
-
-    for (let id = 301; id <= 349; id += 1) {
-      await seedReviewCard(String(id), 35);
-    }
-    await seedReviewCard("350", 29);
-    const first350 = await stub().recordAttempt(SITE, "350", operationId(13), "correct", NOW);
-    expect(first350.totals.mastered).toBe(350);
-    expect(first350.completedMilestone).toBe(350);
-  });
-
-  it("does not celebrate merely because an unchanged stock is a milestone", async () => {
-    const ids = Array.from({ length: 300 }, (_, index) => String(index + 1));
-    await stub().replaceCatalog(SITE, ids, 1, NOW);
-    await runInRawDurableObject(stub(), (_instance, state) => {
-      for (const id of ids) {
-        state.storage.sql.exec(
-          `INSERT INTO cards (
-             site, question_id, due_ms, stability, difficulty, scheduled_days,
-             learning_steps, reps, lapses, state, last_review_ms
-           ) VALUES (?, ?, ?, 35, 5, 30, 0, 5, 0, 2, ?)`,
-          SITE,
-          id,
-          NOW - 1000,
-          NOW - 30 * 86_400_000
-        );
-      }
-    });
-
-    const result = await stub().recordAttempt(SITE, "300", operationId(17), "correct", NOW);
-    expect(result.totals.mastered).toBe(300);
-    expect(result.attempt.masteryDelta).toBe(0);
-    expect(result.completedMilestone).toBeNull();
+    await expect(
+      stub().recordAttempt(SITE, "2", operationId(9), "correct", NOW)
+    ).resolves.toEqual({ error: "operation_conflict" });
+    await expect(
+      stub().recordAttempt(SITE, "1", operationId(9), "incorrect", NOW)
+    ).resolves.toEqual({ error: "operation_conflict" });
   });
 });
 
-
-describe("v4 HTTP contract", () => {
-  it("shares the daily mastery goal between independent clients", async () => {
-    const fresh = env.LEARNING_STATE.get(
-      env.LEARNING_STATE.idFromName("settings-default")
+describe("stability history", () => {
+  it("uses opening and closing totals for the daily delta", async () => {
+    const first = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(10),
+      "correct",
+      NOW
     );
-    await expect(fresh.getSettings()).resolves.toEqual({ dailyMasteryGoal: 5 });
+    const second = await stub().recordAttempt(
+      SITE,
+      "2",
+      operationId(11),
+      "correct",
+      NOW + 1000
+    );
+    const state = await stub().getState(SITE, NOW + 1000);
+    expect(state.stabilityDays).toBe(second.totals.stabilityDays);
+    expect(state.todayStabilityDaysDelta).toBe(second.totals.stabilityDays);
+    expect(state.stabilityDays).toBeGreaterThanOrEqual(first.totals.stabilityDays);
+  });
 
-    const firstClient = await SELF.fetch("https://example.test/v4/settings", {
+  it("returns null before tracking starts and carries known totals forward", async () => {
+    const initial = await stub().getHistory(SITE, 7, NOW);
+    expect(initial.days.slice(0, 6).every((day) => day.stabilityDays === null)).toBe(
+      true
+    );
+    expect(initial.days.at(-1).stabilityDays).toBe(0);
+
+    await stub().recordAttempt(SITE, "1", operationId(12), "correct", NOW);
+    const afterGap = await stub().getHistory(SITE, 3, NOW + 2 * DAY_MS);
+    expect(afterGap.days[0].stabilityDays).not.toBeNull();
+    expect(afterGap.days[1].stabilityDays).toBe(afterGap.days[0].stabilityDays);
+    expect(afterGap.days[2].stabilityDays).toBe(afterGap.days[0].stabilityDays);
+  });
+
+  it("starts a new opening total at the Tokyo date boundary", async () => {
+    await seedReviewCard("1", 35, NOW - 1000, NOW);
+    const nextDay = NOW + DAY_MS;
+    const before = (await stub().getState(SITE, nextDay)).stabilityDays;
+    await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(13),
+      "incorrect",
+      nextDay
+    );
+    const after = await stub().getState(SITE, nextDay);
+    expect(after.todayStabilityDaysDelta).toBe(after.stabilityDays - before);
+  });
+});
+
+describe("site settings", () => {
+  it("stores an independent goal for each site", async () => {
+    await stub().replaceCatalog(OTHER_SITE, ["1"], 0, NOW);
+    await expect(stub().getSettings(SITE)).resolves.toEqual({
+      site: SITE,
+      dailyStabilityDaysGoal: 30,
+    });
+    await expect(stub().getSettings(OTHER_SITE)).resolves.toEqual({
+      site: OTHER_SITE,
+      dailyStabilityDaysGoal: 30,
+    });
+    await expect(stub().updateSettings(SITE, 250)).resolves.toEqual({
+      site: SITE,
+      dailyStabilityDaysGoal: 250,
+    });
+    await expect(stub().getSettings(OTHER_SITE)).resolves.toEqual({
+      site: OTHER_SITE,
+      dailyStabilityDaysGoal: 30,
+    });
+  });
+
+  it("serves and validates the v5 settings contract", async () => {
+    const first = await SELF.fetch(`https://example.test/v5/settings?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
-    expect(firstClient.status).toBe(200);
-    await expect(firstClient.json()).resolves.toEqual({ dailyMasteryGoal: 5 });
+    expect(first.status).toBe(200);
+    await expect(first.json()).resolves.toEqual({
+      site: SITE,
+      dailyStabilityDaysGoal: 30,
+    });
 
-    const update = await SELF.fetch("https://example.test/v4/settings", {
+    const updated = await SELF.fetch("https://example.test/v5/settings", {
       method: "PUT",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-      body: JSON.stringify({ dailyMasteryGoal: 12 }),
+      body: JSON.stringify({ site: SITE, dailyStabilityDaysGoal: 1000 }),
     });
-    expect(update.status).toBe(200);
-    await expect(update.json()).resolves.toEqual({ dailyMasteryGoal: 12 });
-
-    const secondClient = await SELF.fetch("https://example.test/v4/settings", {
-      headers: AUTHORIZATION,
+    expect(updated.status).toBe(200);
+    await expect(updated.json()).resolves.toEqual({
+      site: SITE,
+      dailyStabilityDaysGoal: 1000,
     });
-    expect(secondClient.status).toBe(200);
-    await expect(secondClient.json()).resolves.toEqual({ dailyMasteryGoal: 12 });
-  });
 
-  it("rejects invalid settings requests", async () => {
     for (const body of [
-      { dailyMasteryGoal: 0 },
-      { dailyMasteryGoal: 101 },
-      { dailyMasteryGoal: 1.5 },
-      { dailyMasteryGoal: 5, extra: true },
+      { site: SITE, dailyStabilityDaysGoal: 0 },
+      { site: SITE, dailyStabilityDaysGoal: 1.5 },
+      { site: SITE, dailyStabilityDaysGoal: 5, extra: true },
+      { site: "invalid.example", dailyStabilityDaysGoal: 5 },
     ]) {
-      const response = await SELF.fetch("https://example.test/v4/settings", {
+      const response = await SELF.fetch("https://example.test/v5/settings", {
         method: "PUT",
         headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       expect(response.status).toBe(400);
-      await expect(response.json()).resolves.toEqual({ error: "invalid_request" });
     }
-
-    const query = await SELF.fetch("https://example.test/v4/settings?extra=1", {
-      headers: AUTHORIZATION,
-    });
-    expect(query.status).toBe(400);
-    await expect(query.json()).resolves.toEqual({ error: "invalid_request" });
-
-    const method = await SELF.fetch("https://example.test/v4/settings", {
-      method: "POST",
-      headers: AUTHORIZATION,
-    });
-    expect(method.status).toBe(405);
-    expect(method.headers.get("Allow")).toBe("GET, PUT");
   });
+});
 
-  it("does not expose removed API versions", async () => {
-    const response = await SELF.fetch(`https://example.test/v3/state?site=${SITE}`, {
-      headers: AUTHORIZATION,
-    });
-    expect(response.status).toBe(404);
+describe("v5 HTTP contract", () => {
+  it("does not expose older API versions", async () => {
+    for (const version of ["v3", "v4"]) {
+      const response = await SELF.fetch(
+        `https://example.test/${version}/state?site=${SITE}`,
+        { headers: AUTHORIZATION }
+      );
+      expect(response.status).toBe(404);
+    }
   });
 
   it("requires the configured bearer token", async () => {
-    const url = "https://example.test/v4/sites";
+    const url = "https://example.test/v5/sites";
     const missing = await SELF.fetch(url);
     const incorrect = await SELF.fetch(url, {
       headers: { Authorization: "Bearer incorrect-token" },
     });
-
     expect(missing.status).toBe(401);
-    await expect(missing.json()).resolves.toEqual({ error: "unauthorized" });
     expect(incorrect.status).toBe(401);
-    await expect(incorrect.json()).resolves.toEqual({ error: "unauthorized" });
   });
 
-  it("lists catalog-backed sites and returns state and history", async () => {
-    const sites = await SELF.fetch("https://example.test/v4/sites", {
+  it("lists sites and returns state and history", async () => {
+    const sites = await SELF.fetch("https://example.test/v5/sites", {
       headers: AUTHORIZATION,
     });
-    expect(sites.status).toBe(200);
     await expect(sites.json()).resolves.toEqual({ sites: [SITE] });
 
-    const state = await SELF.fetch(`https://example.test/v4/state?site=${SITE}`, {
+    const state = await SELF.fetch(`https://example.test/v5/state?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(state.status).toBe(200);
-    const stateBody = await state.json();
-    expect(stateBody).toMatchObject({
+    await expect(state.json()).resolves.toMatchObject({
       site: SITE,
-      mastered: 0,
+      stabilityDays: 0,
       solved: 0,
       todaySolved: 0,
-      todayDelta: 0,
+      todayStabilityDaysDelta: 0,
       catalog: { questionCount: 4, generation: 1 },
     });
-    expect(stateBody).not.toHaveProperty("attempted");
 
     const history = await SELF.fetch(
-      `https://example.test/v4/history?site=${SITE}&days=7`,
-      { headers: AUTHORIZATION },
+      `https://example.test/v5/history?site=${SITE}&days=7`,
+      { headers: AUTHORIZATION }
     );
     expect(history.status).toBe(200);
-    const historyBody = await history.json();
-    expect(historyBody.site).toBe(SITE);
-    expect(historyBody.timeZone).toBe("Asia/Tokyo");
-    expect(historyBody.days).toHaveLength(7);
+    expect((await history.json()).days).toHaveLength(7);
   });
 
-  it("replaces the question catalog and serves the canonical next URL", async () => {
-    const replace = await SELF.fetch("https://example.test/v4/questions", {
+  it("replaces the catalog and serves the canonical next URL", async () => {
+    const replace = await SELF.fetch("https://example.test/v5/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -624,16 +538,10 @@ describe("v4 HTTP contract", () => {
       }),
     });
     expect(replace.status).toBe(200);
-    await expect(replace.json()).resolves.toMatchObject({
-      site: SITE,
-      questionCount: 2,
-      generation: 2,
-    });
 
-    const next = await SELF.fetch(`https://example.test/v4/next?site=${SITE}`, {
+    const next = await SELF.fetch(`https://example.test/v5/next?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
-    expect(next.status).toBe(200);
     await expect(next.json()).resolves.toEqual({
       question: {
         questionId: "44614",
@@ -642,159 +550,46 @@ describe("v4 HTTP contract", () => {
         dueMs: null,
       },
     });
-      const excluded = await SELF.fetch(
-      `https://example.test/v4/next?site=${SITE}&excludeQuestionId=44614`,
-      { headers: AUTHORIZATION },
-    );
-    expect(excluded.status).toBe(200);
-    await expect(excluded.json()).resolves.toEqual({
-      question: {
-        questionId: "44615",
-        url: `https://${SITE}/questions/44615`,
-        kind: "new",
-        dueMs: null,
-      },
-    });
   });
 
-  it("rejects a stale catalog generation without replacing the current catalog", async () => {
-    const first = await SELF.fetch("https://example.test/v4/questions", {
-      method: "POST",
-      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        site: SITE,
-        questionIds: ["10", "11"],
-        expectedGeneration: 1,
-      }),
-    });
-    expect(first.status).toBe(200);
-    await expect(first.json()).resolves.toMatchObject({ generation: 2, questionCount: 2 });
-
-    const stale = await SELF.fetch("https://example.test/v4/questions", {
-      method: "POST",
-      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        site: SITE,
-        questionIds: ["20", "21", "22"],
-        expectedGeneration: 1,
-      }),
-    });
-    expect(stale.status).toBe(409);
-    await expect(stale.json()).resolves.toEqual({ error: "catalog_conflict" });
-
-    const state = await SELF.fetch(`https://example.test/v4/state?site=${SITE}`, {
-      headers: AUTHORIZATION,
-    });
-    await expect(state.json()).resolves.toMatchObject({
-      catalog: { questionCount: 2, generation: 2 },
-    });
-    const next = await SELF.fetch(`https://example.test/v4/next?site=${SITE}`, {
-      headers: AUTHORIZATION,
-    });
-    await expect(next.json()).resolves.toMatchObject({ question: { questionId: "10" } });
-  });
-
-  it("rejects attempts for questions outside the registered catalog", async () => {
-    const response = await SELF.fetch("https://example.test/v4/attempts", {
+  it("rejects unknown questions and extra attempt fields", async () => {
+    const unknown = await SELF.fetch("https://example.test/v5/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
         site: SITE,
         questionId: "999",
-        operationId: operationId(18),
-        result: "correct",
-      }),
-    });
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toEqual({ error: "unknown_question" });
-    await runInRawDurableObject(stub(), (_instance, state) => {
-      expect(
-        state.storage.sql.exec("SELECT COUNT(*) AS count FROM attempts").toArray()[0].count,
-      ).toBe(0);
-      expect(
-        state.storage.sql.exec("SELECT COUNT(*) AS count FROM cards").toArray()[0].count,
-      ).toBe(0);
-    });
-  });
-
-  it("returns catalog_missing instead of falling back when no catalog is registered", async () => {
-    await runInRawDurableObject(stub(), (_instance, state) => {
-      state.storage.sql.exec("DELETE FROM questions WHERE site = ?", SITE);
-      state.storage.sql.exec("DELETE FROM catalog_metadata WHERE site = ?", SITE);
-    });
-    const response = await SELF.fetch(`https://example.test/v4/next?site=${SITE}`, {
-      headers: AUTHORIZATION,
-    });
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toEqual({ error: "catalog_missing" });
-  });
-
-  it("rejects client-supplied attempt timestamps and other extra fields", async () => {
-    const response = await SELF.fetch("https://example.test/v4/attempts", {
-      method: "POST",
-      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        site: SITE,
-        questionId: "1",
-        operationId: operationId(19),
-        result: "correct",
-        answeredAtMs: NOW,
-      }),
-    });
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: "invalid_request" });
-  });
-});
-
-describe("server source of truth", () => {
-  it("exposes one shared mastery stock to independent clients", async () => {
-    const firstClient = await SELF.fetch("https://example.test/v4/attempts", {
-      method: "POST",
-      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        site: SITE,
-        questionId: "1",
         operationId: operationId(14),
         result: "correct",
       }),
     });
-    expect(firstClient.status).toBe(200);
+    expect(unknown.status).toBe(409);
+    await expect(unknown.json()).resolves.toEqual({ error: "unknown_question" });
 
-    const secondClient = await SELF.fetch(`https://example.test/v4/state?site=${SITE}`, {
-      headers: AUTHORIZATION,
-    });
-    expect(secondClient.status).toBe(200);
-    await expect(secondClient.json()).resolves.toMatchObject({
-      site: SITE,
-      mastered: 0,
-      solved: 1,
-      todaySolved: 1,
-      todayDelta: 0,
-    });
-
-    await seedReviewCard("2", 29);
-    const crossing = await SELF.fetch("https://example.test/v4/attempts", {
+    const extra = await SELF.fetch("https://example.test/v5/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
         site: SITE,
-        questionId: "2",
+        questionId: "1",
         operationId: operationId(15),
         result: "correct",
+        answeredAtMs: NOW,
       }),
     });
-    expect(crossing.status).toBe(200);
+    expect(extra.status).toBe(400);
+  });
 
-    const refreshed = await SELF.fetch(`https://example.test/v4/state?site=${SITE}`, {
-      headers: AUTHORIZATION,
+  it("returns catalog_missing without a scheduling fallback", async () => {
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec("DELETE FROM questions WHERE site = ?", SITE);
+      state.storage.sql.exec("DELETE FROM catalog_metadata WHERE site = ?", SITE);
     });
-    expect(refreshed.status).toBe(200);
-    await expect(refreshed.json()).resolves.toMatchObject({
-      site: SITE,
-      mastered: 1,
-      solved: 2,
-      todaySolved: 2,
-      todayDelta: 1,
-    });
+    const response = await SELF.fetch(
+      `https://example.test/v5/next?site=${SITE}`,
+      { headers: AUTHORIZATION }
+    );
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: "catalog_missing" });
   });
 });

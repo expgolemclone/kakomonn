@@ -406,12 +406,6 @@
       return;
     }
 
-    if (pendingCelebration !== null) {
-      copyButton.textContent = "祝福を準備中";
-      copyButton.disabled = true;
-      return;
-    }
-
     if (
       navigationInProgress ||
       !frameDocument?.body ||

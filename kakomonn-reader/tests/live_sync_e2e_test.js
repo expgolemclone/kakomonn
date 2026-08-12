@@ -448,13 +448,13 @@ function chromeDevToolsMcpEntry() {
 function assertSyncState(state) {
   assert.equal(state.site, "chushoks.kakomonn.com");
   assert.match(state.today, /^\d{4}-\d{2}-\d{2}$/);
-  assert.equal(Number.isSafeInteger(state.mastered), true);
-  assert.equal(state.mastered >= 0, true);
+  assert.equal(Number.isSafeInteger(state.stabilityDays), true);
+  assert.equal(state.stabilityDays >= 0, true);
   assert.equal(Number.isSafeInteger(state.solved), true);
   assert.equal(state.solved >= 0, true);
   assert.equal(Number.isSafeInteger(state.todaySolved), true);
   assert.equal(state.todaySolved >= 0, true);
-  assert.equal(Number.isSafeInteger(state.todayDelta), true);
+  assert.equal(Number.isSafeInteger(state.todayStabilityDaysDelta), true);
   assert.equal(
     state.catalog === null ||
       (Number.isSafeInteger(state.catalog?.questionCount) &&
@@ -468,7 +468,7 @@ function assertSyncState(state) {
 
 async function requestSyncState(token) {
   const query = new URLSearchParams({ site: "chushoks.kakomonn.com" });
-  const response = await fetch(`${syncApiOrigin}/v4/state?${query}`, {
+  const response = await fetch(`${syncApiOrigin}/v5/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
@@ -808,7 +808,7 @@ async function configureSyncToken(
   await mcp.tool("fill", { uid: tokenInput, value: token });
   await mcp.tool("click", { uid: saveButton });
 
-  const expectedCount = `定着 ${baseline.mastered}問 / 今日 ${baseline.todaySolved}問`;
+  const expectedCount = `定着 ${baseline.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${baseline.todaySolved}問`;
   return waitUntil("the production sync baseline", async () => {
     const state = await readReaderState(mcp);
     return state.settingsHidden && state.count === expectedCount ? state : null;
@@ -1065,12 +1065,6 @@ async function main() {
   const userDataDir = readEdgeUserDataDir();
   const expectedBuildFingerprint = readExpectedBuildFingerprint();
   const baseline = await requestSyncState(token);
-  if (baseline.mastered % 50 === 49) {
-    throw new Error(
-      "The next attempt could cross a mastery milestone. Run the milestone flow separately before this navigation E2E.",
-    );
-  }
-
   const mcp = new McpClient(userDataDir);
   let pageId = null;
   try {
@@ -1095,7 +1089,7 @@ async function main() {
     );
     assert.equal(
       configuredState.count,
-      `定着 ${baseline.mastered}問 / 今日 ${baseline.todaySolved}問`,
+      `定着 ${baseline.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${baseline.todaySolved}問`,
     );
     await submitCorrectAnswer(mcp);
     await copyMarkdownInRealEdge(mcp);
@@ -1104,12 +1098,7 @@ async function main() {
     assert.equal(finalState.today, baseline.today);
     assert.equal(
       browserState.count,
-      `定着 ${finalState.mastered}問 / 今日 ${finalState.todaySolved}問`,
-    );
-    assert.equal(
-      Math.abs(finalState.mastered - baseline.mastered) <= 1,
-      true,
-      "one FSRS attempt can change mastered stock by at most one",
+      `定着 ${finalState.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${finalState.todaySolved}問`,
     );
     console.log(
       JSON.stringify({
@@ -1117,8 +1106,8 @@ async function main() {
         buildFingerprint: expectedBuildFingerprint,
         frameUrl: browserState.frameURL,
         markdownHeading: expectedMarkdownHeading,
-        masteredAfter: finalState.mastered,
-        masteredBefore: baseline.mastered,
+        stabilityDaysAfter: finalState.stabilityDays,
+        stabilityDaysBefore: baseline.stabilityDays,
         status: "passed",
       }),
     );

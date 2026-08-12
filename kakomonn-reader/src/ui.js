@@ -145,12 +145,15 @@
   );
 
   function renderCount() {
-    const mastered = masteredCount === null ? "--" : masteredCount;
+    const stabilityDays =
+      stabilityDaysCount === null
+        ? "--"
+        : stabilityDaysCount.toLocaleString("ja-JP");
     const todaySolved = todaySolvedCount === null ? "--" : todaySolvedCount;
-    countBadge.textContent = `定着 ${mastered}問 / 今日 ${todaySolved}問`;
+    countBadge.textContent = `定着 ${stabilityDays}日 / 今日 ${todaySolved}問`;
     countBadge.setAttribute(
       "aria-label",
-      `定着問題数 ${mastered}問, 今日解いた問題数 ${todaySolved}問`
+      `定着日数 ${stabilityDays}日, 今日解いた問題数 ${todaySolved}問`
     );
   }
 

@@ -29,13 +29,13 @@
       typeof value === "object" &&
       value.site === SITE_ID &&
       /^\d{4}-\d{2}-\d{2}$/.test(value.today) &&
-      Number.isSafeInteger(value.mastered) &&
-      value.mastered >= 0 &&
+      Number.isSafeInteger(value.stabilityDays) &&
+      value.stabilityDays >= 0 &&
       Number.isSafeInteger(value.solved) &&
       value.solved >= 0 &&
       Number.isSafeInteger(value.todaySolved) &&
       value.todaySolved >= 0 &&
-      Number.isSafeInteger(value.todayDelta) &&
+      Number.isSafeInteger(value.todayStabilityDaysDelta) &&
       validCatalog
     );
   }
@@ -52,19 +52,14 @@
       value.attempt.previousStability >= 0 &&
       Number.isFinite(value.attempt.stability) &&
       value.attempt.stability >= 0 &&
-      [-1, 0, 1].includes(value.attempt.masteryDelta) &&
       value.totals !== null &&
       typeof value.totals === "object" &&
-      Number.isSafeInteger(value.totals.mastered) &&
-      value.totals.mastered >= 0 &&
+      Number.isSafeInteger(value.totals.stabilityDays) &&
+      value.totals.stabilityDays >= 0 &&
       Number.isSafeInteger(value.totals.solved) &&
       value.totals.solved >= 0 &&
       Number.isSafeInteger(value.totals.todaySolved) &&
-      value.totals.todaySolved >= 0 &&
-      (value.completedMilestone === null ||
-        (Number.isSafeInteger(value.completedMilestone) &&
-          value.completedMilestone > 0 &&
-          value.completedMilestone % MILESTONE_INTERVAL === 0))
+      value.totals.todaySolved >= 0
     );
   }
 
@@ -173,19 +168,6 @@
     return typeof value.nextURL === "string" && isScheduledQuestionURL(value.nextURL);
   }
 
-  function isPendingCelebration(value) {
-    return (
-      value !== null &&
-      typeof value === "object" &&
-      value.site === SITE_ID &&
-      Number.isSafeInteger(value.milestone) &&
-      value.milestone > 0 &&
-      value.milestone % MILESTONE_INTERVAL === 0 &&
-      typeof value.sourcePageURL === "string" &&
-      isSitePageURL(value.sourcePageURL)
-    );
-  }
-
   function isScheduledQuestionURL(value) {
     try {
       const url = new URL(value);
@@ -284,13 +266,13 @@
 
   function requestSyncState(token) {
     const parameters = new URLSearchParams({ site: SITE_ID });
-    return requestSyncResponse("GET", `/v4/state?${parameters}`, token, isSyncState);
+    return requestSyncResponse("GET", `/v5/state?${parameters}`, token, isSyncState);
   }
 
   function requestAttemptResult(token, operation) {
     return requestSyncResponse(
       "POST",
-      "/v4/attempts",
+      "/v5/attempts",
       token,
       isAttemptResponse,
       {
@@ -307,11 +289,11 @@
     if (excludeQuestionId !== null) {
       parameters.set("excludeQuestionId", excludeQuestionId);
     }
-    return requestSyncResponse("GET", `/v4/next?${parameters}`, token, isNextResponse);
+    return requestSyncResponse("GET", `/v5/next?${parameters}`, token, isNextResponse);
   }
 
   function requestCatalogUpdate(token, questionIds, expectedGeneration) {
-    return requestSyncResponse("POST", "/v4/questions", token, isCatalogResponse, {
+    return requestSyncResponse("POST", "/v5/questions", token, isCatalogResponse, {
       site: SITE_ID,
       questionIds,
       expectedGeneration,
@@ -319,7 +301,7 @@
   }
 
   function requestSpeechTokenResult(token) {
-    return requestSyncResponse("POST", "/v4/speech-token", token, isSpeechTokenResponse);
+    return requestSyncResponse("POST", "/v5/speech-token", token, isSpeechTokenResponse);
   }
 
   function clearAzureSpeechToken() {
@@ -379,7 +361,7 @@
     if (!isSyncState(state)) {
       throw new SyncRequestError("invalid_response");
     }
-    masteredCount = state.mastered;
+    stabilityDaysCount = state.stabilityDays;
     todaySolvedCount = state.todaySolved;
     renderCount();
   }
@@ -410,11 +392,6 @@
     }
     await GM.setValue(PENDING_ANSWER_KEY, completed);
     pendingAnswer = completed;
-  }
-
-  async function clearPendingCelebration() {
-    await GM.deleteValue(PENDING_CELEBRATION_KEY);
-    pendingCelebration = null;
   }
 
   function openSyncSettings(required = false) {
@@ -698,8 +675,6 @@
         syncReady = true;
         if (pendingAnswer !== null) {
           setStatus("未完了の解答同期があります");
-        } else if (pendingCelebration !== null) {
-          setStatus(`${pendingCelebration.milestone}問定着.祝福を準備中`);
         } else {
           setStatus("待機中");
         }
@@ -713,7 +688,6 @@
         syncPromise = null;
         updateSyncDependentControls();
         void maybeContinuePendingAnswerNavigation();
-        void maybeContinuePendingCelebration();
         processCurrentPageSpeech();
       }
     })();
@@ -763,25 +737,18 @@
         syncTokenInput.disabled = false;
         updateSyncDependentControls();
         void maybeContinuePendingAnswerNavigation();
-        void maybeContinuePendingCelebration();
         processCurrentPageSpeech();
       }
     })();
     return syncPromise;
   }
 
-  async function restorePendingState(storedAnswer, storedCelebration) {
+  async function restorePendingState(storedAnswer) {
     if (storedAnswer !== null && !isPendingAnswer(storedAnswer)) {
       await GM.deleteValue(PENDING_ANSWER_KEY);
       pendingAnswer = null;
     } else {
       pendingAnswer = storedAnswer;
-    }
-    if (storedCelebration !== null && !isPendingCelebration(storedCelebration)) {
-      await GM.deleteValue(PENDING_CELEBRATION_KEY);
-      pendingCelebration = null;
-    } else {
-      pendingCelebration = storedCelebration;
     }
   }
 
@@ -793,10 +760,9 @@
       return;
     }
     try {
-      const [storedToken, storedPendingAnswer, storedCelebration] = await Promise.all([
+      const [storedToken, storedPendingAnswer] = await Promise.all([
         GM.getValue(SYNC_TOKEN_KEY, ""),
         GM.getValue(PENDING_ANSWER_KEY, null),
-        GM.getValue(PENDING_CELEBRATION_KEY, null),
       ]);
       if (typeof storedToken !== "string") {
         await GM.deleteValue(SYNC_TOKEN_KEY);
@@ -805,7 +771,7 @@
         syncToken = storedToken.trim();
       }
       clearAzureSpeechToken();
-      await restorePendingState(storedPendingAnswer, storedCelebration);
+      await restorePendingState(storedPendingAnswer);
       if (!syncToken) {
         syncReady = false;
         setStatus("同期トークンを設定してください");
@@ -827,7 +793,6 @@
       document.visibilityState === "visible" &&
       syncToken &&
       pendingAnswer === null &&
-      pendingCelebration === null &&
       !nextQuestionOperationInProgress &&
       syncSettings.hidden
     ) {

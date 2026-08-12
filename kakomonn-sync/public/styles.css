@@ -25,7 +25,7 @@ h2 { margin-bottom: 10px; letter-spacing: -0.025em; }
 .eyebrow { margin-bottom: 8px; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .16em; }
 .header-actions { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: .85rem; }
 main { flex: 1; padding: 34px 0 48px; }
-.panel, .mastery-card, .goal-card, .history-card { border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 94%, transparent); border-radius: 18px; box-shadow: 0 18px 70px rgba(0,0,0,.18); }
+.panel, .stability-card, .goal-card, .history-card { border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 94%, transparent); border-radius: 18px; box-shadow: 0 18px 70px rgba(0,0,0,.18); }
 .panel { padding: clamp(24px, 5vw, 48px); max-width: 720px; }
 .auth-panel p { color: var(--muted); max-width: 58ch; }
 .auth-form { margin-top: 28px; }
@@ -41,13 +41,13 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .toolbar { display: flex; align-items: end; gap: 12px; margin-bottom: 18px; }
 .toolbar label { margin: 0; align-self: center; }
 .toolbar select { min-width: min(360px, 60vw); }
-.mastery-card { padding: clamp(24px, 5vw, 46px); display: grid; grid-template-columns: 1fr auto; gap: 18px 30px; align-items: center; }
-.mastery-card h2 { margin: 0; font-size: clamp(1.25rem, 3vw, 2rem); }
-.mastery-number { display: flex; align-items: baseline; gap: 8px; }
-.mastery-number strong { font-size: clamp(4.5rem, 14vw, 9rem); line-height: .86; letter-spacing: -.07em; color: var(--accent); font-variant-numeric: tabular-nums; }
-.mastery-number span { color: var(--muted); font-size: 1.2rem; }
-.mastery-meta { grid-column: 1 / -1; display: flex; gap: 24px; font-size: clamp(1rem, 2.5vw, 1.3rem); font-weight: 750; }
-.mastery-meta strong { color: var(--accent-2); font-variant-numeric: tabular-nums; }
+.stability-card { padding: clamp(24px, 5vw, 46px); display: grid; grid-template-columns: 1fr auto; gap: 18px 30px; align-items: center; }
+.stability-card h2 { margin: 0; font-size: clamp(1.25rem, 3vw, 2rem); }
+.stability-number { display: flex; align-items: baseline; gap: 8px; }
+.stability-number strong { font-size: clamp(4.5rem, 14vw, 9rem); line-height: .86; letter-spacing: -.07em; color: var(--accent); font-variant-numeric: tabular-nums; }
+.stability-number span { color: var(--muted); font-size: 1.2rem; }
+.stability-meta { grid-column: 1 / -1; display: flex; gap: 24px; font-size: clamp(1rem, 2.5vw, 1.3rem); font-weight: 750; }
+.stability-meta strong { color: var(--accent-2); font-variant-numeric: tabular-nums; }
 .goal-card { margin-top: 18px; padding: 24px 28px; display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; }
 .goal-card h2 { margin: 0; }
 .goal-controls { display: flex; align-items: end; gap: 8px; }
@@ -64,16 +64,16 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .legend-line { position: relative; width: 18px; height: 2px; background: var(--activity); }
 .legend-line::after { content: ""; position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; border: 2px solid var(--activity); border-radius: 50%; background: var(--surface); transform: translate(-50%, -50%); }
 .chart-wrap { overflow-x: auto; padding-bottom: 4px; }
-#mastery-chart { width: 100%; min-width: 560px; display: block; }
+#stability-chart { width: 100%; min-width: 560px; display: block; }
 .grid-line { stroke: #2a3444; stroke-width: 1; }
-.mastery-bar { fill: color-mix(in srgb, var(--accent) 24%, transparent); stroke: var(--accent); stroke-width: 2; }
+.stability-bar { fill: color-mix(in srgb, var(--accent) 24%, transparent); stroke: var(--accent); stroke-width: 2; }
 .solved-line { stroke: var(--activity); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
 .solved-point { fill: var(--surface); stroke: var(--activity); stroke-width: 4; }
-.mastery-value-label, .solved-value-label { font-size: 12px; font-weight: 850; }
-.mastery-value-label { fill: var(--accent); }
+.stability-value-label, .solved-value-label { font-size: 12px; font-weight: 850; }
+.stability-value-label { fill: var(--accent); }
 .solved-value-label { fill: var(--activity); }
 .axis-label { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
-.mastery-axis-label { fill: var(--accent); }
+.stability-axis-label { fill: var(--accent); }
 .solved-axis-label { fill: var(--activity); }
 .date-label { fill: #99a5b6; font-size: 12px; }
 .muted { color: var(--muted); }
@@ -91,12 +91,12 @@ dialog::backdrop { background: rgba(0,0,0,.68); }
   main { padding-top: 20px; }
   .input-row, .toolbar, .goal-controls { align-items: stretch; flex-direction: column; }
   .toolbar select { min-width: 100%; width: 100%; }
-  .mastery-card { grid-template-columns: 1fr; }
-  .mastery-number { justify-content: start; }
+  .stability-card { grid-template-columns: 1fr; }
+  .stability-number { justify-content: start; }
   .goal-card { grid-template-columns: 1fr; }
   .goal-progress { grid-column: 1; }
   .goal-controls input { width: 100%; }
-  .mastery-meta { gap: 14px; flex-wrap: wrap; }
+  .stability-meta { gap: 14px; flex-wrap: wrap; }
   .chart-heading { align-items: start; flex-direction: column; gap: 12px; }
   .chart-legend { justify-content: flex-start; }
 }

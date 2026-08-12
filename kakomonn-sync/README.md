@@ -1,6 +1,6 @@
 # kakomonn-sync
 
-`kakomonn-reader`のサイト別の定着状態と解答履歴を端末間で共有し,直近7日間の定着問題数と日別解答問題数をgraphで表示するCloudflare Workerです. 認証済み端末へAzure Speechの短期tokenも発行します.
+`kakomonn-reader`のサイト別の定着状態と解答履歴を端末間で共有し,直近7日間の定着日数と日別解答問題数をgraphで表示するCloudflare Workerです. 認証済み端末へAzure Speechの短期tokenも発行します.
 
 ## 学習ログ
 
@@ -10,7 +10,7 @@ productionのWorker rootを開くと,独立した学習ログを表示します.
 https://kakomonn-count-sync.expgolem-lab.workers.dev/
 ```
 
-初回だけ`kakomonn-reader`と同じ同期tokenを入力します.tokenと最後に表示したサイトだけをこのoriginの`localStorage`へ保存します.今日の定着純増目標はWorkerへ保存するため,同じ同期tokenを使用する他の端末でも共有されます.browserのlocalStorageへ保存していた旧目標値は読み込まず,自動移行しません.
+初回だけ`kakomonn-reader`と同じ同期tokenを入力します.tokenと最後に表示したサイトだけをこのoriginの`localStorage`へ保存します.今日の定着日数純増目標はsiteごとにWorkerへ保存するため,同じ同期tokenを使用する他の端末でも共有されます.旧目標値は単位が異なるため移行せず,各siteを30日で初期化します.
 
 ## ローカルテスト
 
@@ -49,23 +49,23 @@ npm run deploy:kakomonn-sync
 
 ## API
 
-APIは`/v4`だけを提供し,LearningState Durable Objectを唯一のsource of truthとします.
+APIは`/v5`だけを提供し,LearningState Durable Objectを唯一のsource of truthとします.
 
-- `GET /v4/sites`は,問題catalogを登録済みのサイト一覧を返します.
-- `GET /v4/state?site=<host>`は,定着問題数,解いた問題数,今日解いた問題数,今日の定着純増,問題catalog情報を返します.
-- `GET /v4/history?site=<host>&days=<1-31>`は,日本時間の日別定着問題数と解いた問題数を返します.
-- `POST /v4/attempts`は,`site`,`questionId`,`operationId`,`result`を受け取ります.同じ操作の再送は重複記録せず,異なるpayloadで同じ操作IDを使用した場合は拒否します.
-- `GET /v4/next`は,FSRSに基づく次の問題を返します.
-- `POST /v4/questions`は,siteの問題catalogを世代番号付きで置き換えます.
-- `GET /v4/settings`は,共有設定として`dailyMasteryGoal`を返します.`PUT /v4/settings`は,1から100までの整数で同じ値を更新します.
-- `POST /v4/speech-token`は,有効期間600秒のAzure Speech tokenを返します.
+- `GET /v5/sites`は,問題catalogを登録済みのサイト一覧を返します.
+- `GET /v5/state?site=<host>`は,定着日数,解いた問題数,今日解いた問題数,今日の定着日数純増,問題catalog情報を返します.
+- `GET /v5/history?site=<host>&days=<1-31>`は,日本時間の日別定着日数と解いた問題数を返します.計測開始前の定着日数は`null`です.
+- `POST /v5/attempts`は,`site`,`questionId`,`operationId`,`result`を受け取ります.同じ操作の再送は重複記録せず,異なるpayloadで同じ操作IDを使用した場合は拒否します.
+- `GET /v5/next`は,FSRSに基づく次の問題を返します.
+- `POST /v5/questions`は,siteの問題catalogを世代番号付きで置き換えます.
+- `GET /v5/settings?site=<host>`は,site別の`dailyStabilityDaysGoal`を返します.`PUT /v5/settings`は,siteと1以上の整数で同じ値を更新します.
+- `POST /v5/speech-token`は,有効期間600秒のAzure Speech tokenを返します.
 
 `kakomonn-reader`はSpeech tokenを約9分間再利用し,`ja-JP-NanamiNeural`のMP3をAzureから直接取得します.Workerは音声dataを中継せず,Workers AI,Durable Objects,R2も音声処理には使用しません.Azure Speech F0の無料枠を超過した場合は読み上げを停止し,別の音声へ切り替えません.
 
-定着問題数には現在の問題catalogに含まれるcardだけを数えます.catalogから外れたcardは再登録時に学習状態を復元できるよう保存しますが,定着数と次問候補には含めません.catalog置換で定着数が変化した場合は,その日の定着履歴へ新しい値を記録します.
+定着日数は,現在の問題catalogに含まれる全cardのFSRS stabilityを合計してから整数へ切り捨てた値です.未回答問題は0日として扱います.catalogから外れたcardは再登録時に学習状態を復元できるよう保存しますが,定着日数と次問候補には含めません.catalog置換で定着日数が変化した場合も,その日の履歴へ新しい値を記録します.
 
 解いた問題数はsite内の問題IDの種類数です.同じ問題を複数回解いても累計では1問として数え,日別では同じ日に繰り返しても1問として数えます.別の日に同じ問題を解いた場合は,各日の解いた問題数へ1問ずつ数えます.正答,誤答,スキップはいずれも解答履歴へ含めます.過去に解いた問題は,現在の問題catalogから外れても累計へ含めます.
 
 ## 互換性方針
 
-v1,v2,v3 API,DailyCount class,旧SQLite schema移行は提供しません.DailyCount namespaceと保存dataは廃棄し,LearningStateへ移行しません.旧APIへのfallback,旧形式の自動変換,互換routeは追加しません.API契約を変更する場合はversionを上げ,clientとserverを同時に更新します.廃止versionのdataは現行versionへ暗黙移行せず,必要な移行を個別に設計して明示的に実行します.
+v1,v2,v3,v4 APIは提供しません.v4 LearningStateのcard,attempt,catalog,解答履歴はschema v2へ明示的に移行し,30日判定の履歴と目標設定は破棄します.旧APIへのfallbackや互換routeは追加しません.API契約を変更する場合はversionを上げ,clientとserverを同時に更新します.

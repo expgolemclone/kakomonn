@@ -9,11 +9,11 @@ const site = "chushoks.kakomonn.com";
 const otherSite = "shindans.kakomonn.com";
 const attemptedQuestionCountHistory = [18, 22, 19, 26, 31, 24, 28];
 const deltaHistory = [null, 112, -14, 0, 138, 106, 104];
-const history = [null, 9307, 9412, 9550, 9688, 9794, 9912].map((stabilityDays, index) => ({
+const history = [null, 9307, 9412, 9550, 9688, 9794, 9912].map((closingStabilityDays, index) => ({
   date: `2026-08-${String(index + 4).padStart(2, "0")}`,
-  stabilityDays,
+  closingStabilityDays,
   stabilityDaysDelta: deltaHistory[index],
-  attemptedQuestionCount: attemptedQuestionCountHistory[index],
+  dailyAttemptedQuestionCount: attemptedQuestionCountHistory[index],
 }));
 const dailyDetails = {
   site,
@@ -30,10 +30,10 @@ const dailyDetails = {
       site,
       operation_id: "00000000000000000000000000000001",
       question_id: "44615",
-      answered_at_ms: 1786320000000,
-      result: "correct",
-      previous_stability: 31.25,
-      resulting_stability: 42.75,
+      attempted_at_ms: 1786320000000,
+      answer_result: "correct",
+      previous_card_stability_days: 31.25,
+      resulting_card_stability_days: 42.75,
     }],
   },
 };
@@ -65,8 +65,8 @@ async function installApiMock(page) {
         ["kakomonn-dashboard.site", siteValue],
       ]);
       const settingsValues = new Map([
-        [siteValue, { site: siteValue, dailyStabilityDaysGoal: 30 }],
-        [otherSiteValue, { site: otherSiteValue, dailyStabilityDaysGoal: 100 }],
+        [siteValue, { site: siteValue, dailyStabilityDaysDeltaGoal: 30 }],
+        [otherSiteValue, { site: otherSiteValue, dailyStabilityDaysDeltaGoal: 100 }],
       ]);
       window.__delayedSite = "";
       window.__delayedResolvers = [];
@@ -110,10 +110,10 @@ async function installApiMock(page) {
         if (headers.get("Authorization") !== `Bearer ${tokenValue}`) {
           return respond(401, { error: "unauthorized" });
         }
-        if (url.pathname === "/v6/sites") {
+        if (url.pathname === "/v7/sites") {
           return respond(200, { sites: [siteValue, otherSiteValue] });
         }
-        if (url.pathname === "/v6/state") {
+        if (url.pathname === "/v7/state") {
           const requestedSite = url.searchParams.get("site");
           if (requestedSite === window.__delayedSite) {
             await new Promise((resolve) => window.__delayedResolvers.push(resolve));
@@ -121,14 +121,16 @@ async function installApiMock(page) {
           return respond(200, {
             site: requestedSite,
             today: "2026-08-10",
-            stabilityDays: requestedSite === siteValue ? 9912 : 2999,
-            attemptedQuestionCount: requestedSite === siteValue ? 640 : 100,
-            todayAttemptedQuestionCount: requestedSite === siteValue ? 28 : 4,
-            todayStabilityDaysDelta: requestedSite === siteValue ? 104 : 21,
+            learningMetrics: {
+              stabilityDays: requestedSite === siteValue ? 9912 : 2999,
+              todayStabilityDaysDelta: requestedSite === siteValue ? 104 : 21,
+              attemptedQuestionCount: requestedSite === siteValue ? 640 : 100,
+              todayAttemptedQuestionCount: requestedSite === siteValue ? 28 : 4,
+            },
             catalog: { questionCount: 999, updatedAtMs: Date.now() },
           });
         }
-        if (url.pathname === "/v6/history") {
+        if (url.pathname === "/v7/history") {
           const requestedSite = url.searchParams.get("site");
           if (requestedSite === window.__delayedSite) {
             await new Promise((resolve) => window.__delayedResolvers.push(resolve));
@@ -139,10 +141,10 @@ async function installApiMock(page) {
             today: "2026-08-10",
             days: requestedSite === siteValue
               ? historyValue
-              : historyValue.map((day) => ({ ...day, stabilityDays: 2999 })),
+              : historyValue.map((day) => ({ ...day, closingStabilityDays: 2999 })),
           });
         }
-        if (url.pathname === "/v6/daily-details") {
+        if (url.pathname === "/v7/daily-details") {
           const requestedSite = url.searchParams.get("site");
           const date = url.searchParams.get("date");
           if (date === window.__delayedDetailDate) {
@@ -157,10 +159,10 @@ async function installApiMock(page) {
             tables: { stability_history: [], attempts: [] },
           });
         }
-        if (url.pathname === "/v6/settings" && (init.method ?? "GET") === "GET") {
+        if (url.pathname === "/v7/settings" && (init.method ?? "GET") === "GET") {
           return respond(200, settingsValues.get(url.searchParams.get("site")));
         }
-        if (url.pathname === "/v6/settings" && init.method === "PUT") {
+        if (url.pathname === "/v7/settings" && init.method === "PUT") {
           const settingsValue = JSON.parse(init.body);
           settingsValues.set(settingsValue.site, settingsValue);
           return respond(200, settingsValue);
@@ -184,10 +186,15 @@ async function assertDashboard(page) {
 
   assert.equal(await page.locator("#stability-title").innerText(), "stabilityDays");
   assert.equal(await page.locator("#stability-days").innerText(), "9,912");
-  assert.equal(await page.locator(".stability-meta").innerText(), "todayStabilityDaysDelta +104日\ndailyStabilityDaysGoal +30日");
+  assert.equal(await page.locator(".stability-card .stability-meta").innerText(), "todayStabilityDaysDelta +104日\ndailyStabilityDaysDeltaGoal +30日");
   assert.equal(await page.locator("#today-delta").innerText(), "todayStabilityDaysDelta +104日");
-  assert.equal(await page.locator("#goal-label").innerText(), "dailyStabilityDaysGoal +30日");
-  assert.equal(await page.locator("#goal-progress").innerText(), "todayStabilityDaysDelta +104日 / dailyStabilityDaysGoal +30日");
+  assert.equal(await page.locator("#goal-label").innerText(), "dailyStabilityDaysDeltaGoal +30日");
+  assert.equal(await page.locator("#goal-progress").innerText(), "todayStabilityDaysDelta +104日 / dailyStabilityDaysDeltaGoal +30日");
+  assert.equal(await page.locator("#goal-title").innerText(), "dailyStabilityDaysDeltaGoal");
+  assert.equal(await page.locator('label[for="daily-goal"]').innerText(), "dailyStabilityDaysDeltaGoal");
+  assert.equal(await page.locator("#metrics-title").innerText(), "attemptedQuestionCount");
+  assert.equal(await page.locator("#attempted-question-count").innerText(), "640");
+  assert.equal(await page.locator("#today-attempted-question-count").innerText(), "28");
   assert.equal(await page.locator("#history-title").innerText(), "stabilityDaysDeltaの7日推移");
   assert.equal(await page.locator("#stability-chart .chart-day").count(), 7);
   assert.equal(await page.locator("#stability-chart rect.delta-bar").count(), 6);
@@ -207,12 +214,12 @@ async function assertDashboard(page) {
   assert.equal(text.includes("解いた問題数"), false);
   assert.equal(text.includes("30日以上"), false);
   assert.equal(text.includes("祝福"), false);
-  assert.equal(await page.locator(".goal-card").innerText().then((value) => value.includes("解いた問題数")), false);
+  assert.equal(await page.locator(".goal-card").allInnerTexts().then((values) => values.some((value) => value.includes("解いた問題数"))), false);
   const calls = await page.evaluate(() => window.__apiCalls);
-  assert.equal(calls.some((call) => call.pathname.startsWith("/v4/")), false);
-  assert.equal(calls.filter((call) => call.pathname === "/v6/state").length, 1);
-  assert.equal(calls.filter((call) => call.pathname === "/v6/history").length, 1);
-  assert.equal(calls.filter((call) => call.pathname === "/v6/settings" && call.method === "GET").length, 1);
+  assert.equal(calls.some((call) => !call.pathname.startsWith("/v7/")), false);
+  assert.equal(calls.filter((call) => call.pathname === "/v7/state").length, 1);
+  assert.equal(calls.filter((call) => call.pathname === "/v7/history").length, 1);
+  assert.equal(calls.filter((call) => call.pathname === "/v7/settings" && call.method === "GET").length, 1);
   assert.deepEqual(errors, []);
 
   await page.locator('[data-chart-date="2026-08-10"]').click();
@@ -220,7 +227,7 @@ async function assertDashboard(page) {
   assert.equal(await page.locator('[data-chart-date="2026-08-10"]').getAttribute("aria-pressed"), "true");
   assert.equal(await page.locator("#daily-details-date").innerText(), "2026-08-10");
   assert.equal(await page.locator("#stability-history-table th").allInnerTexts().then((values) => values.join("\n")), "site\ndate\nopening_stability_days\nclosing_stability_days");
-  assert.equal(await page.locator("#attempts-table th").allInnerTexts().then((values) => values.join("\n")), "site\noperation_id\nquestion_id\nanswered_at_ms\nresult\nprevious_stability\nresulting_stability");
+  assert.equal(await page.locator("#attempts-table th").allInnerTexts().then((values) => values.join("\n")), "site\noperation_id\nquestion_id\nattempted_at_ms\nanswer_result\nprevious_card_stability_days\nresulting_card_stability_days");
   assert.equal(await page.locator("#attempts-table tbody").innerText().then((value) => value.includes("1786320000000")), true);
   assert.equal(await page.locator("#attempts-table tbody").innerText().then((value) => value.includes("1,786,320,000,000")), false);
 
@@ -248,15 +255,15 @@ async function assertDashboard(page) {
 
   await page.locator("#daily-goal").fill("250");
   await page.locator("#save-goal").click();
-  await page.waitForFunction(() => document.querySelector("#goal-label")?.textContent === "dailyStabilityDaysGoal +250日");
-  assert.equal(await page.locator("#goal-label").innerText(), "dailyStabilityDaysGoal +250日");
-  assert.equal(await page.locator("#goal-progress").innerText(), "todayStabilityDaysDelta +104日 / dailyStabilityDaysGoal +250日");
+  await page.waitForFunction(() => document.querySelector("#goal-label")?.textContent === "dailyStabilityDaysDeltaGoal +250日");
+  assert.equal(await page.locator("#goal-label").innerText(), "dailyStabilityDaysDeltaGoal +250日");
+  assert.equal(await page.locator("#goal-progress").innerText(), "todayStabilityDaysDelta +104日 / dailyStabilityDaysDeltaGoal +250日");
   assert.equal(
     await page.evaluate(() => localStorage.getItem("今日の定着日数純増目標")),
     null,
   );
   const updatedCalls = await page.evaluate(() => window.__apiCalls);
-  assert.equal(updatedCalls.filter((call) => call.pathname === "/v6/settings" && call.method === "PUT").length, 1);
+  assert.equal(updatedCalls.filter((call) => call.pathname === "/v7/settings" && call.method === "PUT").length, 1);
 
   await page.evaluate((siteValue) => { window.__delayedSite = siteValue; }, otherSite);
   await page.locator("#site-select").selectOption(otherSite);
@@ -276,7 +283,7 @@ async function assertDashboard(page) {
   await page.locator("#refresh-button").click();
   await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "更新日 2026-08-10");
   const finalCalls = await page.evaluate(() => window.__apiCalls);
-  const finalStateCall = finalCalls.filter((call) => call.pathname === "/v6/state").at(-1);
+  const finalStateCall = finalCalls.filter((call) => call.pathname === "/v7/state").at(-1);
   assert.equal(finalStateCall.authorization, `Bearer ${token}`);
 }
 

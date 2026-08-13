@@ -1,6 +1,6 @@
 import { isSite } from "../auth.js";
-import { isDailyStabilitySettings } from "../contracts.js";
-import { getStabilityStateStub } from "../learning-store.js";
+import { isDailyStabilityDeltaSettings } from "../contracts.js";
+import { getLearningStateStub } from "../learning-store.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
 function singleSite(url) {
@@ -17,7 +17,7 @@ function singleSite(url) {
 }
 
 export async function handleSettings(request, url, env) {
-  const stub = getStabilityStateStub(env);
+  const stub = getLearningStateStub(env);
   if (request.method === "GET") {
     const site = singleSite(url);
     if (site === null) {
@@ -35,10 +35,10 @@ export async function handleSettings(request, url, env) {
   } catch {
     return errorResponse("invalid_request", 400);
   }
-  if (!isDailyStabilitySettings(body) || !isSite(body.site)) {
+  if (!isDailyStabilityDeltaSettings(body) || !isSite(body.site)) {
     return errorResponse("invalid_request", 400);
   }
   return jsonResponse(
-    await stub.updateSettings(body.site, body.dailyStabilityDaysGoal)
+    await stub.updateSettings(body.site, body.dailyStabilityDaysDeltaGoal)
   );
 }

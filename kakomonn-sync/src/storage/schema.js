@@ -1,7 +1,7 @@
 import { getTokyoDate } from "../dates.js";
 
-const CURRENT_SCHEMA_VERSION = 2;
-const DEFAULT_DAILY_STABILITY_DAYS_GOAL = 30;
+const CURRENT_SCHEMA_VERSION = 3;
+export const DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL = 30;
 
 function tableDefinition(storage, tableName) {
   return storage.sql
@@ -30,10 +30,10 @@ function createCurrentTables(storage) {
       site TEXT NOT NULL,
       operation_id TEXT NOT NULL,
       question_id TEXT NOT NULL,
-      answered_at_ms INTEGER NOT NULL,
-      result TEXT NOT NULL CHECK (result IN ('correct', 'incorrect')),
-      previous_stability REAL NOT NULL CHECK (previous_stability >= 0),
-      resulting_stability REAL NOT NULL CHECK (resulting_stability >= 0),
+      attempted_at_ms INTEGER NOT NULL,
+      answer_result TEXT NOT NULL CHECK (answer_result IN ('correct', 'incorrect')),
+      previous_card_stability_days REAL NOT NULL CHECK (previous_card_stability_days >= 0),
+      resulting_card_stability_days REAL NOT NULL CHECK (resulting_card_stability_days >= 0),
       PRIMARY KEY (operation_id)
     ) WITHOUT ROWID;
 
@@ -60,7 +60,7 @@ function createCurrentTables(storage) {
 
     CREATE TABLE site_settings (
       site TEXT PRIMARY KEY,
-      daily_stability_days_goal INTEGER NOT NULL CHECK (daily_stability_days_goal >= 1)
+      daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1)
     ) WITHOUT ROWID;
 
     CREATE TABLE schema_metadata (
@@ -70,6 +70,48 @@ function createCurrentTables(storage) {
 
     INSERT INTO schema_metadata (singleton, version)
     VALUES (1, ${CURRENT_SCHEMA_VERSION});
+  `);
+}
+
+function migrateSchemaV2ToV3(storage) {
+  storage.sql.exec(`
+    ALTER TABLE attempts RENAME TO attempts_v2;
+
+    CREATE TABLE attempts (
+      site TEXT NOT NULL,
+      operation_id TEXT NOT NULL,
+      question_id TEXT NOT NULL,
+      attempted_at_ms INTEGER NOT NULL,
+      answer_result TEXT NOT NULL CHECK (answer_result IN ('correct', 'incorrect')),
+      previous_card_stability_days REAL NOT NULL CHECK (previous_card_stability_days >= 0),
+      resulting_card_stability_days REAL NOT NULL CHECK (resulting_card_stability_days >= 0),
+      PRIMARY KEY (operation_id)
+    ) WITHOUT ROWID;
+
+    INSERT INTO attempts (
+      site, operation_id, question_id, attempted_at_ms, answer_result,
+      previous_card_stability_days, resulting_card_stability_days
+    )
+    SELECT site, operation_id, question_id, answered_at_ms, result,
+           previous_stability, resulting_stability
+    FROM attempts_v2;
+
+    DROP TABLE attempts_v2;
+
+    ALTER TABLE site_settings RENAME TO site_settings_v2;
+
+    CREATE TABLE site_settings (
+      site TEXT PRIMARY KEY,
+      daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1)
+    ) WITHOUT ROWID;
+
+    INSERT INTO site_settings (site, daily_stability_days_delta_goal)
+    SELECT site, daily_stability_days_goal
+    FROM site_settings_v2;
+
+    DROP TABLE site_settings_v2;
+
+    UPDATE schema_metadata SET version = ${CURRENT_SCHEMA_VERSION} WHERE singleton = 1;
   `);
 }
 
@@ -84,16 +126,16 @@ function migrateLegacySchema(storage, today) {
       site TEXT NOT NULL,
       operation_id TEXT NOT NULL,
       question_id TEXT NOT NULL,
-      answered_at_ms INTEGER NOT NULL,
-      result TEXT NOT NULL CHECK (result IN ('correct', 'incorrect')),
-      previous_stability REAL NOT NULL CHECK (previous_stability >= 0),
-      resulting_stability REAL NOT NULL CHECK (resulting_stability >= 0),
+      attempted_at_ms INTEGER NOT NULL,
+      answer_result TEXT NOT NULL CHECK (answer_result IN ('correct', 'incorrect')),
+      previous_card_stability_days REAL NOT NULL CHECK (previous_card_stability_days >= 0),
+      resulting_card_stability_days REAL NOT NULL CHECK (resulting_card_stability_days >= 0),
       PRIMARY KEY (operation_id)
     ) WITHOUT ROWID;
 
     INSERT INTO attempts (
-      site, operation_id, question_id, answered_at_ms, result,
-      previous_stability, resulting_stability
+      site, operation_id, question_id, attempted_at_ms, answer_result,
+      previous_card_stability_days, resulting_card_stability_days
     )
     SELECT site, operation_id, question_id, answered_at_ms, result,
            previous_stability, resulting_stability
@@ -113,7 +155,7 @@ function migrateLegacySchema(storage, today) {
 
     CREATE TABLE site_settings (
       site TEXT PRIMARY KEY,
-      daily_stability_days_goal INTEGER NOT NULL CHECK (daily_stability_days_goal >= 1)
+      daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1)
     ) WITHOUT ROWID;
 
     CREATE TABLE schema_metadata (
@@ -126,9 +168,9 @@ function migrateLegacySchema(storage, today) {
   `);
 
   storage.sql.exec(
-    `INSERT INTO site_settings (site, daily_stability_days_goal)
+    `INSERT INTO site_settings (site, daily_stability_days_delta_goal)
      SELECT site, ? FROM catalog_metadata`,
-    DEFAULT_DAILY_STABILITY_DAYS_GOAL
+    DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL
   );
   const sites = storage.sql.exec("SELECT site FROM catalog_metadata").toArray();
   for (const { site } of sites) {
@@ -160,8 +202,8 @@ function installIndexes(storage) {
       ON cards (site, stability);
     CREATE INDEX IF NOT EXISTS cards_by_site_due
       ON cards (site, due_ms, question_id);
-    CREATE INDEX IF NOT EXISTS attempts_by_site_answered_at_question
-      ON attempts (site, answered_at_ms, question_id);
+    CREATE INDEX IF NOT EXISTS attempts_by_site_attempted_at_question
+      ON attempts (site, attempted_at_ms, question_id);
   `);
 }
 
@@ -202,14 +244,20 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     ) {
       migrateLegacySchema(storage, getTokyoDate(new Date(nowMs)));
     } else if (existingCurrent.length !== currentTables.length) {
-      throw new Error("incomplete StabilityState schema");
+      throw new Error("incomplete LearningState schema");
     }
 
     const version = storage.sql
       .exec("SELECT version FROM schema_metadata WHERE singleton = 1")
       .toArray()[0]?.version;
-    if (version !== CURRENT_SCHEMA_VERSION) {
-      throw new Error("unsupported StabilityState schema version");
+    if (version === 2) {
+      migrateSchemaV2ToV3(storage);
+    }
+    const migratedVersion = storage.sql
+      .exec("SELECT version FROM schema_metadata WHERE singleton = 1")
+      .toArray()[0]?.version;
+    if (migratedVersion !== CURRENT_SCHEMA_VERSION) {
+      throw new Error("unsupported LearningState schema version");
     }
     installIndexes(storage);
   });

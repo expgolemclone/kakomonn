@@ -74,7 +74,7 @@ async function seedReviewCard(
 
 beforeEach(reset);
 
-describe("StabilityState schema", () => {
+describe("LearningState schema", () => {
   it("installs query indexes idempotently", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       initializeLearningSchema(state.storage, NOW);
@@ -88,21 +88,21 @@ describe("StabilityState schema", () => {
            WHERE type = 'index' AND name IN (?, ?, ?, ?)
            ORDER BY name`,
           "attempts_by_site",
-          "attempts_by_site_answered_at_question",
+          "attempts_by_site_attempted_at_question",
           "cards_by_site_due",
           "cards_by_site_stability"
         )
         .toArray()
         .map((row) => row.name);
       expect(indexes).toEqual([
-        "attempts_by_site_answered_at_question",
+        "attempts_by_site_attempted_at_question",
         "cards_by_site_due",
         "cards_by_site_stability",
       ]);
     });
   });
 
-  it("migrates v4 data without retaining threshold-based fields", async () => {
+  it("migrates legacy v4 data to schema v3 without retaining threshold-based fields", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
         DROP TABLE attempts;
@@ -178,7 +178,7 @@ describe("StabilityState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 2 });
+      ).toEqual({ version: 3 });
       expect(
         state.storage.sql.exec("SELECT * FROM stability_history").toArray()[0]
       ).toEqual({
@@ -189,17 +189,17 @@ describe("StabilityState schema", () => {
       });
       expect(
         state.storage.sql.exec("SELECT * FROM site_settings").toArray()[0]
-      ).toEqual({ site: SITE, daily_stability_days_goal: 30 });
+      ).toEqual({ site: SITE, daily_stability_days_delta_goal: 30 });
       expect(
         state.storage.sql.exec("SELECT * FROM attempts").toArray()[0]
       ).toEqual({
         site: SITE,
         operation_id: operationId(900),
         question_id: "1",
-        answered_at_ms: NOW,
-        result: "correct",
-        previous_stability: 10,
-        resulting_stability: 12.9,
+        attempted_at_ms: NOW,
+        answer_result: "correct",
+        previous_card_stability_days: 10,
+        resulting_card_stability_days: 12.9,
       });
       expect(
         state.storage.sql
@@ -210,9 +210,115 @@ describe("StabilityState schema", () => {
       ).toEqual([]);
     });
   });
+
+  it("migrates schema v2 data to v3 without losing rows", async () => {
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec(`
+        DROP TABLE attempts;
+        DROP TABLE stability_history;
+        DROP TABLE cards;
+        DROP TABLE questions;
+        DROP TABLE site_settings;
+        DROP TABLE catalog_metadata;
+        DROP TABLE schema_metadata;
+
+        CREATE TABLE cards (
+          site TEXT NOT NULL, question_id TEXT NOT NULL, due_ms INTEGER NOT NULL,
+          stability REAL NOT NULL, difficulty REAL NOT NULL, scheduled_days INTEGER NOT NULL,
+          learning_steps INTEGER NOT NULL, reps INTEGER NOT NULL, lapses INTEGER NOT NULL,
+          state INTEGER NOT NULL, last_review_ms INTEGER,
+          PRIMARY KEY (site, question_id)
+        ) WITHOUT ROWID;
+        CREATE TABLE attempts (
+          site TEXT NOT NULL, operation_id TEXT NOT NULL, question_id TEXT NOT NULL,
+          answered_at_ms INTEGER NOT NULL, result TEXT NOT NULL,
+          previous_stability REAL NOT NULL, resulting_stability REAL NOT NULL,
+          PRIMARY KEY (operation_id)
+        ) WITHOUT ROWID;
+        CREATE TABLE stability_history (
+          site TEXT NOT NULL, date TEXT NOT NULL,
+          opening_stability_days INTEGER NOT NULL, closing_stability_days INTEGER NOT NULL,
+          PRIMARY KEY (site, date)
+        ) WITHOUT ROWID;
+        CREATE TABLE questions (
+          site TEXT NOT NULL, question_id TEXT NOT NULL, PRIMARY KEY (site, question_id)
+        ) WITHOUT ROWID;
+        CREATE TABLE catalog_metadata (
+          site TEXT PRIMARY KEY, question_count INTEGER NOT NULL,
+          updated_at_ms INTEGER NOT NULL, generation INTEGER NOT NULL
+        ) WITHOUT ROWID;
+        CREATE TABLE site_settings (
+          site TEXT PRIMARY KEY, daily_stability_days_goal INTEGER NOT NULL
+        ) WITHOUT ROWID;
+        CREATE TABLE schema_metadata (
+          singleton INTEGER PRIMARY KEY CHECK (singleton = 1), version INTEGER NOT NULL
+        ) WITHOUT ROWID;
+
+        INSERT INTO schema_metadata (singleton, version) VALUES (1, 2);
+      `);
+      state.storage.sql.exec(
+        "INSERT INTO questions (site, question_id) VALUES (?, '1')",
+        SITE
+      );
+      state.storage.sql.exec(
+        "INSERT INTO catalog_metadata VALUES (?, 1, ?, 1)",
+        SITE,
+        NOW
+      );
+      state.storage.sql.exec(
+        `INSERT INTO attempts VALUES (?, ?, '1', ?, 'incorrect', 10, 2.5)`,
+        SITE,
+        operationId(901),
+        NOW
+      );
+      state.storage.sql.exec(
+        "INSERT INTO stability_history VALUES (?, '2026-08-10', 0, 2)",
+        SITE
+      );
+      state.storage.sql.exec(
+        "INSERT INTO site_settings VALUES (?, 45)",
+        SITE
+      );
+
+      initializeLearningSchema(state.storage, NOW);
+
+      expect(
+        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
+      ).toEqual({ version: 3 });
+      expect(
+        state.storage.sql.exec("SELECT * FROM attempts").toArray()[0]
+      ).toEqual({
+        site: SITE,
+        operation_id: operationId(901),
+        question_id: "1",
+        attempted_at_ms: NOW,
+        answer_result: "incorrect",
+        previous_card_stability_days: 10,
+        resulting_card_stability_days: 2.5,
+      });
+      expect(
+        state.storage.sql.exec("SELECT * FROM site_settings").toArray()[0]
+      ).toEqual({ site: SITE, daily_stability_days_delta_goal: 45 });
+      expect(
+        state.storage.sql.exec("SELECT * FROM stability_history").toArray()[0]
+      ).toEqual({
+        site: SITE,
+        date: "2026-08-10",
+        opening_stability_days: 0,
+        closing_stability_days: 2,
+      });
+      expect(
+        state.storage.sql
+          .exec(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%_v2'"
+          )
+          .toArray()
+      ).toEqual([]);
+    });
+  });
 });
 
-describe("FSRS stability days", () => {
+describe("learning metrics", () => {
   it("maps answer results to FSRS ratings", () => {
     expect(ratingForResult("correct")).toBe(Rating.Good);
     expect(ratingForResult("incorrect")).toBe(Rating.Again);
@@ -222,7 +328,7 @@ describe("FSRS stability days", () => {
     await seedReviewCard("1", 1.9);
     await seedReviewCard("2", 2.8);
     await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
-      stabilityDays: 4,
+      learningMetrics: { stabilityDays: 4 },
     });
   });
 
@@ -230,19 +336,18 @@ describe("FSRS stability days", () => {
     await seedReviewCard("1", 12.9);
     await seedReviewCard("2", 3.2);
     await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
-      stabilityDays: 16,
+      learningMetrics: { stabilityDays: 16 },
       catalog: { questionCount: 4 },
     });
 
     await stub().replaceCatalog(SITE, ["2", "3", "4"], 1, NOW);
     await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
-      stabilityDays: 3,
-      todayStabilityDaysDelta: 3,
+      learningMetrics: { stabilityDays: 3, todayStabilityDaysDelta: 3 },
       catalog: { questionCount: 3, generation: 2 },
     });
   });
 
-  it("returns the new attempt contract for correct and incorrect answers", async () => {
+  it("returns the v7 attempt contract for correct and incorrect answers", async () => {
     const correct = await stub().recordAttempt(
       SITE,
       "1",
@@ -252,14 +357,22 @@ describe("FSRS stability days", () => {
     );
     expect(correct.attempt).toMatchObject({
       questionId: "1",
-      result: "correct",
-      previousStability: 0,
+      answerResult: "correct",
+      attemptedAtMs: NOW,
+      previousCardStabilityDays: 0,
+      previousStabilityDays: 0,
     });
-    expect(correct.attempt.resultingStability).toBeGreaterThan(0);
-    expect(correct.attempt).not.toHaveProperty("masteryDelta");
-    expect(correct).not.toHaveProperty("completedMilestone");
-    expect(correct.totals).toMatchObject({ attemptedQuestionCount: 1, todayAttemptedQuestionCount: 1 });
-    expect(correct.totals).toHaveProperty("stabilityDays");
+    expect(correct.attempt.resultingCardStabilityDays).toBeGreaterThan(0);
+    expect(correct.attempt.resultingStabilityDays).toBeGreaterThanOrEqual(0);
+    expect(correct.attempt).not.toHaveProperty("result");
+    expect(correct.attempt).not.toHaveProperty("previousStability");
+    expect(correct).not.toHaveProperty("totals");
+    expect(correct.learningMetrics).toMatchObject({
+      attemptedQuestionCount: 1,
+      todayAttemptedQuestionCount: 1,
+    });
+    expect(correct.learningMetrics).toHaveProperty("stabilityDays");
+    expect(correct.learningMetrics).toHaveProperty("todayStabilityDaysDelta");
 
     await seedReviewCard("2", 35, NOW - 1000, NOW);
     const incorrect = await stub().recordAttempt(
@@ -269,8 +382,12 @@ describe("FSRS stability days", () => {
       "incorrect",
       NOW + 1000
     );
-    expect(incorrect.attempt.result).toBe("incorrect");
-    expect(incorrect.attempt.resultingStability).toBeLessThan(35);
+    expect(incorrect.attempt.answerResult).toBe("incorrect");
+    expect(incorrect.attempt.previousCardStabilityDays).toBe(35);
+    expect(incorrect.attempt.resultingCardStabilityDays).toBeLessThan(35);
+    expect(incorrect.attempt.resultingStabilityDays).toBeLessThan(
+      incorrect.attempt.previousStabilityDays
+    );
   });
 });
 
@@ -290,7 +407,19 @@ describe("attempt idempotency and attempted question totals", () => {
       "correct",
       NOW + 60_000
     );
-    expect(retry).toEqual(first);
+    expect(retry.attempt).toMatchObject({
+      questionId: first.attempt.questionId,
+      answerResult: first.attempt.answerResult,
+      attemptedAtMs: first.attempt.attemptedAtMs,
+      previousCardStabilityDays: first.attempt.previousCardStabilityDays,
+      resultingCardStabilityDays: first.attempt.resultingCardStabilityDays,
+    });
+    expect(retry.attempt.previousStabilityDays).toBe(
+      first.attempt.resultingStabilityDays
+    );
+    expect(retry.attempt.resultingStabilityDays).toBe(
+      first.attempt.resultingStabilityDays
+    );
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(
         state.storage.sql
@@ -328,8 +457,20 @@ describe("attempt idempotency and attempted question totals", () => {
       "correct",
       NOW + 2000
     );
-    expect(retry.attempt).toEqual(first.attempt);
-    expect(retry.totals).toEqual(second.totals);
+    expect(retry.attempt).toMatchObject({
+      questionId: first.attempt.questionId,
+      answerResult: first.attempt.answerResult,
+      attemptedAtMs: first.attempt.attemptedAtMs,
+      previousCardStabilityDays: first.attempt.previousCardStabilityDays,
+      resultingCardStabilityDays: first.attempt.resultingCardStabilityDays,
+    });
+    expect(retry.attempt.previousStabilityDays).toBe(
+      second.learningMetrics.stabilityDays
+    );
+    expect(retry.attempt.resultingStabilityDays).toBe(
+      second.learningMetrics.stabilityDays
+    );
+    expect(retry.learningMetrics).toEqual(second.learningMetrics);
   });
 
   it("counts distinct attempted questions by lifetime and Tokyo date", async () => {
@@ -347,13 +488,15 @@ describe("attempt idempotency and attempted question totals", () => {
 
     await expect(stub().getState(SITE, afterMidnight + 1)).resolves.toMatchObject({
       today: "2026-08-11",
-      attemptedQuestionCount: 2,
-      todayAttemptedQuestionCount: 2,
+      learningMetrics: {
+        attemptedQuestionCount: 2,
+        todayAttemptedQuestionCount: 2,
+      },
     });
     await expect(stub().getHistory(SITE, 2, afterMidnight + 1)).resolves.toMatchObject({
       days: [
-        { date: "2026-08-10", attemptedQuestionCount: 1 },
-        { date: "2026-08-11", attemptedQuestionCount: 2 },
+        { date: "2026-08-10", dailyAttemptedQuestionCount: 1 },
+        { date: "2026-08-11", dailyAttemptedQuestionCount: 2 },
       ],
     });
   });
@@ -386,28 +529,38 @@ describe("stability history", () => {
       NOW + 1000
     );
     const state = await stub().getState(SITE, NOW + 1000);
-    expect(state.stabilityDays).toBe(second.totals.stabilityDays);
-    expect(state.todayStabilityDaysDelta).toBe(second.totals.stabilityDays);
-    expect(state.stabilityDays).toBeGreaterThanOrEqual(first.totals.stabilityDays);
+    expect(state.learningMetrics.stabilityDays).toBe(
+      second.learningMetrics.stabilityDays
+    );
+    expect(state.learningMetrics.todayStabilityDaysDelta).toBe(
+      second.learningMetrics.stabilityDays
+    );
+    expect(state.learningMetrics.stabilityDays).toBeGreaterThanOrEqual(
+      first.learningMetrics.stabilityDays
+    );
   });
 
   it("returns null before tracking starts and carries known totals forward", async () => {
     const initial = await stub().getHistory(SITE, 7, NOW);
-    expect(initial.days.slice(0, 6).every((day) => day.stabilityDays === null)).toBe(
-      true
-    );
+    expect(
+      initial.days.slice(0, 6).every((day) => day.closingStabilityDays === null)
+    ).toBe(true);
     expect(
       initial.days.slice(0, 6).every((day) => day.stabilityDaysDelta === null)
     ).toBe(true);
-    expect(initial.days.at(-1).stabilityDays).toBe(0);
+    expect(initial.days.at(-1).closingStabilityDays).toBe(0);
     expect(initial.days.at(-1).stabilityDaysDelta).toBe(0);
 
     await stub().recordAttempt(SITE, "1", operationId(12), "correct", NOW);
     const afterGap = await stub().getHistory(SITE, 3, NOW + 2 * DAY_MS);
-    expect(afterGap.days[0].stabilityDays).not.toBeNull();
+    expect(afterGap.days[0].closingStabilityDays).not.toBeNull();
     expect(afterGap.days[0].stabilityDaysDelta).toBeGreaterThan(0);
-    expect(afterGap.days[1].stabilityDays).toBe(afterGap.days[0].stabilityDays);
-    expect(afterGap.days[2].stabilityDays).toBe(afterGap.days[0].stabilityDays);
+    expect(afterGap.days[1].closingStabilityDays).toBe(
+      afterGap.days[0].closingStabilityDays
+    );
+    expect(afterGap.days[2].closingStabilityDays).toBe(
+      afterGap.days[0].closingStabilityDays
+    );
     expect(afterGap.days[1].stabilityDaysDelta).toBe(0);
     expect(afterGap.days[2].stabilityDaysDelta).toBe(0);
   });
@@ -415,7 +568,8 @@ describe("stability history", () => {
   it("starts a new opening total at the Tokyo date boundary", async () => {
     await seedReviewCard("1", 35, NOW - 1000, NOW);
     const nextDay = NOW + DAY_MS;
-    const before = (await stub().getState(SITE, nextDay)).stabilityDays;
+    const before = (await stub().getState(SITE, nextDay)).learningMetrics
+      .stabilityDays;
     await stub().recordAttempt(
       SITE,
       "1",
@@ -424,7 +578,9 @@ describe("stability history", () => {
       nextDay
     );
     const after = await stub().getState(SITE, nextDay);
-    expect(after.todayStabilityDaysDelta).toBe(after.stabilityDays - before);
+    expect(after.learningMetrics.todayStabilityDaysDelta).toBe(
+      after.learningMetrics.stabilityDays - before
+    );
     expect(
       (await stub().getHistory(SITE, 2, nextDay)).days.at(-1)
         .stabilityDaysDelta
@@ -459,7 +615,7 @@ describe("daily raw details", () => {
             site: SITE,
             date: "2026-08-10",
             opening_stability_days: 0,
-            closing_stability_days: earlier.totals.stabilityDays,
+            closing_stability_days: earlier.learningMetrics.stabilityDays,
           },
         ],
         attempts: [
@@ -467,19 +623,19 @@ describe("daily raw details", () => {
             site: SITE,
             operation_id: operationId(17),
             question_id: "2",
-            answered_at_ms: NOW + 1000,
-            result: "incorrect",
-            previous_stability: 0,
-            resulting_stability: earlier.attempt.resultingStability,
+            attempted_at_ms: NOW + 1000,
+            answer_result: "incorrect",
+            previous_card_stability_days: 0,
+            resulting_card_stability_days: earlier.attempt.resultingCardStabilityDays,
           },
           {
             site: SITE,
             operation_id: operationId(16),
             question_id: "1",
-            answered_at_ms: NOW + 2000,
-            result: "correct",
-            previous_stability: 0,
-            resulting_stability: later.attempt.resultingStability,
+            attempted_at_ms: NOW + 2000,
+            answer_result: "correct",
+            previous_card_stability_days: 0,
+            resulting_card_stability_days: later.attempt.resultingCardStabilityDays,
           },
         ],
       },
@@ -531,50 +687,51 @@ describe("site settings", () => {
     await stub().replaceCatalog(OTHER_SITE, ["1"], 0, NOW);
     await expect(stub().getSettings(SITE)).resolves.toEqual({
       site: SITE,
-      dailyStabilityDaysGoal: 30,
+      dailyStabilityDaysDeltaGoal: 30,
     });
     await expect(stub().getSettings(OTHER_SITE)).resolves.toEqual({
       site: OTHER_SITE,
-      dailyStabilityDaysGoal: 30,
+      dailyStabilityDaysDeltaGoal: 30,
     });
     await expect(stub().updateSettings(SITE, 250)).resolves.toEqual({
       site: SITE,
-      dailyStabilityDaysGoal: 250,
+      dailyStabilityDaysDeltaGoal: 250,
     });
     await expect(stub().getSettings(OTHER_SITE)).resolves.toEqual({
       site: OTHER_SITE,
-      dailyStabilityDaysGoal: 30,
+      dailyStabilityDaysDeltaGoal: 30,
     });
   });
 
-  it("serves and validates the v6 settings contract", async () => {
-    const first = await SELF.fetch(`https://example.test/v6/settings?site=${SITE}`, {
+  it("serves and validates the v7 settings contract", async () => {
+    const first = await SELF.fetch(`https://example.test/v7/settings?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(first.status).toBe(200);
     await expect(first.json()).resolves.toEqual({
       site: SITE,
-      dailyStabilityDaysGoal: 30,
+      dailyStabilityDaysDeltaGoal: 30,
     });
 
-    const updated = await SELF.fetch("https://example.test/v6/settings", {
+    const updated = await SELF.fetch("https://example.test/v7/settings", {
       method: "PUT",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-      body: JSON.stringify({ site: SITE, dailyStabilityDaysGoal: 1000 }),
+      body: JSON.stringify({ site: SITE, dailyStabilityDaysDeltaGoal: 1000 }),
     });
     expect(updated.status).toBe(200);
     await expect(updated.json()).resolves.toEqual({
       site: SITE,
-      dailyStabilityDaysGoal: 1000,
+      dailyStabilityDaysDeltaGoal: 1000,
     });
 
     for (const body of [
-      { site: SITE, dailyStabilityDaysGoal: 0 },
-      { site: SITE, dailyStabilityDaysGoal: 1.5 },
-      { site: SITE, dailyStabilityDaysGoal: 5, extra: true },
-      { site: "invalid.example", dailyStabilityDaysGoal: 5 },
+      { site: SITE, dailyStabilityDaysDeltaGoal: 0 },
+      { site: SITE, dailyStabilityDaysDeltaGoal: 1.5 },
+      { site: SITE, dailyStabilityDaysDeltaGoal: 5, extra: true },
+      { site: "invalid.example", dailyStabilityDaysDeltaGoal: 5 },
+      { site: SITE, dailyStabilityDaysGoal: 5 },
     ]) {
-      const response = await SELF.fetch("https://example.test/v6/settings", {
+      const response = await SELF.fetch("https://example.test/v7/settings", {
         method: "PUT",
         headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -584,9 +741,9 @@ describe("site settings", () => {
   });
 });
 
-describe("v6 HTTP contract", () => {
+describe("v7 HTTP contract", () => {
   it("does not expose older API versions", async () => {
-    for (const version of ["v3", "v4", "v5"]) {
+    for (const version of ["v3", "v4", "v5", "v6"]) {
       const response = await SELF.fetch(
         `https://example.test/${version}/state?site=${SITE}`,
         { headers: AUTHORIZATION }
@@ -597,8 +754,8 @@ describe("v6 HTTP contract", () => {
 
   it("requires the configured bearer token", async () => {
     for (const url of [
-      "https://example.test/v6/sites",
-      `https://example.test/v6/daily-details?site=${SITE}&date=2026-08-10`,
+      "https://example.test/v7/sites",
+      `https://example.test/v7/daily-details?site=${SITE}&date=2026-08-10`,
     ]) {
       const missing = await SELF.fetch(url);
       const incorrect = await SELF.fetch(url, {
@@ -610,35 +767,50 @@ describe("v6 HTTP contract", () => {
   });
 
   it("lists sites and returns state and history", async () => {
-    const sites = await SELF.fetch("https://example.test/v6/sites", {
+    const sites = await SELF.fetch("https://example.test/v7/sites", {
       headers: AUTHORIZATION,
     });
     await expect(sites.json()).resolves.toEqual({ sites: [SITE] });
 
-    const state = await SELF.fetch(`https://example.test/v6/state?site=${SITE}`, {
+    const state = await SELF.fetch(`https://example.test/v7/state?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(state.status).toBe(200);
-    await expect(state.json()).resolves.toMatchObject({
+    const stateBody = await state.json();
+    expect(Object.keys(stateBody).sort()).toEqual([
+      "catalog",
+      "learningMetrics",
+      "site",
+      "today",
+    ]);
+    expect(stateBody).toMatchObject({
       site: SITE,
-      stabilityDays: 0,
-      attemptedQuestionCount: 0,
-      todayAttemptedQuestionCount: 0,
-      todayStabilityDaysDelta: 0,
+      learningMetrics: {
+        stabilityDays: 0,
+        todayStabilityDaysDelta: 0,
+        attemptedQuestionCount: 0,
+        todayAttemptedQuestionCount: 0,
+      },
       catalog: { questionCount: 4, generation: 1 },
     });
+    expect(stateBody.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
     const history = await SELF.fetch(
-      `https://example.test/v6/history?site=${SITE}&days=7`,
+      `https://example.test/v7/history?site=${SITE}&days=7`,
       { headers: AUTHORIZATION }
     );
     expect(history.status).toBe(200);
     const historyBody = await history.json();
     expect(historyBody.days).toHaveLength(7);
-    expect(historyBody.days.at(-1).stabilityDaysDelta).toBe(0);
+    expect(historyBody.days.at(-1)).toEqual({
+      date: expect.any(String),
+      closingStabilityDays: 0,
+      stabilityDaysDelta: 0,
+      dailyAttemptedQuestionCount: 0,
+    });
 
     const details = await SELF.fetch(
-      `https://example.test/v6/daily-details?site=${SITE}&date=2026-08-10`,
+      `https://example.test/v7/daily-details?site=${SITE}&date=2026-08-10`,
       { headers: AUTHORIZATION }
     );
     expect(details.status).toBe(200);
@@ -659,7 +831,7 @@ describe("v6 HTTP contract", () => {
       `site=${SITE}&date=2026-08-10&extra=true`,
     ]) {
       const response = await SELF.fetch(
-        `https://example.test/v6/daily-details?${search}`,
+        `https://example.test/v7/daily-details?${search}`,
         { headers: AUTHORIZATION }
       );
       expect(response.status).toBe(400);
@@ -667,7 +839,7 @@ describe("v6 HTTP contract", () => {
   });
 
   it("replaces the catalog and serves the canonical next URL", async () => {
-    const replace = await SELF.fetch("https://example.test/v6/questions", {
+    const replace = await SELF.fetch("https://example.test/v7/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -678,7 +850,7 @@ describe("v6 HTTP contract", () => {
     });
     expect(replace.status).toBe(200);
 
-    const next = await SELF.fetch(`https://example.test/v6/next?site=${SITE}`, {
+    const next = await SELF.fetch(`https://example.test/v7/next?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     await expect(next.json()).resolves.toEqual({
@@ -689,34 +861,103 @@ describe("v6 HTTP contract", () => {
         dueMs: null,
       },
     });
+
+    const conflict = await SELF.fetch("https://example.test/v7/questions", {
+      method: "POST",
+      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        site: SITE,
+        questionIds: ["44615"],
+        expectedGeneration: 1,
+      }),
+    });
+    expect(conflict.status).toBe(409);
+    await expect(conflict.json()).resolves.toEqual({ error: "catalog_conflict" });
+
+    for (const body of [
+      { site: SITE, questionIds: [], expectedGeneration: 2 },
+      { site: SITE, questionIds: ["1", "1"], expectedGeneration: 2 },
+      { site: SITE, questionIds: ["1"], expectedGeneration: -1 },
+      { site: SITE, questionIds: ["1"] },
+    ]) {
+      const invalid = await SELF.fetch("https://example.test/v7/questions", {
+        method: "POST",
+        headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      expect(invalid.status).toBe(400);
+    }
   });
 
-  it("rejects unknown questions and extra attempt fields", async () => {
-    const unknown = await SELF.fetch("https://example.test/v6/attempts", {
+  it("rejects unknown questions and non-canonical attempt fields", async () => {
+    const unknown = await SELF.fetch("https://example.test/v7/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
         site: SITE,
         questionId: "999",
         operationId: operationId(14),
-        result: "correct",
+        answerResult: "correct",
       }),
     });
     expect(unknown.status).toBe(409);
     await expect(unknown.json()).resolves.toEqual({ error: "unknown_question" });
 
-    const extra = await SELF.fetch("https://example.test/v6/attempts", {
+    const extra = await SELF.fetch("https://example.test/v7/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
         site: SITE,
         questionId: "1",
         operationId: operationId(15),
-        result: "correct",
-        answeredAtMs: NOW,
+        answerResult: "correct",
+        attemptedAtMs: NOW,
       }),
     });
     expect(extra.status).toBe(400);
+
+    const legacyKey = await SELF.fetch("https://example.test/v7/attempts", {
+      method: "POST",
+      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        site: SITE,
+        questionId: "1",
+        operationId: operationId(20),
+        result: "correct",
+      }),
+    });
+    expect(legacyKey.status).toBe(400);
+  });
+
+  it("returns the exact v7 attempt contract", async () => {
+    const response = await SELF.fetch("https://example.test/v7/attempts", {
+      method: "POST",
+      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        site: SITE,
+        questionId: "1",
+        operationId: operationId(21),
+        answerResult: "correct",
+      }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      attempt: {
+        questionId: "1",
+        answerResult: "correct",
+        attemptedAtMs: expect.any(Number),
+        previousCardStabilityDays: 0,
+        resultingCardStabilityDays: expect.any(Number),
+        previousStabilityDays: 0,
+        resultingStabilityDays: expect.any(Number),
+      },
+      learningMetrics: {
+        stabilityDays: expect.any(Number),
+        todayStabilityDaysDelta: expect.any(Number),
+        attemptedQuestionCount: 1,
+        todayAttemptedQuestionCount: 1,
+      },
+    });
   });
 
   it("returns catalog_missing without a scheduling fallback", async () => {
@@ -725,77 +966,10 @@ describe("v6 HTTP contract", () => {
       state.storage.sql.exec("DELETE FROM catalog_metadata WHERE site = ?", SITE);
     });
     const response = await SELF.fetch(
-      `https://example.test/v6/next?site=${SITE}`,
+      `https://example.test/v7/next?site=${SITE}`,
       { headers: AUTHORIZATION }
     );
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({ error: "catalog_missing" });
-  });
-});
-
-describe("v6 canonical learning metric fields", () => {
-  it("returns canonical learning metric names", async () => {
-    const state = await SELF.fetch(`https://example.test/v6/state?site=${SITE}`, {
-      headers: AUTHORIZATION,
-    });
-    await expect(state.json()).resolves.toMatchObject({
-      site: SITE,
-      stabilityDays: 0,
-      attemptedQuestionCount: 0,
-      todayAttemptedQuestionCount: 0,
-      todayStabilityDaysDelta: 0,
-    });
-
-    const history = await SELF.fetch(
-      `https://example.test/v6/history?site=${SITE}&days=7`,
-      { headers: AUTHORIZATION }
-    );
-    const historyBody = await history.json();
-    expect(historyBody.days.at(-1)).toMatchObject({
-      stabilityDays: 0,
-      stabilityDaysDelta: 0,
-      attemptedQuestionCount: 0,
-    });
-
-    const attempt = await SELF.fetch("https://example.test/v6/attempts", {
-      method: "POST",
-      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        site: SITE,
-        questionId: "1",
-        operationId: operationId(16),
-        result: "correct",
-      }),
-    });
-    const attemptBody = await attempt.json();
-    expect(attemptBody.attempt).toEqual({
-      questionId: "1",
-      result: "correct",
-      previousStability: 0,
-      resultingStability: expect.any(Number),
-    });
-    expect(attemptBody.totals).toMatchObject({
-      attemptedQuestionCount: 1,
-      todayAttemptedQuestionCount: 1,
-    });
-    expect(attemptBody.attempt).not.toHaveProperty("stability");
-    expect(attemptBody.totals).not.toHaveProperty("solved");
-    expect(attemptBody.totals).not.toHaveProperty("todaySolved");
-  });
-
-  it("serves unchanged endpoint contracts under v6", async () => {
-    const sites = await SELF.fetch("https://example.test/v6/sites", {
-      headers: AUTHORIZATION,
-    });
-    await expect(sites.json()).resolves.toEqual({ sites: [SITE] });
-
-    const settings = await SELF.fetch(
-      `https://example.test/v6/settings?site=${SITE}`,
-      { headers: AUTHORIZATION }
-    );
-    await expect(settings.json()).resolves.toEqual({
-      site: SITE,
-      dailyStabilityDaysGoal: 30,
-    });
   });
 });

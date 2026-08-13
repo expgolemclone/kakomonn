@@ -28,7 +28,7 @@
       syncInProgress ||
       nextQuestionOperationInProgress ||
       navigationInProgress ||
-      pendingAnswer !== null ||
+      pendingAttempt !== null ||
       !syncSettings.hidden;
   }
 
@@ -49,9 +49,9 @@
       nextQuestionButton.disabled = !syncToken;
       return;
     }
-    if (pendingAnswer !== null) {
+    if (pendingAttempt !== null) {
       nextQuestionButton.textContent =
-        pendingAnswer.phase === "queued" ? "同期を再試行" : "次の問題を準備中";
+        pendingAttempt.phase === "queued" ? "同期を再試行" : "次の問題を準備中";
       nextQuestionButton.disabled = navigationInProgress;
       return;
     }
@@ -134,23 +134,23 @@
     }
   }
 
-  async function maybeContinuePendingAnswerNavigation() {
+  async function maybeContinuePendingAttemptNavigation() {
     if (
-      pendingAnswer === null ||
-      pendingAnswer.phase !== "awaiting_navigation" ||
+      pendingAttempt === null ||
+      pendingAttempt.phase !== "awaiting_navigation" ||
       !syncReady ||
       syncInProgress ||
       nextQuestionOperationInProgress
     ) {
       return false;
     }
-    if (pendingAnswerTransitionPromise !== null) {
-      return pendingAnswerTransitionPromise;
+    if (pendingAttemptTransitionPromise !== null) {
+      return pendingAttemptTransitionPromise;
     }
-    const operation = pendingAnswer;
-    pendingAnswerTransitionPromise = (async () => {
+    const operation = pendingAttempt;
+    pendingAttemptTransitionPromise = (async () => {
       if (currentFrameURL === operation.nextURL) {
-        await clearPendingAnswer();
+        await clearPendingAttempt();
         setStatus("解答記録を同期しました");
         return true;
       }
@@ -160,17 +160,17 @@
       return navigateToScheduledQuestion(operation.nextURL);
     })();
     try {
-      return await pendingAnswerTransitionPromise;
+      return await pendingAttemptTransitionPromise;
     } catch {
       setStatus("次の問題への遷移を完了できません.再試行してください");
       return false;
     } finally {
-      pendingAnswerTransitionPromise = null;
+      pendingAttemptTransitionPromise = null;
       updateSyncDependentControls();
     }
   }
 
-  async function createPendingAnswer(result) {
+  async function createPendingAttempt(answerResult) {
     const questionId = currentQuestionId();
     if (questionId === null) {
       throw new SyncRequestError("question_id_missing");
@@ -180,26 +180,26 @@
       questionId,
       phase: "queued",
       pageURL: `https://${SITE_ID}/questions/${questionId}`,
-      result,
+      answerResult,
       site: SITE_ID,
     };
-    if (!isPendingAnswer(operation)) {
-      throw new Error("invalid pending answer");
+    if (!isPendingAttempt(operation)) {
+      throw new Error("invalid pending attempt");
     }
-    await GM.setValue(PENDING_ANSWER_KEY, operation);
-    pendingAnswer = operation;
+    await GM.setValue(PENDING_ATTEMPT_KEY, operation);
+    pendingAttempt = operation;
   }
 
-  async function submitPendingAnswer() {
-    if (pendingAnswer === null || syncPromise !== null) {
+  async function submitPendingAttempt() {
+    if (pendingAttempt === null || syncPromise !== null) {
       return false;
     }
-    if (pendingAnswer.phase === "awaiting_navigation") {
-      return maybeContinuePendingAnswerNavigation();
+    if (pendingAttempt.phase === "awaiting_navigation") {
+      return maybeContinuePendingAttemptNavigation();
     }
 
     nextQuestionOperationInProgress = true;
-    const operation = pendingAnswer;
+    const operation = pendingAttempt;
     navigationInProgress = true;
     syncInProgress = true;
     setStatus("学習記録を同期中");
@@ -210,14 +210,14 @@
         const result = await requestAttemptResult(syncToken, operation);
         if (
           result.attempt.questionId !== operation.questionId ||
-          result.attempt.result !== operation.result
+          result.attempt.answerResult !== operation.answerResult
         ) {
           throw new SyncRequestError("invalid_response");
         }
-        stabilityDays = result.totals.stabilityDays;
+        stabilityDays = result.learningMetrics.stabilityDays;
         todayAttemptedQuestionCount =
-          result.totals.todayAttemptedQuestionCount;
-        renderCount();
+          result.learningMetrics.todayAttemptedQuestionCount;
+        renderLearningMetrics();
 
         const next = await requestNextQuestion(syncToken, operation.questionId);
         syncReady = true;
@@ -225,11 +225,11 @@
         setStatus("解答記録を同期しました");
 
         if (next.question === null) {
-          await clearPendingAnswer();
+          await clearPendingAttempt();
           setStatus("出題できる問題はありません");
           return true;
         }
-        await markPendingAnswerAwaitingNavigation(operation, next.question.url);
+        await markPendingAttemptAwaitingNavigation(operation, next.question.url);
         return true;
       } catch (error) {
         navigationInProgress = false;
@@ -247,13 +247,13 @@
         syncInProgress = false;
         syncPromise = null;
         updateSyncDependentControls();
-        void maybeContinuePendingAnswerNavigation();
+        void maybeContinuePendingAttemptNavigation();
       }
     })();
     return syncPromise;
   }
 
-  async function recordCurrentQuestionAndAdvance(result, status) {
+  async function recordCurrentQuestionAndAdvance(answerResult, status) {
     const questionId = currentQuestionId();
     if (questionId === null) {
       setStatus("問題IDを取得できないため解答記録と次問移動を停止しました");
@@ -266,7 +266,7 @@
     setStatus(status);
     updateSyncDependentControls();
     try {
-      await createPendingAnswer(result);
+      await createPendingAttempt(answerResult);
     } catch {
       nextQuestionOperationInProgress = false;
       navigationInProgress = false;
@@ -276,7 +276,7 @@
     }
     nextQuestionOperationInProgress = false;
     navigationInProgress = false;
-    await submitPendingAnswer();
+    await submitPendingAttempt();
     return true;
   }
 
@@ -301,8 +301,8 @@
       await refreshRemoteState();
       return false;
     }
-    if (pendingAnswer !== null) {
-      await submitPendingAnswer();
+    if (pendingAttempt !== null) {
+      await submitPendingAttempt();
       return false;
     }
     if (getCurrentAnswerResult() !== "unknown") {
@@ -329,8 +329,8 @@
       await refreshRemoteState();
       return;
     }
-    if (pendingAnswer !== null) {
-      await submitPendingAnswer();
+    if (pendingAttempt !== null) {
+      await submitPendingAttempt();
       return;
     }
     const answerResult = getCurrentAnswerResult();

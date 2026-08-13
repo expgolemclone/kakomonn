@@ -12,7 +12,7 @@ const userscriptPath = path.resolve(
 );
 const repositoryEnvPath = path.resolve(__dirname, "..", "..", ".env");
 const syncApiOrigin =
-  "https://kakomonn-count-sync.expgolem-lab.workers.dev";
+  "https://kakomonn-sync.expgolem-lab.workers.dev";
 const currentQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const nextQuestionUrl = "https://chushoks.kakomonn.com/questions/86957";
 const correctAnswerText = "輸入の減少は、GDPを増加させる。";
@@ -449,13 +449,15 @@ function chromeDevToolsMcpEntry() {
 function assertSyncState(state) {
   assert.equal(state.site, "chushoks.kakomonn.com");
   assert.match(state.today, /^\d{4}-\d{2}-\d{2}$/);
-  assert.equal(Number.isSafeInteger(state.stabilityDays), true);
-  assert.equal(state.stabilityDays >= 0, true);
-  assert.equal(Number.isSafeInteger(state.attemptedQuestionCount), true);
-  assert.equal(state.attemptedQuestionCount >= 0, true);
-  assert.equal(Number.isSafeInteger(state.todayAttemptedQuestionCount), true);
-  assert.equal(state.todayAttemptedQuestionCount >= 0, true);
-  assert.equal(Number.isSafeInteger(state.todayStabilityDaysDelta), true);
+  const metrics = state.learningMetrics;
+  assert.equal(metrics !== null && typeof metrics === "object", true);
+  assert.equal(Number.isSafeInteger(metrics.stabilityDays), true);
+  assert.equal(metrics.stabilityDays >= 0, true);
+  assert.equal(Number.isSafeInteger(metrics.todayStabilityDaysDelta), true);
+  assert.equal(Number.isSafeInteger(metrics.attemptedQuestionCount), true);
+  assert.equal(metrics.attemptedQuestionCount >= 0, true);
+  assert.equal(Number.isSafeInteger(metrics.todayAttemptedQuestionCount), true);
+  assert.equal(metrics.todayAttemptedQuestionCount >= 0, true);
   assert.equal(
     state.catalog === null ||
       (Number.isSafeInteger(state.catalog?.questionCount) &&
@@ -469,7 +471,7 @@ function assertSyncState(state) {
 
 async function requestSyncState(token) {
   const query = new URLSearchParams({ site: "chushoks.kakomonn.com" });
-  const response = await fetch(`${syncApiOrigin}/v6/state?${query}`, {
+  const response = await fetch(`${syncApiOrigin}/v7/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
@@ -742,7 +744,7 @@ async function readReaderState(mcp) {
       return {
         actionsPresent: Boolean(document.querySelector("#kakomonn-reader-actions")),
         buildFingerprint: shell?.dataset.buildFingerprint ?? null,
-        count: document.querySelector("#kakomonn-reader-count")?.textContent ?? null,
+        count: document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ?? null,
         frameURL: frame?.contentWindow?.location?.href ?? null,
         nextDisabled: next?.disabled ?? null,
         nextText: next?.textContent ?? null,
@@ -809,7 +811,7 @@ async function configureSyncToken(
   await mcp.tool("fill", { uid: tokenInput, value: token });
   await mcp.tool("click", { uid: saveButton });
 
-  const expectedCount = `定着 ${baseline.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${baseline.todayAttemptedQuestionCount}問`;
+  const expectedCount = `stabilityDays ${baseline.learningMetrics.stabilityDays.toLocaleString("ja-JP")}日 / todayAttemptedQuestionCount ${baseline.learningMetrics.todayAttemptedQuestionCount}問`;
   return waitUntil("the production sync baseline", async () => {
     const state = await readReaderState(mcp);
     return state.settingsHidden && state.count === expectedCount ? state : null;
@@ -992,7 +994,7 @@ async function clickNextQuestion(mcp) {
     }`,
   );
 
-  return waitUntil("the FSRS scheduled next question", async () => {
+  return waitUntil("the scheduled next question", async () => {
     const state = await readReaderState(mcp);
     if (
       state.outerURL !== state.frameURL ||
@@ -1000,7 +1002,7 @@ async function clickNextQuestion(mcp) {
       !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
         state.outerURL,
       ) ||
-      !/^定着 \d+日 \/ 今日 \d+問$/.test(state.count ?? "")
+      !/^stabilityDays \d+日 \/ todayAttemptedQuestionCount \d+問$/.test(state.count ?? "")
     ) {
       return null;
     }
@@ -1099,7 +1101,7 @@ async function main() {
     );
     assert.equal(
       configuredState.count,
-      `定着 ${baseline.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${baseline.todayAttemptedQuestionCount}問`,
+      `stabilityDays ${baseline.learningMetrics.stabilityDays.toLocaleString("ja-JP")}日 / todayAttemptedQuestionCount ${baseline.learningMetrics.todayAttemptedQuestionCount}問`,
     );
     await submitCorrectAnswer(mcp);
     await copyMarkdownInRealEdge(mcp);
@@ -1108,7 +1110,7 @@ async function main() {
     assert.equal(finalState.today, baseline.today);
     assert.equal(
       browserState.count,
-      `定着 ${finalState.stabilityDays.toLocaleString("ja-JP")}日 / 今日 ${finalState.todayAttemptedQuestionCount}問`,
+      `stabilityDays ${finalState.learningMetrics.stabilityDays.toLocaleString("ja-JP")}日 / todayAttemptedQuestionCount ${finalState.learningMetrics.todayAttemptedQuestionCount}問`,
     );
     console.log(
       JSON.stringify({
@@ -1116,8 +1118,8 @@ async function main() {
         buildFingerprint: expectedBuildFingerprint,
         frameUrl: browserState.frameURL,
         markdownHeading: expectedMarkdownHeading,
-        stabilityDaysAfter: finalState.stabilityDays,
-        stabilityDaysBefore: baseline.stabilityDays,
+        stabilityDaysAfter: finalState.learningMetrics.stabilityDays,
+        stabilityDaysBefore: baseline.learningMetrics.stabilityDays,
         status: "passed",
       }),
     );

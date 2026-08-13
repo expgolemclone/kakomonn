@@ -15,12 +15,15 @@ import {
   OPERATION_ID_PATTERN,
   QUESTION_ID_PATTERN,
 } from "./contracts.js";
-import { initializeLearningSchema } from "./storage/schema.js";
+import {
+  DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL,
+  initializeLearningSchema,
+} from "./storage/schema.js";
 
 export { initializeLearningSchema } from "./storage/schema.js";
 
 export const LEARNING_STATE_OBJECT_NAME = "primary";
-export const DEFAULT_DAILY_STABILITY_DAYS_GOAL = 30;
+export { DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL };
 export { OPERATION_ID_PATTERN, QUESTION_ID_PATTERN } from "./contracts.js";
 const LEGACY_SETTINGS_STORAGE_KEY = "settings";
 
@@ -102,10 +105,10 @@ function readAttemptedQuestionCountsByDate(storage, site, dates) {
   const attemptedQuestionCounts = new Map(
     storage.sql
       .exec(
-        `SELECT CAST((answered_at_ms + 32400000) / 86400000 AS INTEGER) AS date_ordinal,
+        `SELECT CAST((attempted_at_ms + 32400000) / 86400000 AS INTEGER) AS date_ordinal,
                 COUNT(DISTINCT question_id) AS attempted_question_count
          FROM attempts
-         WHERE site = ? AND answered_at_ms >= ? AND answered_at_ms < ?
+         WHERE site = ? AND attempted_at_ms >= ? AND attempted_at_ms < ?
          GROUP BY date_ordinal`,
         site,
         startMs,
@@ -122,10 +125,25 @@ function readAttemptedQuestionCountsByDate(storage, site, dates) {
   );
 }
 
-function learningTotals(storage, site, nowMs) {
+function readTodayStabilityDaysDelta(storage, site, today) {
+  const row = storage.sql
+    .exec(
+      `SELECT opening_stability_days, closing_stability_days
+       FROM stability_history WHERE site = ? AND date = ?`,
+      site,
+      today
+    )
+    .toArray()[0];
+  return row === undefined
+    ? 0
+    : row.closing_stability_days - row.opening_stability_days;
+}
+
+function learningMetrics(storage, site, nowMs) {
   const today = getTokyoDate(new Date(nowMs));
   return {
     stabilityDays: readStabilityDays(storage, site),
+    todayStabilityDaysDelta: readTodayStabilityDaysDelta(storage, site, today),
     attemptedQuestionCount: readAttemptedQuestionCount(storage, site),
     todayAttemptedQuestionCount: readAttemptedQuestionCountsByDate(
       storage,
@@ -155,15 +173,23 @@ function recordDailyStabilityDays(
   );
 }
 
-function attemptResponse(row, totals) {
+function attemptResponse(
+  row,
+  metrics,
+  previousStabilityDays,
+  resultingStabilityDays
+) {
   return {
     attempt: {
       questionId: row.question_id,
-      result: row.result,
-      previousStability: row.previous_stability,
-      resultingStability: row.resulting_stability,
+      answerResult: row.answer_result,
+      attemptedAtMs: row.attempted_at_ms,
+      previousCardStabilityDays: row.previous_card_stability_days,
+      resultingCardStabilityDays: row.resulting_card_stability_days,
+      previousStabilityDays,
+      resultingStabilityDays,
     },
-    totals,
+    learningMetrics: metrics,
   };
 }
 
@@ -187,8 +213,8 @@ export class LearningState extends DurableObject {
     });
   }
 
-  recordAttempt(site, questionId, operationId, result, nowMs = Date.now()) {
-    assertAttempt(site, questionId, operationId, result);
+  recordAttempt(site, questionId, operationId, answerResult, nowMs = Date.now()) {
+    assertAttempt(site, questionId, operationId, answerResult);
     if (!Number.isSafeInteger(nowMs) || nowMs <= 0) {
       throw new TypeError("invalid attempt time");
     }
@@ -196,7 +222,8 @@ export class LearningState extends DurableObject {
     return this.ctx.storage.transactionSync(() => {
       const existing = this.ctx.storage.sql
         .exec(
-          `SELECT site, question_id, result, previous_stability, resulting_stability
+          `SELECT site, question_id, attempted_at_ms, answer_result,
+                  previous_card_stability_days, resulting_card_stability_days
            FROM attempts WHERE operation_id = ?`,
           operationId
         )
@@ -205,13 +232,16 @@ export class LearningState extends DurableObject {
         if (
           existing.site !== site ||
           existing.question_id !== questionId ||
-          existing.result !== result
+          existing.answer_result !== answerResult
         ) {
           return { error: "operation_conflict" };
         }
+        const stabilityDays = readStabilityDays(this.ctx.storage, site);
         return attemptResponse(
           existing,
-          learningTotals(this.ctx.storage, site, nowMs)
+          learningMetrics(this.ctx.storage, site, nowMs),
+          stabilityDays,
+          stabilityDays
         );
       }
 
@@ -236,8 +266,8 @@ export class LearningState extends DurableObject {
         )
         .toArray()[0];
       const card = rowToCard(stored) ?? createNewCard(nowMs);
-      const previousStability = card.stability;
-      const nextCard = scheduleAnswer(card, result, nowMs);
+      const previousCardStabilityDays = card.stability;
+      const nextCard = scheduleAnswer(card, answerResult, nowMs);
       const stabilityDaysBefore = readStabilityDays(this.ctx.storage, site);
       saveCard(this.ctx.storage, site, questionId, nextCard);
       const stabilityDaysAfter = readStabilityDays(this.ctx.storage, site);
@@ -251,25 +281,28 @@ export class LearningState extends DurableObject {
       );
       this.ctx.storage.sql.exec(
         `INSERT INTO attempts (
-           site, operation_id, question_id, answered_at_ms, result,
-           previous_stability, resulting_stability
+           site, operation_id, question_id, attempted_at_ms, answer_result,
+           previous_card_stability_days, resulting_card_stability_days
          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
         site,
         operationId,
         questionId,
         nowMs,
-        result,
-        previousStability,
+        answerResult,
+        previousCardStabilityDays,
         nextCard.stability
       );
       return attemptResponse(
         {
           question_id: questionId,
-          result,
-          previous_stability: previousStability,
-          resulting_stability: nextCard.stability,
+          attempted_at_ms: nowMs,
+          answer_result: answerResult,
+          previous_card_stability_days: previousCardStabilityDays,
+          resulting_card_stability_days: nextCard.stability,
         },
-        learningTotals(this.ctx.storage, site, nowMs)
+        learningMetrics(this.ctx.storage, site, nowMs),
+        stabilityDaysBefore,
+        stabilityDaysAfter
       );
     });
   }
@@ -280,28 +313,6 @@ export class LearningState extends DurableObject {
     }
     return this.ctx.storage.transactionSync(() => {
       const today = getTokyoDate(new Date(nowMs));
-      const stabilityDays = readStabilityDays(this.ctx.storage, site);
-      const attemptedQuestionCount = readAttemptedQuestionCount(
-        this.ctx.storage,
-        site
-      );
-      const todayAttemptedQuestionCount = readAttemptedQuestionCountsByDate(
-        this.ctx.storage,
-        site,
-        [today]
-      ).get(today);
-      const todayRow = this.ctx.storage.sql
-        .exec(
-          `SELECT opening_stability_days, closing_stability_days
-           FROM stability_history WHERE site = ? AND date = ?`,
-          site,
-          today
-        )
-        .toArray()[0];
-      const todayStabilityDaysDelta =
-        todayRow === undefined
-          ? 0
-          : todayRow.closing_stability_days - todayRow.opening_stability_days;
       const catalog = this.ctx.storage.sql
         .exec(
           "SELECT question_count, updated_at_ms, generation FROM catalog_metadata WHERE site = ?",
@@ -311,10 +322,7 @@ export class LearningState extends DurableObject {
       return {
         site,
         today,
-        stabilityDays,
-        attemptedQuestionCount,
-        todayAttemptedQuestionCount,
-        todayStabilityDaysDelta,
+        learningMetrics: learningMetrics(this.ctx.storage, site, nowMs),
         catalog:
           catalog === undefined
             ? null
@@ -360,22 +368,22 @@ export class LearningState extends DurableObject {
           .toArray()
           .map((row) => [row.date, row])
       );
-      let stabilityDays = baseline?.closing_stability_days ?? null;
+      let closingStabilityDays = baseline?.closing_stability_days ?? null;
       let trackingStarted = baseline !== undefined;
       const history = dates.map((date) => {
         const row = rows.get(date);
         let stabilityDaysDelta = trackingStarted ? 0 : null;
         if (row !== undefined) {
-          stabilityDays = row.closing_stability_days;
+          closingStabilityDays = row.closing_stability_days;
           stabilityDaysDelta =
             row.closing_stability_days - row.opening_stability_days;
           trackingStarted = true;
         }
         return {
           date,
-          stabilityDays,
+          closingStabilityDays,
           stabilityDaysDelta,
-          attemptedQuestionCount: attemptedQuestionCountsByDate.get(date),
+          dailyAttemptedQuestionCount: attemptedQuestionCountsByDate.get(date),
         };
       });
       return { site, timeZone: "Asia/Tokyo", today, days: history };
@@ -398,11 +406,11 @@ export class LearningState extends DurableObject {
         .toArray();
       const attempts = this.ctx.storage.sql
         .exec(
-          `SELECT site, operation_id, question_id, answered_at_ms, result,
-                  previous_stability, resulting_stability
+          `SELECT site, operation_id, question_id, attempted_at_ms, answer_result,
+                  previous_card_stability_days, resulting_card_stability_days
            FROM attempts
-           WHERE site = ? AND answered_at_ms >= ? AND answered_at_ms < ?
-           ORDER BY answered_at_ms, operation_id`,
+           WHERE site = ? AND attempted_at_ms >= ? AND attempted_at_ms < ?
+           ORDER BY attempted_at_ms, operation_id`,
           site,
           startMs,
           endMs
@@ -423,36 +431,42 @@ export class LearningState extends DurableObject {
     }
     const row = this.ctx.storage.sql
       .exec(
-        `SELECT daily_stability_days_goal FROM site_settings WHERE site = ?`,
+        `SELECT daily_stability_days_delta_goal FROM site_settings WHERE site = ?`,
         site
       )
       .toArray()[0];
     if (row === undefined) {
-      throw new Error("missing StabilityState settings");
+      throw new Error("missing LearningState settings");
     }
-    return { site, dailyStabilityDaysGoal: row.daily_stability_days_goal };
+    return {
+      site,
+      dailyStabilityDaysDeltaGoal: row.daily_stability_days_delta_goal,
+    };
   }
 
-  updateSettings(site, dailyStabilityDaysGoal) {
+  updateSettings(site, dailyStabilityDaysDeltaGoal) {
     if (
       !isSite(site) ||
-      !Number.isSafeInteger(dailyStabilityDaysGoal) ||
-      dailyStabilityDaysGoal < 1
+      !Number.isSafeInteger(dailyStabilityDaysDeltaGoal) ||
+      dailyStabilityDaysDeltaGoal < 1
     ) {
       throw new TypeError("invalid settings");
     }
     const updated = this.ctx.storage.sql
       .exec(
-        `UPDATE site_settings SET daily_stability_days_goal = ? WHERE site = ?
-         RETURNING daily_stability_days_goal`,
-        dailyStabilityDaysGoal,
+        `UPDATE site_settings SET daily_stability_days_delta_goal = ? WHERE site = ?
+         RETURNING daily_stability_days_delta_goal`,
+        dailyStabilityDaysDeltaGoal,
         site
       )
       .toArray()[0];
     if (updated === undefined) {
-      throw new Error("missing StabilityState settings");
+      throw new Error("missing LearningState settings");
     }
-    return { site, dailyStabilityDaysGoal: updated.daily_stability_days_goal };
+    return {
+      site,
+      dailyStabilityDaysDeltaGoal: updated.daily_stability_days_delta_goal,
+    };
   }
 
   nextQuestion(site, nowMs = Date.now(), excludeQuestionId = null) {
@@ -553,11 +567,11 @@ export class LearningState extends DurableObject {
         generation
       );
       this.ctx.storage.sql.exec(
-        `INSERT INTO site_settings (site, daily_stability_days_goal)
+        `INSERT INTO site_settings (site, daily_stability_days_delta_goal)
          VALUES (?, ?)
          ON CONFLICT(site) DO NOTHING`,
         site,
-        DEFAULT_DAILY_STABILITY_DAYS_GOAL
+        DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL
       );
       const stabilityDaysAfter = readStabilityDays(this.ctx.storage, site);
       recordDailyStabilityDays(
@@ -584,9 +598,7 @@ export class LearningState extends DurableObject {
   }
 }
 
-export { LearningState as StabilityState };
-
-export function getStabilityStateStub(env) {
+export function getLearningStateStub(env) {
   const id = env.LEARNING_STATE.idFromName(LEARNING_STATE_OBJECT_NAME);
   return env.LEARNING_STATE.get(id);
 }

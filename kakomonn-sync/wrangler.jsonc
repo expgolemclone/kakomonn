@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "kakomonn-count-sync",
+  "name": "kakomonn-sync",
   "main": "src/index.js",
   "compatibility_date": "2026-07-17",
   "workers_dev": true,
@@ -9,7 +9,7 @@
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "none",
     "run_worker_first": [
-      "/v6/*"
+      "/v7/*"
     ]
   },
   "observability": {
@@ -24,11 +24,6 @@
     ]
   },
   "exports": {
-    "StabilityState": {
-      "type": "durable-object",
-      "state": "renamed",
-      "renamed_to": "LearningState"
-    },
     "LearningState": {
       "type": "durable-object",
       "storage": "sqlite"

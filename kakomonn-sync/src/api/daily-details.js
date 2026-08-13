@@ -1,6 +1,6 @@
 import { isSite } from "../auth.js";
 import { dateOrdinal } from "../dates.js";
-import { getStabilityStateStub } from "../learning-store.js";
+import { getLearningStateStub } from "../learning-store.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
 export async function handleDailyDetails(url, env) {
@@ -20,6 +20,6 @@ export async function handleDailyDetails(url, env) {
     return errorResponse("invalid_request", 400);
   }
   return jsonResponse(
-    await getStabilityStateStub(env).getDailyDetails(site, date)
+    await getLearningStateStub(env).getDailyDetails(site, date)
   );
 }

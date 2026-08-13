@@ -290,12 +290,12 @@ async function runLiveCatalogCrawlCase(browser, script) {
     }, script);
 
     await page.waitForFunction(
-      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v6/questions"),
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v7/questions"),
       null,
       { timeout: 180_000 },
     );
     const catalogCall = await page.evaluate(() =>
-      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v6/questions"),
+      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v7/questions"),
     );
     assert.equal(Array.isArray(catalogCall.body.questionIds), true);
     assert.equal(catalogCall.body.questionIds.length > 0, true);
@@ -366,11 +366,11 @@ async function runCase(
 
     console.log(JSON.stringify({ phase: "script-injected", answerText }));
     const frame = await getQuestionFrame(page);
-    await page.locator("#kakomonn-reader-count").waitFor({ state: "visible" });
+    await page.locator("#kakomonn-reader-learning-metrics").waitFor({ state: "visible" });
     await waitForSyncReady(page);
     assert.equal(
-      await page.locator("#kakomonn-reader-count").innerText(),
-      "定着 0日 / 今日 0問",
+      await page.locator("#kakomonn-reader-learning-metrics").innerText(),
+      "stabilityDays 0日 / todayAttemptedQuestionCount 0問",
     );
     assert.deepEqual(
       await frame.locator("body").evaluate((body) => {
@@ -489,16 +489,16 @@ async function runCase(
     if (expectedStabilityDays > 0) {
       await page.waitForFunction(
         (days) =>
-          document.querySelector("#kakomonn-reader-count")?.textContent ===
-          `定着 ${days}日 / 今日 1問`,
+          document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
+          `stabilityDays ${days}日 / todayAttemptedQuestionCount 1問`,
         expectedStabilityDays,
         { timeout: 10_000 },
       );
     } else {
       await page.waitForTimeout(1_500);
       assert.equal(
-        await page.locator("#kakomonn-reader-count").innerText(),
-        "定着 0日 / 今日 1問",
+        await page.locator("#kakomonn-reader-learning-metrics").innerText(),
+        "stabilityDays 0日 / todayAttemptedQuestionCount 1問",
       );
     }
 
@@ -519,7 +519,7 @@ async function runCase(
         phase: "failed",
         answerText,
         pageUrl: page.url(),
-        countText: await page.locator("#kakomonn-reader-count").textContent().catch(() => null),
+        countText: await page.locator("#kakomonn-reader-learning-metrics").textContent().catch(() => null),
         statusText: await page.locator("#kakomonn-reader-status").textContent().catch(() => null),
         nextButton: await page.locator("#kakomonn-reader-next").evaluate((button) => ({
           disabled: button.disabled,
@@ -597,7 +597,7 @@ async function runRandomNavigationCase(browser, script) {
     }, script);
 
     const frame = await getQuestionFrame(page);
-    await page.locator("#kakomonn-reader-count").waitFor({ state: "visible" });
+    await page.locator("#kakomonn-reader-learning-metrics").waitFor({ state: "visible" });
     await waitForSyncReady(page);
 
     const initialQuestion = (
@@ -703,7 +703,7 @@ async function runRandomNavigationCase(browser, script) {
         phase: "random-failed",
         pageUrl: page.url(),
         countText: await page
-          .locator("#kakomonn-reader-count")
+          .locator("#kakomonn-reader-learning-metrics")
           .textContent()
           .catch(() => null),
         statusText: await page
@@ -774,7 +774,7 @@ async function runMarkdownCopyCase(browser, script) {
     }, script);
 
     const frame = await getQuestionFrame(page);
-    await page.locator("#kakomonn-reader-count").waitFor({ state: "visible" });
+    await page.locator("#kakomonn-reader-learning-metrics").waitFor({ state: "visible" });
     await waitForSyncReady(page);
 
     const heading = await frame
@@ -1134,7 +1134,7 @@ async function runCrossDomainActivationCase(browser, script) {
       );
       const stateSites = await page.evaluate(() =>
         window.__syncMock.calls
-          .filter((call) => new URL(call.url).pathname === "/v6/state")
+          .filter((call) => new URL(call.url).pathname === "/v7/state")
           .map((call) => new URL(call.url).searchParams.get("site"))
       );
       assert.equal(stateSites.length >= 1, true);

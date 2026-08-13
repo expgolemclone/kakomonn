@@ -14,7 +14,7 @@
     <div class="page-shell">
       <header class="site-header">
         <div>
-          <p class="eyebrow">KAKOMONN / FSRS MASTERY</p>
+          <p class="eyebrow">KAKOMONN / LEARNING SYNC</p>
           <h1>過去問 <span>定着dashboard</span></h1>
         </div>
         <div class="header-actions">
@@ -53,21 +53,32 @@
             <div class="stability-number"><strong id="stability-days">--</strong><span>日</span></div>
             <div class="stability-meta">
               <span id="today-delta">todayStabilityDaysDelta --</span>
-              <span id="goal-label">dailyStabilityDaysGoal --</span>
+              <span id="goal-label">dailyStabilityDaysDeltaGoal --</span>
             </div>
           </section>
 
           <section class="goal-card" aria-labelledby="goal-title">
             <div>
               <p class="eyebrow">TODAY</p>
-              <h2 id="goal-title">dailyStabilityDaysGoal</h2>
+              <h2 id="goal-title">dailyStabilityDaysDeltaGoal</h2>
             </div>
             <div class="goal-controls">
-              <label for="daily-goal">dailyStabilityDaysGoal</label>
+              <label for="daily-goal">dailyStabilityDaysDeltaGoal</label>
               <input id="daily-goal" type="number" min="1" step="1" inputmode="numeric">
               <button id="save-goal" class="primary-button" type="button">保存</button>
             </div>
             <p id="goal-progress" class="goal-progress">今日 -- / --</p>
+          </section>
+
+          <section class="goal-card" aria-labelledby="metrics-title">
+            <div>
+              <p class="eyebrow">DISPLAY ONLY</p>
+              <h2 id="metrics-title">attemptedQuestionCount</h2>
+            </div>
+            <div class="stability-meta">
+              <span>attemptedQuestionCount <strong id="attempted-question-count">--</strong>問</span>
+              <span>todayAttemptedQuestionCount <strong id="today-attempted-question-count">--</strong>問</span>
+            </div>
           </section>
 
           <figure class="history-card" aria-labelledby="history-title">

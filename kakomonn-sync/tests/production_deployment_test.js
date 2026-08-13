@@ -4,7 +4,7 @@ const { readdir, readFile } = require("node:fs/promises");
 const { extname, resolve } = require("node:path");
 const test = require("node:test");
 
-const productionOrigin = "https://kakomonn-count-sync.expgolem-lab.workers.dev";
+const productionOrigin = "https://kakomonn-sync.expgolem-lab.workers.dev";
 const publicDirectory = resolve(__dirname, "..", "public");
 const assetControlFiles = new Set(["_headers"]);
 const textAssetExtensions = new Set([".css", ".html", ".js"]);
@@ -74,106 +74,143 @@ test("production assets match the repository", async (context) => {
   }
 });
 
-test("production serves only the authenticated v6 API backed by StabilityState", async () => {
-  const unauthorized = await fetch(new URL("/v6/sites", productionOrigin));
+test("production serves only the authenticated v7 API backed by LearningState", async () => {
+  const unauthorized = await fetch(new URL("/v7/sites", productionOrigin));
   assert.equal(unauthorized.status, 401);
   assert.deepEqual(await unauthorized.json(), { error: "unauthorized" });
 
-  const removedV3 = await authorizedGet("/v3/sites");
-  assert.equal(removedV3.status, 404);
-  const removedV4 = await authorizedGet("/v4/sites");
-  assert.equal(removedV4.status, 404);
-  const removedV5 = await authorizedGet("/v5/sites");
-  assert.equal(removedV5.status, 404);
+  for (const version of ["v3", "v4", "v5", "v6"]) {
+    const removed = await authorizedGet(`/${version}/sites`);
+    assert.equal(removed.status, 404, `/${version}/sites must be removed`);
+  }
 
-  const sitesResponse = await authorizedGet("/v6/sites");
+  const sitesResponse = await authorizedGet("/v7/sites");
   assert.equal(sitesResponse.status, 200);
   const sitesBody = await sitesResponse.json();
   assert.equal(Array.isArray(sitesBody.sites), true);
   assert.equal(sitesBody.sites.every((site) => sitePattern.test(site)), true);
 
-  if (sitesBody.sites.length > 0) {
-    const site = sitesBody.sites[0];
-    const settingsResponse = await authorizedGet(
-      `/v6/settings?${new URLSearchParams({ site })}`,
-    );
-    assert.equal(settingsResponse.status, 200);
-    const settingsBody = await settingsResponse.json();
-    assert.deepEqual(Object.keys(settingsBody), ["site", "dailyStabilityDaysGoal"]);
-    assert.equal(settingsBody.site, site);
-    assert.equal(Number.isSafeInteger(settingsBody.dailyStabilityDaysGoal), true);
-    assert.equal(settingsBody.dailyStabilityDaysGoal >= 1, true);
-
-    const stateResponse = await authorizedGet(`/v6/state?${new URLSearchParams({ site })}`);
-    assert.equal(stateResponse.status, 200);
-    const stateBody = await stateResponse.json();
-    assert.equal(stateBody.site, site);
-    assert.equal(Number.isSafeInteger(stateBody.stabilityDays), true);
-    assert.equal(stateBody.stabilityDays >= 0, true);
-    assert.equal(Number.isSafeInteger(stateBody.attemptedQuestionCount), true);
-    assert.equal(stateBody.attemptedQuestionCount >= 0, true);
-    assert.equal(Number.isSafeInteger(stateBody.todayAttemptedQuestionCount), true);
-    assert.equal(stateBody.todayAttemptedQuestionCount >= 0, true);
-    assert.equal(Object.hasOwn(stateBody, "solved"), false);
-    assert.equal(Object.hasOwn(stateBody, "todaySolved"), false);
-    assert.equal(Object.hasOwn(stateBody, "attempted"), false);
-    assert.equal(Number.isSafeInteger(stateBody.todayStabilityDaysDelta), true);
-
-    const historyResponse = await authorizedGet(
-      `/v6/history?${new URLSearchParams({ site, days: "7" })}`,
-    );
-    assert.equal(historyResponse.status, 200);
-    const historyBody = await historyResponse.json();
-    assert.equal(historyBody.days.length, 7);
-    assert.equal(
-      historyBody.days.every(
-        (day) =>
-          (day.stabilityDays === null ||
-            (Number.isSafeInteger(day.stabilityDays) && day.stabilityDays >= 0)) &&
-          (day.stabilityDaysDelta === null ||
-            Number.isSafeInteger(day.stabilityDaysDelta)) &&
-          Number.isSafeInteger(day.attemptedQuestionCount) &&
-          day.attemptedQuestionCount >= 0 &&
-          !Object.hasOwn(day, "solved"),
-      ),
-      true,
-    );
-
-    const detailsResponse = await authorizedGet(
-      `/v6/daily-details?${new URLSearchParams({ site, date: historyBody.today })}`,
-    );
-    assert.equal(detailsResponse.status, 200);
-    const detailsBody = await detailsResponse.json();
-    assert.deepEqual(Object.keys(detailsBody), ["site", "date", "timeZone", "tables"]);
-    assert.equal(detailsBody.site, site);
-    assert.equal(detailsBody.date, historyBody.today);
-    assert.equal(detailsBody.timeZone, "Asia/Tokyo");
-    assert.deepEqual(Object.keys(detailsBody.tables), ["stability_history", "attempts"]);
-    assert.equal(Array.isArray(detailsBody.tables.stability_history), true);
-    assert.equal(detailsBody.tables.stability_history.length <= 1, true);
-    assert.equal(Array.isArray(detailsBody.tables.attempts), true);
-    assert.equal(
-      detailsBody.tables.stability_history.every(
-        (row) =>
-          row.site === site &&
-          row.date === historyBody.today &&
-          Number.isSafeInteger(row.opening_stability_days) &&
-          Number.isSafeInteger(row.closing_stability_days),
-      ),
-      true,
-    );
-    assert.equal(
-      detailsBody.tables.attempts.every(
-        (row) =>
-          row.site === site &&
-          typeof row.operation_id === "string" &&
-          typeof row.question_id === "string" &&
-          Number.isSafeInteger(row.answered_at_ms) &&
-          (row.result === "correct" || row.result === "incorrect") &&
-          Number.isFinite(row.previous_stability) &&
-          Number.isFinite(row.resulting_stability),
-      ),
-      true,
-    );
+  if (sitesBody.sites.length === 0) {
+    return;
   }
+
+  const site = sitesBody.sites[0];
+  const settingsResponse = await authorizedGet(
+    `/v7/settings?${new URLSearchParams({ site })}`,
+  );
+  assert.equal(settingsResponse.status, 200);
+  const settingsBody = await settingsResponse.json();
+  assert.deepEqual(Object.keys(settingsBody), ["site", "dailyStabilityDaysDeltaGoal"]);
+  assert.equal(settingsBody.site, site);
+  assert.equal(Number.isSafeInteger(settingsBody.dailyStabilityDaysDeltaGoal), true);
+  assert.equal(settingsBody.dailyStabilityDaysDeltaGoal >= 1, true);
+
+  const stateResponse = await authorizedGet(`/v7/state?${new URLSearchParams({ site })}`);
+  assert.equal(stateResponse.status, 200);
+  const stateBody = await stateResponse.json();
+  assert.deepEqual(Object.keys(stateBody).sort(), [
+    "catalog",
+    "learningMetrics",
+    "site",
+    "today",
+  ]);
+  assert.equal(stateBody.site, site);
+  assert.match(stateBody.today, /^\d{4}-\d{2}-\d{2}$/);
+  const metrics = stateBody.learningMetrics;
+  assert.deepEqual(Object.keys(metrics).sort(), [
+    "attemptedQuestionCount",
+    "stabilityDays",
+    "todayAttemptedQuestionCount",
+    "todayStabilityDaysDelta",
+  ]);
+  assert.equal(Number.isSafeInteger(metrics.stabilityDays), true);
+  assert.equal(metrics.stabilityDays >= 0, true);
+  assert.equal(Number.isSafeInteger(metrics.todayStabilityDaysDelta), true);
+  assert.equal(Number.isSafeInteger(metrics.attemptedQuestionCount), true);
+  assert.equal(metrics.attemptedQuestionCount >= 0, true);
+  assert.equal(Number.isSafeInteger(metrics.todayAttemptedQuestionCount), true);
+  assert.equal(metrics.todayAttemptedQuestionCount >= 0, true);
+  assert.equal(
+    stateBody.catalog === null ||
+      (Number.isSafeInteger(stateBody.catalog.questionCount) &&
+        stateBody.catalog.questionCount > 0 &&
+        Number.isSafeInteger(stateBody.catalog.generation) &&
+        stateBody.catalog.generation > 0),
+    true,
+  );
+
+  const historyResponse = await authorizedGet(
+    `/v7/history?${new URLSearchParams({ site, days: "7" })}`,
+  );
+  assert.equal(historyResponse.status, 200);
+  const historyBody = await historyResponse.json();
+  assert.equal(historyBody.days.length, 7);
+  assert.equal(
+    historyBody.days.every(
+      (day) =>
+        (day.closingStabilityDays === null ||
+          (Number.isSafeInteger(day.closingStabilityDays) &&
+            day.closingStabilityDays >= 0)) &&
+        (day.stabilityDaysDelta === null ||
+          Number.isSafeInteger(day.stabilityDaysDelta)) &&
+        Number.isSafeInteger(day.dailyAttemptedQuestionCount) &&
+        day.dailyAttemptedQuestionCount >= 0,
+    ),
+    true,
+  );
+
+  const detailsResponse = await authorizedGet(
+    `/v7/daily-details?${new URLSearchParams({ site, date: historyBody.today })}`,
+  );
+  assert.equal(detailsResponse.status, 200);
+  const detailsBody = await detailsResponse.json();
+  assert.deepEqual(Object.keys(detailsBody), ["site", "date", "timeZone", "tables"]);
+  assert.equal(detailsBody.site, site);
+  assert.equal(detailsBody.date, historyBody.today);
+  assert.equal(detailsBody.timeZone, "Asia/Tokyo");
+  assert.deepEqual(Object.keys(detailsBody.tables), ["stability_history", "attempts"]);
+  assert.equal(Array.isArray(detailsBody.tables.stability_history), true);
+  assert.equal(detailsBody.tables.stability_history.length <= 1, true);
+  assert.equal(Array.isArray(detailsBody.tables.attempts), true);
+  assert.equal(
+    detailsBody.tables.stability_history.every(
+      (row) =>
+        row.site === site &&
+        row.date === historyBody.today &&
+        Number.isSafeInteger(row.opening_stability_days) &&
+        Number.isSafeInteger(row.closing_stability_days),
+    ),
+    true,
+  );
+  assert.equal(
+    detailsBody.tables.attempts.every(
+      (row) =>
+        row.site === site &&
+        typeof row.operation_id === "string" &&
+        typeof row.question_id === "string" &&
+        Number.isSafeInteger(row.attempted_at_ms) &&
+        (row.answer_result === "correct" || row.answer_result === "incorrect") &&
+        Number.isFinite(row.previous_card_stability_days) &&
+        Number.isFinite(row.resulting_card_stability_days),
+    ),
+    true,
+  );
+});
+
+test("production issues Azure speech tokens with the configured key", async () => {
+  const unauthorized = await fetch(new URL("/v7/speech-token", productionOrigin), {
+    method: "POST",
+  });
+  assert.equal(unauthorized.status, 401);
+
+  const response = await fetch(new URL("/v7/speech-token", productionOrigin), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${syncToken()}` },
+  });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(Object.keys(body).sort(), ["expiresInSeconds", "token"]);
+  assert.equal(typeof body.token, "string");
+  assert.equal(body.token.length > 0, true);
+  assert.equal(body.expiresInSeconds, 600);
 });

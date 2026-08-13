@@ -1,5 +1,5 @@
 import { isSite } from "../auth.js";
-import { getStabilityStateStub } from "../learning-store.js";
+import { getLearningStateStub } from "../learning-store.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
 function singleSite(url) {
@@ -16,5 +16,5 @@ export async function handleState(url, env) {
   if (site === null) {
     return errorResponse("invalid_request", 400);
   }
-  return jsonResponse(await getStabilityStateStub(env).getState(site));
+  return jsonResponse(await getLearningStateStub(env).getState(site));
 }

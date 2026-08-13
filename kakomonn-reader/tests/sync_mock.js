@@ -1,8 +1,8 @@
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SITE = "chushoks.kakomonn.com";
-const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE}.v6.pending-attempt`;
+const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE}.v7.pending-attempt`;
 const LEGACY_PENDING_CORRECT_KEY = `kakomonn-reader.${SITE}.pending-correct`;
-const SYNC_API_ORIGIN = "https://kakomonn-count-sync.expgolem-lab.workers.dev";
+const SYNC_API_ORIGIN = "https://kakomonn-sync.expgolem-lab.workers.dev";
 const AZURE_SPEECH_ORIGIN = "https://japaneast.tts.speech.microsoft.com";
 const AZURE_SPEECH_TOKEN = "test-azure-speech-token";
 
@@ -15,11 +15,11 @@ function installSyncMockInWindow({
   expectedToken,
   expectedSite,
   hasStoredToken,
-  initialPendingAnswer,
+  initialPendingAttempt,
   initialProcessedOperations,
   returnsPromise,
   tokenKey,
-  pendingAnswerKey,
+  pendingAttemptKey,
   expectedOrigin,
   expectedSpeechOrigin,
   expectedSpeechToken,
@@ -30,16 +30,19 @@ function installSyncMockInWindow({
 }) {
   const values = new Map();
   if (hasStoredToken) values.set(tokenKey, expectedToken);
-  if (initialPendingAnswer !== null) values.set(pendingAnswerKey, initialPendingAnswer);
+  if (initialPendingAttempt !== null) values.set(pendingAttemptKey, initialPendingAttempt);
 
   const processed = new Map(
     initialProcessedOperations.map((item) => [
       item.operationId,
       {
         questionId: item.questionId ?? "45124",
-        result: item.result ?? "correct",
-        previousStability: item.previousStability ?? 29,
-        resultingStability: item.resultingStability ?? 31,
+        answerResult: item.answerResult ?? "correct",
+        attemptedAtMs: item.attemptedAtMs ?? 1786500000000,
+        previousCardStabilityDays: item.previousCardStabilityDays ?? 29,
+        resultingCardStabilityDays: item.resultingCardStabilityDays ?? 31,
+        previousStabilityDays: item.previousStabilityDays ?? 10,
+        resultingStabilityDays: item.resultingStabilityDays ?? 11,
       },
     ]),
   );
@@ -52,6 +55,7 @@ function installSyncMockInWindow({
     attemptCount: initialAttemptCount,
     attemptedQuestionCount: initialAttemptedQuestionCount,
     todayAttemptedQuestionCount: initialTodayAttemptedQuestionCount,
+    todayStabilityDaysDelta: 0,
     date: initialDate,
     token: expectedToken,
     calls: [],
@@ -60,7 +64,7 @@ function installSyncMockInWindow({
     failNextDeleteValue: false,
     holdNextSetValue: false,
     releaseHeldSetValue: null,
-    commitThenFailNextAnswer: false,
+    commitThenFailNextAttempt: false,
     holdNextRequest: false,
     releaseHeldRequest: null,
     clipboardWrites: [],
@@ -75,10 +79,12 @@ function installSyncMockInWindow({
   const syncState = () => ({
     site: expectedSite,
     today: mock.date,
-    stabilityDays: mock.stabilityDays,
-    attemptedQuestionCount: mock.attemptedQuestionCount,
-    todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
-    todayStabilityDaysDelta: 0,
+    learningMetrics: {
+      stabilityDays: mock.stabilityDays,
+      todayStabilityDaysDelta: mock.todayStabilityDaysDelta,
+      attemptedQuestionCount: mock.attemptedQuestionCount,
+      todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
+    },
     catalog:
       mock.catalogQuestionCount === null
         ? null
@@ -202,19 +208,19 @@ function installSyncMockInWindow({
         const pathname = requestURL.pathname;
         if (
           call.method === "GET" &&
-          pathname === "/v6/state" &&
+          pathname === "/v7/state" &&
           requestURL.searchParams.get("site") === expectedSite
         ) {
           respondJSON(200, syncState());
           return;
         }
-        if (call.method === "POST" && pathname === "/v6/speech-token") {
+        if (call.method === "POST" && pathname === "/v7/speech-token") {
           respondJSON(200, { token: expectedSpeechToken, expiresInSeconds: 600 });
           return;
         }
         if (
           call.method === "GET" &&
-          pathname === "/v6/next" &&
+          pathname === "/v7/next" &&
           requestURL.searchParams.get("site") === expectedSite &&
           requestURL.searchParams.getAll("site").length === 1 &&
           requestURL.searchParams.getAll("excludeQuestionId").length <= 1
@@ -233,7 +239,7 @@ function installSyncMockInWindow({
           });
           return;
         }
-        if (call.method === "POST" && pathname === "/v6/questions") {
+        if (call.method === "POST" && pathname === "/v7/questions") {
           if (mock.conflictNextCatalogUpdate) {
             mock.conflictNextCatalogUpdate = false;
             mock.catalogUpdatedAtMs = Date.now();
@@ -269,17 +275,17 @@ function installSyncMockInWindow({
           });
           return;
         }
-        if (call.method === "POST" && pathname === "/v6/attempts") {
+        if (call.method === "POST" && pathname === "/v7/attempts") {
           const operationId = call.body?.operationId;
           const questionId = call.body?.questionId;
-          const result = call.body?.result;
+          const answerResult = call.body?.answerResult;
           if (
             !/^[0-9a-f]{32}$/.test(operationId ?? "") ||
             !/^\d+$/.test(questionId ?? "") ||
             call.body?.site !== expectedSite ||
-            (result !== "correct" && result !== "incorrect") ||
+            (answerResult !== "correct" && answerResult !== "incorrect") ||
             Object.keys(call.body ?? {}).sort().join(",") !==
-              "operationId,questionId,result,site"
+              "answerResult,operationId,questionId,site"
           ) {
             respondJSON(400, { error: "invalid_request" });
             return;
@@ -287,7 +293,7 @@ function installSyncMockInWindow({
           let item = processed.get(operationId);
           if (
             item !== undefined &&
-            (item.result !== result || item.questionId !== questionId)
+            (item.answerResult !== answerResult || item.questionId !== questionId)
           ) {
             respondJSON(409, { error: "operation_conflict" });
             return;
@@ -302,39 +308,48 @@ function installSyncMockInWindow({
             const nextAttemptStabilityDaysDelta =
               mock.nextAttemptStabilityDaysDelta;
             mock.nextAttemptStabilityDaysDelta = 0;
+            const previousStabilityDays = mock.stabilityDays;
             mock.stabilityDays += nextAttemptStabilityDaysDelta;
+            mock.todayStabilityDaysDelta += nextAttemptStabilityDaysDelta;
             item = {
               questionId,
-              result,
-              previousStability:
+              answerResult,
+              attemptedAtMs: Date.now(),
+              previousCardStabilityDays:
                 nextAttemptStabilityDaysDelta === -1
                   ? 35
                   : nextAttemptStabilityDaysDelta === 1
                     ? 29
                     : 10,
-              resultingStability:
+              resultingCardStabilityDays:
                 nextAttemptStabilityDaysDelta === -1
                   ? 5
                   : nextAttemptStabilityDaysDelta === 1
                     ? 31
                     : 11,
+              previousStabilityDays,
+              resultingStabilityDays: mock.stabilityDays,
             };
             processed.set(operationId, item);
           }
-          if (mock.commitThenFailNextAnswer) {
-            mock.commitThenFailNextAnswer = false;
+          if (mock.commitThenFailNextAttempt) {
+            mock.commitThenFailNextAttempt = false;
             failRequest();
             return;
           }
           respondJSON(200, {
             attempt: {
               questionId: item.questionId,
-              result: item.result,
-              previousStability: item.previousStability,
-              resultingStability: item.resultingStability,
+              answerResult: item.answerResult,
+              attemptedAtMs: item.attemptedAtMs,
+              previousCardStabilityDays: item.previousCardStabilityDays,
+              resultingCardStabilityDays: item.resultingCardStabilityDays,
+              previousStabilityDays: item.previousStabilityDays,
+              resultingStabilityDays: item.resultingStabilityDays,
             },
-            totals: {
+            learningMetrics: {
               stabilityDays: mock.stabilityDays,
+              todayStabilityDaysDelta: mock.todayStabilityDaysDelta,
               attemptedQuestionCount: mock.attemptedQuestionCount,
               todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
             },
@@ -372,7 +387,7 @@ function createSyncMockConfiguration({
   date = "2026-08-10",
   token = "test-sync-token",
   configured = true,
-  pendingAnswer = null,
+  pendingAttempt = null,
   processedOperations = [],
   userscriptsPromise = false,
   systemClipboard = false,
@@ -390,11 +405,11 @@ function createSyncMockConfiguration({
     expectedToken: token,
     expectedSite: site,
     hasStoredToken: configured,
-    initialPendingAnswer: pendingAnswer,
+    initialPendingAttempt: pendingAttempt,
     initialProcessedOperations: processedOperations,
     returnsPromise: userscriptsPromise,
     tokenKey: SYNC_TOKEN_KEY,
-    pendingAnswerKey: `kakomonn-reader.${site}.v6.pending-attempt`,
+    pendingAttemptKey: `kakomonn-reader.${site}.v7.pending-attempt`,
     expectedOrigin: SYNC_API_ORIGIN,
     expectedSpeechOrigin: AZURE_SPEECH_ORIGIN,
     expectedSpeechToken: AZURE_SPEECH_TOKEN,
@@ -415,7 +430,7 @@ module.exports = {
   installSyncMock,
   installSyncMockInWindow,
   LEGACY_PENDING_CORRECT_KEY,
-  PENDING_ANSWER_KEY,
+  PENDING_ATTEMPT_KEY,
   SITE,
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,

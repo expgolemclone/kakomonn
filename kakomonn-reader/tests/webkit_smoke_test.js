@@ -213,8 +213,8 @@ async function main() {
     }, fixtureBody);
     await page.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-count")?.textContent ===
-        "定着 0日 / 今日 0問",
+        document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
+        "stabilityDays 0日 / todayAttemptedQuestionCount 0問",
     );
     assert.deepEqual(
       await childFrame.evaluate(() => {
@@ -452,8 +452,8 @@ async function main() {
     await childFrame.waitForURL(nextQuestionURL);
     await page.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-count")?.textContent ===
-        "定着 31日 / 今日 1問",
+        document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
+        "stabilityDays 31日 / todayAttemptedQuestionCount 1問",
     );
     assert.equal(
       await page.evaluate(
@@ -461,7 +461,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v6/attempts",
+              new URL(call.url).pathname === "/v7/attempts",
           ).length,
       ),
       1,

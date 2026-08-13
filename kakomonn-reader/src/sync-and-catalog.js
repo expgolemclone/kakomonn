@@ -24,42 +24,56 @@
         value.catalog.updatedAtMs > 0 &&
         Number.isSafeInteger(value.catalog.generation) &&
         value.catalog.generation > 0);
+    const metrics = value?.learningMetrics;
+    const validLearningMetrics =
+      metrics !== null &&
+      typeof metrics === "object" &&
+      Number.isSafeInteger(metrics.stabilityDays) &&
+      metrics.stabilityDays >= 0 &&
+      Number.isSafeInteger(metrics.todayStabilityDaysDelta) &&
+      Number.isSafeInteger(metrics.attemptedQuestionCount) &&
+      metrics.attemptedQuestionCount >= 0 &&
+      Number.isSafeInteger(metrics.todayAttemptedQuestionCount) &&
+      metrics.todayAttemptedQuestionCount >= 0;
     return (
       value !== null &&
       typeof value === "object" &&
       value.site === SITE_ID &&
       /^\d{4}-\d{2}-\d{2}$/.test(value.today) &&
-      Number.isSafeInteger(value.stabilityDays) &&
-      value.stabilityDays >= 0 &&
-      Number.isSafeInteger(value.attemptedQuestionCount) &&
-      value.attemptedQuestionCount >= 0 &&
-      Number.isSafeInteger(value.todayAttemptedQuestionCount) &&
-      value.todayAttemptedQuestionCount >= 0 &&
-      Number.isSafeInteger(value.todayStabilityDaysDelta) &&
+      validLearningMetrics &&
       validCatalog
     );
   }
 
   function isAttemptResponse(value) {
+    const metrics = value?.learningMetrics;
     return (
       value !== null &&
       typeof value === "object" &&
       value.attempt !== null &&
       typeof value.attempt === "object" &&
       /^\d+$/.test(value.attempt.questionId) &&
-      (value.attempt.result === "correct" || value.attempt.result === "incorrect") &&
-      Number.isFinite(value.attempt.previousStability) &&
-      value.attempt.previousStability >= 0 &&
-      Number.isFinite(value.attempt.resultingStability) &&
-      value.attempt.resultingStability >= 0 &&
-      value.totals !== null &&
-      typeof value.totals === "object" &&
-      Number.isSafeInteger(value.totals.stabilityDays) &&
-      value.totals.stabilityDays >= 0 &&
-      Number.isSafeInteger(value.totals.attemptedQuestionCount) &&
-      value.totals.attemptedQuestionCount >= 0 &&
-      Number.isSafeInteger(value.totals.todayAttemptedQuestionCount) &&
-      value.totals.todayAttemptedQuestionCount >= 0
+      (value.attempt.answerResult === "correct" ||
+        value.attempt.answerResult === "incorrect") &&
+      Number.isSafeInteger(value.attempt.attemptedAtMs) &&
+      value.attempt.attemptedAtMs > 0 &&
+      Number.isFinite(value.attempt.previousCardStabilityDays) &&
+      value.attempt.previousCardStabilityDays >= 0 &&
+      Number.isFinite(value.attempt.resultingCardStabilityDays) &&
+      value.attempt.resultingCardStabilityDays >= 0 &&
+      Number.isSafeInteger(value.attempt.previousStabilityDays) &&
+      value.attempt.previousStabilityDays >= 0 &&
+      Number.isSafeInteger(value.attempt.resultingStabilityDays) &&
+      value.attempt.resultingStabilityDays >= 0 &&
+      metrics !== null &&
+      typeof metrics === "object" &&
+      Number.isSafeInteger(metrics.stabilityDays) &&
+      metrics.stabilityDays >= 0 &&
+      Number.isSafeInteger(metrics.todayStabilityDaysDelta) &&
+      Number.isSafeInteger(metrics.attemptedQuestionCount) &&
+      metrics.attemptedQuestionCount >= 0 &&
+      Number.isSafeInteger(metrics.todayAttemptedQuestionCount) &&
+      metrics.todayAttemptedQuestionCount >= 0
     );
   }
 
@@ -148,14 +162,14 @@
     }
   }
 
-  function isPendingAnswer(value) {
+  function isPendingAttempt(value) {
     if (
       value === null ||
       typeof value !== "object" ||
       value.site !== SITE_ID ||
       !/^[0-9a-f]{32}$/.test(value.operationId) ||
       !/^\d+$/.test(value.questionId) ||
-      (value.result !== "correct" && value.result !== "incorrect") ||
+      (value.answerResult !== "correct" && value.answerResult !== "incorrect") ||
       !isSitePageURL(value.pageURL) ||
       extractQuestionIdFromURL(value.pageURL) !== value.questionId ||
       (value.phase !== "queued" && value.phase !== "awaiting_navigation")
@@ -266,20 +280,20 @@
 
   function requestSyncState(token) {
     const parameters = new URLSearchParams({ site: SITE_ID });
-    return requestSyncResponse("GET", `/v6/state?${parameters}`, token, isSyncState);
+    return requestSyncResponse("GET", `/v7/state?${parameters}`, token, isSyncState);
   }
 
   function requestAttemptResult(token, operation) {
     return requestSyncResponse(
       "POST",
-      "/v6/attempts",
+      "/v7/attempts",
       token,
       isAttemptResponse,
       {
         site: operation.site,
         questionId: operation.questionId,
         operationId: operation.operationId,
-        result: operation.result,
+        answerResult: operation.answerResult,
       }
     );
   }
@@ -289,11 +303,11 @@
     if (excludeQuestionId !== null) {
       parameters.set("excludeQuestionId", excludeQuestionId);
     }
-    return requestSyncResponse("GET", `/v6/next?${parameters}`, token, isNextResponse);
+    return requestSyncResponse("GET", `/v7/next?${parameters}`, token, isNextResponse);
   }
 
   function requestCatalogUpdate(token, questionIds, expectedGeneration) {
-    return requestSyncResponse("POST", "/v6/questions", token, isCatalogResponse, {
+    return requestSyncResponse("POST", "/v7/questions", token, isCatalogResponse, {
       site: SITE_ID,
       questionIds,
       expectedGeneration,
@@ -301,7 +315,7 @@
   }
 
   function requestSpeechTokenResult(token) {
-    return requestSyncResponse("POST", "/v6/speech-token", token, isSpeechTokenResponse);
+    return requestSyncResponse("POST", "/v7/speech-token", token, isSpeechTokenResponse);
   }
 
   function clearAzureSpeechToken() {
@@ -361,9 +375,9 @@
     if (!isSyncState(state)) {
       throw new SyncRequestError("invalid_response");
     }
-    stabilityDays = state.stabilityDays;
-    todayAttemptedQuestionCount = state.todayAttemptedQuestionCount;
-    renderCount();
+    stabilityDays = state.learningMetrics.stabilityDays;
+    todayAttemptedQuestionCount = state.learningMetrics.todayAttemptedQuestionCount;
+    renderLearningMetrics();
   }
 
   function updateSyncDependentControls() {
@@ -373,25 +387,25 @@
     synchronizeTimeLimitPhase();
   }
 
-  async function clearPendingAnswer() {
-    await GM.deleteValue(PENDING_ANSWER_KEY);
-    pendingAnswer = null;
+  async function clearPendingAttempt() {
+    await GM.deleteValue(PENDING_ATTEMPT_KEY);
+    pendingAttempt = null;
   }
 
-  async function markPendingAnswerAwaitingNavigation(operation, nextURL) {
+  async function markPendingAttemptAwaitingNavigation(operation, nextURL) {
     if (
-      pendingAnswer === null ||
-      pendingAnswer.operationId !== operation.operationId ||
+      pendingAttempt === null ||
+      pendingAttempt.operationId !== operation.operationId ||
       !isScheduledQuestionURL(nextURL)
     ) {
-      throw new Error("pending answer changed");
+      throw new Error("pending attempt changed");
     }
     const completed = { ...operation, phase: "awaiting_navigation", nextURL };
-    if (!isPendingAnswer(completed)) {
-      throw new Error("invalid completed answer");
+    if (!isPendingAttempt(completed)) {
+      throw new Error("invalid completed attempt");
     }
-    await GM.setValue(PENDING_ANSWER_KEY, completed);
-    pendingAnswer = completed;
+    await GM.setValue(PENDING_ATTEMPT_KEY, completed);
+    pendingAttempt = completed;
   }
 
   function openSyncSettings(required = false) {
@@ -673,7 +687,7 @@
         state = await ensureQuestionCatalog(syncToken, state);
         applyRemoteState(state);
         syncReady = true;
-        if (pendingAnswer !== null) {
+        if (pendingAttempt !== null) {
           setStatus("未完了の解答同期があります");
         } else {
           setStatus("待機中");
@@ -687,7 +701,7 @@
         syncInProgress = false;
         syncPromise = null;
         updateSyncDependentControls();
-        void maybeContinuePendingAnswerNavigation();
+        void maybeContinuePendingAttemptNavigation();
         processCurrentPageSpeech();
       }
     })();
@@ -736,33 +750,33 @@
         syncSettingsCancelButton.disabled = false;
         syncTokenInput.disabled = false;
         updateSyncDependentControls();
-        void maybeContinuePendingAnswerNavigation();
+        void maybeContinuePendingAttemptNavigation();
         processCurrentPageSpeech();
       }
     })();
     return syncPromise;
   }
 
-  async function restorePendingState(storedAnswer) {
-    if (storedAnswer !== null && !isPendingAnswer(storedAnswer)) {
-      await GM.deleteValue(PENDING_ANSWER_KEY);
-      pendingAnswer = null;
+  async function restorePendingState(storedAttempt) {
+    if (storedAttempt !== null && !isPendingAttempt(storedAttempt)) {
+      await GM.deleteValue(PENDING_ATTEMPT_KEY);
+      pendingAttempt = null;
     } else {
-      pendingAnswer = storedAnswer;
+      pendingAttempt = storedAttempt;
     }
   }
 
   async function initializeSync() {
-    renderCount();
+    renderLearningMetrics();
     updateSyncDependentControls();
     if (!userscriptAPIAvailable()) {
       setStatus("ユーザースクリプトAPIを利用できません");
       return;
     }
     try {
-      const [storedToken, storedPendingAnswer] = await Promise.all([
+      const [storedToken, storedPendingAttempt] = await Promise.all([
         GM.getValue(SYNC_TOKEN_KEY, ""),
-        GM.getValue(PENDING_ANSWER_KEY, null),
+        GM.getValue(PENDING_ATTEMPT_KEY, null),
       ]);
       if (typeof storedToken !== "string") {
         await GM.deleteValue(SYNC_TOKEN_KEY);
@@ -771,7 +785,7 @@
         syncToken = storedToken.trim();
       }
       clearAzureSpeechToken();
-      await restorePendingState(storedPendingAnswer);
+      await restorePendingState(storedPendingAttempt);
       if (!syncToken) {
         syncReady = false;
         setStatus("同期トークンを設定してください");
@@ -792,7 +806,7 @@
     if (
       document.visibilityState === "visible" &&
       syncToken &&
-      pendingAnswer === null &&
+      pendingAttempt === null &&
       !nextQuestionOperationInProgress &&
       syncSettings.hidden
     ) {

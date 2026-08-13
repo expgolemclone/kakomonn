@@ -19,8 +19,8 @@
   statusBadge.id = "kakomonn-reader-status";
   statusBadge.textContent = "ページ読込中";
 
-  const countBadge = document.createElement("div");
-  countBadge.id = "kakomonn-reader-count";
+  const learningMetricsBadge = document.createElement("div");
+  learningMetricsBadge.id = "kakomonn-reader-learning-metrics";
 
   const skipButton = document.createElement("button");
   skipButton.id = "kakomonn-reader-skip";
@@ -49,7 +49,7 @@
 
   controls.append(
     statusBadge,
-    countBadge,
+    learningMetricsBadge,
     skipButton,
     syncSettingsButton,
     timeLimitProgress
@@ -144,7 +144,7 @@
     syncSettings
   );
 
-  function renderCount() {
+  function renderLearningMetrics() {
     const stabilityDaysText =
       stabilityDays === null
         ? "--"
@@ -153,10 +153,10 @@
       todayAttemptedQuestionCount === null
         ? "--"
         : todayAttemptedQuestionCount;
-    countBadge.textContent = `定着 ${stabilityDaysText}日 / 今日 ${todayAttemptedQuestionCountText}問`;
-    countBadge.setAttribute(
+    learningMetricsBadge.textContent = `stabilityDays ${stabilityDaysText}日 / todayAttemptedQuestionCount ${todayAttemptedQuestionCountText}問`;
+    learningMetricsBadge.setAttribute(
       "aria-label",
-      `定着日数 ${stabilityDaysText}日, 今日解いた問題数 ${todayAttemptedQuestionCountText}問`
+      `stabilityDays ${stabilityDaysText}日, todayAttemptedQuestionCount ${todayAttemptedQuestionCountText}問`
     );
   }
 

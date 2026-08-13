@@ -5,7 +5,7 @@ const path = require("node:path");
 const { chromium } = require("playwright");
 const {
   installSyncMock,
-  PENDING_ANSWER_KEY,
+  PENDING_ATTEMPT_KEY,
 } = require("./sync_mock");
 
 const projectRoot = path.resolve(__dirname, "..");
@@ -15,8 +15,13 @@ const edgeUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0";
 
-function questionHTML(result = "correct", nativeNextId = "999") {
-  const resultClass = result === "correct" ? "is-correct" : result === "incorrect" ? "is-wrong" : "";
+function questionHTML(answerResult = "correct", nativeNextId = "999") {
+  const resultClass =
+    answerResult === "correct"
+      ? "is-correct"
+      : answerResult === "incorrect"
+        ? "is-wrong"
+        : "";
   return `<!doctype html><html><body>
     <main>
       <p>問題文です.</p>
@@ -53,7 +58,7 @@ async function prepare(page, startPath, options = {}) {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
   await page.route(`https://${site}/**`, (route) =>
-    route.fulfill({ contentType: "text/html; charset=utf-8", body: questionHTML(options.result, options.nativeNextId) }),
+    route.fulfill({ contentType: "text/html; charset=utf-8", body: questionHTML(options.answerResult, options.nativeNextId) }),
   );
   await page.goto(`https://${site}${startPath}`);
   await page.evaluate(() => {
@@ -71,7 +76,7 @@ async function prepare(page, startPath, options = {}) {
 
 async function readerFrame(page) {
   await page.waitForSelector("#kakomonn-reader-frame");
-  await page.waitForFunction(() => document.querySelector("#kakomonn-reader-count")?.textContent?.startsWith("定着 "));
+  await page.waitForFunction(() => document.querySelector("#kakomonn-reader-learning-metrics")?.textContent?.startsWith("stabilityDays "));
   const frame = page.frames().find((candidate) => candidate !== page.mainFrame());
   assert(frame, "reader frame must exist");
   await frame.waitForLoadState("load");
@@ -81,7 +86,7 @@ async function readerFrame(page) {
 
 function attemptCalls(page) {
   return page.evaluate(() =>
-    window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v6/attempts"),
+    window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v7/attempts"),
   );
 }
 
@@ -95,23 +100,23 @@ async function runQuestionIdCase(browser, startPath) {
     await page.evaluate(() => { window.__syncMock.nextAttemptStabilityDaysDelta = 31; });
     await frame.locator("#native-next").click();
     await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v6/attempts"),
+      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v7/attempts"),
     );
     const calls = await attemptCalls(page);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].body.questionId, "123");
-    assert.deepEqual(Object.keys(calls[0].body).sort(), ["operationId", "questionId", "result", "site"]);
+    assert.deepEqual(Object.keys(calls[0].body).sort(), ["answerResult", "operationId", "questionId", "site"]);
     await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v6/next"),
+      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v7/next"),
     );
     await frame.waitForURL(`https://${site}/questions/456`);
     assert.equal(
-      await page.locator("#kakomonn-reader-count").innerText(),
-      "定着 31日 / 今日 1問"
+      await page.locator("#kakomonn-reader-learning-metrics").innerText(),
+      "stabilityDays 31日 / todayAttemptedQuestionCount 1問"
     );
     assert.equal(
-      await page.locator("#kakomonn-reader-count").getAttribute("aria-label"),
-      "定着日数 31日, 今日解いた問題数 1問"
+      await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-label"),
+      "stabilityDays 31日, todayAttemptedQuestionCount 1問"
     );
     assert.deepEqual(errors, []);
   } finally {
@@ -129,7 +134,7 @@ async function runUnknownURLCase(browser) {
     assert.equal(await page.locator("#kakomonn-reader-next").isDisabled(), true);
     assert.equal((await attemptCalls(page)).length, 0);
     assert.equal(
-      await page.evaluate(() => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v6/next")),
+      await page.evaluate(() => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v7/next")),
       false,
     );
     assert.deepEqual(errors, []);
@@ -147,29 +152,29 @@ async function runRetryCase(browser) {
     await page.waitForFunction(() => document.querySelector("#kakomonn-reader-next")?.disabled === false);
     await page.evaluate(() => {
       window.__syncMock.nextAttemptStabilityDaysDelta = 31;
-      window.__syncMock.commitThenFailNextAnswer = true;
+      window.__syncMock.commitThenFailNextAttempt = true;
     });
     await frame.locator("#native-next").click();
     await page.waitForFunction(() => document.querySelector("#kakomonn-reader-status")?.textContent?.includes("再試行してください"));
-    const firstPending = await page.evaluate((key) => window.__getGMValue(key), PENDING_ANSWER_KEY);
+    const firstPending = await page.evaluate((key) => window.__getGMValue(key), PENDING_ATTEMPT_KEY);
     assert.match(firstPending.operationId, /^[0-9a-f]{32}$/);
     assert.equal(firstPending.questionId, "123");
     assert.equal(await page.evaluate(() => window.__syncMock.stabilityDays), 31);
 
     await page.locator("#kakomonn-reader-next").click();
     await page.waitForFunction(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v6/attempts").length === 2,
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v7/attempts").length === 2,
     );
     const calls = await attemptCalls(page);
     assert.equal(calls[0].body.operationId, calls[1].body.operationId);
     assert.equal(await page.evaluate(() => window.__syncMock.stabilityDays), 31);
     await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v6/next"),
+      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v7/next"),
     );
     await frame.waitForURL(`https://${site}/questions/456`);
     assert.equal(
-      await page.locator("#kakomonn-reader-count").innerText(),
-      "定着 31日 / 今日 1問"
+      await page.locator("#kakomonn-reader-learning-metrics").innerText(),
+      "stabilityDays 31日 / todayAttemptedQuestionCount 1問"
     );
     assert.deepEqual(errors, []);
   } finally {
@@ -251,10 +256,10 @@ async function runCatalogRefreshCase(browser) {
     await installSyncMock(page, { catalogQuestionCount: null });
     await page.addScriptTag({ content: fs.readFileSync(scriptPath, "utf8") });
     await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v6/questions"),
+      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v7/questions"),
     );
     const catalogCall = await page.evaluate(() =>
-      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v6/questions"),
+      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v7/questions"),
     );
     assert.deepEqual(catalogCall.body.questionIds, ["10", "11", "12", "13", "14", "20"]);
     assert.equal(catalogCall.body.expectedGeneration, 0);
@@ -325,7 +330,7 @@ async function runCatalogIncompleteCase(browser) {
       "問題一覧を同期できません.再試行してください",
     );
     const catalogCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v6/questions"),
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v7/questions"),
     );
     assert.equal(catalogCalls.length, 0);
     assert.deepEqual(errors, []);
@@ -385,7 +390,7 @@ async function runCatalogFinalPageMismatchCase(browser) {
       "問題一覧を同期できません.再試行してください",
     );
     const catalogCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v6/questions"),
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v7/questions"),
     );
     assert.equal(finalPageReads, 2);
     assert.equal(catalogCalls.length, 0);
@@ -445,7 +450,7 @@ async function runCatalogSamePageDuplicateCase(browser) {
       "問題一覧を同期できません.再試行してください",
     );
     const catalogCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v6/questions"),
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v7/questions"),
     );
     assert.equal(catalogCalls.length, 0);
     assert.deepEqual(errors, []);
@@ -519,7 +524,7 @@ async function runCatalogHybridSnapshotCase(browser) {
       "問題一覧を同期できません.再試行してください",
     );
     const catalogCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v6/questions"),
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v7/questions"),
     );
     assert.equal(pageOneReads, 2);
     assert.equal(catalogCalls.length, 0);
@@ -574,7 +579,7 @@ async function runCatalogCASConflictCase(browser) {
     await page.addScriptTag({ content: fs.readFileSync(scriptPath, "utf8") });
     await page.waitForFunction(() => document.querySelector("#kakomonn-reader-status")?.textContent === "待機中");
     const catalogCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v6/questions"),
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v7/questions"),
     );
     assert.equal(catalogCalls.length, 1);
     assert.equal(catalogCalls[0].body.expectedGeneration, 0);
@@ -591,7 +596,7 @@ async function runStabilityDaysDecreaseCase(browser) {
     const page = await context.newPage();
     const errors = await prepare(page, "/questions/123", {
       stabilityDays: 35,
-      result: "incorrect",
+      answerResult: "incorrect",
       nextQuestionId: null,
     });
     const frame = await readerFrame(page);
@@ -603,8 +608,8 @@ async function runStabilityDaysDecreaseCase(browser) {
       "出題できる問題はありません",
     );
     assert.equal(
-      await page.locator("#kakomonn-reader-count").innerText(),
-      "定着 5日 / 今日 1問"
+      await page.locator("#kakomonn-reader-learning-metrics").innerText(),
+      "stabilityDays 5日 / todayAttemptedQuestionCount 1問"
     );
     assert.deepEqual(errors, []);
   } finally {
@@ -616,8 +621,8 @@ async function main() {
   execFileSync("python3", ["build.py"], { cwd: projectRoot, stdio: "inherit" });
   const script = fs.readFileSync(scriptPath, "utf8");
   assert.equal(script.includes("/v3/answers"), false);
-  assert.equal(script.includes("/v6/attempts"), true);
-  assert.equal(script.includes("/v6/next"), true);
+  assert.equal(script.includes("/v7/attempts"), true);
+  assert.equal(script.includes("/v7/next"), true);
   assert.equal(script.includes("completedMilestone"), false);
   assert.equal(script.includes("masteryDelta"), false);
   assert.equal(script.includes("findNextQuestionURL"), false);
@@ -638,7 +643,7 @@ async function main() {
   } finally {
     await browser.close();
   }
-  console.log("reader FSRS navigation smoke test passed");
+  console.log("reader learning metrics smoke test passed");
 }
 
 main().catch((error) => {

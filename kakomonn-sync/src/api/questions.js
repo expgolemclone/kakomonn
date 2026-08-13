@@ -1,6 +1,6 @@
 import { isSite } from "../auth.js";
 import { QUESTION_ID_PATTERN } from "../contracts.js";
-import { getStabilityStateStub } from "../learning-store.js";
+import { getLearningStateStub } from "../learning-store.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
 export async function handleQuestions(request, env) {
@@ -30,7 +30,7 @@ export async function handleQuestions(request, env) {
   ) {
     return errorResponse("invalid_request", 400);
   }
-  const result = await getStabilityStateStub(env).replaceCatalog(
+  const result = await getLearningStateStub(env).replaceCatalog(
     body.site,
     body.questionIds,
     body.expectedGeneration

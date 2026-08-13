@@ -360,7 +360,7 @@
     updateNextQuestionButton();
     updateCopyButton();
     synchronizeTimeLimitPhase();
-    void maybeContinuePendingAnswerNavigation();
+    void maybeContinuePendingAttemptNavigation();
 
     loadTimer = window.setTimeout(() => {
       loadTimer = null;
@@ -404,7 +404,7 @@
     }
   });
 
-  renderCount();
+  renderLearningMetrics();
   void initializeSync();
 
   // iframeのloadがキャッシュ等で先に完了していた場合にも対応します.

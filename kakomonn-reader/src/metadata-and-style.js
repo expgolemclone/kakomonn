@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         過去問マイルストーン＋連続自動読み上げ
+// @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @description  問題文と解説の読み上げ, コピー, FSRS stability合計日数の端末間同期を提供します.
+// @description  問題文と解説の読み上げ, コピー, stabilityDays合計日数の端末間同期を提供します.
 // @match        https://*.kakomonn.com/*
-// @connect      kakomonn-count-sync.expgolem-lab.workers.dev
+// @connect      kakomonn-sync.expgolem-lab.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com
 // @run-at       document-end
 // @noframes
@@ -29,7 +29,7 @@
       ? GM_info.scriptHandler
       : "";
   const SYNC_API_URL =
-    "https://kakomonn-count-sync.expgolem-lab.workers.dev";
+    "https://kakomonn-sync.expgolem-lab.workers.dev";
   const SITE_ID = location.hostname.toLowerCase();
   if (
     !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(
@@ -39,7 +39,7 @@
     return;
   }
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
-  const PENDING_ANSWER_KEY = `kakomonn-reader.${SITE_ID}.v6.pending-attempt`;
+  const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE_ID}.v7.pending-attempt`;
   const SYNC_TIMEOUT_MS = 15000;
   const SPEECH_TIMEOUT_MS = 30000;
   const FRAME_LOAD_DELAY_MS = 900;
@@ -220,8 +220,8 @@
   let syncReady = false;
   let syncInProgress = false;
   let syncPromise = null;
-  let pendingAnswer = null;
-  let pendingAnswerTransitionPromise = null;
+  let pendingAttempt = null;
+  let pendingAttemptTransitionPromise = null;
 
   const style = document.createElement("style");
   style.textContent = `

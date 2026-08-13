@@ -97,16 +97,16 @@ async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
     );
     const answerCalls = await page.evaluate(() =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v6/attempts"
+        (call) => new URL(call.url).pathname === "/v7/attempts"
       )
     );
     assert.equal(answerCalls.length, 1);
-    assert.equal(answerCalls[0].body.result, "incorrect");
+    assert.equal(answerCalls[0].body.answerResult, "incorrect");
     assert.equal(answerCalls[0].body.questionId, "100");
     assert.equal(await page.evaluate(() => window.__syncMock.attemptCount), 1);
     const nextCall = await page.evaluate(() =>
       window.__syncMock.calls.find(
-        (call) => new URL(call.url).pathname === "/v6/next"
+        (call) => new URL(call.url).pathname === "/v7/next"
       )
     );
     assert.equal(
@@ -139,17 +139,17 @@ async function explanationExpiryRecordsAndAdvances(browser, script) {
     await page.waitForFunction(
       () =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v6/attempts"
+          (call) => new URL(call.url).pathname === "/v7/attempts"
         ).length === 1
     );
     const recorded = await page.evaluate(() => ({
       answered: window.__syncMock.attemptCount,
       body: window.__syncMock.calls.find(
-        (call) => new URL(call.url).pathname === "/v6/attempts"
+        (call) => new URL(call.url).pathname === "/v7/attempts"
       ).body,
     }));
     assert.equal(recorded.answered, 1);
-    assert.equal(recorded.body.result, "correct");
+    assert.equal(recorded.body.answerResult, "correct");
     assert.equal(recorded.body.site, "chushoks.kakomonn.com");
     await page.waitForFunction(
       () =>

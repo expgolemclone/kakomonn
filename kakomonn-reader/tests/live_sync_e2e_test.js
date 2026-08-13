@@ -257,16 +257,17 @@ async function configureSyncToken(
   assertRuntimeIdentity(ready, expectedBuildFingerprint);
 
   if (ready.settingsHidden) {
-    await waitUntil("the enabled sync settings button", async () => {
-      const state = await readReaderState(page);
-      return state.settingsButtonDisabled === false ? state : null;
-    });
-    await page
-      .locator("#kakomonn-reader-sync-settings-button")
-      .evaluate((button) => button.click());
     await waitUntil("the open sync settings panel", async () => {
       const state = await readReaderState(page);
-      return state.settingsHidden === false ? state : null;
+      if (state.settingsHidden === false) {
+        return state;
+      }
+      if (state.settingsButtonDisabled === false) {
+        await page
+          .locator("#kakomonn-reader-sync-settings-button")
+          .evaluate((button) => button.click());
+      }
+      return null;
     });
   }
 

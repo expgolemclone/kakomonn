@@ -182,25 +182,28 @@ async function assertDashboard(page) {
   await installApiMock(page);
   await page.addStyleTag({ content: stylesSource });
   await page.addScriptTag({ content: appSource });
-  await page.waitForFunction(() => document.querySelector("#stability-days")?.textContent === "9,912");
+  await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+104");
 
-  assert.equal(await page.locator("#stability-title").innerText(), "stabilityDays");
+  assert.equal(await page.locator("#primary-kpi-title").innerText(), "todayStabilityDaysDelta");
+  assert.equal(await page.locator("#today-stability-days-delta").innerText(), "+104");
   assert.equal(await page.locator("#stability-days").innerText(), "9,912");
-  assert.equal(await page.locator(".stability-card .stability-meta").innerText(), "todayStabilityDaysDelta +104日\ndailyStabilityDaysDeltaGoal +30日");
-  assert.equal(await page.locator("#today-delta").innerText(), "todayStabilityDaysDelta +104日");
-  assert.equal(await page.locator("#goal-label").innerText(), "dailyStabilityDaysDeltaGoal +30日");
-  assert.equal(await page.locator("#goal-progress").innerText(), "todayStabilityDaysDelta +104日 / dailyStabilityDaysDeltaGoal +30日");
   assert.equal(await page.locator("#goal-title").innerText(), "dailyStabilityDaysDeltaGoal");
   assert.equal(await page.locator('label[for="daily-goal"]').innerText(), "dailyStabilityDaysDeltaGoal");
-  assert.equal(await page.locator("#metrics-title").innerText(), "attemptedQuestionCount");
+  assert.equal(await page.locator("#daily-goal").inputValue(), "30");
+  assert.deepEqual(await page.locator(".metric-list dt").allInnerTexts(), ["stabilityDays", "attemptedQuestionCount", "todayAttemptedQuestionCount"]);
   assert.equal(await page.locator("#attempted-question-count").innerText(), "640");
   assert.equal(await page.locator("#today-attempted-question-count").innerText(), "28");
+  assert.equal(await page.locator("#goal-label, #goal-progress, .stability-card, .stability-meta").count(), 0);
+  assert.equal(await page.locator("#dashboard *").evaluateAll((elements) => elements.filter((element) => element.childElementCount === 0 && element.textContent.trim() === "+104" && element.getClientRects().length > 0).length), 1);
   assert.equal(await page.locator("#history-title").innerText(), "stabilityDaysDeltaの7日推移");
   assert.equal(await page.locator("#stability-chart .chart-day").count(), 7);
   assert.equal(await page.locator("#stability-chart rect.delta-bar").count(), 6);
   assert.equal(await page.locator("#stability-chart rect.delta-bar.negative").count(), 1);
   assert.equal(await page.locator("#stability-chart rect.delta-bar.zero").count(), 1);
-  assert.equal(await page.locator("#stability-chart .delta-value-label").count(), 6);
+  assert.equal(await page.locator("#stability-chart .delta-value-label").count(), 5);
+  assert.equal(await page.locator('[data-chart-date="2026-08-10"] .delta-value-label').count(), 0);
+  assert.equal(await page.locator('[data-chart-date="2026-08-09"] .delta-value-label').textContent(), "+106");
+  assert.match(await page.locator('[data-chart-date="2026-08-10"]').getAttribute("aria-label"), /stabilityDaysDelta \+104日/);
   assert.equal((await page.locator("#stability-chart .delta-axis-label").count()) >= 2, true);
   assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-04, stabilityDaysDelta 記録なし/);
   assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-10, stabilityDaysDelta \+104日/);
@@ -255,9 +258,9 @@ async function assertDashboard(page) {
 
   await page.locator("#daily-goal").fill("250");
   await page.locator("#save-goal").click();
-  await page.waitForFunction(() => document.querySelector("#goal-label")?.textContent === "dailyStabilityDaysDeltaGoal +250日");
-  assert.equal(await page.locator("#goal-label").innerText(), "dailyStabilityDaysDeltaGoal +250日");
-  assert.equal(await page.locator("#goal-progress").innerText(), "todayStabilityDaysDelta +104日 / dailyStabilityDaysDeltaGoal +250日");
+  await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "dailyStabilityDaysDeltaGoalを同期しました.");
+  assert.equal(await page.locator("#daily-goal").inputValue(), "250");
+  assert.equal((await page.locator(".goal-card").innerText()).includes("+104"), false);
   assert.equal(
     await page.evaluate(() => localStorage.getItem("今日の定着日数純増目標")),
     null,
@@ -268,7 +271,7 @@ async function assertDashboard(page) {
   await page.evaluate((siteValue) => { window.__delayedSite = siteValue; }, otherSite);
   await page.locator("#site-select").selectOption(otherSite);
   await page.locator("#site-select").selectOption(site);
-  await page.waitForFunction(() => document.querySelector("#stability-days")?.textContent === "9,912");
+  await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+104");
   await page.evaluate(() => window.__releaseDelayedSite());
   await page.waitForTimeout(50);
   assert.equal(await page.locator("#dashboard").isVisible(), true);
@@ -302,7 +305,7 @@ async function main() {
   } finally {
     await browser.close();
   }
-  console.log("dashboard stability days E2E passed");
+  console.log("dashboard KPI E2E passed");
 }
 
 main().catch((error) => {

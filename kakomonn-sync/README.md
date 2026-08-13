@@ -12,7 +12,7 @@ https://kakomonn-sync.expgolem-lab.workers.dev/
 
 初回だけ`kakomonn-reader`と同じ同期tokenを入力します. tokenと最後に表示したサイトだけをこのoriginの`localStorage`へ保存します. `dailyStabilityDaysDeltaGoal`はsiteごとにWorkerへ保存するため, 同じ同期tokenを使用する他の端末でも共有されます.
 
-dashboardのgraphは`stabilityDaysDelta`だけを表示します. graphの日付を選択すると, 該当する`stability_history`と`attempts`の全columnをDBのcolumn名と保存値のまま確認できます.
+dashboardは`todayStabilityDaysDelta`をprimary KPIとして表示し, `stabilityDays`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`は表示専用の指標として扱います. 各指標の数値は画面内の1か所だけに表示します. graphは`stabilityDaysDelta`だけを表示し, 当日barではprimary KPIと重複する数値labelを省きます. graphの日付を選択すると, 該当する`stability_history`と`attempts`の全columnをDBのcolumn名と保存値のまま確認できます.
 
 ## ローカルテスト
 

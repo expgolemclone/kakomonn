@@ -25,7 +25,7 @@ h2 { margin-bottom: 10px; letter-spacing: -0.025em; }
 .eyebrow { margin-bottom: 8px; color: var(--muted); font-size: .72rem; font-weight: 800; letter-spacing: .16em; }
 .header-actions { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: .85rem; }
 main { flex: 1; padding: 34px 0 48px; }
-.panel, .stability-card, .goal-card, .history-card { border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 94%, transparent); border-radius: 18px; box-shadow: 0 18px 70px rgba(0,0,0,.18); }
+.panel, .primary-kpi-card, .goal-card, .metrics-card, .history-card { border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 94%, transparent); border-radius: 18px; box-shadow: 0 18px 70px rgba(0,0,0,.18); }
 .panel { padding: clamp(24px, 5vw, 48px); max-width: 720px; }
 .auth-panel p { color: var(--muted); max-width: 58ch; }
 .auth-form { margin-top: 28px; }
@@ -41,19 +41,25 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .toolbar { display: flex; align-items: end; gap: 12px; margin-bottom: 18px; }
 .toolbar label { margin: 0; align-self: center; }
 .toolbar select { min-width: min(360px, 60vw); }
-.stability-card { padding: clamp(24px, 5vw, 46px); display: grid; grid-template-columns: 1fr auto; gap: 18px 30px; align-items: center; }
-.stability-card h2 { margin: 0; font-size: clamp(1.25rem, 3vw, 2rem); }
-.stability-number { display: flex; align-items: baseline; gap: 8px; }
-.stability-number strong { font-size: clamp(4.5rem, 14vw, 9rem); line-height: .86; letter-spacing: -.07em; color: var(--accent); font-variant-numeric: tabular-nums; }
-.stability-number span { color: var(--muted); font-size: 1.2rem; }
-.stability-meta { grid-column: 1 / -1; display: flex; gap: 24px; font-size: clamp(1rem, 2.5vw, 1.3rem); font-weight: 750; }
-.stability-meta strong { color: var(--accent-2); font-variant-numeric: tabular-nums; }
+.primary-kpi-card { padding: clamp(24px, 5vw, 46px); display: grid; grid-template-columns: 1fr auto; gap: 18px 30px; align-items: center; }
+.primary-kpi-card h2 { margin: 0; font-size: clamp(1.25rem, 3vw, 2rem); }
+.primary-kpi-number { display: flex; align-items: baseline; gap: 8px; }
+.primary-kpi-number strong { font-size: clamp(4.5rem, 14vw, 9rem); line-height: .86; letter-spacing: -.07em; color: var(--accent); font-variant-numeric: tabular-nums; }
+.primary-kpi-number span { color: var(--muted); font-size: 1.2rem; }
 .goal-card { margin-top: 18px; padding: 24px 28px; display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; }
 .goal-card h2 { margin: 0; }
 .goal-controls { display: flex; align-items: end; gap: 8px; }
 .goal-controls label { margin-bottom: 12px; }
 .goal-controls input { width: 88px; }
-.goal-progress { grid-column: 1 / -1; margin: 0; font-size: 1.25rem; font-weight: 800; }
+.metrics-card { margin-top: 18px; padding: 24px 28px; }
+.metric-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
+.metric-item { min-width: 0; padding: 0 20px; border-left: 1px solid var(--border); }
+.metric-item:first-child { padding-left: 0; border-left: 0; }
+.metric-item:last-child { padding-right: 0; }
+.metric-item dt { color: var(--muted); font-size: .82rem; font-weight: 700; overflow-wrap: anywhere; }
+.metric-item dd { display: flex; align-items: baseline; gap: 6px; margin: 10px 0 0; }
+.metric-item strong { color: var(--accent-2); font-size: clamp(1.6rem, 4vw, 2.3rem); font-variant-numeric: tabular-nums; }
+.metric-item dd span { color: var(--muted); }
 .history-card { margin: 18px 0 0; padding: 24px 28px 18px; }
 .history-card figcaption h2 { margin-bottom: 0; }
 .chart-heading { margin-bottom: 16px; }
@@ -100,11 +106,13 @@ dialog::backdrop { background: rgba(0,0,0,.68); }
   main { padding-top: 20px; }
   .input-row, .toolbar, .goal-controls { align-items: stretch; flex-direction: column; }
   .toolbar select { min-width: 100%; width: 100%; }
-  .stability-card { grid-template-columns: 1fr; }
-  .stability-number { justify-content: start; }
+  .primary-kpi-card { grid-template-columns: 1fr; }
+  .primary-kpi-number { justify-content: start; }
   .goal-card { grid-template-columns: 1fr; }
-  .goal-progress { grid-column: 1; }
   .goal-controls input { width: 100%; }
-  .stability-meta { gap: 14px; flex-wrap: wrap; }
+  .metric-list { grid-template-columns: 1fr; }
+  .metric-item, .metric-item:first-child, .metric-item:last-child { padding: 14px 0; border-top: 1px solid var(--border); border-left: 0; }
+  .metric-item:first-child { padding-top: 0; border-top: 0; }
+  .metric-item:last-child { padding-bottom: 0; }
   .history-card { padding-inline: 16px; }
 }

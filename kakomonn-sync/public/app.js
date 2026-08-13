@@ -13,7 +13,7 @@ const el = {
   authPanel: byId("auth-panel"), authForm: byId("auth-form"), authToken: byId("auth-token"), authMessage: byId("auth-message"),
   dashboard: byId("dashboard"), siteEmpty: byId("site-empty"), loadError: byId("load-error"), errorMessage: byId("error-message"), retryButton: byId("retry-button"),
   settingsButton: byId("settings-button"), settingsDialog: byId("settings-dialog"), settingsForm: byId("settings-form"), settingsToken: byId("settings-token"), settingsMessage: byId("settings-message"), settingsClose: byId("settings-close"), forgetToken: byId("forget-token"),
-  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), stabilityDaysElement: byId("stability-days"), todayStabilityDaysDeltaElement: byId("today-delta"), goalLabel: byId("goal-label"), dailyStabilityDaysDeltaGoalInput: byId("daily-goal"), saveGoal: byId("save-goal"), goalProgress: byId("goal-progress"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
+  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), todayStabilityDaysDeltaElement: byId("today-stability-days-delta"), dailyStabilityDaysDeltaGoalInput: byId("daily-goal"), saveGoal: byId("save-goal"), stabilityDaysElement: byId("stability-days"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
   dailyDetails: byId("daily-details"), dailyDetailsDate: byId("daily-details-date"), dailyDetailsInstruction: byId("daily-details-instruction"), dailyDetailsStatus: byId("daily-details-status"), dailyDetailsTables: byId("daily-details-tables"), stabilityHistoryTable: byId("stability-history-table"), attemptsTable: byId("attempts-table"),
 };
 
@@ -86,11 +86,7 @@ async function requestJSON(path, token, { method = "GET", body } = {}) {
 function formatted(value) { return value.toLocaleString("ja-JP"); }
 function signed(value) { return `${value >= 0 ? "+" : ""}${formatted(value)}`; }
 function renderGoal() {
-  const dailyStabilityDaysDeltaGoal = state.settings.dailyStabilityDaysDeltaGoal;
-  const todayStabilityDaysDelta = state.learning?.learningMetrics.todayStabilityDaysDelta ?? 0;
-  el.dailyStabilityDaysDeltaGoalInput.value = String(dailyStabilityDaysDeltaGoal);
-  el.goalLabel.textContent = `dailyStabilityDaysDeltaGoal +${formatted(dailyStabilityDaysDeltaGoal)}日`;
-  el.goalProgress.textContent = `todayStabilityDaysDelta ${signed(todayStabilityDaysDelta)}日 / dailyStabilityDaysDeltaGoal +${formatted(dailyStabilityDaysDeltaGoal)}日`;
+  el.dailyStabilityDaysDeltaGoalInput.value = String(state.settings.dailyStabilityDaysDeltaGoal);
 }
 
 function svgNode(name, attrs = {}, text = "") {
@@ -153,6 +149,7 @@ function renderChart(days) {
   days.forEach((day, index) => {
     const xx = left + bandWidth * (index + 0.5);
     const value = day.stabilityDaysDelta;
+    const isToday = day.date === state.learning.today;
     const selected = day.date === state.selectedDate;
     const group = svgNode("g", {
       class: "chart-day",
@@ -173,10 +170,8 @@ function renderChart(days) {
         barY = zeroY - 1;
         barHeight = 2;
       }
-      group.append(
-        svgNode("rect", { x: xx - barWidth / 2, y: barY, width: barWidth, height: barHeight, rx: 5, class: `delta-bar ${value < 0 ? "negative" : value === 0 ? "zero" : "positive"}` }),
-        svgNode("text", { x: xx, y: value >= 0 ? Math.max(top + 12, barY - 8) : Math.min(bottom + 16, barY + barHeight + 16), class: "delta-value-label", "text-anchor": "middle" }, signed(value))
-      );
+      group.append(svgNode("rect", { x: xx - barWidth / 2, y: barY, width: barWidth, height: barHeight, rx: 5, class: `delta-bar ${value < 0 ? "negative" : value === 0 ? "zero" : "positive"}` }));
+      if (!isToday) group.append(svgNode("text", { x: xx, y: value >= 0 ? Math.max(top + 12, barY - 8) : Math.min(bottom + 16, barY + barHeight + 16), class: "delta-value-label", "text-anchor": "middle" }, signed(value)));
     }
     const [, month, date] = day.date.split("-");
     group.append(svgNode("text", { x: xx, y: 252, class: "date-label", "text-anchor": "middle" }, `${Number(month)}/${Number(date)}`));
@@ -290,8 +285,8 @@ async function loadDailyDetails(date, { focusChart = false } = {}) {
 function renderDashboard() {
   const learning = state.learning;
   const metrics = learning.learningMetrics;
+  el.todayStabilityDaysDeltaElement.textContent = signed(metrics.todayStabilityDaysDelta);
   el.stabilityDaysElement.textContent = formatted(metrics.stabilityDays);
-  el.todayStabilityDaysDeltaElement.textContent = `todayStabilityDaysDelta ${signed(metrics.todayStabilityDaysDelta)}日`;
   el.attemptedQuestionCountElement.textContent = formatted(metrics.attemptedQuestionCount);
   el.todayAttemptedQuestionCountElement.textContent = formatted(metrics.todayAttemptedQuestionCount);
   renderGoal();

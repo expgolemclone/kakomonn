@@ -45,16 +45,12 @@
             <button id="refresh-button" class="text-button" type="button">再読み込み</button>
           </div>
 
-          <section class="stability-card" aria-labelledby="stability-title">
+          <section class="primary-kpi-card" aria-labelledby="primary-kpi-title">
             <div>
               <p class="eyebrow">PRIMARY KPI</p>
-              <h2 id="stability-title">stabilityDays</h2>
+              <h2 id="primary-kpi-title">todayStabilityDaysDelta</h2>
             </div>
-            <div class="stability-number"><strong id="stability-days">--</strong><span>日</span></div>
-            <div class="stability-meta">
-              <span id="today-delta">todayStabilityDaysDelta --</span>
-              <span id="goal-label">dailyStabilityDaysDeltaGoal --</span>
-            </div>
+            <div class="primary-kpi-number"><strong id="today-stability-days-delta">--</strong><span>日</span></div>
           </section>
 
           <section class="goal-card" aria-labelledby="goal-title">
@@ -67,18 +63,24 @@
               <input id="daily-goal" type="number" min="1" step="1" inputmode="numeric">
               <button id="save-goal" class="primary-button" type="button">保存</button>
             </div>
-            <p id="goal-progress" class="goal-progress">今日 -- / --</p>
           </section>
 
-          <section class="goal-card" aria-labelledby="metrics-title">
-            <div>
-              <p class="eyebrow">DISPLAY ONLY</p>
-              <h2 id="metrics-title">attemptedQuestionCount</h2>
-            </div>
-            <div class="stability-meta">
-              <span>attemptedQuestionCount <strong id="attempted-question-count">--</strong>問</span>
-              <span>todayAttemptedQuestionCount <strong id="today-attempted-question-count">--</strong>問</span>
-            </div>
+          <section class="metrics-card" aria-label="DISPLAY ONLY">
+            <p class="eyebrow">DISPLAY ONLY</p>
+            <dl class="metric-list">
+              <div class="metric-item">
+                <dt>stabilityDays</dt>
+                <dd><strong id="stability-days">--</strong><span>日</span></dd>
+              </div>
+              <div class="metric-item">
+                <dt>attemptedQuestionCount</dt>
+                <dd><strong id="attempted-question-count">--</strong><span>問</span></dd>
+              </div>
+              <div class="metric-item">
+                <dt>todayAttemptedQuestionCount</dt>
+                <dd><strong id="today-attempted-question-count">--</strong><span>問</span></dd>
+              </div>
+            </dl>
           </section>
 
           <figure class="history-card" aria-labelledby="history-title">

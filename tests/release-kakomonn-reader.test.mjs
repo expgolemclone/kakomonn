@@ -109,6 +109,7 @@ test("uses Windows command wrappers without a shell", () => {
   const calls = [];
   const runner = createCommandRunner({
     cwd: "C:\\repo",
+    environment: { RELEASE_TEST: "1" },
     platform: "win32",
     commandShell: "C:\\Windows\\System32\\cmd.exe",
     spawnSyncImpl: (command, args, options) => {
@@ -124,6 +125,10 @@ test("uses Windows command wrappers without a shell", () => {
   assert.deepEqual(calls[0].args, ["/d", "/s", "/c", "npm --version"]);
   assert.deepEqual(calls[0].options.stdio, ["ignore", "pipe", "pipe"]);
   assert.equal(calls[0].options.cwd, "C:\\repo");
+  assert.deepEqual(calls[0].options.env, {
+    NODE_OPTIONS: "--use-system-ca",
+    RELEASE_TEST: "1",
+  });
   assert.equal(calls[1].command, "C:\\Windows\\System32\\cmd.exe");
   assert.deepEqual(calls[1].args, ["/d", "/s", "/c", "jj --version"]);
   assert.equal(calls[1].options.stdio, "inherit");

@@ -42,6 +42,8 @@ const randomQuestionUrl = "https://chushoks.kakomonn.com/questions";
 const readerReadyTimeout = 30_000;
 const darkModeImageFilter = "invert(1) hue-rotate(180deg)";
 const answerShortcutKeys = "qwert";
+const pageErrorLocationPrefix = "__KAKOMONN_PAGE_ERROR_LOCATION__";
+const readerSourceURL = "kakomonn-reader.user.js";
 
 function formatPageError(error) {
   return (
@@ -50,6 +52,49 @@ function formatPageError(error) {
     error?.name ||
     String(error) ||
     "Unknown page error"
+  );
+}
+
+function collectPageErrors(page) {
+  const pageErrors = [];
+  const pageErrorLocations = [];
+  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
+  page.on("console", (message) => {
+    if (!message.text().startsWith(pageErrorLocationPrefix)) {
+      return;
+    }
+    pageErrorLocations.push(
+      JSON.parse(message.text().slice(pageErrorLocationPrefix.length)),
+    );
+  });
+  return { pageErrorLocations, pageErrors };
+}
+
+function assertNoReaderPageErrors(pageErrors, pageErrorLocations, details = {}) {
+  const readerPageErrors = pageErrorLocations.filter(
+    ({ filename }) =>
+      filename === readerSourceURL || filename.endsWith(`/${readerSourceURL}`),
+  );
+  const unlocatedPageErrors = pageErrors.filter(
+    (pageError) =>
+      !pageErrorLocations.some(
+        ({ message }) =>
+          pageError.includes(message) || message.includes(pageError),
+      ),
+  );
+  assert.deepEqual(
+    { readerPageErrors, unlocatedPageErrors },
+    { readerPageErrors: [], unlocatedPageErrors: [] },
+    JSON.stringify({ ...details, pageErrorLocations }),
+  );
+}
+
+async function injectReader(page, script) {
+  await page.evaluate(
+    ({ source, sourceURL }) => {
+      (0, eval)(`${source}\n//# sourceURL=${sourceURL}`);
+    },
+    { source: script, sourceURL: readerSourceURL },
   );
 }
 
@@ -230,6 +275,18 @@ function compactCopiedContent(markdown) {
 }
 
 async function blockThirdPartyAds(context) {
+  await context.addInitScript((prefix) => {
+    window.addEventListener("error", (event) => {
+      console.debug(
+        `${prefix}${JSON.stringify({
+          column: event.colno,
+          filename: event.filename,
+          line: event.lineno,
+          message: event.message,
+        })}`,
+      );
+    });
+  }, pageErrorLocationPrefix);
   await context.route("**/*", async (route) => {
     const hostname = new URL(route.request().url()).hostname;
     const isAdRequest =
@@ -255,9 +312,8 @@ async function runLiveCatalogCrawlCase(browser, script) {
   const context = await browser.newContext();
   await blockThirdPartyAds(context);
   const page = await context.newPage();
-  const pageErrors = [];
+  const { pageErrorLocations, pageErrors } = collectPageErrors(page);
   const catalogPageTasks = [];
-  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
   page.on("response", (response) => {
     const url = new URL(response.url());
     if (url.hostname !== "chushoks.kakomonn.com" || !/^\/list1\/\d+$/.test(url.pathname)) {
@@ -295,9 +351,7 @@ async function runLiveCatalogCrawlCase(browser, script) {
     });
     await page.evaluate(() => localStorage.clear());
     await installSyncMock(page, { catalogQuestionCount: null });
-    await page.evaluate((source) => {
-      (0, eval)(source);
-    }, script);
+    await injectReader(page, script);
 
     await page.waitForFunction(
       () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v7/questions"),
@@ -331,7 +385,9 @@ async function runLiveCatalogCrawlCase(browser, script) {
         `incomplete live catalog crawl: ${listPath}`,
       );
     }
-    assert.deepEqual(pageErrors, []);
+    assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
+      questionURL: fixedQuestionUrl,
+    });
   } finally {
     await context.close();
   }
@@ -351,8 +407,7 @@ async function runCase(
   const context = await browser.newContext();
   await blockThirdPartyAds(context);
   const page = await context.newPage();
-  const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
+  const { pageErrorLocations, pageErrors } = collectPageErrors(page);
 
   try {
     console.log(JSON.stringify({ phase: "goto", answerText }));
@@ -370,9 +425,7 @@ async function runCase(
 
     await page.evaluate(() => localStorage.clear());
     await installSyncMock(page, { nextQuestionId: "86957" });
-    await page.evaluate((source) => {
-      (0, eval)(source);
-    }, script);
+    await injectReader(page, script);
 
     console.log(JSON.stringify({ phase: "script-injected", answerText }));
     const frame = await getQuestionFrame(page);
@@ -513,7 +566,9 @@ async function runCase(
     }
 
     assert.equal(await readStoredStabilityDays(page), expectedStabilityDays);
-    assert.deepEqual(pageErrors, []);
+    assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
+      questionURL: fixedQuestionUrl,
+    });
     console.log(
       JSON.stringify({
         answerText,
@@ -540,6 +595,7 @@ async function runCase(
         ]).catch(() => null),
         storedStabilityDays: await readStoredStabilityDays(page).catch(() => null),
         syncCalls: await page.evaluate(() => window.__syncMock?.calls ?? []).catch(() => []),
+        pageErrorLocations,
         pageErrors,
       }),
     );
@@ -553,8 +609,7 @@ async function runRandomNavigationCase(browser, script) {
   const context = await browser.newContext();
   await blockThirdPartyAds(context);
   const page = await context.newPage();
-  const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
+  const { pageErrorLocations, pageErrors } = collectPageErrors(page);
 
   try {
     console.log(JSON.stringify({ phase: "random-goto" }));
@@ -602,9 +657,7 @@ async function runRandomNavigationCase(browser, script) {
 
     await page.evaluate(() => localStorage.clear());
     await installSyncMock(page, { nextQuestionId: "45125" });
-    await page.evaluate((source) => {
-      (0, eval)(source);
-    }, script);
+    await injectReader(page, script);
 
     const frame = await getQuestionFrame(page);
     await page.locator("#kakomonn-reader-learning-metrics").waitFor({ state: "visible" });
@@ -696,7 +749,9 @@ async function runRandomNavigationCase(browser, script) {
     );
     assert.equal(await readStoredAttemptCount(page), 1);
     assert.equal(await readStoredStabilityDays(page), 0);
-    assert.deepEqual(pageErrors, []);
+    assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
+      questionURL: createQuestionUrl,
+    });
     console.log(
       JSON.stringify({
         phase: "random-navigation",
@@ -743,6 +798,7 @@ async function runRandomNavigationCase(browser, script) {
             window.__syncMock?.calls.map((call) => new URL(call.url).pathname) ?? [],
           )
           .catch(() => null),
+        pageErrorLocations,
         pageErrors,
       }),
     );
@@ -758,8 +814,7 @@ async function runMarkdownCopyCase(browser, script) {
   });
   await blockThirdPartyAds(context);
   const page = await context.newPage();
-  const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
+  const { pageErrorLocations, pageErrors } = collectPageErrors(page);
 
   try {
     console.log(JSON.stringify({ phase: "markdown-copy-goto" }));
@@ -779,9 +834,7 @@ async function runMarkdownCopyCase(browser, script) {
 
     await page.evaluate(() => localStorage.clear());
     await installSyncMock(page, { systemClipboard: true });
-    await page.evaluate((source) => {
-      (0, eval)(source);
-    }, script);
+    await injectReader(page, script);
 
     const frame = await getQuestionFrame(page);
     await page.locator("#kakomonn-reader-learning-metrics").waitFor({ state: "visible" });
@@ -946,7 +999,9 @@ async function runMarkdownCopyCase(browser, script) {
     assert.equal(copiedMarkdown.includes("訂正依頼・報告はこちら"), false);
     assert.equal(copiedMarkdown.includes("参考になった数"), false);
     assert.equal(copiedMarkdown.includes("Advertisement"), false);
-    assert.deepEqual(pageErrors, []);
+    assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
+      questionURL: markdownQuestionUrl,
+    });
     console.log(
       JSON.stringify({
         phase: "markdown-copy",
@@ -969,6 +1024,7 @@ async function runMarkdownCopyCase(browser, script) {
           .locator("#kakomonn-reader-status")
           .textContent()
           .catch(() => null),
+        pageErrorLocations,
         pageErrors,
       }),
     );
@@ -984,8 +1040,7 @@ async function runReportedCopyCase(browser, script) {
   });
   await blockThirdPartyAds(context);
   const page = await context.newPage();
-  const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
+  const { pageErrorLocations, pageErrors } = collectPageErrors(page);
 
   try {
     const response = await page.goto(reportedCopyQuestionUrl, {
@@ -1004,9 +1059,7 @@ async function runReportedCopyCase(browser, script) {
 
     await page.evaluate(() => localStorage.clear());
     await installSyncMock(page, { systemClipboard: true });
-    await page.evaluate((source) => {
-      (0, eval)(source);
-    }, script);
+    await injectReader(page, script);
 
     const frame = await getQuestionFrame(page);
     await waitForSyncReady(page);
@@ -1054,7 +1107,9 @@ async function runReportedCopyCase(browser, script) {
     );
     assert.equal(copiedMarkdown.includes("### 解説 01"), true);
     assert.equal(copiedMarkdown.includes("### 解説 02"), true);
-    assert.deepEqual(pageErrors, []);
+    assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
+      questionURL: reportedCopyQuestionUrl,
+    });
   } finally {
     await context.close();
   }
@@ -1064,8 +1119,7 @@ async function runImageChoiceInversionCase(browser, script) {
   const context = await browser.newContext();
   await blockThirdPartyAds(context);
   const page = await context.newPage();
-  const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
+  const { pageErrorLocations, pageErrors } = collectPageErrors(page);
 
   try {
     const response = await page.goto(imageChoiceQuestionUrl, {
@@ -1084,9 +1138,7 @@ async function runImageChoiceInversionCase(browser, script) {
 
     await page.evaluate(() => localStorage.clear());
     await installSyncMock(page);
-    await page.evaluate((source) => {
-      (0, eval)(source);
-    }, script);
+    await injectReader(page, script);
 
     const frame = await getQuestionFrame(page);
     const choiceImages = frame.locator(
@@ -1097,7 +1149,9 @@ async function runImageChoiceInversionCase(browser, script) {
       await darkModeImageFilters(choiceImages),
       Array(4).fill(darkModeImageFilter),
     );
-    assert.deepEqual(pageErrors, []);
+    assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
+      questionURL: imageChoiceQuestionUrl,
+    });
   } finally {
     await context.close();
   }
@@ -1108,9 +1162,9 @@ async function runCrossDomainActivationCase(browser, script) {
     const context = await browser.newContext();
     await blockThirdPartyAds(context);
     const page = await context.newPage();
-    const pageErrors = [];
-    page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
+    const { pageErrorLocations, pageErrors } = collectPageErrors(page);
     try {
+      console.log(JSON.stringify({ phase: "cross-domain-goto", questionURL }));
       const response = await page.goto(questionURL, {
         waitUntil: "domcontentloaded",
         timeout: 60_000,
@@ -1124,9 +1178,7 @@ async function runCrossDomainActivationCase(browser, script) {
       await page.evaluate(() => localStorage.clear());
       const site = new URL(questionURL).hostname;
       await installSyncMock(page, { site });
-      await page.evaluate((source) => {
-        (0, eval)(source);
-      }, script);
+      await injectReader(page, script);
 
       const frame = await getQuestionFrame(page);
       await waitForSyncReady(page);
@@ -1149,7 +1201,7 @@ async function runCrossDomainActivationCase(browser, script) {
       );
       assert.equal(stateSites.length >= 1, true);
       assert.equal(stateSites.every((requestedSite) => requestedSite === site), true);
-      assert.deepEqual(pageErrors, []);
+      assertNoReaderPageErrors(pageErrors, pageErrorLocations, { questionURL });
     } finally {
       await context.close();
     }

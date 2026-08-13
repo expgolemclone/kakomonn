@@ -22,7 +22,7 @@
     "test:kakomonn-live-site": "node kakomonn-reader/tests/live_site_e2e_test.js",
     "test:kakomonn-live-sync": "npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader/tests/live_sync_e2e_test.js",
     "release:kakomonn-reader": "node scripts/release-kakomonn-reader.mjs",
-    "deploy:kakomonn-sync": "npm run test:kakomonn-sync && npm run test:kakomonn-dashboard && wrangler deploy --config kakomonn-sync/wrangler.jsonc && npm run test:kakomonn-sync-production"
+    "deploy:kakomonn-sync": "npm run test:kakomonn-sync && npm run test:kakomonn-dashboard && node --use-system-ca node_modules/wrangler/bin/wrangler.js deploy --config kakomonn-sync/wrangler.jsonc && npm run test:kakomonn-sync-production"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.20.3",

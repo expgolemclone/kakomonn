@@ -41,15 +41,23 @@ function resolveInvocation(command, args, platform, commandShell) {
 
 export function createCommandRunner({
   cwd = PROJECT_ROOT,
+  environment = process.env,
   platform = process.platform,
   commandShell = process.env.ComSpec,
   spawnSyncImpl = spawnSync,
 } = {}) {
+  const childEnvironment = {
+    ...environment,
+    NODE_OPTIONS: [environment.NODE_OPTIONS, "--use-system-ca"]
+      .filter(Boolean)
+      .join(" "),
+  };
   return (command, args = [], { capture = false } = {}) => {
     const invocation = resolveInvocation(command, args, platform, commandShell);
     const result = spawnSyncImpl(invocation.executable, invocation.args, {
       cwd,
       encoding: "utf8",
+      env: childEnvironment,
       stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
       windowsHide: true,
     });

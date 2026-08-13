@@ -10,6 +10,30 @@
   frame.title = "過去問ページ";
   frame.allow = "autoplay";
   frame.src = currentFrameURL;
+  function enforceReaderFrameDimensions() {
+    frame.removeAttribute("height");
+    frame.removeAttribute("width");
+    if (
+      frame.style.getPropertyValue("height") !== "100%" ||
+      frame.style.getPropertyPriority("height") !== "important"
+    ) {
+      frame.style.setProperty("height", "100%", "important");
+    }
+    if (
+      frame.style.getPropertyValue("width") !== "100%" ||
+      frame.style.getPropertyPriority("width") !== "important"
+    ) {
+      frame.style.setProperty("width", "100%", "important");
+    }
+  }
+  enforceReaderFrameDimensions();
+  const readerFrameDimensionObserver = new MutationObserver(
+    enforceReaderFrameDimensions
+  );
+  readerFrameDimensionObserver.observe(frame, {
+    attributes: true,
+    attributeFilter: ["height", "style", "width"],
+  });
   shell.appendChild(frame);
 
   const controls = document.createElement("div");

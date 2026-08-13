@@ -4,35 +4,40 @@ const test = require("node:test");
 
 const {
   assertRuntimeIdentity,
-  dedicatedEdgeWindowPowerShell,
   extractBuildFingerprint,
-  isRemoteDebugApprovalRejection,
-  readEdgeUserDataDir,
-  readSyncToken,
-  remoteDebugApprovalEnvironment,
-  remoteDebugApprovalPowerShell,
 } = require("./live_sync_e2e_test");
+const {
+  SYNC_TOKEN_KEY,
+  edgeLaunchArguments,
+  extractSyncTokenCandidates,
+  readConfiguredToken,
+  readEdgeUserDataDir,
+  resolveSyncToken,
+  secretFreeEnvironment,
+  stopDedicatedEdgePowerShell,
+  writeEnvToken,
+} = require("./support/edge_tampermonkey");
 
 const fingerprint = "a".repeat(64);
 const validRuntime = {
   buildFingerprint: fingerprint,
   scriptHandler: "Tampermonkey",
   userAgent:
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
 };
 
 test("accepts the exact Edge, Tampermonkey, and build identity", () => {
   assert.doesNotThrow(() => assertRuntimeIdentity(validRuntime, fingerprint));
 });
 
-test("rejects a non-Edge remote-debugging target", () => {
+test("rejects a non-Edge browser runtime", () => {
   assert.throws(
     () =>
       assertRuntimeIdentity(
         {
           ...validRuntime,
           userAgent:
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/151.0.0.0 Safari/537.36",
         },
         fingerprint,
       ),
@@ -40,7 +45,7 @@ test("rejects a non-Edge remote-debugging target", () => {
   );
 });
 
-test("rejects a userscript injected by another script handler", () => {
+test("rejects another userscript handler or a stale build", () => {
   assert.throws(
     () =>
       assertRuntimeIdentity(
@@ -49,9 +54,6 @@ test("rejects a userscript injected by another script handler", () => {
       ),
     /must be injected by Tampermonkey/,
   );
-});
-
-test("rejects a stale installed userscript", () => {
   assert.throws(
     () =>
       assertRuntimeIdentity(
@@ -67,7 +69,10 @@ test("extracts exactly one generated build fingerprint", () => {
     extractBuildFingerprint(`const BUILD_FINGERPRINT = "${fingerprint}";`),
     fingerprint,
   );
-  assert.throws(() => extractBuildFingerprint("const BUILD_FINGERPRINT = 'x';"), /found 0/);
+  assert.throws(
+    () => extractBuildFingerprint("const BUILD_FINGERPRINT = 'x';"),
+    /found 0/,
+  );
   assert.throws(
     () =>
       extractBuildFingerprint(
@@ -77,169 +82,275 @@ test("extracts exactly one generated build fingerprint", () => {
   );
 });
 
-test("uses the process sync token without loading an env file", () => {
-  const token = "a".repeat(32);
-  let loaded = false;
-  assert.equal(
-    readSyncToken({
+test("reads the process token before the ignored env file", () => {
+  const token = "b".repeat(64);
+  let envRead = false;
+  assert.deepEqual(
+    readConfiguredToken({
       environment: { KAKOMONN_SYNC_TOKEN: token },
-      loadEnvironmentFile: () => {
-        loaded = true;
+      envFilePath: "C:\\workspace\\kakomonn\\.env",
+      existsSync: () => {
+        envRead = true;
+        return true;
       },
     }),
-    token,
+    { source: "process environment", token },
   );
-  assert.equal(loaded, false);
+  assert.equal(envRead, false);
 });
 
-test("loads the repository env file when the process token is absent", () => {
-  const token = "b".repeat(32);
-  const environment = {};
-  const envFilePath = "C:\\workspace\\kakomonn\\.env";
-  let loadedPath = "";
-  assert.equal(
-    readSyncToken({
-      environment,
-      envFilePath,
-      loadEnvironmentFile: (candidatePath) => {
-        loadedPath = candidatePath;
-        environment.KAKOMONN_SYNC_TOKEN = token;
-      },
-    }),
-    token,
-  );
-  assert.equal(loadedPath, envFilePath);
-});
-
-test("rejects a missing or invalid sync token after env loading", () => {
-  assert.throws(
-    () =>
-      readSyncToken({
+test("reads quoted and unquoted tokens from the ignored env file", () => {
+  const token = "c".repeat(64);
+  for (const value of [token, `"${token}"`, `'${token}'`]) {
+    assert.deepEqual(
+      readConfiguredToken({
         environment: {},
-        loadEnvironmentFile: () => {},
-      }),
-    /must contain the deployed secret token/,
-  );
-  assert.throws(
-    () =>
-      readSyncToken({
-        environment: { KAKOMONN_SYNC_TOKEN: "invalid token" },
-        loadEnvironmentFile: () => {
-          throw new Error("must not load");
-        },
-      }),
-    /must contain the deployed secret token/,
-  );
-});
-
-test("retries only an explicit remote-debugging approval rejection", () => {
-  assert.equal(
-    isRemoteDebugApprovalRejection(
-      new Error("Cause: Unexpected server response: 403"),
-    ),
-    true,
-  );
-  assert.equal(
-    isRemoteDebugApprovalRejection(
-      new Error("Cause: Unexpected server response: 500"),
-    ),
-    false,
-  );
-  assert.equal(
-    isRemoteDebugApprovalRejection(new Error("MCP request timed out")),
-    false,
-  );
-});
-
-test("requires an explicit dedicated Edge user data directory", () => {
-  assert.throws(
-    () =>
-      readEdgeUserDataDir({
-        environment: {
-          LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local",
-        },
+        envFilePath: "C:\\workspace\\kakomonn\\.env",
         existsSync: () => true,
-        platform: "win32",
+        readFileSync: () => `OTHER=value\nKAKOMONN_SYNC_TOKEN=${value}\n`,
       }),
-    /KAKOMONN_EDGE_USER_DATA_DIR must point to a dedicated/,
+      { source: "C:\\workspace\\kakomonn\\.env", token },
+    );
+  }
+});
+
+test("extracts only 64-character hexadecimal candidates from relevant storage", () => {
+  const token = "d".repeat(64);
+  const unrelatedHash = "e".repeat(64);
+  assert.deepEqual(
+    extractSyncTokenCandidates([
+      Buffer.from(`${SYNC_TOKEN_KEY}\0${token}\0${unrelatedHash}`),
+    ]),
+    new Set([token, unrelatedHash]),
+  );
+  assert.deepEqual(
+    extractSyncTokenCandidates([Buffer.from(token)]),
+    new Set(),
   );
 });
 
-test("rejects the standard Edge user data directory and its profiles", () => {
+test("validates a configured token without scanning browser storage", async () => {
+  const token = "f".repeat(64);
+  let scanned = false;
+  assert.equal(
+    await resolveSyncToken({
+      envFilePath: "C:\\workspace\\kakomonn\\.env",
+      readConfigured: () => ({ source: "test", token }),
+      discoverStorageDirectories: () => {
+        scanned = true;
+        return [];
+      },
+      validateToken: async (candidate) => candidate === token,
+    }),
+    token,
+  );
+  assert.equal(scanned, false);
+});
+
+test("does not replace a configured token rejected by production", async () => {
+  const token = "1".repeat(64);
+  let scanned = false;
+  await assert.rejects(
+    resolveSyncToken({
+      envFilePath: "C:\\workspace\\kakomonn\\.env",
+      readConfigured: () => ({ source: "test", token }),
+      discoverStorageDirectories: () => {
+        scanned = true;
+        return [];
+      },
+      validateToken: async () => false,
+    }),
+    (error) => {
+      assert.match(error.message, /was rejected by production/);
+      assert.equal(error.message.includes(token), false);
+      return true;
+    },
+  );
+  assert.equal(scanned, false);
+});
+
+test("saves the one production-valid browser token", async () => {
+  const validToken = "2".repeat(64);
+  const invalidToken = "3".repeat(64);
+  let saved = null;
+  const environment = {};
+  assert.equal(
+    await resolveSyncToken({
+      environment,
+      envFilePath: "C:\\workspace\\kakomonn\\.env",
+      readConfigured: () => null,
+      readDedicatedUserDataDir: () => "dedicated-profile",
+      discoverStorageDirectories: ({ dedicatedUserDataDir }) => {
+        assert.equal(dedicatedUserDataDir, "dedicated-profile");
+        return ["edge-storage", "chrome-storage"];
+      },
+      scanCandidates: ({ storageDirectories }) => {
+        assert.deepEqual(storageDirectories, [
+          "edge-storage",
+          "chrome-storage",
+        ]);
+        return new Set([invalidToken, validToken]);
+      },
+      validateToken: async (candidate) => candidate === validToken,
+      saveToken: (filePath, token) => {
+        saved = { filePath, token };
+      },
+    }),
+    validToken,
+  );
+  assert.deepEqual(saved, {
+    filePath: "C:\\workspace\\kakomonn\\.env",
+    token: validToken,
+  });
+  assert.equal(environment.KAKOMONN_SYNC_TOKEN, validToken);
+});
+
+test("rejects missing or conflicting production-valid browser tokens", async () => {
+  const firstToken = "4".repeat(64);
+  const secondToken = "5".repeat(64);
+  const baseOptions = {
+    envFilePath: "C:\\workspace\\kakomonn\\.env",
+    readConfigured: () => null,
+    readDedicatedUserDataDir: () => "dedicated-profile",
+    discoverStorageDirectories: () => ["storage"],
+  };
+  await assert.rejects(
+    resolveSyncToken({
+      ...baseOptions,
+      scanCandidates: () => new Set([firstToken]),
+      validateToken: async () => false,
+    }),
+    /No production sync token/,
+  );
+  await assert.rejects(
+    resolveSyncToken({
+      ...baseOptions,
+      scanCandidates: () => new Set([firstToken, secondToken]),
+      validateToken: async () => true,
+    }),
+    /Multiple production sync tokens/,
+  );
+});
+
+test("updates only the token assignment in the ignored env file", () => {
+  const oldToken = "6".repeat(64);
+  const newToken = "7".repeat(64);
+  const files = new Map([
+    ["C:\\workspace\\kakomonn\\.env", `OTHER=value\r\nKAKOMONN_SYNC_TOKEN=${oldToken}\r\n`],
+  ]);
+  writeEnvToken("C:\\workspace\\kakomonn\\.env", newToken, {
+    existsSync: (filePath) => files.has(filePath),
+    readFileSync: (filePath) => files.get(filePath),
+    writeFileSync: (filePath, contents) => files.set(filePath, contents),
+    renameSync: (source, destination) => {
+      files.set(destination, files.get(source));
+      files.delete(source);
+    },
+  });
+  assert.equal(
+    files.get("C:\\workspace\\kakomonn\\.env"),
+    `OTHER=value\r\nKAKOMONN_SYNC_TOKEN=${newToken}\r\n`,
+  );
+});
+
+test("defaults to the dedicated Edge E2E profile", () => {
   const localAppData = "C:\\Users\\tester\\AppData\\Local";
-  const standardUserDataDir = path.join(
+  assert.equal(
+    readEdgeUserDataDir({
+      environment: { LOCALAPPDATA: localAppData },
+      existsSync: () => true,
+      platform: "win32",
+    }),
+    path.win32.join(localAppData, "kakomonn-edge-e2e"),
+  );
+});
+
+test("reads the Edge E2E profile from the ignored env file", () => {
+  const localAppData = "C:\\Users\\tester\\AppData\\Local";
+  const envFilePath = "C:\\workspace\\kakomonn\\.env";
+  const envProfile = "C:\\profiles\\from-env-file";
+  const processProfile = "C:\\profiles\\from-process";
+  const readOptions = {
+    envFilePath,
+    existsSync: () => true,
+    platform: "win32",
+    readFileSync: () =>
+      `OTHER=value\nKAKOMONN_EDGE_USER_DATA_DIR="${envProfile}"\n`,
+  };
+  assert.equal(
+    readEdgeUserDataDir({
+      ...readOptions,
+      environment: { LOCALAPPDATA: localAppData },
+    }),
+    envProfile,
+  );
+  assert.equal(
+    readEdgeUserDataDir({
+      ...readOptions,
+      environment: {
+        KAKOMONN_EDGE_USER_DATA_DIR: processProfile,
+        LOCALAPPDATA: localAppData,
+      },
+    }),
+    processProfile,
+  );
+});
+
+test("rejects the standard Edge profile and accepts an explicit dedicated profile", () => {
+  const localAppData = "C:\\Users\\tester\\AppData\\Local";
+  const standard = path.win32.join(
     localAppData,
     "Microsoft",
     "Edge",
     "User Data",
   );
-  for (const configuredPath of [
-    standardUserDataDir,
-    path.join(standardUserDataDir, "Default"),
-  ]) {
-    assert.throws(
-      () =>
-        readEdgeUserDataDir({
-          environment: {
-            KAKOMONN_EDGE_USER_DATA_DIR: configuredPath,
-            LOCALAPPDATA: localAppData,
-          },
-          existsSync: () => true,
-          platform: "win32",
-        }),
-      /must be outside the standard Edge user data directory/,
-    );
-  }
-});
-
-test("accepts a dedicated Edge E2E user data directory with remote debugging", () => {
-  const dedicatedUserDataDir =
-    "C:\\Users\\tester\\AppData\\Local\\kakomonn-edge-e2e";
+  assert.throws(
+    () =>
+      readEdgeUserDataDir({
+        environment: {
+          KAKOMONN_EDGE_USER_DATA_DIR: path.win32.join(standard, "Default"),
+          LOCALAPPDATA: localAppData,
+        },
+        existsSync: () => true,
+        platform: "win32",
+      }),
+    /must be outside the standard Edge user data directory/,
+  );
+  const dedicated = path.win32.join(localAppData, "kakomonn-edge-e2e");
   assert.equal(
     readEdgeUserDataDir({
       environment: {
-        KAKOMONN_EDGE_USER_DATA_DIR: dedicatedUserDataDir,
-        LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local",
+        KAKOMONN_EDGE_USER_DATA_DIR: dedicated,
+        LOCALAPPDATA: localAppData,
       },
-      existsSync: (candidatePath) =>
-        candidatePath ===
-        path.win32.join(dedicatedUserDataDir, "DevToolsActivePort"),
+      existsSync: () => true,
       platform: "win32",
     }),
-    path.win32.resolve(dedicatedUserDataDir),
+    dedicated,
   );
 });
 
-test("automates approval only in the configured dedicated Edge profile", () => {
-  const userDataDir =
-    "C:\\Users\\tester\\AppData\\Local\\kakomonn-edge-e2e";
-  const environment = remoteDebugApprovalEnvironment(
-    userDataDir,
-    12_345,
-    {
-      KAKOMONN_SYNC_TOKEN: "must-not-reach-powershell",
-      SystemRoot: "C:\\Windows",
-    },
+test("launches the dedicated Edge profile minimized", () => {
+  const extensionPath = "C:\\profiles\\tampermonkey";
+  const args = edgeLaunchArguments(
+    "C:\\profiles\\kakomonn-edge-e2e",
+    extensionPath,
   );
+  assert.equal(args.includes("--start-minimized"), true);
+  assert.equal(args.some((argument) => argument.startsWith("--headless")), false);
+  assert.equal(args.includes("--remote-debugging-port=0"), true);
+  assert.equal(args.includes(`--load-extension=${extensionPath}`), true);
+  assert.equal(args.includes(`--disable-extensions-except=${extensionPath}`), true);
+  assert.equal(args.some((argument) => argument.startsWith("edge://")), false);
+  assert.doesNotMatch(stopDedicatedEdgePowerShell, /UIAutomation|許可/);
+});
 
-  assert.equal(environment.KAKOMONN_E2E_EDGE_USER_DATA_DIR, userDataDir);
-  assert.equal(environment.KAKOMONN_E2E_APPROVAL_TIMEOUT_MS, "12345");
-  assert.equal(environment.KAKOMONN_SYNC_TOKEN, undefined);
-  assert.match(remoteDebugApprovalPowerShell, /--user-data-dir=/);
-  assert.match(remoteDebugApprovalPowerShell, /"許可"/);
-  assert.match(remoteDebugApprovalPowerShell, /"MdTextButton"/);
-  assert.match(remoteDebugApprovalPowerShell, /InvokePattern/);
-  assert.match(remoteDebugApprovalPowerShell, /BoundingRectangle/);
-  assert.match(
-    remoteDebugApprovalPowerShell,
-    /Multiple remote debugging approval buttons were found/,
+test("does not pass the production token to browser subprocesses", () => {
+  assert.deepEqual(
+    secretFreeEnvironment({
+      KEEP: "value",
+      KAKOMONN_SYNC_TOKEN: "must-not-reach-browser",
+    }),
+    { KEEP: "value" },
   );
-  assert.match(dedicatedEdgeWindowPowerShell, /--user-data-dir=/);
-  assert.match(dedicatedEdgeWindowPowerShell, /--new-window/);
-  assert.match(
-    dedicatedEdgeWindowPowerShell,
-    /edge:\/\/inspect\/#remote-debugging/,
-  );
-  assert.match(dedicatedEdgeWindowPowerShell, /MainWindowHandle/);
-  assert.match(dedicatedEdgeWindowPowerShell, /WindowStyle = "Normal"/);
 });

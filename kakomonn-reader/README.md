@@ -34,7 +34,7 @@ npm run release:kakomonn-reader
 
 このcommandはlockfileどおりに依存関係をinstallし,local test,smoke test,live-site E2E,実Edgeと実Tampermonkeyと本番同期Workerを使うlive E2Eを含む`npm test`をWindowsで実行します. すべての検証後にmainが変わっていないことを再確認し,生成した`kakomonn-reader.user.js`を公開します.
 
-release前に専用のuser data directoryでEdgeを起動し,そのprofileだけにTampermonkeyをinstallします. 最新の`kakomonn-reader.user.js`を保存し, `edge://inspect/#remote-debugging`でリモートデバッグを有効にして, `KAKOMONN_SYNC_TOKEN`へ本番Workerのtokenを設定します. 専用profileを示す`KAKOMONN_EDGE_USER_DATA_DIR`を含め,いずれかが欠けている場合やTampermonkeyへ保存したbuildがmainと一致しない場合は,releaseを作成せず終了します. 通常利用するEdge user data directoryとその配下は拒否します.
+release前の初回準備では, 専用のuser data directoryでEdgeを起動し, そのprofileだけにTampermonkeyをinstallしてからEdgeを閉じます. test scriptが専用profileのEdgeを最小化して起動し, 最新の`kakomonn-reader.user.js`をTampermonkeyへ更新します. `KAKOMONN_SYNC_TOKEN`は本番Workerのtokenです. 値が未設定の場合は, EdgeとChromeのTampermonkey storageからproductionで認証できる値を自動取得します. 専用profile, Tampermonkey, token, 最新buildのいずれかが欠けている場合は, releaseを作成せず終了します. 通常利用するEdge user data directoryとその配下はlive E2Eに使用しません.
 
 Releaseのtagは`kakomonn-reader-<commit SHA>`,titleは`kakomonn-reader <先頭12文字のSHA>`です.同期済みの`main`先端だけを`Latest`として公開し,生成fileはrepositoryの差分へ含めません. 作業内容とmainの不一致,localとoriginまたはGitHub上のmainの不一致,local検証の失敗,検証中のmain更新,同一tagの既存Releaseのいずれかを検出した場合は公開せず終了します. 原因を解消して同じcommandを最初から実行してください. skip,force,任意revisionを指定するoptionはありません.
 
@@ -65,21 +65,21 @@ npm ci
 npm run build:kakomonn-reader
 ```
 
-通常利用するEdge profileは使用しません. 次のcommandで専用のuser data directoryを指定してEdgeを起動し,そのprofileだけにTampermonkeyをinstallして,生成された`kakomonn-reader.user.js`を保存します.
+通常利用するEdge profileはlive E2Eに使用しません. 初回だけ次のcommandで専用のuser data directoryを指定してEdgeを起動し, そのprofileへTampermonkeyをinstallしてからEdgeを閉じます. userscriptの保存と更新はtest scriptが行います.
 
 ```powershell
 $env:KAKOMONN_EDGE_USER_DATA_DIR = Join-Path $env:LOCALAPPDATA 'kakomonn-edge-e2e'
 $edgeExecutable = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'
-Start-Process -FilePath $edgeExecutable -ArgumentList "--user-data-dir=$env:KAKOMONN_EDGE_USER_DATA_DIR",'edge://inspect/#remote-debugging'
+Start-Process -FilePath $edgeExecutable -ArgumentList "--user-data-dir=$env:KAKOMONN_EDGE_USER_DATA_DIR"
 ```
 
-専用profileの`edge://inspect/#remote-debugging`でリモートデバッグを有効にしてから次の完全testを実行します. `KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ,ES2020構文,local smoke test,実サイトE2Eに続けて,専用profileの実Edge,実Tampermonkey,デプロイ済みの同期Workerを一続きで検証します. 最後のE2Eは専用Edgeに表示されるリモートデバッグの`許可`をWindows UI Automationで自動操作し,Tampermonkeyへ保存されたbuild fingerprintが生成fileと一致することを確認してから,Edgeの通常clickで解答記録を1件送信し,問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに,本番の解答履歴と定着状態を更新し,外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
+`KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ, ES2020構文, local smoke test, 実サイトE2Eに続けて, 専用profileの最小化Edge, 実Tampermonkey, デプロイ済みの同期Workerを一続きで検証します. 最後のE2Eはtest scriptがEdgeを起動し, Tampermonkeyを`UserScripts API Dynamic`に固定して, 最新userscriptを更新します. さらに, build fingerprintが生成fileと一致することを確認します. その後, 実Edge上で解答記録を1件送信し, 問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに, 本番の解答履歴と定着状態を更新し, 外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
 
 ```powershell
 $env:KAKOMONN_SYNC_TOKEN='<SYNC_TOKEN>'
 npm test
 ```
 
-`KAKOMONN_EDGE_USER_DATA_DIR`は必須です. 通常利用するEdge user data directoryとその配下は使用できません. 接続時に専用profileのEdgeが表示するリモートデバッグの承認は,testが`許可`を自動操作します.
+`KAKOMONN_EDGE_USER_DATA_DIR`はprocess環境変数またはrepository rootのignore済み`.env`で指定できます. process環境変数がある場合はその値を優先し, 省略した場合は`%LOCALAPPDATA%\kakomonn-edge-e2e`を使用します. 通常利用するEdge user data directoryとその配下は使用できません. test scriptが指定された専用profileの既存processを終了し, 最小化Edgeの起動から終了までを所有します.
 
 `npm run test:kakomonn-live-sync`で最後のlive E2Eだけを再実行できますが,build,local test,smoke test,live-site E2Eを含む完全な完了条件は`npm test`です. live-sync E2Eをskipまたはforce通過させるoptionはありません. `npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます.

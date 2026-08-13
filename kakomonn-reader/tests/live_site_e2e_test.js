@@ -43,6 +43,16 @@ const readerReadyTimeout = 30_000;
 const darkModeImageFilter = "invert(1) hue-rotate(180deg)";
 const answerShortcutKeys = "qwert";
 
+function formatPageError(error) {
+  return (
+    error?.stack ||
+    error?.message ||
+    error?.name ||
+    String(error) ||
+    "Unknown page error"
+  );
+}
+
 async function getQuestionFrame(page) {
   await page.locator("#kakomonn-reader-frame").waitFor({ state: "attached" });
   const frame = page.locator("#kakomonn-reader-frame").contentFrame();
@@ -247,7 +257,7 @@ async function runLiveCatalogCrawlCase(browser, script) {
   const page = await context.newPage();
   const pageErrors = [];
   const catalogPageTasks = [];
-  page.on("pageerror", (error) => pageErrors.push(error.stack ?? String(error)));
+  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
   page.on("response", (response) => {
     const url = new URL(response.url());
     if (url.hostname !== "chushoks.kakomonn.com" || !/^\/list1\/\d+$/.test(url.pathname)) {
@@ -342,7 +352,7 @@ async function runCase(
   await blockThirdPartyAds(context);
   const page = await context.newPage();
   const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(error.stack ?? String(error)));
+  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
 
   try {
     console.log(JSON.stringify({ phase: "goto", answerText }));
@@ -544,7 +554,7 @@ async function runRandomNavigationCase(browser, script) {
   await blockThirdPartyAds(context);
   const page = await context.newPage();
   const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
 
   try {
     console.log(JSON.stringify({ phase: "random-goto" }));
@@ -749,7 +759,7 @@ async function runMarkdownCopyCase(browser, script) {
   await blockThirdPartyAds(context);
   const page = await context.newPage();
   const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
 
   try {
     console.log(JSON.stringify({ phase: "markdown-copy-goto" }));
@@ -975,7 +985,7 @@ async function runReportedCopyCase(browser, script) {
   await blockThirdPartyAds(context);
   const page = await context.newPage();
   const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
 
   try {
     const response = await page.goto(reportedCopyQuestionUrl, {
@@ -1055,7 +1065,7 @@ async function runImageChoiceInversionCase(browser, script) {
   await blockThirdPartyAds(context);
   const page = await context.newPage();
   const pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(String(error)));
+  page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
 
   try {
     const response = await page.goto(imageChoiceQuestionUrl, {
@@ -1099,7 +1109,7 @@ async function runCrossDomainActivationCase(browser, script) {
     await blockThirdPartyAds(context);
     const page = await context.newPage();
     const pageErrors = [];
-    page.on("pageerror", (error) => pageErrors.push(String(error)));
+    page.on("pageerror", (error) => pageErrors.push(formatPageError(error)));
     try {
       const response = await page.goto(questionURL, {
         waitUntil: "domcontentloaded",

@@ -562,6 +562,23 @@ async function main() {
       true,
       JSON.stringify(readerLayout),
     );
+    await page.evaluate(() => {
+      const frame = document.querySelector("#kakomonn-reader-frame");
+      frame.setAttribute("height", "90");
+      frame.setAttribute("width", "728");
+      frame.style.height = "90px";
+      frame.style.width = "728px";
+    });
+    await page.waitForFunction(() => {
+      const frame = document.querySelector("#kakomonn-reader-frame");
+      const shell = document.querySelector("#kakomonn-reader-shell");
+      return (
+        frame.getAttribute("height") === null &&
+        frame.getAttribute("width") === null &&
+        frame.clientHeight === shell.clientHeight &&
+        frame.clientWidth === shell.clientWidth
+      );
+    });
     assert.deepEqual(
       await page.evaluate(() => {
         const root = getComputedStyle(document.documentElement);

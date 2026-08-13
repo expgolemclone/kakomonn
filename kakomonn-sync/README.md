@@ -51,7 +51,7 @@ npm run deploy:kakomonn-sync
 
 ## API
 
-APIは`/v7`だけを提供し, LearningState Durable Objectを唯一のsource of truthとします. `GET /v7/state`と`POST /v7/attempts`は`stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`を`learningMetrics`として返します. `POST /v7/attempts`は`attempt`として`answerResult`, `attemptedAtMs`, card単位の`previousCardStabilityDays`と`resultingCardStabilityDays`, 集計値の`previousStabilityDays`と`resultingStabilityDays`も返します.
+APIは`/v7`だけを提供し, LearningState Durable Objectを唯一のsource of truthとします. `GET /v7/state`と`POST /v7/attempts`は`stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`を`learningMetrics`として返します. `POST /v7/attempts`は`attempt`として`answerResult`, `attemptedAtMs`, card単位の`previousCardStabilityDays`と`resultingCardStabilityDays`, 集計値の`previousStabilityDays`と`resultingStabilityDays`も返します. 解答によって`todayStabilityDaysDelta`が`dailyStabilityDaysDeltaGoal`へ初めて到達した場合だけ, `celebration`として`site`, `date`, `todayStabilityDaysDelta`, `dailyStabilityDaysDeltaGoal`も返します.
 
 - `GET /v7/sites`は,問題catalogを登録済みのサイト一覧を返します.
 - `GET /v7/state?site=<host>`は,`learningMetrics`と問題catalog情報を返します.
@@ -68,6 +68,8 @@ APIは`/v7`だけを提供し, LearningState Durable Objectを唯一のsource of
 `stabilityDays`は, 現在の問題catalogに含まれる全cardのFSRS stabilityを合計してから整数へ切り捨てた値です. 未回答問題は0日として扱います. catalogから外れたcardは再登録時に学習状態を復元できるよう保存しますが, `stabilityDays`と次問候補には含めません. catalog置換で`stabilityDays`が変化した場合も, その日の履歴へ新しい値を記録します.
 
 `stabilityDaysDelta`は, 日ごとの`closing_stability_days - opening_stability_days`です. `todayStabilityDaysDelta`は当日の同じ値で, `dailyStabilityDaysDeltaGoal`はこの純増に対する目標です.
+
+祝福判定は解答前の`todayStabilityDaysDelta`が目標未満で, 解答後の値が目標以上になった場合だけ成立します. siteと日本時間の日付ごとに1回だけ記録し, 同じ`operationId`の再送では同じeventを返します. 目標変更, catalog変更, 初回同期では祝福を作成しません.
 
 解いた問題数はsite内の問題IDの種類数です.同じ問題を複数回解いても累計では1問として数え,日別では同じ日に繰り返しても1問として数えます.別の日に同じ問題を解いた場合は,各日の解いた問題数へ1問ずつ数えます.正答,誤答,スキップはいずれも解答履歴へ含めます.過去に解いた問題は,現在の問題catalogから外れても累計へ含めます.
 

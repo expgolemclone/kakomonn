@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @description  問題文と解説の読み上げ, コピー, stabilityDays合計日数の端末間同期を提供します.
+// @description  問題文と解説の読み上げ, コピー, stabilityDays合計日数の端末間同期と日次目標の祝福を提供します.
 // @match        https://*.kakomonn.com/*
 // @connect      kakomonn-sync.expgolem-lab.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com
@@ -30,6 +30,8 @@
       : "";
   const SYNC_API_URL =
     "https://kakomonn-sync.expgolem-lab.workers.dev";
+  const CONGRATULATIONS_URL =
+    "https://kakomonn-congratulations.expgolem-lab.workers.dev/";
   const SITE_ID = location.hostname.toLowerCase();
   if (
     !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(
@@ -40,6 +42,8 @@
   }
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
   const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE_ID}.v7.pending-attempt`;
+  const PENDING_CELEBRATION_KEY =
+    `kakomonn-reader.${SITE_ID}.v7.pending-celebration`;
   const SYNC_TIMEOUT_MS = 15000;
   const SPEECH_TIMEOUT_MS = 30000;
   const FRAME_LOAD_DELAY_MS = 900;
@@ -222,6 +226,8 @@
   let syncPromise = null;
   let pendingAttempt = null;
   let pendingAttemptTransitionPromise = null;
+  let pendingCelebration = null;
+  let celebrationTransitionPromise = null;
 
   const style = document.createElement("style");
   style.textContent = `

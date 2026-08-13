@@ -1,6 +1,6 @@
 import { getTokyoDate } from "../dates.js";
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 export const DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL = 30;
 
 function tableDefinition(storage, tableName) {
@@ -63,6 +63,16 @@ function createCurrentTables(storage) {
       daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1)
     ) WITHOUT ROWID;
 
+    CREATE TABLE daily_stability_days_delta_achievements (
+      site TEXT NOT NULL,
+      date TEXT NOT NULL,
+      operation_id TEXT NOT NULL UNIQUE,
+      achieved_at_ms INTEGER NOT NULL CHECK (achieved_at_ms > 0),
+      today_stability_days_delta INTEGER NOT NULL CHECK (today_stability_days_delta >= 1),
+      daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1),
+      PRIMARY KEY (site, date)
+    ) WITHOUT ROWID;
+
     CREATE TABLE schema_metadata (
       singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
       version INTEGER NOT NULL CHECK (version > 0)
@@ -111,6 +121,22 @@ function migrateSchemaV2ToV3(storage) {
 
     DROP TABLE site_settings_v2;
 
+    UPDATE schema_metadata SET version = 3 WHERE singleton = 1;
+  `);
+}
+
+function migrateSchemaV3ToV4(storage) {
+  storage.sql.exec(`
+    CREATE TABLE daily_stability_days_delta_achievements (
+      site TEXT NOT NULL,
+      date TEXT NOT NULL,
+      operation_id TEXT NOT NULL UNIQUE,
+      achieved_at_ms INTEGER NOT NULL CHECK (achieved_at_ms > 0),
+      today_stability_days_delta INTEGER NOT NULL CHECK (today_stability_days_delta >= 1),
+      daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1),
+      PRIMARY KEY (site, date)
+    ) WITHOUT ROWID;
+
     UPDATE schema_metadata SET version = ${CURRENT_SCHEMA_VERSION} WHERE singleton = 1;
   `);
 }
@@ -156,6 +182,16 @@ function migrateLegacySchema(storage, today) {
     CREATE TABLE site_settings (
       site TEXT PRIMARY KEY,
       daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE daily_stability_days_delta_achievements (
+      site TEXT NOT NULL,
+      date TEXT NOT NULL,
+      operation_id TEXT NOT NULL UNIQUE,
+      achieved_at_ms INTEGER NOT NULL CHECK (achieved_at_ms > 0),
+      today_stability_days_delta INTEGER NOT NULL CHECK (today_stability_days_delta >= 1),
+      daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1),
+      PRIMARY KEY (site, date)
     ) WITHOUT ROWID;
 
     CREATE TABLE schema_metadata (
@@ -212,7 +248,7 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     throw new TypeError("invalid schema initialization time");
   }
   storage.transactionSync(() => {
-    const currentTables = [
+    const schemaV3Tables = [
       "attempts",
       "cards",
       "catalog_metadata",
@@ -220,6 +256,10 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       "schema_metadata",
       "site_settings",
       "stability_history",
+    ];
+    const currentTables = [
+      ...schemaV3Tables,
+      "daily_stability_days_delta_achievements",
     ];
     const legacyTables = [
       "attempts",
@@ -229,35 +269,40 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       "mastery_history",
       "questions",
     ];
-    const existingCurrent = currentTables.filter(
+    const existingSchemaV3 = schemaV3Tables.filter(
       (name) => tableDefinition(storage, name) !== undefined
     );
     const existingLegacy = legacyTables.filter(
       (name) => tableDefinition(storage, name) !== undefined
     );
 
-    if (existingCurrent.length === 0 && existingLegacy.length === 0) {
+    if (existingSchemaV3.length === 0 && existingLegacy.length === 0) {
       createCurrentTables(storage);
     } else if (
       tableDefinition(storage, "schema_metadata") === undefined &&
       existingLegacy.length === legacyTables.length
     ) {
       migrateLegacySchema(storage, getTokyoDate(new Date(nowMs)));
-    } else if (existingCurrent.length !== currentTables.length) {
+    } else if (existingSchemaV3.length !== schemaV3Tables.length) {
       throw new Error("incomplete LearningState schema");
     }
 
-    const version = storage.sql
+    let version = storage.sql
       .exec("SELECT version FROM schema_metadata WHERE singleton = 1")
       .toArray()[0]?.version;
     if (version === 2) {
       migrateSchemaV2ToV3(storage);
+      version = 3;
     }
-    const migratedVersion = storage.sql
-      .exec("SELECT version FROM schema_metadata WHERE singleton = 1")
-      .toArray()[0]?.version;
-    if (migratedVersion !== CURRENT_SCHEMA_VERSION) {
+    if (version === 3) {
+      migrateSchemaV3ToV4(storage);
+      version = CURRENT_SCHEMA_VERSION;
+    }
+    if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error("unsupported LearningState schema version");
+    }
+    if (currentTables.some((name) => tableDefinition(storage, name) === undefined)) {
+      throw new Error("incomplete LearningState schema");
     }
     installIndexes(storage);
   });

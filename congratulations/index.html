@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja" data-state="loading">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description" content="todayStabilityDaysDeltaの目標達成を13種類の作品から選んで祝うpage">
+    <title>todayStabilityDaysDelta達成を祝福中</title>
+    <link rel="stylesheet" href="./shell.css">
+  </head>
+  <body>
+    <main class="stage">
+      <p id="loading" class="loading" role="status">祝福を選んでいます...</p>
+      <iframe id="celebration-frame" title="ランダムに選ばれた祝福page" referrerpolicy="no-referrer" aria-busy="true"></iframe>
+    </main>
+    <aside class="study-log-ticket" aria-label="todayStabilityDaysDeltaの達成記録">
+      <span id="achievement-label" class="achievement-label"></span>
+      <button id="open-study-log" class="study-log-button" type="button">学習ログを見る</button>
+    </aside>
+    <section id="error-panel" class="error-panel" role="alert" hidden>
+      <h1>祝福pageを開けません</h1>
+      <p></p>
+    </section>
+    <script type="module" src="./router.js"></script>
+  </body>
+</html>

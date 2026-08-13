@@ -10,6 +10,7 @@
 - `a,s,d,f,g`で表示選択肢1から5の取り消し線を切り替えます.
 - 問題pageを開くたびに, `問題`見出しがpage topへ来る位置まで自動でscrollします. `z`で100px下へ,`x`で100px上へscrollし,`gg`でpage topへ戻ります. 検索欄や計算欄などへ入力中はkeyboard shortcutを無効にします.
 - `Enter`は未解答なら解答を実行し,解答後は次問へ進みます. 下部の`次の問題へ`をクリックまたはタップして進むこともできます.
+- 解答によって`todayStabilityDaysDelta`が`dailyStabilityDaysDeltaGoal`へ初めて到達すると, その日のprimary KPI達成を祝う専用pageへ移動します. 同じ日の祝福はsiteごとに1回だけです.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
 - 現在の問題catalogに含まれる全問題のstabilityを合計して切り捨てた定着日数stabilityDaysと解答履歴. 値は`kakomonn-sync`へ保存され,Win11 EdgeとiPhone Safariで共有されます.問題画面ではstabilityDaysとtodayAttemptedQuestionCountを確認できます.同期WorkerのrootではstabilityDays,todayStabilityDaysDelta,dailyStabilityDaysDeltaGoal,attemptedQuestionCount,直近7日間のhistoryを確認できます.解いた問題数は問題IDの種類数で,同じ問題を同じ日に繰り返しても1問として数えます.
 - 解答後に, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でクリップボードへコピー. `yy`でもコピーできます.
@@ -51,6 +52,8 @@ iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 両�
 初回起動時に同期トークンの入力画面が開きます.Win11とiPhoneへ,Worker Secretの`SYNC_TOKEN`と同じ値を入力してください.トークンは各ユーザースクリプトマネージャーの専用ストレージへ保存され,対象サイトの`localStorage`には保存されません.
 
 正解と不正解のどちらでも,解答記録の同期に失敗した場合は次問へ進まず,同じ操作IDで再試行します.通信が復旧した後に`同期を再試行`を押してください.同じ操作の再送は二重加算されません.
+
+同期Workerが解答responseで`celebration`を返した場合は, readerがそのeventをユーザースクリプトの専用storageへ保存してから祝福pageへ移動します. 移動前にpageを閉じても, 次回起動時に同じeventから再開します.
 
 ## バージョン管理
 

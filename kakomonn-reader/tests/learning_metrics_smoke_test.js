@@ -69,6 +69,7 @@ async function prepare(page, startPath, options = {}) {
   await installSyncMock(page, {
     stabilityDays: options.stabilityDays ?? 0,
     nextQuestionId: options.nextQuestionId === undefined ? "456" : options.nextQuestionId,
+    pendingCelebration: options.pendingCelebration ?? null,
   });
   await page.addScriptTag({ content: fs.readFileSync(scriptPath, "utf8") });
   return errors;
@@ -617,6 +618,74 @@ async function runStabilityDaysDecreaseCase(browser) {
   }
 }
 
+async function runCelebrationCase(browser) {
+  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  try {
+    const page = await context.newPage();
+    await page.route("https://kakomonn-congratulations.expgolem-lab.workers.dev/**", (route) =>
+      route.fulfill({
+        contentType: "text/html; charset=utf-8",
+        body: "<!doctype html><html><body><h1>dailyStabilityDaysDelta達成</h1></body></html>",
+      }),
+    );
+    const errors = await prepare(page, "/questions/123", { nextQuestionId: "456" });
+    const frame = await readerFrame(page);
+    await page.waitForFunction(() => document.querySelector("#kakomonn-reader-next")?.disabled === false);
+    await page.evaluate(() => {
+      window.__syncMock.nextAttemptStabilityDaysDelta = 31;
+      window.__syncMock.nextCelebration = {
+        site: "chushoks.kakomonn.com",
+        date: "2026-08-10",
+        todayStabilityDaysDelta: 31,
+        dailyStabilityDaysDeltaGoal: 30,
+      };
+    });
+    await frame.locator("#native-next").click();
+    await page.waitForURL((url) =>
+      url.origin === "https://kakomonn-congratulations.expgolem-lab.workers.dev",
+    );
+    const url = new URL(page.url());
+    assert.equal(url.searchParams.get("site"), site);
+    assert.equal(url.searchParams.get("date"), "2026-08-10");
+    assert.equal(url.searchParams.get("todayStabilityDaysDelta"), "31");
+    assert.equal(url.searchParams.get("dailyStabilityDaysDeltaGoal"), "30");
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
+async function runPendingCelebrationRecoveryCase(browser) {
+  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  try {
+    const page = await context.newPage();
+    await page.route("https://kakomonn-congratulations.expgolem-lab.workers.dev/**", (route) =>
+      route.fulfill({
+        contentType: "text/html; charset=utf-8",
+        body: "<!doctype html><html><body><h1>dailyStabilityDaysDelta達成</h1></body></html>",
+      }),
+    );
+    const celebration = {
+      site,
+      date: "2026-08-10",
+      todayStabilityDaysDelta: 35,
+      dailyStabilityDaysDeltaGoal: 30,
+    };
+    const errors = await prepare(page, "/questions/123", {
+      pendingCelebration: celebration,
+    });
+    await page.waitForURL((url) =>
+      url.origin === "https://kakomonn-congratulations.expgolem-lab.workers.dev",
+    );
+    const url = new URL(page.url());
+    assert.equal(url.searchParams.get("todayStabilityDaysDelta"), "35");
+    assert.equal(url.searchParams.get("dailyStabilityDaysDeltaGoal"), "30");
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
 async function main() {
   execFileSync("python3", ["build.py"], { cwd: projectRoot, stdio: "inherit" });
   const script = fs.readFileSync(scriptPath, "utf8");
@@ -640,6 +709,8 @@ async function main() {
     await runCatalogHybridSnapshotCase(browser);
     await runCatalogCASConflictCase(browser);
     await runStabilityDaysDecreaseCase(browser);
+    await runCelebrationCase(browser);
+    await runPendingCelebrationRecoveryCase(browser);
   } finally {
     await browser.close();
   }

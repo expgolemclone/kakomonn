@@ -6,6 +6,7 @@
 
 - [`kakomonn-reader`](kakomonn-reader/README.md): 中小企業診断士試験の過去問ページ向け読み上げとFSRS定着日数管理スクリプト.
 - [`kakomonn-sync`](kakomonn-sync/README.md): kakomonn-readerの定着状態,解答履歴,目標設定を端末間で共有し,学習logを表示するCloudflare Worker.
+- [`congratulations`](congratulations/README.md): `todayStabilityDaysDelta`が日次目標へ到達したときに表示する13種類の祝福体験.
 
 ## テスト
 

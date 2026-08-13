@@ -139,6 +139,81 @@ function readTodayStabilityDaysDelta(storage, site, today) {
     : row.closing_stability_days - row.opening_stability_days;
 }
 
+function readDailyStabilityDaysDeltaGoal(storage, site) {
+  const row = storage.sql
+    .exec(
+      `SELECT daily_stability_days_delta_goal FROM site_settings WHERE site = ?`,
+      site
+    )
+    .toArray()[0];
+  if (row === undefined) {
+    throw new Error("missing LearningState settings");
+  }
+  return row.daily_stability_days_delta_goal;
+}
+
+function celebrationFromRow(row) {
+  if (row === undefined) {
+    return undefined;
+  }
+  return {
+    site: row.site,
+    date: row.date,
+    todayStabilityDaysDelta: row.today_stability_days_delta,
+    dailyStabilityDaysDeltaGoal: row.daily_stability_days_delta_goal,
+  };
+}
+
+function readCelebrationForOperation(storage, operationId) {
+  return celebrationFromRow(
+    storage.sql
+      .exec(
+        `SELECT site, date, today_stability_days_delta,
+                daily_stability_days_delta_goal
+         FROM daily_stability_days_delta_achievements
+         WHERE operation_id = ?`,
+        operationId
+      )
+      .toArray()[0]
+  );
+}
+
+function recordCelebration(
+  storage,
+  site,
+  date,
+  operationId,
+  achievedAtMs,
+  previousTodayStabilityDaysDelta,
+  metrics
+) {
+  const dailyStabilityDaysDeltaGoal = readDailyStabilityDaysDeltaGoal(storage, site);
+  if (
+    previousTodayStabilityDaysDelta >= dailyStabilityDaysDeltaGoal ||
+    metrics.todayStabilityDaysDelta < dailyStabilityDaysDeltaGoal
+  ) {
+    return undefined;
+  }
+  const row = storage.sql
+    .exec(
+      `INSERT INTO daily_stability_days_delta_achievements (
+         site, date, operation_id, achieved_at_ms,
+         today_stability_days_delta, daily_stability_days_delta_goal
+       ) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(site, date) DO NOTHING
+       RETURNING site, date, today_stability_days_delta,
+                 daily_stability_days_delta_goal`,
+      site,
+      date,
+      operationId,
+      achievedAtMs,
+      metrics.todayStabilityDaysDelta,
+      dailyStabilityDaysDeltaGoal
+    )
+    .toArray()[0];
+  return celebrationFromRow(row);
+}
+
 function learningMetrics(storage, site, nowMs) {
   const today = getTokyoDate(new Date(nowMs));
   return {
@@ -177,9 +252,10 @@ function attemptResponse(
   row,
   metrics,
   previousStabilityDays,
-  resultingStabilityDays
+  resultingStabilityDays,
+  celebration = undefined
 ) {
-  return {
+  const response = {
     attempt: {
       questionId: row.question_id,
       answerResult: row.answer_result,
@@ -191,6 +267,10 @@ function attemptResponse(
     },
     learningMetrics: metrics,
   };
+  if (celebration !== undefined) {
+    response.celebration = celebration;
+  }
+  return response;
 }
 
 function assertAttempt(site, questionId, operationId, result) {
@@ -241,7 +321,8 @@ export class LearningState extends DurableObject {
           existing,
           learningMetrics(this.ctx.storage, site, nowMs),
           stabilityDays,
-          stabilityDays
+          stabilityDays,
+          readCelebrationForOperation(this.ctx.storage, operationId)
         );
       }
 
@@ -272,6 +353,11 @@ export class LearningState extends DurableObject {
       saveCard(this.ctx.storage, site, questionId, nextCard);
       const stabilityDaysAfter = readStabilityDays(this.ctx.storage, site);
       const today = getTokyoDate(new Date(nowMs));
+      const previousTodayStabilityDaysDelta = readTodayStabilityDaysDelta(
+        this.ctx.storage,
+        site,
+        today
+      );
       recordDailyStabilityDays(
         this.ctx.storage,
         site,
@@ -292,6 +378,16 @@ export class LearningState extends DurableObject {
         previousCardStabilityDays,
         nextCard.stability
       );
+      const metrics = learningMetrics(this.ctx.storage, site, nowMs);
+      const celebration = recordCelebration(
+        this.ctx.storage,
+        site,
+        today,
+        operationId,
+        nowMs,
+        previousTodayStabilityDaysDelta,
+        metrics
+      );
       return attemptResponse(
         {
           question_id: questionId,
@@ -300,9 +396,10 @@ export class LearningState extends DurableObject {
           previous_card_stability_days: previousCardStabilityDays,
           resulting_card_stability_days: nextCard.stability,
         },
-        learningMetrics(this.ctx.storage, site, nowMs),
+        metrics,
         stabilityDaysBefore,
-        stabilityDaysAfter
+        stabilityDaysAfter,
+        celebration
       );
     });
   }
@@ -429,18 +526,12 @@ export class LearningState extends DurableObject {
     if (!isSite(site)) {
       throw new TypeError("invalid settings site");
     }
-    const row = this.ctx.storage.sql
-      .exec(
-        `SELECT daily_stability_days_delta_goal FROM site_settings WHERE site = ?`,
-        site
-      )
-      .toArray()[0];
-    if (row === undefined) {
-      throw new Error("missing LearningState settings");
-    }
     return {
       site,
-      dailyStabilityDaysDeltaGoal: row.daily_stability_days_delta_goal,
+      dailyStabilityDaysDeltaGoal: readDailyStabilityDaysDeltaGoal(
+        this.ctx.storage,
+        site
+      ),
     };
   }
 

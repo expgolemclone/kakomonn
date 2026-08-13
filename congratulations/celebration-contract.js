@@ -1,0 +1,71 @@
+const SITE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/;
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const REQUIRED_KEYS = [
+  "dailyStabilityDaysDeltaGoal",
+  "date",
+  "site",
+  "todayStabilityDaysDelta",
+];
+
+function parseInteger(value, name) {
+  if (!/^-?(?:0|[1-9]\d*)$/.test(value ?? "")) {
+    throw new TypeError(`${name} must be an integer.`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new TypeError(`${name} must be a safe integer.`);
+  }
+  return parsed;
+}
+
+function validDate(value) {
+  if (!DATE_PATTERN.test(value)) {
+    return false;
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+export function parseCelebration(search) {
+  const parameters = new URLSearchParams(search);
+  const keys = Array.from(parameters.keys()).sort();
+  if (
+    keys.length !== REQUIRED_KEYS.length ||
+    keys.some((key, index) => key !== REQUIRED_KEYS[index])
+  ) {
+    throw new TypeError("Celebration parameters are invalid.");
+  }
+  const site = parameters.get("site");
+  const date = parameters.get("date");
+  if (!SITE_PATTERN.test(site ?? "") || !validDate(date ?? "")) {
+    throw new TypeError("Celebration identity is invalid.");
+  }
+  const todayStabilityDaysDelta = parseInteger(
+    parameters.get("todayStabilityDaysDelta"),
+    "todayStabilityDaysDelta",
+  );
+  const dailyStabilityDaysDeltaGoal = parseInteger(
+    parameters.get("dailyStabilityDaysDeltaGoal"),
+    "dailyStabilityDaysDeltaGoal",
+  );
+  if (
+    dailyStabilityDaysDeltaGoal < 1 ||
+    todayStabilityDaysDelta < dailyStabilityDaysDeltaGoal
+  ) {
+    throw new TypeError("Celebration metrics are invalid.");
+  }
+  return {
+    site,
+    date,
+    todayStabilityDaysDelta,
+    dailyStabilityDaysDeltaGoal,
+  };
+}
+
+export function celebrationSearch(celebration) {
+  const parameters = new URLSearchParams();
+  for (const key of REQUIRED_KEYS) {
+    parameters.set(key, String(celebration[key]));
+  }
+  return parameters.toString();
+}

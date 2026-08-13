@@ -29,6 +29,7 @@
       nextQuestionOperationInProgress ||
       navigationInProgress ||
       pendingAttempt !== null ||
+      pendingCelebration !== null ||
       !syncSettings.hidden;
   }
 
@@ -53,6 +54,11 @@
       nextQuestionButton.textContent =
         pendingAttempt.phase === "queued" ? "同期を再試行" : "次の問題を準備中";
       nextQuestionButton.disabled = navigationInProgress;
+      return;
+    }
+    if (pendingCelebration !== null) {
+      nextQuestionButton.textContent = "祝福を表示";
+      nextQuestionButton.disabled = celebrationTransitionPromise !== null;
       return;
     }
     if (navigationInProgress) {
@@ -151,7 +157,11 @@
     pendingAttemptTransitionPromise = (async () => {
       if (currentFrameURL === operation.nextURL) {
         await clearPendingAttempt();
-        setStatus("解答記録を同期しました");
+        setStatus(
+          pendingCelebration === null
+            ? "解答記録を同期しました"
+            : "dailyStabilityDaysDeltaGoal達成.祝福を準備中"
+        );
         return true;
       }
       if (frameDocument === null || navigationInProgress) {
@@ -167,7 +177,57 @@
     } finally {
       pendingAttemptTransitionPromise = null;
       updateSyncDependentControls();
+      void maybeContinuePendingCelebration();
     }
+  }
+
+  function congratulationsURL(celebration) {
+    const url = new URL(CONGRATULATIONS_URL);
+    url.searchParams.set("site", celebration.site);
+    url.searchParams.set("date", celebration.date);
+    url.searchParams.set(
+      "todayStabilityDaysDelta",
+      String(celebration.todayStabilityDaysDelta)
+    );
+    url.searchParams.set(
+      "dailyStabilityDaysDeltaGoal",
+      String(celebration.dailyStabilityDaysDeltaGoal)
+    );
+    return url.href;
+  }
+
+  async function maybeContinuePendingCelebration() {
+    if (
+      pendingCelebration === null ||
+      !syncReady ||
+      pendingAttempt !== null ||
+      syncInProgress ||
+      nextQuestionOperationInProgress ||
+      celebrationTransitionPromise !== null
+    ) {
+      return false;
+    }
+    const celebration = pendingCelebration;
+    celebrationTransitionPromise = (async () => {
+      navigationInProgress = true;
+      stopSpeech();
+      setStatus("dailyStabilityDaysDeltaGoal達成");
+      updateSyncDependentControls();
+      try {
+        await clearPendingCelebration();
+        location.assign(congratulationsURL(celebration));
+        return true;
+      } catch {
+        await savePendingCelebration(celebration);
+        navigationInProgress = false;
+        setStatus("祝福pageを開けません.再試行してください");
+        return false;
+      } finally {
+        celebrationTransitionPromise = null;
+        updateSyncDependentControls();
+      }
+    })();
+    return celebrationTransitionPromise;
   }
 
   async function createPendingAttempt(answerResult) {
@@ -218,6 +278,9 @@
         todayAttemptedQuestionCount =
           result.learningMetrics.todayAttemptedQuestionCount;
         renderLearningMetrics();
+        if (result.celebration !== undefined) {
+          await savePendingCelebration(result.celebration);
+        }
 
         const next = await requestNextQuestion(syncToken, operation.questionId);
         syncReady = true;
@@ -226,7 +289,11 @@
 
         if (next.question === null) {
           await clearPendingAttempt();
-          setStatus("出題できる問題はありません");
+          setStatus(
+            pendingCelebration === null
+              ? "出題できる問題はありません"
+              : "dailyStabilityDaysDeltaGoal達成.祝福を準備中"
+          );
           return true;
         }
         await markPendingAttemptAwaitingNavigation(operation, next.question.url);
@@ -248,6 +315,7 @@
         syncPromise = null;
         updateSyncDependentControls();
         void maybeContinuePendingAttemptNavigation();
+        void maybeContinuePendingCelebration();
       }
     })();
     return syncPromise;
@@ -305,6 +373,10 @@
       await submitPendingAttempt();
       return false;
     }
+    if (pendingCelebration !== null) {
+      await maybeContinuePendingCelebration();
+      return false;
+    }
     if (getCurrentAnswerResult() !== "unknown") {
       return false;
     }
@@ -333,6 +405,10 @@
       await submitPendingAttempt();
       return;
     }
+    if (pendingCelebration !== null) {
+      await maybeContinuePendingCelebration();
+      return;
+    }
     const answerResult = getCurrentAnswerResult();
     if (answerResult === "unknown") {
       setStatus("正誤を確認できません");
@@ -347,7 +423,8 @@
       !speechEnabled ||
       !currentPageReadPending ||
       !syncReady ||
-      syncInProgress
+      syncInProgress ||
+      pendingCelebration !== null
     ) {
       return;
     }
@@ -363,7 +440,8 @@
       !speechSupported ||
       !currentPageReadPending ||
       !syncReady ||
-      syncInProgress
+      syncInProgress ||
+      pendingCelebration !== null
     ) {
       return false;
     }
@@ -397,7 +475,8 @@
     if (
       !currentPageReadPending ||
       !syncReady ||
-      syncInProgress
+      syncInProgress ||
+      pendingCelebration !== null
     ) {
       return;
     }

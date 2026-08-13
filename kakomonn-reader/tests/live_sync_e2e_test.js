@@ -470,33 +470,21 @@ async function clickNextQuestion(page) {
     }`,
   );
   assert.equal(hitTest.targetId, "kakomonn-reader-next", JSON.stringify(hitTest));
-  await evaluate(
+  const nextClick = await evaluate(
     page,
     `() => {
-      window.__kakomonnLiveNextClicked = false;
-      document.querySelector("#kakomonn-reader-next").addEventListener(
+      let clicked = false;
+      const button = document.querySelector("#kakomonn-reader-next");
+      button.addEventListener(
         "click",
         () => {
-          window.__kakomonnLiveNextClicked = true;
+          clicked = true;
         },
         true
       );
+      button.click();
+      return { clicked };
     }`,
-  );
-  await page
-    .locator("#kakomonn-reader-next")
-    .evaluate((button) => button.click());
-  await delay(1_000);
-  const nextClick = await evaluate(
-    page,
-    `() => ({
-      clicked: window.__kakomonnLiveNextClicked,
-      state: {
-        disabled: document.querySelector("#kakomonn-reader-next").disabled,
-        status: document.querySelector("#kakomonn-reader-status").textContent,
-        text: document.querySelector("#kakomonn-reader-next").textContent
-      }
-    })`,
   );
   assert.equal(
     nextClick.clicked,
@@ -504,7 +492,19 @@ async function clickNextQuestion(page) {
     JSON.stringify(nextClick),
   );
 
-  return waitUntil("the scheduled next question", async () => {
+  return waitUntil("the scheduled next question or primary KPI celebration", async () => {
+    const outerURL = await evaluate(page, "() => location.href");
+    if (
+      outerURL.startsWith(
+        "https://kakomonn-congratulations.expgolem-lab.workers.dev/",
+      )
+    ) {
+      const ready = await evaluate(
+        page,
+        `() => document.documentElement.dataset.state === "ready"`,
+      );
+      return ready ? { kind: "celebration", outerURL } : null;
+    }
     const state = await readReaderState(page);
     if (
       state.outerURL !== state.frameURL ||
@@ -516,7 +516,7 @@ async function clickNextQuestion(page) {
     ) {
       return null;
     }
-    return state;
+    return { kind: "question", state };
   });
 }
 
@@ -588,19 +588,45 @@ async function main() {
     );
     await submitCorrectAnswer(page);
     await copyMarkdownInRealEdge(page);
-    const browserState = await clickNextQuestion(page);
+    const navigationResult = await clickNextQuestion(page);
     const finalState = await requestSyncState(token);
     assert.equal(finalState.today, baseline.today);
-    assert.equal(
-      browserState.count,
-      `stabilityDays ${finalState.learningMetrics.stabilityDays.toLocaleString("ja-JP")}日 / todayAttemptedQuestionCount ${finalState.learningMetrics.todayAttemptedQuestionCount}問`,
-    );
+    let frameUrl = null;
+    if (navigationResult.kind === "question") {
+      frameUrl = navigationResult.state.frameURL;
+      assert.equal(
+        navigationResult.state.count,
+        `stabilityDays ${finalState.learningMetrics.stabilityDays.toLocaleString("ja-JP")}日 / todayAttemptedQuestionCount ${finalState.learningMetrics.todayAttemptedQuestionCount}問`,
+      );
+    } else {
+      const celebrationURL = new URL(navigationResult.outerURL);
+      assert.deepEqual([...celebrationURL.searchParams.keys()].sort(), [
+        "dailyStabilityDaysDeltaGoal",
+        "date",
+        "site",
+        "todayStabilityDaysDelta",
+      ]);
+      assert.equal(celebrationURL.searchParams.get("site"), finalState.site);
+      assert.equal(celebrationURL.searchParams.get("date"), finalState.today);
+      assert.equal(
+        Number(celebrationURL.searchParams.get("todayStabilityDaysDelta")),
+        finalState.learningMetrics.todayStabilityDaysDelta,
+      );
+      assert.equal(
+        Number.isSafeInteger(
+          Number(celebrationURL.searchParams.get("dailyStabilityDaysDeltaGoal")),
+        ) &&
+          Number(celebrationURL.searchParams.get("dailyStabilityDaysDeltaGoal")) >= 1,
+        true,
+      );
+    }
     console.log(
       JSON.stringify({
         browser: "Microsoft Edge with Tampermonkey",
         buildFingerprint: expectedBuildFingerprint,
-        frameUrl: browserState.frameURL,
+        frameUrl,
         markdownHeading: expectedMarkdownHeading,
+        navigation: navigationResult.kind,
         stabilityDaysAfter: finalState.learningMetrics.stabilityDays,
         stabilityDaysBefore: baseline.learningMetrics.stabilityDays,
         status: "passed",

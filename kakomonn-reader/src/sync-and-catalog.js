@@ -47,6 +47,8 @@
 
   function isAttemptResponse(value) {
     const metrics = value?.learningMetrics;
+    const validCelebration =
+      value?.celebration === undefined || isCelebration(value.celebration);
     return (
       value !== null &&
       typeof value === "object" &&
@@ -73,7 +75,33 @@
       Number.isSafeInteger(metrics.attemptedQuestionCount) &&
       metrics.attemptedQuestionCount >= 0 &&
       Number.isSafeInteger(metrics.todayAttemptedQuestionCount) &&
-      metrics.todayAttemptedQuestionCount >= 0
+      metrics.todayAttemptedQuestionCount >= 0 &&
+      validCelebration
+    );
+  }
+
+  function isCalendarDate(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return false;
+    }
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(date.getTime()) &&
+      date.toISOString().slice(0, 10) === value;
+  }
+
+  function isCelebration(value) {
+    return (
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      Object.keys(value).sort().join(",") ===
+        "dailyStabilityDaysDeltaGoal,date,site,todayStabilityDaysDelta" &&
+      value.site === SITE_ID &&
+      isCalendarDate(value.date) &&
+      Number.isSafeInteger(value.todayStabilityDaysDelta) &&
+      Number.isSafeInteger(value.dailyStabilityDaysDeltaGoal) &&
+      value.dailyStabilityDaysDeltaGoal >= 1 &&
+      value.todayStabilityDaysDelta >= value.dailyStabilityDaysDeltaGoal
     );
   }
 
@@ -180,6 +208,10 @@
       return value.nextURL === undefined;
     }
     return typeof value.nextURL === "string" && isScheduledQuestionURL(value.nextURL);
+  }
+
+  function isPendingCelebration(value) {
+    return isCelebration(value);
   }
 
   function isScheduledQuestionURL(value) {
@@ -390,6 +422,19 @@
   async function clearPendingAttempt() {
     await GM.deleteValue(PENDING_ATTEMPT_KEY);
     pendingAttempt = null;
+  }
+
+  async function savePendingCelebration(celebration) {
+    if (!isPendingCelebration(celebration)) {
+      throw new Error("invalid pending celebration");
+    }
+    await GM.setValue(PENDING_CELEBRATION_KEY, celebration);
+    pendingCelebration = celebration;
+  }
+
+  async function clearPendingCelebration() {
+    await GM.deleteValue(PENDING_CELEBRATION_KEY);
+    pendingCelebration = null;
   }
 
   async function markPendingAttemptAwaitingNavigation(operation, nextURL) {
@@ -702,6 +747,7 @@
         syncPromise = null;
         updateSyncDependentControls();
         void maybeContinuePendingAttemptNavigation();
+        void maybeContinuePendingCelebration();
         processCurrentPageSpeech();
       }
     })();
@@ -751,18 +797,25 @@
         syncTokenInput.disabled = false;
         updateSyncDependentControls();
         void maybeContinuePendingAttemptNavigation();
+        void maybeContinuePendingCelebration();
         processCurrentPageSpeech();
       }
     })();
     return syncPromise;
   }
 
-  async function restorePendingState(storedAttempt) {
+  async function restorePendingState(storedAttempt, storedCelebration) {
     if (storedAttempt !== null && !isPendingAttempt(storedAttempt)) {
       await GM.deleteValue(PENDING_ATTEMPT_KEY);
       pendingAttempt = null;
     } else {
       pendingAttempt = storedAttempt;
+    }
+    if (storedCelebration !== null && !isPendingCelebration(storedCelebration)) {
+      await GM.deleteValue(PENDING_CELEBRATION_KEY);
+      pendingCelebration = null;
+    } else {
+      pendingCelebration = storedCelebration;
     }
   }
 
@@ -774,9 +827,10 @@
       return;
     }
     try {
-      const [storedToken, storedPendingAttempt] = await Promise.all([
+      const [storedToken, storedPendingAttempt, storedCelebration] = await Promise.all([
         GM.getValue(SYNC_TOKEN_KEY, ""),
         GM.getValue(PENDING_ATTEMPT_KEY, null),
+        GM.getValue(PENDING_CELEBRATION_KEY, null),
       ]);
       if (typeof storedToken !== "string") {
         await GM.deleteValue(SYNC_TOKEN_KEY);
@@ -785,7 +839,7 @@
         syncToken = storedToken.trim();
       }
       clearAzureSpeechToken();
-      await restorePendingState(storedPendingAttempt);
+      await restorePendingState(storedPendingAttempt, storedCelebration);
       if (!syncToken) {
         syncReady = false;
         setStatus("同期トークンを設定してください");
@@ -807,6 +861,7 @@
       document.visibilityState === "visible" &&
       syncToken &&
       pendingAttempt === null &&
+      pendingCelebration === null &&
       !nextQuestionOperationInProgress &&
       syncSettings.hidden
     ) {

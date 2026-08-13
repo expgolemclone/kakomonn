@@ -27,6 +27,7 @@ async function reset() {
   const raw = stub();
   await runInRawDurableObject(raw, (_instance, state) => {
     for (const table of [
+      "daily_stability_days_delta_achievements",
       "attempts",
       "stability_history",
       "cards",
@@ -102,9 +103,10 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates legacy v4 data to schema v3 without retaining threshold-based fields", async () => {
+  it("migrates legacy v4 data to schema v4 without retaining threshold-based fields", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
+        DROP TABLE daily_stability_days_delta_achievements;
         DROP TABLE attempts;
         DROP TABLE stability_history;
         DROP TABLE cards;
@@ -178,7 +180,12 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 3 });
+      ).toEqual({ version: 4 });
+      expect(
+        state.storage.sql
+          .exec("SELECT * FROM daily_stability_days_delta_achievements")
+          .toArray()
+      ).toEqual([]);
       expect(
         state.storage.sql.exec("SELECT * FROM stability_history").toArray()[0]
       ).toEqual({
@@ -211,9 +218,10 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates schema v2 data to v3 without losing rows", async () => {
+  it("migrates schema v2 data to v4 without losing rows", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
+        DROP TABLE daily_stability_days_delta_achievements;
         DROP TABLE attempts;
         DROP TABLE stability_history;
         DROP TABLE cards;
@@ -284,7 +292,12 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 3 });
+      ).toEqual({ version: 4 });
+      expect(
+        state.storage.sql
+          .exec("SELECT * FROM daily_stability_days_delta_achievements")
+          .toArray()
+      ).toEqual([]);
       expect(
         state.storage.sql.exec("SELECT * FROM attempts").toArray()[0]
       ).toEqual({
@@ -509,6 +522,130 @@ describe("attempt idempotency and attempted question totals", () => {
     await expect(
       stub().recordAttempt(SITE, "1", operationId(9), "incorrect", NOW)
     ).resolves.toEqual({ error: "operation_conflict" });
+  });
+});
+
+describe("daily stability delta celebrations", () => {
+  it("returns one celebration when an answer crosses the site goal", async () => {
+    await stub().updateSettings(SITE, 1);
+
+    const first = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(30),
+      "correct",
+      NOW
+    );
+    expect(first.learningMetrics.todayStabilityDaysDelta).toBeGreaterThanOrEqual(1);
+    expect(first.celebration).toEqual({
+      site: SITE,
+      date: "2026-08-10",
+      todayStabilityDaysDelta: first.learningMetrics.todayStabilityDaysDelta,
+      dailyStabilityDaysDeltaGoal: 1,
+    });
+
+    const retry = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(30),
+      "correct",
+      NOW + 1000
+    );
+    expect(retry.celebration).toEqual(first.celebration);
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec("SELECT * FROM daily_stability_days_delta_achievements")
+          .toArray()
+      ).toEqual([
+        {
+          site: SITE,
+          date: "2026-08-10",
+          operation_id: operationId(30),
+          achieved_at_ms: NOW,
+          today_stability_days_delta: first.learningMetrics.todayStabilityDaysDelta,
+          daily_stability_days_delta_goal: 1,
+        },
+      ]);
+    });
+  });
+
+  it("does not celebrate a second crossing on the same site and Tokyo date", async () => {
+    await stub().updateSettings(SITE, 1);
+    const first = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(31),
+      "correct",
+      NOW
+    );
+    expect(first).toHaveProperty("celebration");
+
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      const current = state.storage.sql
+        .exec(
+          "SELECT closing_stability_days FROM stability_history WHERE site = ? AND date = '2026-08-10'",
+          SITE
+        )
+        .toArray()[0].closing_stability_days;
+      state.storage.sql.exec(
+        `UPDATE stability_history
+         SET opening_stability_days = ?, closing_stability_days = ?
+         WHERE site = ? AND date = '2026-08-10'`,
+        current,
+        current,
+        SITE
+      );
+    });
+
+    const repeated = await stub().recordAttempt(
+      SITE,
+      "2",
+      operationId(32),
+      "correct",
+      NOW + 1000
+    );
+    expect(repeated.learningMetrics.todayStabilityDaysDelta).toBeGreaterThanOrEqual(1);
+    expect(repeated).not.toHaveProperty("celebration");
+  });
+
+  it("allows another celebration on the next Tokyo date", async () => {
+    await stub().updateSettings(SITE, 1);
+    const first = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(33),
+      "correct",
+      NOW
+    );
+    const nextDay = await stub().recordAttempt(
+      SITE,
+      "2",
+      operationId(34),
+      "correct",
+      NOW + DAY_MS
+    );
+
+    expect(first.celebration.date).toBe("2026-08-10");
+    expect(nextDay.celebration).toMatchObject({
+      site: SITE,
+      date: "2026-08-11",
+      dailyStabilityDaysDeltaGoal: 1,
+    });
+  });
+
+  it("does not create celebrations from settings or catalog changes", async () => {
+    await seedReviewCard("1", 100);
+    await stub().updateSettings(SITE, 1);
+    await stub().replaceCatalog(SITE, ["1", "2", "3"], 1, NOW + 1000);
+
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec("SELECT COUNT(*) AS count FROM daily_stability_days_delta_achievements")
+          .toArray()[0].count
+      ).toBe(0);
+    });
   });
 });
 
@@ -957,6 +1094,54 @@ describe("v7 HTTP contract", () => {
         attemptedQuestionCount: 1,
         todayAttemptedQuestionCount: 1,
       },
+    });
+  });
+
+  it("returns and replays the exact primary KPI celebration contract", async () => {
+    const settings = await SELF.fetch("https://example.test/v7/settings", {
+      method: "PUT",
+      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        site: SITE,
+        dailyStabilityDaysDeltaGoal: 1,
+      }),
+    });
+    expect(settings.status).toBe(200);
+
+    const body = {
+      site: SITE,
+      questionId: "1",
+      operationId: operationId(22),
+      answerResult: "correct",
+    };
+    const response = await SELF.fetch("https://example.test/v7/attempts", {
+      method: "POST",
+      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(Object.keys(result.celebration).sort()).toEqual([
+      "dailyStabilityDaysDeltaGoal",
+      "date",
+      "site",
+      "todayStabilityDaysDelta",
+    ]);
+    expect(result.celebration).toEqual({
+      site: SITE,
+      date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      todayStabilityDaysDelta: result.learningMetrics.todayStabilityDaysDelta,
+      dailyStabilityDaysDeltaGoal: 1,
+    });
+
+    const retry = await SELF.fetch("https://example.test/v7/attempts", {
+      method: "POST",
+      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    expect(retry.status).toBe(200);
+    await expect(retry.json()).resolves.toMatchObject({
+      celebration: result.celebration,
     });
   });
 

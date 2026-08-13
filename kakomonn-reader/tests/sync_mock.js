@@ -1,6 +1,7 @@
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SITE = "chushoks.kakomonn.com";
 const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE}.v7.pending-attempt`;
+const PENDING_CELEBRATION_KEY = `kakomonn-reader.${SITE}.v7.pending-celebration`;
 const LEGACY_PENDING_CORRECT_KEY = `kakomonn-reader.${SITE}.pending-correct`;
 const SYNC_API_ORIGIN = "https://kakomonn-sync.expgolem-lab.workers.dev";
 const AZURE_SPEECH_ORIGIN = "https://japaneast.tts.speech.microsoft.com";
@@ -16,10 +17,12 @@ function installSyncMockInWindow({
   expectedSite,
   hasStoredToken,
   initialPendingAttempt,
+  initialPendingCelebration,
   initialProcessedOperations,
   returnsPromise,
   tokenKey,
   pendingAttemptKey,
+  pendingCelebrationKey,
   expectedOrigin,
   expectedSpeechOrigin,
   expectedSpeechToken,
@@ -31,6 +34,9 @@ function installSyncMockInWindow({
   const values = new Map();
   if (hasStoredToken) values.set(tokenKey, expectedToken);
   if (initialPendingAttempt !== null) values.set(pendingAttemptKey, initialPendingAttempt);
+  if (initialPendingCelebration !== null) {
+    values.set(pendingCelebrationKey, initialPendingCelebration);
+  }
 
   const processed = new Map(
     initialProcessedOperations.map((item) => [
@@ -43,6 +49,7 @@ function installSyncMockInWindow({
         resultingCardStabilityDays: item.resultingCardStabilityDays ?? 31,
         previousStabilityDays: item.previousStabilityDays ?? 10,
         resultingStabilityDays: item.resultingStabilityDays ?? 11,
+        celebration: item.celebration,
       },
     ]),
   );
@@ -70,6 +77,7 @@ function installSyncMockInWindow({
     clipboardWrites: [],
     nextQuestionId: initialNextQuestionId,
     nextAttemptStabilityDaysDelta: 0,
+    nextCelebration: null,
     catalogUpdatedAtMs: Date.now(),
     catalogQuestionCount: initialCatalogQuestionCount,
     catalogGeneration: initialCatalogGeneration,
@@ -329,7 +337,9 @@ function installSyncMockInWindow({
                     : 11,
               previousStabilityDays,
               resultingStabilityDays: mock.stabilityDays,
+              celebration: mock.nextCelebration ?? undefined,
             };
+            mock.nextCelebration = null;
             processed.set(operationId, item);
           }
           if (mock.commitThenFailNextAttempt) {
@@ -353,6 +363,9 @@ function installSyncMockInWindow({
               attemptedQuestionCount: mock.attemptedQuestionCount,
               todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
             },
+            ...(item.celebration === undefined
+              ? {}
+              : { celebration: item.celebration }),
           });
           return;
         }
@@ -388,6 +401,7 @@ function createSyncMockConfiguration({
   token = "test-sync-token",
   configured = true,
   pendingAttempt = null,
+  pendingCelebration = null,
   processedOperations = [],
   userscriptsPromise = false,
   systemClipboard = false,
@@ -406,10 +420,12 @@ function createSyncMockConfiguration({
     expectedSite: site,
     hasStoredToken: configured,
     initialPendingAttempt: pendingAttempt,
+    initialPendingCelebration: pendingCelebration,
     initialProcessedOperations: processedOperations,
     returnsPromise: userscriptsPromise,
     tokenKey: SYNC_TOKEN_KEY,
     pendingAttemptKey: `kakomonn-reader.${site}.v7.pending-attempt`,
+    pendingCelebrationKey: `kakomonn-reader.${site}.v7.pending-celebration`,
     expectedOrigin: SYNC_API_ORIGIN,
     expectedSpeechOrigin: AZURE_SPEECH_ORIGIN,
     expectedSpeechToken: AZURE_SPEECH_TOKEN,
@@ -431,6 +447,7 @@ module.exports = {
   installSyncMockInWindow,
   LEGACY_PENDING_CORRECT_KEY,
   PENDING_ATTEMPT_KEY,
+  PENDING_CELEBRATION_KEY,
   SITE,
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,

@@ -214,7 +214,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
-        "stabilityDays 0日 / todayAttemptedQuestionCount 0問",
+        "todayStabilityDaysDelta 0日",
     );
     assert.deepEqual(
       await page.evaluate(() => {
@@ -487,7 +487,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
-        "stabilityDays 31日 / todayAttemptedQuestionCount 1問",
+        "todayStabilityDaysDelta 31日",
     );
     assert.equal(
       await page.evaluate(

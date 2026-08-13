@@ -407,8 +407,7 @@
     if (!isSyncState(state)) {
       throw new SyncRequestError("invalid_response");
     }
-    stabilityDays = state.learningMetrics.stabilityDays;
-    todayAttemptedQuestionCount = state.learningMetrics.todayAttemptedQuestionCount;
+    todayStabilityDaysDelta = state.learningMetrics.todayStabilityDaysDelta;
     renderLearningMetrics();
   }
 

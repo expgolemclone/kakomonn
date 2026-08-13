@@ -497,7 +497,7 @@ async function main() {
     assert.equal(await page.evaluate(() => typeof window.Audio), "function");
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "stabilityDays 0日 / todayAttemptedQuestionCount 0問",
+      "todayStabilityDaysDelta 0日",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-start").count(),
@@ -1160,7 +1160,7 @@ async function main() {
       await page.waitForFunction(
         () =>
           document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-          "stabilityDays 31日 / todayAttemptedQuestionCount 1問",
+          "todayStabilityDaysDelta 31日",
       );
     } catch (error) {
       error.readerState = await page.evaluate(() => ({
@@ -1201,6 +1201,7 @@ async function main() {
       window.__syncMock.attemptCount = 7;
       window.__syncMock.attemptedQuestionCount = 7;
       window.__syncMock.todayAttemptedQuestionCount = 7;
+      window.__syncMock.todayStabilityDaysDelta = 7;
       window.__syncMock.holdNextRequest = true;
       window.dispatchEvent(new Event("focus"));
     });
@@ -1215,7 +1216,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-        "stabilityDays 7日 / todayAttemptedQuestionCount 7問",
+        "todayStabilityDaysDelta 7日",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
@@ -1383,7 +1384,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "stabilityDays --日 / todayAttemptedQuestionCount --問",
+      "todayStabilityDaysDelta --日",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").focus();
     await setupPage.keyboard.type("qwert asdfg n gg yy xz ");
@@ -1398,7 +1399,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "stabilityDays 0日 / todayAttemptedQuestionCount 0問",
+      "todayStabilityDaysDelta 0日",
     );
     assert.equal(
       await setupPage.evaluate(
@@ -1573,19 +1574,20 @@ async function main() {
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-        "stabilityDays 31日 / todayAttemptedQuestionCount 1問",
+        "todayStabilityDaysDelta 31日",
     );
     await iosPage.evaluate(() => {
       window.__syncMock.stabilityDays = 6;
       window.__syncMock.attemptCount = 6;
       window.__syncMock.attemptedQuestionCount = 6;
       window.__syncMock.todayAttemptedQuestionCount = 6;
+      window.__syncMock.todayStabilityDaysDelta = 6;
       window.dispatchEvent(new Event("focus"));
     });
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-        "stabilityDays 6日 / todayAttemptedQuestionCount 6問",
+        "todayStabilityDaysDelta 6日",
     );
     assert.equal(
       await iosPage.evaluate(

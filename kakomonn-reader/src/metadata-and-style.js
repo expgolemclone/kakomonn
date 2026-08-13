@@ -218,8 +218,7 @@
   let currentQuestionText = "";
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
-  let stabilityDays = null;
-  let todayAttemptedQuestionCount = null;
+  let todayStabilityDaysDelta = null;
   let syncToken = "";
   let syncReady = false;
   let syncInProgress = false;

@@ -274,9 +274,8 @@
         ) {
           throw new SyncRequestError("invalid_response");
         }
-        stabilityDays = result.learningMetrics.stabilityDays;
-        todayAttemptedQuestionCount =
-          result.learningMetrics.todayAttemptedQuestionCount;
+        todayStabilityDaysDelta =
+          result.learningMetrics.todayStabilityDaysDelta;
         renderLearningMetrics();
         if (result.celebration !== undefined) {
           await savePendingCelebration(result.celebration);

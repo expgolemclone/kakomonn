@@ -169,18 +169,14 @@
   );
 
   function renderLearningMetrics() {
-    const stabilityDaysText =
-      stabilityDays === null
+    const todayStabilityDaysDeltaText =
+      todayStabilityDaysDelta === null
         ? "--"
-        : stabilityDays.toLocaleString("ja-JP");
-    const todayAttemptedQuestionCountText =
-      todayAttemptedQuestionCount === null
-        ? "--"
-        : todayAttemptedQuestionCount;
-    learningMetricsBadge.textContent = `stabilityDays ${stabilityDaysText}日 / todayAttemptedQuestionCount ${todayAttemptedQuestionCountText}問`;
+        : todayStabilityDaysDelta.toLocaleString("ja-JP");
+    learningMetricsBadge.textContent = `todayStabilityDaysDelta ${todayStabilityDaysDeltaText}日`;
     learningMetricsBadge.setAttribute(
       "aria-label",
-      `stabilityDays ${stabilityDaysText}日, todayAttemptedQuestionCount ${todayAttemptedQuestionCountText}問`
+      `todayStabilityDaysDelta ${todayStabilityDaysDeltaText}日`
     );
   }
 

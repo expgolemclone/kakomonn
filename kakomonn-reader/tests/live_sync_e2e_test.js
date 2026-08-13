@@ -276,7 +276,7 @@ async function configureSyncToken(
     .getByRole("button", { name: "確認して保存" })
     .evaluate((button) => button.click());
 
-  const expectedCount = `stabilityDays ${baseline.learningMetrics.stabilityDays.toLocaleString("ja-JP")}日 / todayAttemptedQuestionCount ${baseline.learningMetrics.todayAttemptedQuestionCount}問`;
+  const expectedCount = `todayStabilityDaysDelta ${baseline.learningMetrics.todayStabilityDaysDelta.toLocaleString("ja-JP")}日`;
   return waitUntil("the production sync baseline", async () => {
     const state = await readReaderState(page);
     return state.settingsHidden && state.count === expectedCount ? state : null;
@@ -513,7 +513,7 @@ async function clickNextQuestion(page) {
       !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
         state.outerURL,
       ) ||
-      !/^stabilityDays \d+日 \/ todayAttemptedQuestionCount \d+問$/.test(state.count ?? "")
+      !/^todayStabilityDaysDelta -?\d+(?:,\d{3})*日$/.test(state.count ?? "")
     ) {
       return null;
     }
@@ -585,7 +585,7 @@ async function main() {
     );
     assert.equal(
       configuredState.count,
-      `stabilityDays ${baseline.learningMetrics.stabilityDays.toLocaleString("ja-JP")}日 / todayAttemptedQuestionCount ${baseline.learningMetrics.todayAttemptedQuestionCount}問`,
+      `todayStabilityDaysDelta ${baseline.learningMetrics.todayStabilityDaysDelta.toLocaleString("ja-JP")}日`,
     );
     await submitCorrectAnswer(page);
     await copyMarkdownInRealEdge(page);
@@ -597,7 +597,7 @@ async function main() {
       frameUrl = navigationResult.state.frameURL;
       assert.equal(
         navigationResult.state.count,
-        `stabilityDays ${finalState.learningMetrics.stabilityDays.toLocaleString("ja-JP")}日 / todayAttemptedQuestionCount ${finalState.learningMetrics.todayAttemptedQuestionCount}問`,
+        `todayStabilityDaysDelta ${finalState.learningMetrics.todayStabilityDaysDelta.toLocaleString("ja-JP")}日`,
       );
     } else {
       const celebrationURL = new URL(navigationResult.outerURL);

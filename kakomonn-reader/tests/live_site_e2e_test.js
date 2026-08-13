@@ -433,7 +433,7 @@ async function runCase(
     await waitForSyncReady(page);
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "stabilityDays 0日 / todayAttemptedQuestionCount 0問",
+      "todayStabilityDaysDelta 0日",
     );
     assert.deepEqual(
       await frame.locator("body").evaluate((body) => {
@@ -548,24 +548,24 @@ async function runCase(
     await clickNextQuestion(page, frame, fixedNextQuestionUrl);
     console.log(JSON.stringify({ phase: "next-clicked", answerText }));
 
-    const expectedStabilityDays = attemptStabilityDaysDelta;
-    if (expectedStabilityDays > 0) {
+    const expectedTodayStabilityDaysDelta = attemptStabilityDaysDelta;
+    if (expectedTodayStabilityDaysDelta > 0) {
       await page.waitForFunction(
         (days) =>
           document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
-          `stabilityDays ${days}日 / todayAttemptedQuestionCount 1問`,
-        expectedStabilityDays,
+          `todayStabilityDaysDelta ${days}日`,
+        expectedTodayStabilityDaysDelta,
         { timeout: 10_000 },
       );
     } else {
       await page.waitForTimeout(1_500);
       assert.equal(
         await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-        "stabilityDays 0日 / todayAttemptedQuestionCount 1問",
+        "todayStabilityDaysDelta 0日",
       );
     }
 
-    assert.equal(await readStoredStabilityDays(page), expectedStabilityDays);
+    assert.equal(await readStoredStabilityDays(page), expectedTodayStabilityDaysDelta);
     assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
       questionURL: fixedQuestionUrl,
     });
@@ -573,7 +573,7 @@ async function runCase(
       JSON.stringify({
         answerText,
         expectedBanner,
-        expectedStabilityDays,
+        expectedTodayStabilityDaysDelta,
         pageErrors,
         status: "passed",
       }),

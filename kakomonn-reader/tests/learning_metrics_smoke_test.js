@@ -77,7 +77,7 @@ async function prepare(page, startPath, options = {}) {
 
 async function readerFrame(page) {
   await page.waitForSelector("#kakomonn-reader-frame");
-  await page.waitForFunction(() => document.querySelector("#kakomonn-reader-learning-metrics")?.textContent?.startsWith("stabilityDays "));
+  await page.waitForFunction(() => document.querySelector("#kakomonn-reader-learning-metrics")?.textContent?.startsWith("todayStabilityDaysDelta "));
   const frame = page.frames().find((candidate) => candidate !== page.mainFrame());
   assert(frame, "reader frame must exist");
   await frame.waitForLoadState("load");
@@ -113,11 +113,11 @@ async function runQuestionIdCase(browser, startPath) {
     await frame.waitForURL(`https://${site}/questions/456`);
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "stabilityDays 31日 / todayAttemptedQuestionCount 1問"
+      "todayStabilityDaysDelta 31日"
     );
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-label"),
-      "stabilityDays 31日, todayAttemptedQuestionCount 1問"
+      "todayStabilityDaysDelta 31日"
     );
     assert.deepEqual(errors, []);
   } finally {
@@ -175,7 +175,7 @@ async function runRetryCase(browser) {
     await frame.waitForURL(`https://${site}/questions/456`);
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "stabilityDays 31日 / todayAttemptedQuestionCount 1問"
+      "todayStabilityDaysDelta 31日"
     );
     assert.deepEqual(errors, []);
   } finally {
@@ -610,7 +610,7 @@ async function runStabilityDaysDecreaseCase(browser) {
     );
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "stabilityDays 5日 / todayAttemptedQuestionCount 1問"
+      "todayStabilityDaysDelta -30日"
     );
     assert.deepEqual(errors, []);
   } finally {

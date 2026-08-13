@@ -330,7 +330,7 @@
       background: var(--kakomonn-reader-time-fill);
     }
 
-    #kakomonn-reader-count,
+    #kakomonn-reader-learning-metrics,
     #kakomonn-reader-status,
     #kakomonn-reader-skip,
     #kakomonn-reader-sync-settings-button {
@@ -353,7 +353,7 @@
       white-space: nowrap;
     }
 
-    #kakomonn-reader-count {
+    #kakomonn-reader-learning-metrics {
       flex: 0 0 auto;
       white-space: nowrap;
     }
@@ -435,19 +435,53 @@
     }
 
     @media (max-width: 620px) {
-      #kakomonn-reader-controls {
-        gap: 4px;
-        padding-right: 6px;
-        padding-left: 6px;
+      :root {
+        --kakomonn-reader-controls-height: calc(
+          96px + env(safe-area-inset-top)
+        );
       }
 
-      #kakomonn-reader-count,
+      #kakomonn-reader-controls {
+        display: grid;
+        grid-template-rows: 32px minmax(32px, auto);
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-content: center;
+        gap: 4px;
+        padding: calc(6px + env(safe-area-inset-top)) 6px 6px;
+      }
+
+      #kakomonn-reader-learning-metrics,
       #kakomonn-reader-status,
       #kakomonn-reader-skip,
       #kakomonn-reader-sync-settings-button {
         padding-right: 8px;
         padding-left: 8px;
         font-size: 11px;
+      }
+
+      #kakomonn-reader-status {
+        grid-row: 1;
+        grid-column: 1;
+      }
+
+      #kakomonn-reader-skip {
+        grid-row: 1;
+        grid-column: 2;
+      }
+
+      #kakomonn-reader-sync-settings-button {
+        grid-row: 1;
+        grid-column: 3;
+      }
+
+      #kakomonn-reader-learning-metrics {
+        grid-row: 2;
+        grid-column: 1 / -1;
+        justify-self: stretch;
+        overflow-wrap: anywhere;
+        line-height: 1.25;
+        text-align: center;
+        white-space: normal;
       }
 
       #kakomonn-reader-actions {

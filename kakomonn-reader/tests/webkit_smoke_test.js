@@ -217,6 +217,40 @@ async function main() {
         "stabilityDays 0日 / todayAttemptedQuestionCount 0問",
     );
     assert.deepEqual(
+      await page.evaluate(() => {
+        const controls = document.querySelector("#kakomonn-reader-controls");
+        const status = document.querySelector("#kakomonn-reader-status");
+        const learningMetrics = document.querySelector(
+          "#kakomonn-reader-learning-metrics",
+        );
+        const shell = document.querySelector("#kakomonn-reader-shell");
+        const controlsRect = controls.getBoundingClientRect();
+        const statusRect = status.getBoundingClientRect();
+        const learningMetricsRect = learningMetrics.getBoundingClientRect();
+        const shellRect = shell.getBoundingClientRect();
+        return {
+          controlsOverflow: controls.scrollWidth > controls.clientWidth,
+          learningMetricsClipped:
+            learningMetrics.scrollWidth > learningMetrics.clientWidth ||
+            learningMetrics.scrollHeight > learningMetrics.clientHeight,
+          learningMetricsInsideHeader:
+            learningMetricsRect.left >= controlsRect.left &&
+            learningMetricsRect.right <= controlsRect.right &&
+            learningMetricsRect.bottom <= controlsRect.bottom,
+          learningMetricsOnSecondRow:
+            learningMetricsRect.top >= statusRect.bottom,
+          shellStartsBelowHeader: shellRect.top >= controlsRect.bottom,
+        };
+      }),
+      {
+        controlsOverflow: false,
+        learningMetricsClipped: false,
+        learningMetricsInsideHeader: true,
+        learningMetricsOnSecondRow: true,
+        shellStartsBelowHeader: true,
+      },
+    );
+    assert.deepEqual(
       await childFrame.evaluate(() => {
         const choiceImage = document.createElement("img");
         document

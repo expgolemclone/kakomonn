@@ -333,7 +333,7 @@ describe("LearningState schema", () => {
 
 describe("learning metrics", () => {
   it("maps answer results to FSRS ratings", () => {
-    expect(ratingForResult("correct")).toBe(Rating.Good);
+    expect(ratingForResult("correct")).toBe(Rating.Easy);
     expect(ratingForResult("incorrect")).toBe(Rating.Again);
   });
 
@@ -386,6 +386,17 @@ describe("learning metrics", () => {
     });
     expect(correct.learningMetrics).toHaveProperty("stabilityDays");
     expect(correct.learningMetrics).toHaveProperty("todayStabilityDaysDelta");
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      const card = state.storage.sql
+        .exec(
+          "SELECT due_ms, stability FROM cards WHERE site = ? AND question_id = ?",
+          SITE,
+          "1"
+        )
+        .toArray()[0];
+      expect(card.due_ms).toBeGreaterThan(NOW);
+      expect(card.stability).toBe(correct.attempt.resultingCardStabilityDays);
+    });
 
     await seedReviewCard("2", 35, NOW - 1000, NOW);
     const incorrect = await stub().recordAttempt(

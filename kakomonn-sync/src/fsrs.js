@@ -4,7 +4,7 @@ const scheduler = fsrs({ enable_fuzz: false });
 
 export function ratingForResult(result) {
   if (result === "correct") {
-    return Rating.Good;
+    return Rating.Easy;
   }
   if (result === "incorrect") {
     return Rating.Again;

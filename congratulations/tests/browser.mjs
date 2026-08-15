@@ -38,6 +38,9 @@ async function verifyExperience(browser, origin, experience, viewport, reducedMo
     assert.equal(response?.status(), 200, experience.id);
     const root = page.locator('[data-celebration-root][data-ready="true"]');
     await root.waitFor({ state: "visible" });
+    const epilogue = page.locator("[data-scroll-epilogue]");
+    await epilogue.waitFor({ state: "visible" });
+    assert.equal(await page.locator("[data-scroll-chapter]").count(), 3, experience.id);
     assert.equal(await page.title(), `todayStabilityDaysDelta達成 | ${experience.label}`);
     assert.equal(
       await page.locator(".achievement-metric").innerText(),
@@ -46,10 +49,19 @@ async function verifyExperience(browser, origin, experience, viewport, reducedMo
     const layout = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
       viewport: innerWidth,
+      height: document.documentElement.scrollHeight,
+      viewportHeight: innerHeight,
       state: document.documentElement.dataset.state,
       ready: document.querySelector("[data-celebration-root]")?.dataset.ready,
+      scrollDepth: document.documentElement.dataset.scrollDepth,
     }));
     assert.equal(layout.width <= layout.viewport + 1, true, experience.id);
+    assert.equal(layout.scrollDepth, "ready", experience.id);
+    assert.equal(
+      layout.height / layout.viewportHeight >= (viewport.width <= 560 ? 5 : 3),
+      true,
+      `${experience.id} scroll depth`,
+    );
     assert.deepEqual(layout, { ...layout, state: "ready", ready: "true" });
     const status = page.locator("[data-status]");
     const before = await status.textContent();
@@ -76,6 +88,7 @@ async function verifyShell(browser, origin) {
     assert.equal(frameUrl.search.slice(1), search);
     const frame = page.locator("#celebration-frame").contentFrame();
     await frame.locator('[data-celebration-root][data-ready="true"]').waitFor();
+    await frame.locator("[data-scroll-epilogue]").waitFor();
     const layout = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
       viewport: innerWidth,

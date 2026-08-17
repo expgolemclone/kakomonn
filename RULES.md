@@ -5,3 +5,5 @@
 - `kakomonn-sync/`または`package.json`のkakomonn-sync向け設定を変更した場合は,最終`main`をpushした後に`npm run deploy:kakomonn-sync`を実行し,production asset一致testまで通過したことを確認すること.
 - `kakomonn-reader/`, `scripts/release-kakomonn-reader.mjs`, `tests/release-kakomonn-reader.test.mjs`, または`package.json`のkakomonn-reader向けbuild,test,release設定を変更した場合は,prepushまたはcommit作業の一部として,最終`main`をpushした後に`npm run release:kakomonn-reader`を実行すること. GitHubのLatest Releaseのtarget SHAが最終`main`と一致し,`kakomonn-reader.user.js`がassetとして公開されたことを確認するまで作業を完了しないこと.
 - `congratulations/`または`package.json`のcongratulations向け設定を変更した場合は, 最終`main`をpushした後に`npm run deploy:congratulations`を実行し, production E2Eまで通過したことを確認すること.
+
+- Cloudflareのusage limitをなるべく使わない設計を心がけること.

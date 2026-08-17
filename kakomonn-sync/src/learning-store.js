@@ -82,9 +82,9 @@ function readStabilityDays(storage, site) {
   return storage.sql
     .exec(
       `SELECT CAST(COALESCE(SUM(c.stability), 0) AS INTEGER) AS stability_days
-       FROM questions q
-       LEFT JOIN cards c ON c.site = q.site AND c.question_id = q.question_id
-       WHERE q.site = ?`,
+       FROM cards c
+       JOIN questions q ON q.site = c.site AND q.question_id = c.question_id
+       WHERE c.site = ?`,
       site
     )
     .toArray()[0].stability_days;
@@ -93,8 +93,8 @@ function readStabilityDays(storage, site) {
 function readAttemptedQuestionCount(storage, site) {
   return storage.sql
     .exec(
-      `SELECT COUNT(DISTINCT question_id) AS attempted_question_count
-       FROM attempts WHERE site = ?`,
+      `SELECT COUNT(*) AS attempted_question_count
+       FROM cards WHERE site = ?`,
       site
     )
     .toArray()[0].attempted_question_count;

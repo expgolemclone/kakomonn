@@ -1,0 +1,103 @@
+name: Apply Durable Object row-read fix
+
+on:
+  push:
+    branches:
+      - fix/durable-object-row-quota
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/durable-object-row-quota
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply row-read optimization
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('kakomonn-sync/src/learning-store.js')
+          text = path.read_text(encoding='utf-8')
+
+          old_stability = '''function readStabilityDays(storage, site) {
+            return storage.sql
+              .exec(
+                `SELECT CAST(COALESCE(SUM(c.stability), 0) AS INTEGER) AS stability_days
+                 FROM questions q
+                 LEFT JOIN cards c ON c.site = q.site AND c.question_id = q.question_id
+                 WHERE q.site = ?`,
+                site
+              )
+              .toArray()[0].stability_days;
+          }
+          '''
+          new_stability = '''function readStabilityDays(storage, site) {
+            return storage.sql
+              .exec(
+                `SELECT CAST(COALESCE(SUM(c.stability), 0) AS INTEGER) AS stability_days
+                 FROM cards c
+                 JOIN questions q ON q.site = c.site AND q.question_id = c.question_id
+                 WHERE c.site = ?`,
+                site
+              )
+              .toArray()[0].stability_days;
+          }
+          '''
+
+          old_attempted = '''function readAttemptedQuestionCount(storage, site) {
+            return storage.sql
+              .exec(
+                `SELECT COUNT(DISTINCT question_id) AS attempted_question_count
+                 FROM attempts WHERE site = ?`,
+                site
+              )
+              .toArray()[0].attempted_question_count;
+          }
+          '''
+          new_attempted = '''function readAttemptedQuestionCount(storage, site) {
+            return storage.sql
+              .exec(
+                `SELECT COUNT(*) AS attempted_question_count
+                 FROM cards WHERE site = ?`,
+                site
+              )
+              .toArray()[0].attempted_question_count;
+          }
+          '''
+
+          if text.count(old_stability) != 1:
+            raise SystemExit('stability query anchor mismatch')
+          if text.count(old_attempted) != 1:
+            raise SystemExit('attempted count query anchor mismatch')
+
+          text = text.replace(old_stability, new_stability)
+          text = text.replace(old_attempted, new_attempted)
+          path.write_text(text, encoding='utf-8')
+
+      - run: git diff --check
+      - run: npm run test:repository-naming
+      - run: npm run test:kakomonn-sync
+      - run: npm run test:kakomonn-dashboard
+
+      - name: Commit tested fix
+        run: |
+          rm .github/workflows/apply-row-quota-fix.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add kakomonn-sync/src/learning-store.js .github/workflows/apply-row-quota-fix.yml
+          git commit -m "Reduce Durable Object row reads"
+          git push origin HEAD:fix/durable-object-row-quota

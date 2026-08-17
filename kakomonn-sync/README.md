@@ -69,6 +69,8 @@ APIは`/v7`だけを提供し, LearningState Durable Objectを唯一のsource of
 
 `stabilityDays`は, 現在の問題catalogに含まれる全cardのFSRS stabilityを合計してから整数へ切り捨てた値です. 未回答問題は0日として扱います. catalogから外れたcardは再登録時に学習状態を復元できるよう保存しますが, `stabilityDays`と次問候補には含めません. catalog置換で`stabilityDays`が変化した場合も, その日の履歴へ新しい値を記録します.
 
+`learningMetrics`の現在値はsiteごとの`learning_metrics` rowへ保持し, 解答と同じtransactionで更新します. 通常のstate取得と解答ではcatalog, card全体, attempt全履歴をaggregate scanしません. `stabilityDays`だけはcatalog置換時に現在のcatalogから再集計し, 増分更新の誤差とcatalogから外れたcardの影響を補正します.
+
 `stabilityDaysDelta`は, 日ごとの`closing_stability_days - opening_stability_days`です. `todayStabilityDaysDelta`は当日の同じ値で, `dailyStabilityDaysDeltaGoal`はこの純増に対する目標です.
 
 祝福判定は解答前の`todayStabilityDaysDelta`が目標未満で, 解答後の値が目標以上になった場合だけ成立します. siteと日本時間の日付ごとに1回だけ記録し, 同じ`operationId`の再送では同じeventを返します. 目標変更, catalog変更, 初回同期では祝福を作成しません.
@@ -77,4 +79,4 @@ APIは`/v7`だけを提供し, LearningState Durable Objectを唯一のsource of
 
 ## 互換性方針
 
-v1からv6のAPIは提供しません. legacy v4 schemaのcard, attempt, catalog, 解答履歴はschema v3へ明示的に移行し, 30日判定の履歴と目標設定は破棄します. schema v2のdataはschema v3へlosslessに移行します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.
+v1からv6のAPIは提供しません. legacy v4 schemaのcard, attempt, catalog, 解答履歴はschema v5へ明示的に移行し, 30日判定の履歴と目標設定は破棄します. schema v2からv4のdataはschema v5へ移行します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.

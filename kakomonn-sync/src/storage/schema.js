@@ -1,6 +1,6 @@
-import { getTokyoDate } from "../dates.js";
+import { getTokyoDate, tokyoDateRangeMs } from "../dates.js";
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 export const DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL = 30;
 
 function tableDefinition(storage, tableName) {
@@ -61,6 +61,14 @@ function createCurrentTables(storage) {
     CREATE TABLE site_settings (
       site TEXT PRIMARY KEY,
       daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE learning_metrics (
+      site TEXT PRIMARY KEY,
+      stability_days REAL NOT NULL CHECK (stability_days >= 0),
+      attempted_question_count INTEGER NOT NULL CHECK (attempted_question_count >= 0),
+      attempted_question_count_date TEXT NOT NULL,
+      today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0)
     ) WITHOUT ROWID;
 
     CREATE TABLE daily_stability_days_delta_achievements (
@@ -137,11 +145,59 @@ function migrateSchemaV3ToV4(storage) {
       PRIMARY KEY (site, date)
     ) WITHOUT ROWID;
 
+    UPDATE schema_metadata SET version = 4 WHERE singleton = 1;
+  `);
+}
+
+function migrateSchemaV4ToV5(storage, today, startMs, endMs) {
+  storage.sql.exec(`
+    CREATE TABLE learning_metrics (
+      site TEXT PRIMARY KEY,
+      stability_days REAL NOT NULL CHECK (stability_days >= 0),
+      attempted_question_count INTEGER NOT NULL CHECK (attempted_question_count >= 0),
+      attempted_question_count_date TEXT NOT NULL,
+      today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0)
+    ) WITHOUT ROWID;
+
+    INSERT INTO learning_metrics (
+      site, stability_days, attempted_question_count,
+      attempted_question_count_date, today_attempted_question_count
+    )
+    SELECT metadata.site,
+           COALESCE((
+             SELECT SUM(cards.stability)
+             FROM cards
+             JOIN questions
+               ON questions.site = cards.site
+              AND questions.question_id = cards.question_id
+             WHERE cards.site = metadata.site
+           ), 0),
+           (
+             SELECT COUNT(*)
+             FROM cards
+             WHERE cards.site = metadata.site
+           ),
+           ?,
+           (
+             SELECT COUNT(*)
+             FROM cards
+             WHERE cards.site = metadata.site
+               AND cards.last_review_ms >= ?
+               AND cards.last_review_ms < ?
+           )
+    FROM catalog_metadata metadata`,
+    today,
+    startMs,
+    endMs
+  );
+
+  storage.sql.exec(`
     UPDATE schema_metadata SET version = ${CURRENT_SCHEMA_VERSION} WHERE singleton = 1;
   `);
 }
 
 function migrateLegacySchema(storage, today) {
+  const { startMs, endMs } = tokyoDateRangeMs(today);
   storage.sql.exec(`
     DROP INDEX IF EXISTS attempts_by_site;
     DROP INDEX IF EXISTS attempts_by_site_answered_at_question;
@@ -184,6 +240,14 @@ function migrateLegacySchema(storage, today) {
       daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1)
     ) WITHOUT ROWID;
 
+    CREATE TABLE learning_metrics (
+      site TEXT PRIMARY KEY,
+      stability_days REAL NOT NULL CHECK (stability_days >= 0),
+      attempted_question_count INTEGER NOT NULL CHECK (attempted_question_count >= 0),
+      attempted_question_count_date TEXT NOT NULL,
+      today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0)
+    ) WITHOUT ROWID;
+
     CREATE TABLE daily_stability_days_delta_achievements (
       site TEXT NOT NULL,
       date TEXT NOT NULL,
@@ -210,15 +274,45 @@ function migrateLegacySchema(storage, today) {
   );
   const sites = storage.sql.exec("SELECT site FROM catalog_metadata").toArray();
   for (const { site } of sites) {
-    const stabilityDays = storage.sql
+    const learningMetrics = storage.sql
       .exec(
-        `SELECT CAST(COALESCE(SUM(c.stability), 0) AS INTEGER) AS stability_days
-         FROM questions q
-         LEFT JOIN cards c ON c.site = q.site AND c.question_id = q.question_id
-         WHERE q.site = ?`,
-        site
+        `SELECT COALESCE((
+                  SELECT SUM(cards.stability)
+                  FROM cards
+                  JOIN questions
+                    ON questions.site = cards.site
+                   AND questions.question_id = cards.question_id
+                  WHERE cards.site = ?
+                ), 0) AS stability_days,
+                (
+                  SELECT COUNT(*)
+                  FROM cards
+                  WHERE cards.site = ?
+                ) AS attempted_question_count,
+                (
+                  SELECT COUNT(*)
+                  FROM cards
+                  WHERE site = ? AND last_review_ms >= ? AND last_review_ms < ?
+                ) AS today_attempted_question_count`,
+        site,
+        site,
+        site,
+        startMs,
+        endMs
       )
-      .toArray()[0].stability_days;
+      .toArray()[0];
+    storage.sql.exec(
+      `INSERT INTO learning_metrics (
+         site, stability_days, attempted_question_count,
+         attempted_question_count_date, today_attempted_question_count
+       ) VALUES (?, ?, ?, ?, ?)`,
+      site,
+      learningMetrics.stability_days,
+      learningMetrics.attempted_question_count,
+      today,
+      learningMetrics.today_attempted_question_count
+    );
+    const stabilityDays = Math.trunc(learningMetrics.stability_days);
     storage.sql.exec(
       `INSERT INTO stability_history (
          site, date, opening_stability_days, closing_stability_days
@@ -248,6 +342,8 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     throw new TypeError("invalid schema initialization time");
   }
   storage.transactionSync(() => {
+    const today = getTokyoDate(new Date(nowMs));
+    const { startMs, endMs } = tokyoDateRangeMs(today);
     const schemaV3Tables = [
       "attempts",
       "cards",
@@ -260,6 +356,7 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     const currentTables = [
       ...schemaV3Tables,
       "daily_stability_days_delta_achievements",
+      "learning_metrics",
     ];
     const legacyTables = [
       "attempts",
@@ -282,7 +379,7 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       tableDefinition(storage, "schema_metadata") === undefined &&
       existingLegacy.length === legacyTables.length
     ) {
-      migrateLegacySchema(storage, getTokyoDate(new Date(nowMs)));
+      migrateLegacySchema(storage, today);
     } else if (existingSchemaV3.length !== schemaV3Tables.length) {
       throw new Error("incomplete LearningState schema");
     }
@@ -296,6 +393,10 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     }
     if (version === 3) {
       migrateSchemaV3ToV4(storage);
+      version = 4;
+    }
+    if (version === 4) {
+      migrateSchemaV4ToV5(storage, today, startMs, endMs);
       version = CURRENT_SCHEMA_VERSION;
     }
     if (version !== CURRENT_SCHEMA_VERSION) {

@@ -78,26 +78,105 @@ function saveCard(storage, site, questionId, card) {
   );
 }
 
-function readStabilityDays(storage, site) {
+function storedLearningMetricsFromRow(row) {
+  if (row === undefined) {
+    throw new Error("missing LearningState learning metrics");
+  }
+  return {
+    stabilityDays: row.stability_days,
+    attemptedQuestionCount: row.attempted_question_count,
+    attemptedQuestionCountDate: row.attempted_question_count_date,
+    todayAttemptedQuestionCount: row.today_attempted_question_count,
+  };
+}
+
+function readStoredLearningMetrics(storage, site) {
+  return storedLearningMetricsFromRow(
+    storage.sql
+      .exec(
+        `SELECT stability_days, attempted_question_count,
+                attempted_question_count_date, today_attempted_question_count
+         FROM learning_metrics WHERE site = ?`,
+        site
+      )
+      .toArray()[0]
+  );
+}
+
+function calculateCurrentCatalogStabilityDays(storage, site) {
   return storage.sql
     .exec(
-      `SELECT CAST(COALESCE(SUM(c.stability), 0) AS INTEGER) AS stability_days
-       FROM questions q
-       LEFT JOIN cards c ON c.site = q.site AND c.question_id = q.question_id
-       WHERE q.site = ?`,
+      `SELECT COALESCE(SUM(cards.stability), 0) AS stability_days
+       FROM cards
+       JOIN questions
+         ON questions.site = cards.site
+        AND questions.question_id = cards.question_id
+       WHERE cards.site = ?`,
       site
     )
     .toArray()[0].stability_days;
 }
 
-function readAttemptedQuestionCount(storage, site) {
-  return storage.sql
-    .exec(
-      `SELECT COUNT(DISTINCT question_id) AS attempted_question_count
-       FROM attempts WHERE site = ?`,
-      site
-    )
-    .toArray()[0].attempted_question_count;
+function replaceStoredLearningMetrics(storage, site, metrics, today) {
+  return storedLearningMetricsFromRow(
+    storage.sql
+      .exec(
+        `INSERT INTO learning_metrics (
+           site, stability_days, attempted_question_count,
+           attempted_question_count_date, today_attempted_question_count
+         ) VALUES (?, ?, ?, ?, 0)
+         ON CONFLICT(site) DO UPDATE SET
+           stability_days = excluded.stability_days,
+           attempted_question_count = excluded.attempted_question_count
+         RETURNING stability_days, attempted_question_count,
+                   attempted_question_count_date, today_attempted_question_count`,
+        site,
+        metrics.stabilityDays,
+        metrics.attemptedQuestionCount,
+        today
+      )
+      .toArray()[0]
+  );
+}
+
+function updateStoredLearningMetrics(
+  storage,
+  site,
+  previousCardStabilityDays,
+  resultingCardStabilityDays,
+  attemptedQuestionCountDelta,
+  today,
+  todayAttemptedQuestionCountDelta
+) {
+  return storedLearningMetricsFromRow(
+    storage.sql
+      .exec(
+        `UPDATE learning_metrics
+         SET stability_days = stability_days - ? + ?,
+             attempted_question_count = attempted_question_count + ?,
+             attempted_question_count_date = ?,
+             today_attempted_question_count =
+               CASE WHEN attempted_question_count_date = ?
+                    THEN today_attempted_question_count + ?
+                    ELSE ? END
+         WHERE site = ?
+         RETURNING stability_days, attempted_question_count,
+                   attempted_question_count_date, today_attempted_question_count`,
+        previousCardStabilityDays,
+        resultingCardStabilityDays,
+        attemptedQuestionCountDelta,
+        today,
+        today,
+        todayAttemptedQuestionCountDelta,
+        todayAttemptedQuestionCountDelta,
+        site
+      )
+      .toArray()[0]
+  );
+}
+
+function integerStabilityDays(metrics) {
+  return Math.trunc(metrics.stabilityDays);
 }
 
 function readAttemptedQuestionCountsByDate(storage, site, dates) {
@@ -214,17 +293,16 @@ function recordCelebration(
   return celebrationFromRow(row);
 }
 
-function learningMetrics(storage, site, nowMs) {
+function learningMetrics(storage, site, nowMs, storedMetrics) {
   const today = getTokyoDate(new Date(nowMs));
   return {
-    stabilityDays: readStabilityDays(storage, site),
+    stabilityDays: integerStabilityDays(storedMetrics),
     todayStabilityDaysDelta: readTodayStabilityDaysDelta(storage, site, today),
-    attemptedQuestionCount: readAttemptedQuestionCount(storage, site),
-    todayAttemptedQuestionCount: readAttemptedQuestionCountsByDate(
-      storage,
-      site,
-      [today]
-    ).get(today),
+    attemptedQuestionCount: storedMetrics.attemptedQuestionCount,
+    todayAttemptedQuestionCount:
+      storedMetrics.attemptedQuestionCountDate === today
+        ? storedMetrics.todayAttemptedQuestionCount
+        : 0,
   };
 }
 
@@ -316,10 +394,11 @@ export class LearningState extends DurableObject {
         ) {
           return { error: "operation_conflict" };
         }
-        const stabilityDays = readStabilityDays(this.ctx.storage, site);
+        const storedMetrics = readStoredLearningMetrics(this.ctx.storage, site);
+        const stabilityDays = integerStabilityDays(storedMetrics);
         return attemptResponse(
           existing,
-          learningMetrics(this.ctx.storage, site, nowMs),
+          learningMetrics(this.ctx.storage, site, nowMs, storedMetrics),
           stabilityDays,
           stabilityDays,
           readCelebrationForOperation(this.ctx.storage, operationId)
@@ -349,10 +428,29 @@ export class LearningState extends DurableObject {
       const card = rowToCard(stored) ?? createNewCard(nowMs);
       const previousCardStabilityDays = card.stability;
       const nextCard = scheduleAnswer(card, answerResult, nowMs);
-      const stabilityDaysBefore = readStabilityDays(this.ctx.storage, site);
-      saveCard(this.ctx.storage, site, questionId, nextCard);
-      const stabilityDaysAfter = readStabilityDays(this.ctx.storage, site);
       const today = getTokyoDate(new Date(nowMs));
+      const { startMs, endMs } = tokyoDateRangeMs(today);
+      const previousAttemptedAtMs = stored?.last_review_ms;
+      const todayAttemptedQuestionCountDelta =
+        previousAttemptedAtMs === null ||
+        previousAttemptedAtMs === undefined ||
+        previousAttemptedAtMs < startMs ||
+        previousAttemptedAtMs >= endMs
+          ? 1
+          : 0;
+      const storedMetricsBefore = readStoredLearningMetrics(this.ctx.storage, site);
+      const stabilityDaysBefore = integerStabilityDays(storedMetricsBefore);
+      saveCard(this.ctx.storage, site, questionId, nextCard);
+      const storedMetricsAfter = updateStoredLearningMetrics(
+        this.ctx.storage,
+        site,
+        previousCardStabilityDays,
+        nextCard.stability,
+        stored === undefined ? 1 : 0,
+        today,
+        todayAttemptedQuestionCountDelta
+      );
+      const stabilityDaysAfter = integerStabilityDays(storedMetricsAfter);
       const previousTodayStabilityDaysDelta = readTodayStabilityDaysDelta(
         this.ctx.storage,
         site,
@@ -378,7 +476,12 @@ export class LearningState extends DurableObject {
         previousCardStabilityDays,
         nextCard.stability
       );
-      const metrics = learningMetrics(this.ctx.storage, site, nowMs);
+      const metrics = learningMetrics(
+        this.ctx.storage,
+        site,
+        nowMs,
+        storedMetricsAfter
+      );
       const celebration = recordCelebration(
         this.ctx.storage,
         site,
@@ -416,10 +519,24 @@ export class LearningState extends DurableObject {
           site
         )
         .toArray()[0];
+      const storedMetrics =
+        catalog === undefined
+          ? {
+              stabilityDays: 0,
+              attemptedQuestionCount: 0,
+              attemptedQuestionCountDate: today,
+              todayAttemptedQuestionCount: 0,
+            }
+          : readStoredLearningMetrics(this.ctx.storage, site);
       return {
         site,
         today,
-        learningMetrics: learningMetrics(this.ctx.storage, site, nowMs),
+        learningMetrics: learningMetrics(
+          this.ctx.storage,
+          site,
+          nowMs,
+          storedMetrics
+        ),
         catalog:
           catalog === undefined
             ? null
@@ -628,7 +745,7 @@ export class LearningState extends DurableObject {
       throw new TypeError("invalid question catalog");
     }
     return this.ctx.storage.transactionSync(() => {
-      const stabilityDaysBefore = readStabilityDays(this.ctx.storage, site);
+      const today = getTokyoDate(new Date(nowMs));
       const metadata = this.ctx.storage.sql
         .exec("SELECT generation FROM catalog_metadata WHERE site = ?", site)
         .toArray()[0];
@@ -636,6 +753,16 @@ export class LearningState extends DurableObject {
       if (currentGeneration !== expectedGeneration) {
         return { error: "catalog_conflict", currentGeneration };
       }
+      const storedMetricsBefore =
+        metadata === undefined
+          ? {
+              stabilityDays: 0,
+              attemptedQuestionCount: 0,
+              attemptedQuestionCountDate: today,
+              todayAttemptedQuestionCount: 0,
+            }
+          : readStoredLearningMetrics(this.ctx.storage, site);
+      const stabilityDaysBefore = integerStabilityDays(storedMetricsBefore);
       const generation = currentGeneration + 1;
       this.ctx.storage.sql.exec("DELETE FROM questions WHERE site = ?", site);
       for (const questionId of questionIds) {
@@ -664,11 +791,23 @@ export class LearningState extends DurableObject {
         site,
         DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL
       );
-      const stabilityDaysAfter = readStabilityDays(this.ctx.storage, site);
+      const storedMetricsAfter = replaceStoredLearningMetrics(
+        this.ctx.storage,
+        site,
+        {
+          stabilityDays: calculateCurrentCatalogStabilityDays(
+            this.ctx.storage,
+            site
+          ),
+          attemptedQuestionCount: storedMetricsBefore.attemptedQuestionCount,
+        },
+        today
+      );
+      const stabilityDaysAfter = integerStabilityDays(storedMetricsAfter);
       recordDailyStabilityDays(
         this.ctx.storage,
         site,
-        getTokyoDate(new Date(nowMs)),
+        today,
         stabilityDaysBefore,
         stabilityDaysAfter
       );

@@ -622,7 +622,7 @@ async function runCelebrationCase(browser) {
   const context = await browser.newContext({ userAgent: edgeUserAgent });
   try {
     const page = await context.newPage();
-    await page.route("https://kakomonn-congratulations.expgolem-lab.workers.dev/**", (route) =>
+    await page.route("https://kakomonn-congratulations.kakomonn.workers.dev/**", (route) =>
       route.fulfill({
         contentType: "text/html; charset=utf-8",
         body: "<!doctype html><html><body><h1>dailyStabilityDaysDelta達成</h1></body></html>",
@@ -642,7 +642,7 @@ async function runCelebrationCase(browser) {
     });
     await frame.locator("#native-next").click();
     await page.waitForURL((url) =>
-      url.origin === "https://kakomonn-congratulations.expgolem-lab.workers.dev",
+      url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
     const url = new URL(page.url());
     assert.equal(url.searchParams.get("site"), site);
@@ -659,7 +659,7 @@ async function runPendingCelebrationRecoveryCase(browser) {
   const context = await browser.newContext({ userAgent: edgeUserAgent });
   try {
     const page = await context.newPage();
-    await page.route("https://kakomonn-congratulations.expgolem-lab.workers.dev/**", (route) =>
+    await page.route("https://kakomonn-congratulations.kakomonn.workers.dev/**", (route) =>
       route.fulfill({
         contentType: "text/html; charset=utf-8",
         body: "<!doctype html><html><body><h1>dailyStabilityDaysDelta達成</h1></body></html>",
@@ -675,7 +675,7 @@ async function runPendingCelebrationRecoveryCase(browser) {
       pendingCelebration: celebration,
     });
     await page.waitForURL((url) =>
-      url.origin === "https://kakomonn-congratulations.expgolem-lab.workers.dev",
+      url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
     const url = new URL(page.url());
     assert.equal(url.searchParams.get("todayStabilityDaysDelta"), "35");

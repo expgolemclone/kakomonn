@@ -3,7 +3,7 @@
 // @namespace    local.kakomonn.reader
 // @description  問題文と解説の読み上げ, コピー, stabilityDays合計日数の端末間同期と日次目標の祝福を提供します.
 // @match        https://*.kakomonn.com/*
-// @connect      kakomonn-sync.expgolem-lab.workers.dev
+// @connect      kakomonn-sync.kakomonn.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com
 // @run-at       document-end
 // @noframes
@@ -29,9 +29,9 @@
       ? GM_info.scriptHandler
       : "";
   const SYNC_API_URL =
-    "https://kakomonn-sync.expgolem-lab.workers.dev";
+    "https://kakomonn-sync.kakomonn.workers.dev";
   const CONGRATULATIONS_URL =
-    "https://kakomonn-congratulations.expgolem-lab.workers.dev/";
+    "https://kakomonn-congratulations.kakomonn.workers.dev/";
   const SITE_ID = location.hostname.toLowerCase();
   if (
     !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(

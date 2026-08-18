@@ -2,7 +2,7 @@ import manifest from "./celebrations.json" with { type: "json" };
 import { parseCelebration } from "./celebration-contract.js";
 import { chooseCelebration, validateManifest } from "./celebration-selection.js";
 
-const STUDY_LOG_URL = "https://kakomonn-sync.expgolem-lab.workers.dev/";
+const STUDY_LOG_URL = "https://kakomonn-sync.kakomonn.workers.dev/";
 const READY_MESSAGE = "kakomonn:celebration-ready";
 const READY_TIMEOUT_MS = 12_000;
 

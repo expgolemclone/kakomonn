@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { celebrationSearch } from "../celebration-contract.js";
 
-const origin = "https://kakomonn-congratulations.expgolem-lab.workers.dev";
+const origin = "https://kakomonn-congratulations.kakomonn.workers.dev";
 const search = celebrationSearch({
   site: "chushoks.kakomonn.com",
   date: "2026-08-13",

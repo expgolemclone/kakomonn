@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$BaseUrl = "https://kakomonn-sync.expgolem-lab.workers.dev/v7",
+    [string]$BaseUrl = "https://kakomonn-sync.kakomonn.workers.dev/v7",
     [string]$Site
 )
 

@@ -19,7 +19,7 @@ const userscriptPath = path.resolve(
 );
 const repositoryEnvPath = path.resolve(__dirname, "..", "..", ".env");
 const syncApiOrigin =
-  "https://kakomonn-sync.expgolem-lab.workers.dev";
+  "https://kakomonn-sync.kakomonn.workers.dev";
 const currentQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const correctAnswerText = "輸入の減少は、GDPを増加させる。";
 const expectedMarkdownHeading =
@@ -497,7 +497,7 @@ async function clickNextQuestion(page) {
     const outerURL = await evaluate(page, "() => location.href");
     if (
       outerURL.startsWith(
-        "https://kakomonn-congratulations.expgolem-lab.workers.dev/",
+        "https://kakomonn-congratulations.kakomonn.workers.dev/",
       )
     ) {
       const ready = await evaluate(

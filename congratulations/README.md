@@ -14,7 +14,7 @@ repository rootで実行します.
 npm run test:congratulations
 ```
 
-production URLは`https://kakomonn-congratulations.expgolem-lab.workers.dev/`です. deployとproduction検証は次のcommandへ閉じ込めます.
+production URLは`https://kakomonn-congratulations.kakomonn.workers.dev/`です. deployとproduction検証は次のcommandへ閉じ込めます.
 
 ```bash
 npm run deploy:congratulations

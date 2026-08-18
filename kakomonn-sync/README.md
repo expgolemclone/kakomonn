@@ -7,7 +7,7 @@
 productionのWorker rootを開くと,独立した学習ログを表示します.
 
 ```text
-https://kakomonn-sync.expgolem-lab.workers.dev/
+https://kakomonn-sync.kakomonn.workers.dev/
 ```
 
 初回だけ`kakomonn-reader`と同じ同期tokenを入力します. tokenと最後に表示したサイトだけをこのoriginの`localStorage`へ保存します. `dailyStabilityDaysDeltaGoal`はsiteごとにWorkerへ保存するため, 同じ同期tokenを使用する他の端末でも共有されます.

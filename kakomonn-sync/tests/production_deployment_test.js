@@ -4,7 +4,7 @@ const { readdir, readFile } = require("node:fs/promises");
 const { extname, resolve } = require("node:path");
 const test = require("node:test");
 
-const productionOrigin = "https://kakomonn-sync.expgolem-lab.workers.dev";
+const productionOrigin = "https://kakomonn-sync.kakomonn.workers.dev";
 const publicDirectory = resolve(__dirname, "..", "public");
 const assetControlFiles = new Set(["_headers"]);
 const textAssetExtensions = new Set([".css", ".html", ".js"]);

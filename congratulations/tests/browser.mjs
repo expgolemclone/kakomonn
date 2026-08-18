@@ -77,7 +77,7 @@ async function verifyShell(browser, origin) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = captureErrors(page);
   try {
-    await page.route("https://kakomonn-sync.expgolem-lab.workers.dev/", (route) =>
+    await page.route("https://kakomonn-sync.kakomonn.workers.dev/", (route) =>
       route.fulfill({ contentType: "text/html", body: "<h1>学習ログ</h1>" }),
     );
     await page.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
@@ -95,7 +95,7 @@ async function verifyShell(browser, origin) {
     }));
     assert.equal(layout.width <= layout.viewport + 1, true);
     await Promise.all([
-      page.waitForURL("https://kakomonn-sync.expgolem-lab.workers.dev/"),
+      page.waitForURL("https://kakomonn-sync.kakomonn.workers.dev/"),
       page.locator("#open-study-log").click(),
     ]);
     assert.deepEqual(errors, []);

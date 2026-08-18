@@ -3,7 +3,7 @@ const SITE = "chushoks.kakomonn.com";
 const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE}.v7.pending-attempt`;
 const PENDING_CELEBRATION_KEY = `kakomonn-reader.${SITE}.v7.pending-celebration`;
 const LEGACY_PENDING_CORRECT_KEY = `kakomonn-reader.${SITE}.pending-correct`;
-const SYNC_API_ORIGIN = "https://kakomonn-sync.expgolem-lab.workers.dev";
+const SYNC_API_ORIGIN = "https://kakomonn-sync.kakomonn.workers.dev";
 const AZURE_SPEECH_ORIGIN = "https://japaneast.tts.speech.microsoft.com";
 const AZURE_SPEECH_TOKEN = "test-azure-speech-token";
 

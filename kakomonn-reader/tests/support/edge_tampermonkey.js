@@ -10,7 +10,7 @@ const TAMPERMONKEY_EXTENSION_ID = "dhdgffkkebhmkfjojejmpbldmpobfkfo";
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SYNC_TOKEN_PATTERN = /^[0-9a-f]{64}$/i;
 const DEFAULT_SYNC_API_ORIGIN =
-  "https://kakomonn-sync.expgolem-lab.workers.dev";
+  "https://kakomonn-sync.kakomonn.workers.dev";
 const DEFAULT_EDGE_E2E_DIRECTORY_NAME = "kakomonn-edge-e2e";
 
 function delay(milliseconds) {
@@ -637,7 +637,7 @@ async function installUserscript(context, userscriptPath) {
   const settingsPage = await context.newPage();
   await settingsPage.goto(
     `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=settings`,
-    { waitUntil: "domcontentloaded", timeout: 30_000 },
+    { waitUntil: "commit", timeout: 30_000 },
   );
   const userScriptsPermission = await settingsPage.evaluate(async () => {
     if (typeof chrome.userScripts === "undefined") {
@@ -681,7 +681,7 @@ async function installUserscript(context, userscriptPath) {
   const utilityPage = await context.newPage();
   await utilityPage.goto(
     `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=utils`,
-    { waitUntil: "domcontentloaded", timeout: 30_000 },
+    { waitUntil: "commit", timeout: 30_000 },
   );
   const fileInput = utilityPage.locator('input[type="file"]');
   await fileInput.waitFor({ state: "attached", timeout: 30_000 });
@@ -742,7 +742,7 @@ async function installUserscript(context, userscriptPath) {
 
   await utilityPage.goto(
     `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=dashboard`,
-    { waitUntil: "domcontentloaded", timeout: 30_000 },
+    { waitUntil: "commit", timeout: 30_000 },
   );
   const scriptRow = utilityPage
     .locator("tr.scripttr")
@@ -819,7 +819,7 @@ async function installUserscript(context, userscriptPath) {
     await delay(5_000);
     await utilityPage.goto(
       `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=dashboard`,
-      { waitUntil: "domcontentloaded", timeout: 30_000 },
+      { waitUntil: "commit", timeout: 30_000 },
     );
     const verifiedRow = utilityPage
       .locator("tr.scripttr")
@@ -838,7 +838,7 @@ async function installUserscript(context, userscriptPath) {
   }
   await utilityPage.goto(
     `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=dashboard`,
-    { waitUntil: "domcontentloaded", timeout: 30_000 },
+    { waitUntil: "commit", timeout: 30_000 },
   );
   const enabledRow = utilityPage
     .locator("tr.scripttr")

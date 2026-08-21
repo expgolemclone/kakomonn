@@ -8,6 +8,16 @@
 - [`kakomonn-sync`](kakomonn-sync/README.md): kakomonn-readerの定着状態,解答履歴,目標設定を端末間で共有し,学習logを表示するCloudflare Worker.
 - [`congratulations`](congratulations/README.md): `todayStabilityDaysDelta`が日次目標へ到達したときに表示する13種類の祝福体験.
 
+## 普段使いのChrome
+
+次のcommandは, `%LOCALAPPDATA%\kakomonn-chrome-e2e` の専用profileでChromeを起動し, `https://chushoks.kakomonn.com/questions` を開きます.
+
+```powershell
+npm run open:kakomonn
+```
+
+Chromeが同じprofileで起動済みの場合は, 既存windowへ新しいtabを追加します. `npm test`のlive E2Eはこのprofileの既存Chrome processを終了するため, test前に普段使いの作業を保存してください.
+
 ## テスト
 
 Node.js 22.12以上とPython 3を使用します.

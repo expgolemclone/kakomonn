@@ -10,10 +10,12 @@
   "scripts": {
     "build": "npm run build:kakomonn-reader",
     "postinstall": "playwright install chromium webkit",
+    "open:kakomonn": "node scripts/open-kakomonn.mjs",
     "build:kakomonn-reader": "python3 kakomonn-reader/build.py",
     "test": "npm run test:local && npm run test:smoke && npm run test:kakomonn-live-site && npm run test:kakomonn-live-sync",
-    "test:local": "npm run test:repository-naming && npm run test:release-script && npm run test:live-sync-script && npm run test:kakomonn-reader && npm run test:kakomonn-sync && npm run test:congratulations",
+    "test:local": "npm run test:repository-naming && npm run test:open-kakomonn && npm run test:release-script && npm run test:live-sync-script && npm run test:kakomonn-reader && npm run test:kakomonn-sync && npm run test:congratulations",
     "test:repository-naming": "node --test tests/repository_naming_test.mjs",
+    "test:open-kakomonn": "node --test tests/open-kakomonn.test.mjs",
     "test:release-script": "node --test tests/release-kakomonn-reader.test.mjs",
     "test:live-sync-script": "node --test kakomonn-reader/tests/live_sync_e2e_unit_test.js",
     "test:kakomonn-reader": "npm run build:kakomonn-reader && python3 kakomonn-reader/tests/build_test.py && es-check es2020 kakomonn-reader/kakomonn-reader.user.js && python3 kakomonn-reader/tests/userscript_metadata_test.py kakomonn-reader/kakomonn-reader.user.js",

@@ -93,6 +93,23 @@ function assertNoReaderPageErrors(pageErrors, pageErrorLocations, details = {}) 
   );
 }
 
+function collectSameOriginPaths(html, pageURL, pattern, allowSearch = false) {
+  const pageOrigin = new URL(pageURL).origin;
+  const paths = new Set();
+  for (const match of html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
+    const url = new URL(match[1], pageURL);
+    if (
+      url.origin === pageOrigin &&
+      (allowSearch || url.search === "") &&
+      url.hash === "" &&
+      pattern.test(url.pathname)
+    ) {
+      paths.add(url.pathname);
+    }
+  }
+  return paths;
+}
+
 async function injectReader(page, script) {
   await page.evaluate(
     ({ source, sourceURL }) => {
@@ -336,13 +353,45 @@ async function runLiveCatalogCrawlCase(browser, script) {
           requestedPage,
           totalPages: Number(marker[1]),
           currentPage: Number(marker[2]),
-          hasQuestionLink: /href=["'][^"']*\/questions\/\d+["']/.test(html),
+          questionIds: [...collectSameOriginPaths(
+            html,
+            url.href,
+            /^\/questions\/\d+$/,
+          )].map((questionPath) => questionPath.slice("/questions/".length)),
         };
       }),
     );
   });
 
   try {
+    const createQuestionResponse = await context.request.get(createQuestionUrl);
+    assert.equal(createQuestionResponse.ok(), true);
+    const createQuestionHTML = await createQuestionResponse.text();
+    const catalogIndexPaths = collectSameOriginPaths(
+      createQuestionHTML,
+      createQuestionUrl,
+      /^\/list$/,
+    );
+    assert.deepEqual([...catalogIndexPaths], ["/list"]);
+    const catalogIndexURL = new URL([...catalogIndexPaths][0], createQuestionUrl);
+    const catalogIndexResponse = await context.request.get(catalogIndexURL.href);
+    assert.equal(catalogIndexResponse.ok(), true);
+    const expectedListPaths = collectSameOriginPaths(
+      await catalogIndexResponse.text(),
+      catalogIndexURL.href,
+      /^\/list1\/\d+$/,
+      true,
+    );
+    for (const listPath of collectSameOriginPaths(
+      createQuestionHTML,
+      createQuestionUrl,
+      /^\/list1\/\d+$/,
+      true,
+    )) {
+      expectedListPaths.add(listPath);
+    }
+    assert.equal(expectedListPaths.size > 0, true);
+
     const response = await page.goto(fixedQuestionUrl, {
       waitUntil: "domcontentloaded",
       timeout: 60_000,
@@ -366,7 +415,6 @@ async function runLiveCatalogCrawlCase(browser, script) {
       window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v7/questions"),
     );
     assert.equal(Array.isArray(catalogCall.body.questionIds), true);
-    assert.equal(catalogCall.body.questionIds.length > 0, true);
     assert.equal(catalogCall.body.expectedGeneration, 0);
 
     const catalogPages = await Promise.all(catalogPageTasks);
@@ -375,13 +423,17 @@ async function runLiveCatalogCrawlCase(browser, script) {
     for (const pageInfo of catalogPages) {
       assert.equal(pageInfo.currentPage, pageInfo.requestedPage);
       assert.equal(pageInfo.totalPages >= pageInfo.currentPage, true);
-      assert.equal(pageInfo.hasQuestionLink, true);
+      assert.equal(pageInfo.questionIds.length > 0, true);
       const group = groups.get(pageInfo.listPath) ?? { totalPages: pageInfo.totalPages, pages: new Set() };
       assert.equal(group.totalPages, pageInfo.totalPages);
       group.pages.add(pageInfo.currentPage);
       groups.set(pageInfo.listPath, group);
     }
-    assert.equal(groups.size > 0, true);
+    assert.deepEqual(
+      [...groups.keys()].sort(),
+      [...expectedListPaths].sort(),
+      "live catalog index and crawled lists differ",
+    );
     for (const [listPath, group] of groups) {
       assert.deepEqual(
         [...group.pages].sort((left, right) => left - right),
@@ -389,6 +441,20 @@ async function runLiveCatalogCrawlCase(browser, script) {
         `incomplete live catalog crawl: ${listPath}`,
       );
     }
+    const observedQuestionIds = [...new Set(
+      catalogPages.flatMap(({ questionIds }) => questionIds),
+    )].sort((left, right) => Number(left) - Number(right));
+    assert.deepEqual(
+      catalogCall.body.questionIds,
+      observedQuestionIds,
+      "live catalog pages and uploaded question IDs differ",
+    );
+    console.log(JSON.stringify({
+      phase: "catalog-crawl",
+      listCount: groups.size,
+      questionCount: observedQuestionIds.length,
+      status: "passed",
+    }));
     assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
       questionURL: fixedQuestionUrl,
     });

@@ -11,9 +11,9 @@ const {
 const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const site = "chushoks.kakomonn.com";
-const edgeUserAgent =
+const chromeUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0";
+  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
 
 function questionHTML(answerResult = "correct", nativeNextId = "999") {
   const resultClass =
@@ -92,7 +92,7 @@ function attemptCalls(page) {
 }
 
 async function runQuestionIdCase(browser, startPath) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     const errors = await prepare(page, startPath, { nextQuestionId: "456" });
@@ -126,7 +126,7 @@ async function runQuestionIdCase(browser, startPath) {
 }
 
 async function runUnknownURLCase(browser) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     const errors = await prepare(page, "/questions/current");
@@ -145,7 +145,7 @@ async function runUnknownURLCase(browser) {
 }
 
 async function runRetryCase(browser) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     const errors = await prepare(page, "/questions/123", { nextQuestionId: "456" });
@@ -184,7 +184,7 @@ async function runRetryCase(browser) {
 }
 
 async function runCatalogRefreshCase(browser) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     const errors = [];
@@ -285,7 +285,7 @@ async function runCatalogRefreshCase(browser) {
 }
 
 async function runCatalogIncompleteCase(browser) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     const errors = [];
@@ -341,7 +341,7 @@ async function runCatalogIncompleteCase(browser) {
 }
 
 async function runCatalogFinalPageMismatchCase(browser) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     const errors = [];
@@ -402,7 +402,7 @@ async function runCatalogFinalPageMismatchCase(browser) {
 }
 
 async function runCatalogSamePageDuplicateCase(browser) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     const errors = [];
@@ -461,7 +461,7 @@ async function runCatalogSamePageDuplicateCase(browser) {
 }
 
 async function runCatalogHybridSnapshotCase(browser) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     const errors = [];
@@ -536,7 +536,7 @@ async function runCatalogHybridSnapshotCase(browser) {
 }
 
 async function runCatalogCASConflictCase(browser) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     const errors = [];
@@ -592,7 +592,7 @@ async function runCatalogCASConflictCase(browser) {
 }
 
 async function runStabilityDaysDecreaseCase(browser) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     const errors = await prepare(page, "/questions/123", {
@@ -619,7 +619,7 @@ async function runStabilityDaysDecreaseCase(browser) {
 }
 
 async function runCelebrationCase(browser) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     await page.route("https://kakomonn-congratulations.kakomonn.workers.dev/**", (route) =>
@@ -656,7 +656,7 @@ async function runCelebrationCase(browser) {
 }
 
 async function runPendingCelebrationRecoveryCase(browser) {
-  const context = await browser.newContext({ userAgent: edgeUserAgent });
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
     await page.route("https://kakomonn-congratulations.kakomonn.workers.dev/**", (route) =>

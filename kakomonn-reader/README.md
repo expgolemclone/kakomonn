@@ -12,7 +12,7 @@
 - `Enter`は未解答なら解答を実行し,解答後は次問へ進みます. 下部の`次の問題へ`をクリックまたはタップして進むこともできます.
 - 解答によって`todayStabilityDaysDelta`が`dailyStabilityDaysDeltaGoal`へ初めて到達すると, その日のprimary KPI達成を祝う専用pageへ移動します. 同じ日の祝福はsiteごとに1回だけです.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
-- 現在の問題catalogに含まれる全問題のstabilityを合計して切り捨てた定着日数stabilityDaysと解答履歴. 値は`kakomonn-sync`へ保存され,Win11 EdgeとiPhone Safariで共有されます.問題画面ではtodayStabilityDaysDeltaを確認できます.同期WorkerのrootではstabilityDays,todayStabilityDaysDelta,dailyStabilityDaysDeltaGoal,attemptedQuestionCount,直近7日間のhistoryを確認できます.解いた問題数は問題IDの種類数で,同じ問題を同じ日に繰り返しても1問として数えます.
+- 現在の問題catalogに含まれる全問題のstabilityを合計して切り捨てた定着日数stabilityDaysと解答履歴. 値は`kakomonn-sync`へ保存され,Windows 11 ChromeとiPhone Safariで共有されます.問題画面ではtodayStabilityDaysDeltaを確認できます.同期WorkerのrootではstabilityDays,todayStabilityDaysDelta,dailyStabilityDaysDeltaGoal,attemptedQuestionCount,直近7日間のhistoryを確認できます.解いた問題数は問題IDの種類数で,同じ問題を同じ日に繰り返しても1問として数えます.
 - 解答後に, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でクリップボードへコピー. `yy`でもコピーできます.
 
 ## ビルド
@@ -21,7 +21,7 @@
 python3 build.py
 ```
 
-`src/`にはmetadataとstyle,UI,syncとcatalog,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyなどのユーザースクリプトマネージャーには, 生成されたファイルを登録してください.
+`src/`にはmetadataとstyle,UI,syncとcatalog,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyへ生成されたファイルを登録してください.
 
 ## Release
 
@@ -33,9 +33,9 @@ Windowsローカルから,同期済みの`main`先端をGitHub Releaseへ公開�
 npm run release:kakomonn-reader
 ```
 
-このcommandはlockfileどおりに依存関係をinstallし,local test,smoke test,live-site E2E,実Edgeと実Tampermonkeyと本番同期Workerを使うlive E2Eを含む`npm test`をWindowsで実行します. すべての検証後にmainが変わっていないことを再確認し,生成した`kakomonn-reader.user.js`を公開します.
+このcommandはlockfileどおりに依存関係をinstallし,local test,smoke test,live-site E2E,実Chromeと実Tampermonkeyと本番同期Workerを使うlive E2Eを含む`npm test`をWindowsで実行します. すべての検証後にmainが変わっていないことを再確認し,生成した`kakomonn-reader.user.js`を公開します.
 
-release前の初回準備では, 専用のuser data directoryでEdgeを起動し, そのprofileだけにTampermonkeyをinstallしてからEdgeを閉じます. test scriptが専用profileのEdgeを最小化して起動し, 最新の`kakomonn-reader.user.js`をTampermonkeyへ更新します. `KAKOMONN_SYNC_TOKEN`は本番Workerのtokenです. 値が未設定の場合は, EdgeとChromeのTampermonkey storageからproductionで認証できる値を自動取得します. 専用profile, Tampermonkey, token, 最新buildのいずれかが欠けている場合は, releaseを作成せず終了します. 通常利用するEdge user data directoryとその配下はlive E2Eに使用しません.
+release前の初回準備では, 専用のuser data directoryでChromeを起動し, そのprofileだけにTampermonkeyをinstallして`Allow User Scripts`を有効にしてからChromeを閉じます. test scriptが専用profileのChromeを最小化して起動し, 最新の`kakomonn-reader.user.js`をTampermonkeyへ更新します. `KAKOMONN_SYNC_TOKEN`は本番Workerのtokenです. 値が未設定の場合は, 専用Chrome profileと標準Chrome profileのTampermonkey storageからproductionで認証できる値を自動取得します. 専用profile, Tampermonkey, token, 最新buildのいずれかが欠けている場合は, releaseを作成せず終了します. 通常利用するChrome user data directoryとその配下はlive E2Eに使用しません.
 
 Releaseのtagは`kakomonn-reader-<commit SHA>`,titleは`kakomonn-reader <先頭12文字のSHA>`です.同期済みの`main`先端だけを`Latest`として公開し,生成fileはrepositoryの差分へ含めません. 作業内容とmainの不一致,localとoriginまたはGitHub上のmainの不一致,local検証の失敗,検証中のmain更新,同一tagの既存Releaseのいずれかを検出した場合は公開せず終了します. 原因を解消して同じcommandを最初から実行してください. skip,force,任意revisionを指定するoptionはありません.
 
@@ -43,7 +43,7 @@ Releaseのtagは`kakomonn-reader-<commit SHA>`,titleは`kakomonn-reader <先頭1
 
 ## 動作環境
 
-iOS SafariのUserscriptsとMicrosoft EdgeのTampermonkeyに対応します. 両端末ともAzure Speechの`ja-JP-NanamiNeural`を使用し,短期tokenの取得後はAzureから音声を直接受信します. Windows Edgeでは同期と問題ページの準備が完了すると自動で読み上げを開始します. ブラウザが自動再生を拒否した場合とiOSでは,準備完了後の最初の画面クリックまたはタップで読み上げを開始し,以降の問題は自動で読み上げます. 読み上げにはインターネット接続が必要です.
+Windows 11 Chrome + TampermonkeyとiPhone Safari + Tampermonkeyだけに対応します. 両端末ともAzure Speechの`ja-JP-NanamiNeural`を使用し,短期tokenの取得後はAzureから音声を直接受信します. Windows Chromeでは同期と問題ページの準備が完了すると自動で読み上げを開始します. ブラウザが自動再生を拒否した場合とiPhone Safariでは,準備完了後の最初の画面クリックまたはタップで読み上げを開始し,以降の問題は自動で読み上げます. 読み上げにはインターネット接続が必要です.
 
 ## 学習記録の同期設定
 
@@ -68,21 +68,21 @@ npm ci
 npm run build:kakomonn-reader
 ```
 
-通常利用するEdge profileはlive E2Eに使用しません. 初回だけ次のcommandで専用のuser data directoryを指定してEdgeを起動し, そのprofileへTampermonkeyをinstallしてからEdgeを閉じます. userscriptの保存と更新はtest scriptが行います.
+通常利用するChrome profileはlive E2Eに使用しません. 初回だけ次のcommandで専用のuser data directoryを指定してChromeを起動し, そのprofileへTampermonkeyをinstallして`Allow User Scripts`を有効にしてからChromeを閉じます. userscriptの保存と更新はtest scriptが行います.
 
 ```powershell
-$env:KAKOMONN_EDGE_USER_DATA_DIR = Join-Path $env:LOCALAPPDATA 'kakomonn-edge-e2e'
-$edgeExecutable = Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'
-Start-Process -FilePath $edgeExecutable -ArgumentList "--user-data-dir=$env:KAKOMONN_EDGE_USER_DATA_DIR"
+$env:KAKOMONN_CHROME_USER_DATA_DIR = Join-Path $env:LOCALAPPDATA 'kakomonn-chrome-e2e'
+$chromeExecutable = Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'
+Start-Process -FilePath $chromeExecutable -ArgumentList "--user-data-dir=$env:KAKOMONN_CHROME_USER_DATA_DIR"
 ```
 
-`KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ, ES2020構文, local smoke test, 実サイトE2Eに続けて, 専用profileの最小化Edge, 実Tampermonkey, デプロイ済みの同期Workerを一続きで検証します. 最後のE2Eはtest scriptがEdgeを起動し, Tampermonkeyを`UserScripts API Dynamic`に固定して, 最新userscriptを更新します. さらに, build fingerprintが生成fileと一致することを確認します. その後, 実Edge上で解答記録を1件送信し, 問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに, 本番の解答履歴と定着状態を更新し, 外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
+`KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ, ES2020構文, local smoke test, 実サイトE2Eに続けて, 専用profileの最小化Chrome, 実Tampermonkey, デプロイ済みの同期Workerを一続きで検証します. 最後のE2Eはtest scriptがChromeを起動し, Tampermonkeyを`UserScripts API Dynamic`に固定して, 最新userscriptを更新します. さらに, build fingerprintが生成fileと一致することを確認します. その後, 実Chrome上で解答記録を1件送信し, 問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに, 本番の解答履歴と定着状態を更新し, 外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
 
 ```powershell
 $env:KAKOMONN_SYNC_TOKEN='<SYNC_TOKEN>'
 npm test
 ```
 
-`KAKOMONN_EDGE_USER_DATA_DIR`はprocess環境変数またはrepository rootのignore済み`.env`で指定できます. process環境変数がある場合はその値を優先し, 省略した場合は`%LOCALAPPDATA%\kakomonn-edge-e2e`を使用します. 通常利用するEdge user data directoryとその配下は使用できません. test scriptが指定された専用profileの既存processを終了し, 最小化Edgeの起動から終了までを所有します.
+`KAKOMONN_CHROME_USER_DATA_DIR`はprocess環境変数またはrepository rootのignore済み`.env`で指定できます. process環境変数がある場合はその値を優先し, 省略した場合は`%LOCALAPPDATA%\kakomonn-chrome-e2e`を使用します. 通常利用するChrome user data directoryとその配下は使用できません. `KAKOMONN_CHROME_EXECUTABLE`を省略した場合は`%ProgramFiles%\Google\Chrome\Application\chrome.exe`を使用します. test scriptが指定された専用profileの既存processを終了し, 最小化Chromeの起動から終了までを所有します.
 
 `npm run test:kakomonn-live-sync`で最後のlive E2Eだけを再実行できますが,build,local test,smoke test,live-site E2Eを含む完全な完了条件は`npm test`です. live-sync E2Eをskipまたはforce通過させるoptionはありません. `npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます.

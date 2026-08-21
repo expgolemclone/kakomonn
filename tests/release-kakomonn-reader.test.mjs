@@ -138,7 +138,7 @@ test("uses Windows command wrappers without a shell", () => {
   );
 });
 
-test("makes live Edge and production sync the final npm test gates", () => {
+test("makes live Chrome and production sync the final npm test gates", () => {
   assert.deepEqual(packageJson.scripts.test.split(" && "), [
     "npm run test:local",
     "npm run test:smoke",

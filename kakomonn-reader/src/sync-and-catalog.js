@@ -1,18 +1,3 @@
-  function userscriptAPIAvailable() {
-    return (
-      typeof GM === "object" &&
-      typeof GM.getValue === "function" &&
-      typeof GM.setValue === "function" &&
-      typeof GM.deleteValue === "function" &&
-      typeof GM.xmlHttpRequest === "function" &&
-      clipboardAPIAvailable()
-    );
-  }
-
-  function clipboardAPIAvailable() {
-    return typeof GM === "object" && typeof GM.setClipboard === "function";
-  }
-
   function isSyncState(value) {
     const validCatalog =
       value?.catalog === null ||
@@ -237,52 +222,37 @@
   }
 
   function gmXMLHttpRequest(details) {
-    let abortRequest = () => {};
+    let tampermonkeyRequest;
     let rejectRequest = () => {};
     const promise = new Promise((resolve, reject) => {
       let settled = false;
-      let timeoutTimer = null;
       const settleOnce = (callback) => {
         if (settled) {
           return;
         }
         settled = true;
-        if (timeoutTimer !== null) {
-          window.clearTimeout(timeoutTimer);
-          timeoutTimer = null;
-        }
         callback();
       };
       const resolveOnce = (response) => settleOnce(() => resolve(response));
       const rejectOnce = (code) =>
         settleOnce(() => reject(new SyncRequestError(code)));
       rejectRequest = rejectOnce;
-      timeoutTimer = window.setTimeout(() => {
-        rejectOnce("request_timeout");
-        abortRequest();
-      }, details.timeout ?? SYNC_TIMEOUT_MS);
       try {
-        const request = GM.xmlHttpRequest({
+        tampermonkeyRequest = GM.xmlHttpRequest({
           ...details,
           timeout: details.timeout ?? SYNC_TIMEOUT_MS,
-          onload: resolveOnce,
           onerror: () => rejectOnce("network_error"),
           onabort: () => rejectOnce("request_aborted"),
           ontimeout: () => rejectOnce("request_timeout"),
         });
-        if (typeof request?.abort === "function") {
-          abortRequest = () => request.abort();
-        }
-        if (typeof request?.catch === "function") {
-          request.catch(() => rejectOnce("network_error"));
-        }
+        tampermonkeyRequest.then(resolveOnce, () => rejectOnce("network_error"));
       } catch {
         rejectOnce("network_error");
       }
     });
     promise.abort = () => {
       rejectRequest("request_aborted");
-      abortRequest();
+      tampermonkeyRequest.abort();
     };
     return promise;
   }
@@ -821,10 +791,6 @@
   async function initializeSync() {
     renderLearningMetrics();
     updateSyncDependentControls();
-    if (!userscriptAPIAvailable()) {
-      setStatus("ユーザースクリプトAPIを利用できません");
-      return;
-    }
     try {
       const [storedToken, storedPendingAttempt, storedCelebration] = await Promise.all([
         GM.getValue(SYNC_TOKEN_KEY, ""),

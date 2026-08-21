@@ -59,6 +59,22 @@ const RETIRED_PATTERNS = [
   /(?<![a-z_])result: "(correct|incorrect)"/,
 ];
 
+const RETIRED_RUNTIME_PATTERNS = [
+  /isWindowsEdge/,
+  /KAKOMONN_EDGE_/,
+  /edge_tampermonkey/,
+  /launchDedicatedEdge/,
+  /readEdgeUserDataDir/,
+  /edgeLaunchArguments/,
+  /stopDedicatedEdge/,
+  /kakomonn-edge-e2e/,
+];
+
+const UNSUPPORTED_HANDLER_FIXTURES = new Set([
+  "kakomonn-reader/tests/live_sync_e2e_unit_test.js",
+  "kakomonn-reader/tests/smoke_test.js",
+]);
+
 async function* listFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
@@ -92,5 +108,34 @@ test("retired learning metric names stay out of the repository", async () => {
     violations,
     [],
     `retired names were found outside legacy migrations:\n${violations.join("\n")}`,
+  );
+});
+
+test("retired runtime names stay out of production code and support files", async () => {
+  const violations = [];
+  for await (const filePath of listFiles(repositoryRoot)) {
+    const relativePath = relative(repositoryRoot, filePath).replaceAll("\\", "/");
+    if (relativePath === "tests/repository_naming_test.mjs") continue;
+    const lines = (await readFile(filePath, "utf8")).split(/\r?\n/);
+    lines.forEach((line, index) => {
+      for (const pattern of RETIRED_RUNTIME_PATTERNS) {
+        if (pattern.test(line)) {
+          violations.push(`${relativePath}:${index + 1}: ${pattern} => ${line.trim()}`);
+        }
+      }
+      if (
+        line.includes("Userscripts") &&
+        !UNSUPPORTED_HANDLER_FIXTURES.has(relativePath)
+      ) {
+        violations.push(
+          `${relativePath}:${index + 1}: unsupported handler => ${line.trim()}`,
+        );
+      }
+    });
+  }
+  assert.deepEqual(
+    violations,
+    [],
+    `retired runtime names were found:\n${violations.join("\n")}`,
   );
 });

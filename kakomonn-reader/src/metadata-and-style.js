@@ -25,9 +25,22 @@
   const BUILD_FINGERPRINT = "__KAKOMONN_READER_BUILD_FINGERPRINT__";
   const SCRIPT_HANDLER =
     typeof GM_info === "object" &&
+    GM_info !== null &&
     typeof GM_info.scriptHandler === "string"
       ? GM_info.scriptHandler
       : "";
+  const userAgent = navigator.userAgent;
+  const isWindowsChrome =
+    userAgent.includes("Windows NT") &&
+    /\bChrome\/\d+(?:\.\d+)+/.test(userAgent) &&
+    !userAgent.includes("Edg/");
+  const isIPhoneSafari =
+    userAgent.includes("iPhone") &&
+    userAgent.includes("AppleWebKit/") &&
+    /\bVersion\/\d+(?:\.\d+)+/.test(userAgent) &&
+    /\bMobile\/\S+/.test(userAgent) &&
+    /\bSafari\/\d+(?:\.\d+)+/.test(userAgent) &&
+    !/(?:CriOS|FxiOS|EdgiOS|OPiOS)\//.test(userAgent);
   const SYNC_API_URL =
     "https://kakomonn-sync.kakomonn.workers.dev";
   const CONGRATULATIONS_URL =
@@ -37,6 +50,19 @@
     !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(
       SITE_ID
     )
+  ) {
+    return;
+  }
+  if (
+    SCRIPT_HANDLER !== "Tampermonkey" ||
+    (!isWindowsChrome && !isIPhoneSafari) ||
+    typeof GM !== "object" ||
+    GM === null ||
+    typeof GM.getValue !== "function" ||
+    typeof GM.setValue !== "function" ||
+    typeof GM.deleteValue !== "function" ||
+    typeof GM.xmlHttpRequest !== "function" ||
+    typeof GM.setClipboard !== "function"
   ) {
     return;
   }
@@ -179,18 +205,12 @@
 
   const speechAudio =
     typeof window.Audio === "function" ? new window.Audio() : null;
-  const isIOS =
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const isWindowsEdge =
-    navigator.userAgent.includes("Windows NT") &&
-    navigator.userAgent.includes("Edg/");
   const speechSupported =
     typeof speechAudio?.play === "function" &&
     typeof speechAudio?.pause === "function" &&
     typeof speechAudio?.canPlayType === "function" &&
     speechAudio.canPlayType("audio/mpeg") !== "" &&
-    (isIOS || isWindowsEdge);
+    (isIPhoneSafari || isWindowsChrome);
   let speechEnabled = false;
   let speechPaused = false;
   let speechInitializationInProgress = false;

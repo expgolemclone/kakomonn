@@ -7,10 +7,10 @@ const { spawnSync } = require("node:child_process");
 
 const {
   installUserscript,
-  launchDedicatedEdge,
-  readEdgeUserDataDir,
+  launchDedicatedChrome,
+  readChromeUserDataDir,
   resolveSyncToken,
-} = require("./support/edge_tampermonkey");
+} = require("./support/chrome_tampermonkey");
 
 const userscriptPath = path.resolve(
   __dirname,
@@ -24,8 +24,8 @@ const currentQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const correctAnswerText = "輸入の減少は、GDPを増加させる。";
 const expectedMarkdownHeading =
   "# 中小企業診断士試験 令和7年度（2025年） 問4（経済学・経済政策 問4）";
-const edgeViewport = { height: 900, width: 1440 };
-const edgeViewportTolerancePx = 1;
+const chromeViewport = { height: 900, width: 1440 };
+const chromeViewportTolerancePx = 1;
 const buildFingerprintPattern =
   /const BUILD_FINGERPRINT = "([0-9a-f]{64})";/g;
 
@@ -56,8 +56,18 @@ function assertRuntimeIdentity(state, expectedBuildFingerprint) {
   );
   assert.match(
     state.userAgent,
+    /Windows NT/,
+    "The remote-debugging target must run on Windows",
+  );
+  assert.match(
+    state.userAgent,
+    /\bChrome\/\d+/,
+    "The remote-debugging target must be Google Chrome",
+  );
+  assert.doesNotMatch(
+    state.userAgent,
     /\bEdg\/\d+/,
-    "The remote-debugging target must be Microsoft Edge",
+    "The remote-debugging target must not be Microsoft Edge",
   );
   assert.equal(
     state.scriptHandler,
@@ -411,7 +421,7 @@ async function submitCorrectAnswer(page) {
   );
 }
 
-async function copyMarkdownInRealEdge(page) {
+async function copyMarkdownInRealChrome(page) {
   const clipboardNonce = prepareClipboardNonce();
   await waitUntil("the ready Markdown copy button", async () =>
     evaluate(
@@ -541,8 +551,8 @@ async function resizeToExactViewport(page) {
     `Invalid devicePixelRatio: ${devicePixelRatio}`,
   );
   await page.setViewportSize({
-    height: Math.round(edgeViewport.height * devicePixelRatio),
-    width: Math.round(edgeViewport.width * devicePixelRatio),
+    height: Math.round(chromeViewport.height * devicePixelRatio),
+    width: Math.round(chromeViewport.width * devicePixelRatio),
   });
   const actualViewport = await evaluate(
     page,
@@ -552,25 +562,25 @@ async function resizeToExactViewport(page) {
     })`,
   );
   assert.equal(
-    Math.abs(actualViewport.height - edgeViewport.height) <=
-      edgeViewportTolerancePx &&
-      Math.abs(actualViewport.width - edgeViewport.width) <=
-        edgeViewportTolerancePx,
+    Math.abs(actualViewport.height - chromeViewport.height) <=
+      chromeViewportTolerancePx &&
+      Math.abs(actualViewport.width - chromeViewport.width) <=
+        chromeViewportTolerancePx,
     true,
-    JSON.stringify({ actualViewport, edgeViewport }),
+    JSON.stringify({ actualViewport, chromeViewport }),
   );
 }
 
 async function main() {
   const token = await resolveSyncToken({ envFilePath: repositoryEnvPath });
-  const userDataDir = readEdgeUserDataDir({ envFilePath: repositoryEnvPath });
+  const userDataDir = readChromeUserDataDir({ envFilePath: repositoryEnvPath });
   const expectedBuildFingerprint = readExpectedBuildFingerprint();
   const baseline = await requestSyncState(token);
-  const edge = await launchDedicatedEdge({ userDataDir });
+  const chrome = await launchDedicatedChrome({ userDataDir });
   let page = null;
   try {
-    await installUserscript(edge.context, userscriptPath);
-    page = await edge.context.newPage();
+    await installUserscript(chrome.context, userscriptPath);
+    page = await chrome.context.newPage();
     await page.goto(currentQuestionUrl, {
       waitUntil: "domcontentloaded",
       timeout: 60_000,
@@ -588,7 +598,7 @@ async function main() {
       `todayStabilityDaysDelta ${baseline.learningMetrics.todayStabilityDaysDelta.toLocaleString("ja-JP")}日`,
     );
     await submitCorrectAnswer(page);
-    await copyMarkdownInRealEdge(page);
+    await copyMarkdownInRealChrome(page);
     const navigationResult = await clickNextQuestion(page);
     const finalState = await requestSyncState(token);
     assert.equal(finalState.today, baseline.today);
@@ -623,7 +633,7 @@ async function main() {
     }
     console.log(
       JSON.stringify({
-        browser: "Microsoft Edge with Tampermonkey",
+        browser: "Google Chrome with Tampermonkey",
         buildFingerprint: expectedBuildFingerprint,
         frameUrl,
         markdownHeading: expectedMarkdownHeading,
@@ -642,7 +652,7 @@ async function main() {
     if (page !== null) {
       await page.close().catch(() => null);
     }
-    await edge.close();
+    await chrome.close();
   }
 }
 

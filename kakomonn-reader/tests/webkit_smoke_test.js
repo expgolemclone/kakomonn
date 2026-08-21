@@ -195,7 +195,6 @@ async function main() {
     });
     await installSyncMock(page, {
       nextQuestionId: "86957",
-      userscriptsPromise: true,
     });
     await page.addScriptTag({ content: script });
     await page.locator("#kakomonn-reader-frame").waitFor({ state: "attached" });

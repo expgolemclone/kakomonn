@@ -492,7 +492,7 @@
       readPendingCurrentPage();
       return;
     }
-    if (isIOS) {
+    if (isIPhoneSafari) {
       setStatus(SPEECH_GESTURE_STATUS);
       return;
     }

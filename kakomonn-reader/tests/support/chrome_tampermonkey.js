@@ -11,7 +11,7 @@ const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SYNC_TOKEN_PATTERN = /^[0-9a-f]{64}$/i;
 const DEFAULT_SYNC_API_ORIGIN =
   "https://kakomonn-sync.kakomonn.workers.dev";
-const DEFAULT_EDGE_E2E_DIRECTORY_NAME = "kakomonn-edge-e2e";
+const DEFAULT_CHROME_E2E_DIRECTORY_NAME = "kakomonn-chrome-e2e";
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -19,29 +19,6 @@ function delay(milliseconds) {
 
 function platformPath(platform = process.platform) {
   return platform === "win32" ? path.win32 : path;
-}
-
-function defaultEdgeUserDataDir(
-  environment = process.env,
-  platform = process.platform,
-) {
-  const pathApi = platformPath(platform);
-  if (platform === "win32") {
-    const localAppData = environment.LOCALAPPDATA;
-    if (!localAppData) {
-      throw new Error("LOCALAPPDATA is not set");
-    }
-    return pathApi.join(localAppData, "Microsoft", "Edge", "User Data");
-  }
-  if (platform === "darwin") {
-    return pathApi.join(
-      os.homedir(),
-      "Library",
-      "Application Support",
-      "Microsoft Edge",
-    );
-  }
-  return pathApi.join(os.homedir(), ".config", "microsoft-edge");
 }
 
 function defaultChromeUserDataDir(
@@ -68,7 +45,7 @@ function defaultChromeUserDataDir(
   return pathApi.join(os.homedir(), ".config", "google-chrome");
 }
 
-function defaultEdgeE2EUserDataDir(
+function defaultChromeE2EUserDataDir(
   environment = process.env,
   platform = process.platform,
 ) {
@@ -78,9 +55,9 @@ function defaultEdgeE2EUserDataDir(
     if (!localAppData) {
       throw new Error("LOCALAPPDATA is not set");
     }
-    return pathApi.join(localAppData, DEFAULT_EDGE_E2E_DIRECTORY_NAME);
+    return pathApi.join(localAppData, DEFAULT_CHROME_E2E_DIRECTORY_NAME);
   }
-  return pathApi.join(os.tmpdir(), DEFAULT_EDGE_E2E_DIRECTORY_NAME);
+  return pathApi.join(os.tmpdir(), DEFAULT_CHROME_E2E_DIRECTORY_NAME);
 }
 
 function isSameOrDescendantPath(parentPath, candidatePath, pathApi = path) {
@@ -93,7 +70,7 @@ function isSameOrDescendantPath(parentPath, candidatePath, pathApi = path) {
   );
 }
 
-function readEdgeUserDataDir({
+function readChromeUserDataDir({
   environment = process.env,
   envFilePath,
   existsSync = fs.existsSync,
@@ -102,27 +79,27 @@ function readEdgeUserDataDir({
 } = {}) {
   const pathApi = platformPath(platform);
   const configuredPath =
-    environment.KAKOMONN_EDGE_USER_DATA_DIR ??
-    readEnvAssignment(envFilePath, "KAKOMONN_EDGE_USER_DATA_DIR", {
+    environment.KAKOMONN_CHROME_USER_DATA_DIR ??
+    readEnvAssignment(envFilePath, "KAKOMONN_CHROME_USER_DATA_DIR", {
       existsSync,
       readFileSync,
     }) ??
-    defaultEdgeE2EUserDataDir(environment, platform);
+    defaultChromeE2EUserDataDir(environment, platform);
   if (configuredPath === "") {
-    throw new Error("KAKOMONN_EDGE_USER_DATA_DIR must not be empty");
+    throw new Error("KAKOMONN_CHROME_USER_DATA_DIR must not be empty");
   }
   const userDataDir = pathApi.resolve(configuredPath);
   const standardUserDataDir = pathApi.resolve(
-    defaultEdgeUserDataDir(environment, platform),
+    defaultChromeUserDataDir(environment, platform),
   );
   if (isSameOrDescendantPath(standardUserDataDir, userDataDir, pathApi)) {
     throw new Error(
-      "KAKOMONN_EDGE_USER_DATA_DIR must be outside the standard Edge user data directory",
+      "KAKOMONN_CHROME_USER_DATA_DIR must be outside the standard Chrome user data directory",
     );
   }
   if (!existsSync(userDataDir)) {
     throw new Error(
-      `The dedicated Edge E2E user data directory was not found: ${userDataDir}`,
+      `The dedicated Chrome E2E user data directory was not found: ${userDataDir}`,
     );
   }
   return userDataDir;
@@ -220,13 +197,12 @@ function listProfileDirectories(userDataRoot, {
 function discoverTampermonkeyStorageDirectories({
   environment = process.env,
   platform = process.platform,
-  dedicatedUserDataDir = defaultEdgeE2EUserDataDir(environment, platform),
+  dedicatedUserDataDir = defaultChromeE2EUserDataDir(environment, platform),
   existsSync = fs.existsSync,
   readdirSync = fs.readdirSync,
 } = {}) {
   const roots = [
     dedicatedUserDataDir,
-    defaultEdgeUserDataDir(environment, platform),
     defaultChromeUserDataDir(environment, platform),
   ];
   const directories = new Set();
@@ -329,7 +305,7 @@ async function resolveSyncToken({
   environment = process.env,
   envFilePath,
   readConfigured = readConfiguredToken,
-  readDedicatedUserDataDir = readEdgeUserDataDir,
+  readDedicatedUserDataDir = readChromeUserDataDir,
   discoverStorageDirectories = discoverTampermonkeyStorageDirectories,
   scanCandidates = scanStoredSyncTokenCandidates,
   validateToken = validateSyncToken,
@@ -365,12 +341,12 @@ async function resolveSyncToken({
   const distinctValidTokens = [...new Set(validTokens)];
   if (distinctValidTokens.length === 0) {
     throw new Error(
-      "No production sync token was found in Edge or Chrome Tampermonkey storage",
+      "No production sync token was found in Chrome Tampermonkey storage",
     );
   }
   if (distinctValidTokens.length > 1) {
     throw new Error(
-      "Multiple production sync tokens were found in Edge or Chrome Tampermonkey storage",
+      "Multiple production sync tokens were found in Chrome Tampermonkey storage",
     );
   }
   saveToken(envFilePath, distinctValidTokens[0]);
@@ -380,7 +356,7 @@ async function resolveSyncToken({
 
 function windowsPowerShellExecutable(environment = process.env) {
   if (process.platform !== "win32") {
-    throw new Error("The Edge Tampermonkey E2E requires Windows");
+    throw new Error("The Chrome Tampermonkey E2E requires Windows");
   }
   const systemRoot = environment.SystemRoot;
   if (!systemRoot) {
@@ -401,15 +377,15 @@ function secretFreeEnvironment(environment = process.env) {
   return childEnvironment;
 }
 
-const stopDedicatedEdgePowerShell = String.raw`
+const stopDedicatedChromePowerShell = String.raw`
 $ErrorActionPreference = "SilentlyContinue"
 $userDataDir = [System.IO.Path]::GetFullPath(
-  $env:KAKOMONN_E2E_EDGE_USER_DATA_DIR
+  $env:KAKOMONN_E2E_CHROME_USER_DATA_DIR
 )
 $plainArgument = "--user-data-dir=$userDataDir"
 $quotedArgument = '--user-data-dir="' + $userDataDir + '"'
 $processes = @(
-  Get-CimInstance Win32_Process -Filter "Name = 'msedge.exe'" |
+  Get-CimInstance Win32_Process -Filter "Name = 'chrome.exe'" |
     Where-Object {
       $_.CommandLine -and (
         $_.CommandLine.Contains($plainArgument) -or
@@ -432,7 +408,7 @@ foreach ($process in $processes) {
 exit 0
 `;
 
-function stopDedicatedEdge(userDataDir, {
+function stopDedicatedChrome(userDataDir, {
   spawnSyncImpl = spawnSync,
   environment = process.env,
 } = {}) {
@@ -443,13 +419,13 @@ function stopDedicatedEdge(userDataDir, {
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      stopDedicatedEdgePowerShell,
+      stopDedicatedChromePowerShell,
     ],
     {
       encoding: "utf8",
       env: secretFreeEnvironment({
         ...environment,
-        KAKOMONN_E2E_EDGE_USER_DATA_DIR: userDataDir,
+        KAKOMONN_E2E_CHROME_USER_DATA_DIR: userDataDir,
       }),
       maxBuffer: 2 * 1024 * 1024,
       windowsHide: true,
@@ -459,25 +435,25 @@ function stopDedicatedEdge(userDataDir, {
     throw result.error;
   }
   if (result.status !== 0) {
-    throw new Error(`Failed to stop the dedicated Edge profile: ${result.stderr.trim()}`);
+    throw new Error(`Failed to stop the dedicated Chrome profile: ${result.stderr.trim()}`);
   }
 }
 
-function edgeExecutablePath(environment = process.env) {
-  const configured = environment.KAKOMONN_EDGE_EXECUTABLE ?? "";
+function chromeExecutablePath(environment = process.env) {
+  const configured = environment.KAKOMONN_CHROME_EXECUTABLE ?? "";
   if (configured !== "") {
     return path.resolve(configured);
   }
-  const programFilesX86 = environment["ProgramFiles(x86)"];
-  if (!programFilesX86) {
-    throw new Error("ProgramFiles(x86) is not set");
+  const programFiles = environment.ProgramFiles;
+  if (!programFiles) {
+    throw new Error("ProgramFiles is not set");
   }
   return path.join(
-    programFilesX86,
-    "Microsoft",
-    "Edge",
+    programFiles,
+    "Google",
+    "Chrome",
     "Application",
-    "msedge.exe",
+    "chrome.exe",
   );
 }
 
@@ -485,34 +461,41 @@ function locateTampermonkeyExtension(userDataDir, {
   existsSync = fs.existsSync,
   readdirSync = fs.readdirSync,
 } = {}) {
-  const extensionRoot = path.join(
+  const extensionsRoot = path.join(
     userDataDir,
     "Default",
     "Extensions",
-    TAMPERMONKEY_EXTENSION_ID,
   );
-  if (!existsSync(extensionRoot)) {
+  if (!existsSync(extensionsRoot)) {
     throw new Error(
-      "Tampermonkey must be installed in the dedicated Edge E2E profile",
+      "Tampermonkey must be installed in the dedicated Chrome E2E profile",
     );
   }
+  const extensionIds = readdirSync(extensionsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  if (!extensionIds.includes(TAMPERMONKEY_EXTENSION_ID)) {
+    throw new Error(
+      "Tampermonkey must be installed in the dedicated Chrome E2E profile",
+    );
+  }
+  const extensionRoot = path.join(extensionsRoot, TAMPERMONKEY_EXTENSION_ID);
   const versions = readdirSync(extensionRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort((left, right) => right.localeCompare(left, undefined, { numeric: true }));
   if (versions.length === 0) {
     throw new Error(
-      "Tampermonkey must be installed in the dedicated Edge E2E profile",
+      "Tampermonkey must be installed in the dedicated Chrome E2E profile",
     );
   }
   return path.join(extensionRoot, versions[0]);
 }
 
-function edgeLaunchArguments(userDataDir, extensionPath) {
+function chromeLaunchArguments(userDataDir) {
   return [
     `--user-data-dir=${userDataDir}`,
-    `--disable-extensions-except=${extensionPath}`,
-    `--load-extension=${extensionPath}`,
     "--remote-debugging-port=0",
     "--start-minimized",
     "--force-device-scale-factor=1",
@@ -553,29 +536,29 @@ async function waitForActivePort(activePortPath, browserProcess, timeoutMs = 30_
     }
     if (browserProcess.exitCode !== null) {
       throw new Error(
-        `Microsoft Edge exited before remote debugging started: ${browserProcess.exitCode}`,
+        `Google Chrome exited before remote debugging started: ${browserProcess.exitCode}`,
       );
     }
     await delay(100);
   }
-  throw new Error("Microsoft Edge remote debugging did not start");
+  throw new Error("Google Chrome remote debugging did not start");
 }
 
-async function launchDedicatedEdge({
+async function launchDedicatedChrome({
   environment = process.env,
-  userDataDir = readEdgeUserDataDir({ environment }),
+  userDataDir = readChromeUserDataDir({ environment }),
 } = {}) {
-  const executablePath = edgeExecutablePath(environment);
+  const executablePath = chromeExecutablePath(environment);
   if (!fs.existsSync(executablePath)) {
-    throw new Error(`Microsoft Edge was not found: ${executablePath}`);
+    throw new Error(`Google Chrome was not found: ${executablePath}`);
   }
-  const extensionPath = locateTampermonkeyExtension(userDataDir);
-  stopDedicatedEdge(userDataDir, { environment });
+  locateTampermonkeyExtension(userDataDir);
+  stopDedicatedChrome(userDataDir, { environment });
   const activePortPath = path.join(userDataDir, "DevToolsActivePort");
   fs.rmSync(activePortPath, { force: true });
   const browserProcess = spawn(
     executablePath,
-    edgeLaunchArguments(userDataDir, extensionPath),
+    chromeLaunchArguments(userDataDir),
     {
       env: secretFreeEnvironment(environment),
       stdio: "ignore",
@@ -585,7 +568,7 @@ async function launchDedicatedEdge({
   const port = await waitForActivePort(activePortPath, browserProcess);
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
   const contexts = browser.contexts();
-  assert.equal(contexts.length, 1, "The dedicated Edge profile must expose one context");
+  assert.equal(contexts.length, 1, "The dedicated Chrome profile must expose one context");
   let closed = false;
   return {
     browser,
@@ -612,7 +595,7 @@ async function launchDedicatedEdge({
         exited = await waitForProcessExit(browserProcess, 3_000);
       }
       if (!exited) {
-        stopDedicatedEdge(userDataDir, { environment });
+        stopDedicatedChrome(userDataDir, { environment });
       }
     },
   };
@@ -652,7 +635,7 @@ async function installUserscript(context, userscriptPath) {
   });
   if (userScriptsPermission !== "enabled") {
     throw new Error(
-      "Tampermonkey requires Allow User Scripts in the dedicated Edge profile",
+      "Tampermonkey requires Allow User Scripts in the dedicated Chrome profile",
     );
   }
   const configurationMode = settingsPage
@@ -867,23 +850,22 @@ module.exports = {
   TAMPERMONKEY_EXTENSION_ID,
   assertTokenShape,
   defaultChromeUserDataDir,
-  defaultEdgeE2EUserDataDir,
-  defaultEdgeUserDataDir,
+  defaultChromeE2EUserDataDir,
   discoverTampermonkeyStorageDirectories,
-  edgeLaunchArguments,
+  chromeLaunchArguments,
   extractSyncTokenCandidates,
   installUserscript,
   isSameOrDescendantPath,
-  launchDedicatedEdge,
+  launchDedicatedChrome,
   listProfileDirectories,
   locateTampermonkeyExtension,
   readConfiguredToken,
   readDirectoryBuffers,
-  readEdgeUserDataDir,
+  readChromeUserDataDir,
   resolveSyncToken,
   scanStoredSyncTokenCandidates,
   secretFreeEnvironment,
-  stopDedicatedEdgePowerShell,
+  stopDedicatedChromePowerShell,
   validateSyncToken,
   writeEnvToken,
 };

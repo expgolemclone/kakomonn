@@ -6,6 +6,10 @@ const { installSyncMock } = require("./sync_mock");
 
 const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
+const chromeUserAgent =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+  "AppleWebKit/537.36 (KHTML, like Gecko) " +
+  "Chrome/150.0.0.0 Safari/537.36";
 const fixedQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const fixedNextQuestionUrl = "https://chushoks.kakomonn.com/questions/86957";
 const randomScheduledQuestionUrl =
@@ -309,7 +313,7 @@ async function blockThirdPartyAds(context) {
 }
 
 async function runLiveCatalogCrawlCase(browser, script) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   await blockThirdPartyAds(context);
   const page = await context.newPage();
   const { pageErrorLocations, pageErrors } = collectPageErrors(page);
@@ -404,7 +408,7 @@ async function runCase(
     inputMethod = "click",
   },
 ) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   await blockThirdPartyAds(context);
   const page = await context.newPage();
   const { pageErrorLocations, pageErrors } = collectPageErrors(page);
@@ -606,7 +610,7 @@ async function runCase(
 }
 
 async function runRandomNavigationCase(browser, script) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   await blockThirdPartyAds(context);
   const page = await context.newPage();
   const { pageErrorLocations, pageErrors } = collectPageErrors(page);
@@ -811,6 +815,7 @@ async function runRandomNavigationCase(browser, script) {
 async function runMarkdownCopyCase(browser, script) {
   const context = await browser.newContext({
     permissions: ["clipboard-read", "clipboard-write"],
+    userAgent: chromeUserAgent,
   });
   await blockThirdPartyAds(context);
   const page = await context.newPage();
@@ -1037,6 +1042,7 @@ async function runMarkdownCopyCase(browser, script) {
 async function runReportedCopyCase(browser, script) {
   const context = await browser.newContext({
     permissions: ["clipboard-read", "clipboard-write"],
+    userAgent: chromeUserAgent,
   });
   await blockThirdPartyAds(context);
   const page = await context.newPage();
@@ -1116,7 +1122,7 @@ async function runReportedCopyCase(browser, script) {
 }
 
 async function runImageChoiceInversionCase(browser, script) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
   await blockThirdPartyAds(context);
   const page = await context.newPage();
   const { pageErrorLocations, pageErrors } = collectPageErrors(page);
@@ -1159,7 +1165,7 @@ async function runImageChoiceInversionCase(browser, script) {
 
 async function runCrossDomainActivationCase(browser, script) {
   for (const questionURL of crossDomainQuestionUrls) {
-    const context = await browser.newContext();
+    const context = await browser.newContext({ userAgent: chromeUserAgent });
     await blockThirdPartyAds(context);
     const page = await context.newPage();
     const { pageErrorLocations, pageErrors } = collectPageErrors(page);

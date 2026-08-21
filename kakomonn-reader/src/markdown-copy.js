@@ -400,12 +400,6 @@
       return;
     }
 
-    if (!clipboardAPIAvailable()) {
-      copyButton.textContent = "コピー非対応";
-      copyButton.disabled = true;
-      return;
-    }
-
     if (
       navigationInProgress ||
       !frameDocument?.body ||

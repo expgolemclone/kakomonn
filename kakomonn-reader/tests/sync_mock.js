@@ -19,7 +19,6 @@ function installSyncMockInWindow({
   initialPendingAttempt,
   initialPendingCelebration,
   initialProcessedOperations,
-  returnsPromise,
   tokenKey,
   pendingAttemptKey,
   pendingCelebrationKey,
@@ -67,6 +66,7 @@ function installSyncMockInWindow({
     token: expectedToken,
     calls: [],
     failNextRequest: false,
+    timeoutNextRequest: false,
     failNextSetValue: false,
     failNextDeleteValue: false,
     holdNextSetValue: false,
@@ -104,6 +104,7 @@ function installSyncMockInWindow({
   });
 
   window.__syncMock = mock;
+  window.GM_info = { scriptHandler: "Tampermonkey" };
   window.GM = {
     async setClipboard(value) {
       if (window.__clipboardWriteFails) throw new Error("mock clipboard write failed");
@@ -139,19 +140,16 @@ function installSyncMockInWindow({
       values.delete(key);
     },
     xmlHttpRequest(details) {
-      let resolveRequest = null;
-      let rejectRequest = null;
-      const requestPromise = returnsPromise
-        ? new Promise((resolve, reject) => {
-            resolveRequest = resolve;
-            rejectRequest = reject;
-          })
-        : null;
+      let resolveRequest;
+      let rejectRequest;
+      const requestPromise = new Promise((resolve, reject) => {
+        resolveRequest = resolve;
+        rejectRequest = reject;
+      });
       const respondJSON = (status, body) => {
         window.setTimeout(() => {
           const response = { status, responseText: JSON.stringify(body) };
-          details.onload?.(response);
-          resolveRequest?.(response);
+          resolveRequest(response);
         }, 0);
       };
       const respondAudio = () => {
@@ -161,14 +159,18 @@ function installSyncMockInWindow({
             response: new Uint8Array([0x49, 0x44, 0x33, 0x04]).buffer,
             responseHeaders: "content-type: audio/mpeg",
           };
-          details.onload?.(response);
-          resolveRequest?.(response);
+          resolveRequest(response);
         }, 0);
       };
       const failRequest = () => {
         const error = new Error("mock request failed");
         details.onerror?.({});
-        rejectRequest?.(error);
+        rejectRequest(error);
+      };
+      const timeoutRequest = () => {
+        const error = new Error("mock request timed out");
+        details.ontimeout?.({});
+        rejectRequest(error);
       };
       const contentType = details.headers?.["Content-Type"] ?? "";
       const call = {
@@ -189,6 +191,11 @@ function installSyncMockInWindow({
         if (mock.failNextRequest) {
           mock.failNextRequest = false;
           failRequest();
+          return;
+        }
+        if (mock.timeoutNextRequest) {
+          mock.timeoutNextRequest = false;
+          timeoutRequest();
           return;
         }
         const requestURL = new URL(call.url);
@@ -381,11 +388,12 @@ function installSyncMockInWindow({
       } else {
         window.setTimeout(executeRequest, 0);
       }
-      if (requestPromise !== null) {
-        requestPromise.abort = () => {};
-        return requestPromise;
-      }
-      return { abort() {} };
+      requestPromise.abort = () => {
+        const error = new Error("mock request aborted");
+        details.onabort?.({});
+        rejectRequest(error);
+      };
+      return requestPromise;
     },
   };
   window.__getGMValue = (key) =>
@@ -403,7 +411,6 @@ function createSyncMockConfiguration({
   pendingAttempt = null,
   pendingCelebration = null,
   processedOperations = [],
-  userscriptsPromise = false,
   systemClipboard = false,
   site = SITE,
   nextQuestionId = "45125",
@@ -422,7 +429,6 @@ function createSyncMockConfiguration({
     initialPendingAttempt: pendingAttempt,
     initialPendingCelebration: pendingCelebration,
     initialProcessedOperations: processedOperations,
-    returnsPromise: userscriptsPromise,
     tokenKey: SYNC_TOKEN_KEY,
     pendingAttemptKey: `kakomonn-reader.${site}.v7.pending-attempt`,
     pendingCelebrationKey: `kakomonn-reader.${site}.v7.pending-celebration`,

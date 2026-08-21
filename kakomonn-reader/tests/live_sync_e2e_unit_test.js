@@ -8,40 +8,55 @@ const {
 } = require("./live_sync_e2e_test");
 const {
   SYNC_TOKEN_KEY,
-  edgeLaunchArguments,
+  TAMPERMONKEY_EXTENSION_ID,
+  chromeLaunchArguments,
+  discoverTampermonkeyStorageDirectories,
   extractSyncTokenCandidates,
+  locateTampermonkeyExtension,
   readConfiguredToken,
-  readEdgeUserDataDir,
+  readChromeUserDataDir,
   resolveSyncToken,
   secretFreeEnvironment,
-  stopDedicatedEdgePowerShell,
+  stopDedicatedChromePowerShell,
   writeEnvToken,
-} = require("./support/edge_tampermonkey");
+} = require("./support/chrome_tampermonkey");
 
 const fingerprint = "a".repeat(64);
 const validRuntime = {
   buildFingerprint: fingerprint,
   scriptHandler: "Tampermonkey",
   userAgent:
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36",
 };
 
-test("accepts the exact Edge, Tampermonkey, and build identity", () => {
+test("accepts the exact Chrome, Tampermonkey, and build identity", () => {
   assert.doesNotThrow(() => assertRuntimeIdentity(validRuntime, fingerprint));
 });
 
-test("rejects a non-Edge browser runtime", () => {
+test("rejects Edge and non-Windows browser runtimes", () => {
   assert.throws(
     () =>
       assertRuntimeIdentity(
         {
           ...validRuntime,
           userAgent:
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/151.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0",
         },
         fingerprint,
       ),
-    /must be Microsoft Edge/,
+    /must not be Microsoft Edge/,
+  );
+  assert.throws(
+    () =>
+      assertRuntimeIdentity(
+        {
+          ...validRuntime,
+          userAgent:
+            "Mozilla/5.0 (X11; Linux x86_64) Chrome/151.0.0.0 Safari/537.36",
+        },
+        fingerprint,
+      ),
+    /must run on Windows/,
   );
 });
 
@@ -129,6 +144,73 @@ test("extracts only 64-character hexadecimal candidates from relevant storage", 
   );
 });
 
+test("discovers token storage only in dedicated and standard Chrome profiles", () => {
+  const localAppData = "C:\\Users\\tester\\AppData\\Local";
+  const dedicated = path.win32.join(localAppData, "kakomonn-chrome-e2e");
+  const standard = path.win32.join(
+    localAppData,
+    "Google",
+    "Chrome",
+    "User Data",
+  );
+  const roots = [];
+  const directories = discoverTampermonkeyStorageDirectories({
+    dedicatedUserDataDir: dedicated,
+    environment: { LOCALAPPDATA: localAppData },
+    existsSync: () => true,
+    platform: "win32",
+    readdirSync: (directory) => {
+      roots.push(directory);
+      return [{ isDirectory: () => true, name: "Default" }];
+    },
+  });
+  assert.deepEqual(roots, [dedicated, standard]);
+  assert.deepEqual(
+    directories,
+    [dedicated, standard].map((root) =>
+      path.win32.join(
+        root,
+        "Default",
+        "Local Extension Settings",
+        TAMPERMONKEY_EXTENSION_ID,
+      ),
+    ),
+  );
+});
+
+test("locates Tampermonkey when the dedicated profile has other extensions", () => {
+  const userDataDir = "C:\\profiles\\kakomonn-chrome-e2e";
+  const extensionsRoot = path.win32.join(
+    userDataDir,
+    "Default",
+    "Extensions",
+  );
+  const tampermonkeyRoot = path.win32.join(
+    extensionsRoot,
+    TAMPERMONKEY_EXTENSION_ID,
+  );
+  const entry = (name) => ({ isDirectory: () => true, name });
+  assert.equal(
+    locateTampermonkeyExtension(userDataDir, {
+      existsSync: () => true,
+      readdirSync: (directory) =>
+        directory === extensionsRoot
+          ? [entry(TAMPERMONKEY_EXTENSION_ID), entry("other-extension")]
+          : [entry("5.4.1_0")],
+    }),
+    path.win32.join(tampermonkeyRoot, "5.4.1_0"),
+  );
+  assert.throws(() =>
+    locateTampermonkeyExtension(userDataDir, {
+      existsSync: () => true,
+      readdirSync: (directory) =>
+        directory === extensionsRoot
+          ? [entry("other-extension")]
+          : [entry("5.4.1_0")],
+    }),
+  );
+});
+
 test("validates a configured token without scanning browser storage", async () => {
   const token = "f".repeat(64);
   let scanned = false;
@@ -182,12 +264,12 @@ test("saves the one production-valid browser token", async () => {
       readDedicatedUserDataDir: () => "dedicated-profile",
       discoverStorageDirectories: ({ dedicatedUserDataDir }) => {
         assert.equal(dedicatedUserDataDir, "dedicated-profile");
-        return ["edge-storage", "chrome-storage"];
+        return ["dedicated-chrome-storage", "standard-chrome-storage"];
       },
       scanCandidates: ({ storageDirectories }) => {
         assert.deepEqual(storageDirectories, [
-          "edge-storage",
-          "chrome-storage",
+          "dedicated-chrome-storage",
+          "standard-chrome-storage",
         ]);
         return new Set([invalidToken, validToken]);
       },
@@ -253,19 +335,19 @@ test("updates only the token assignment in the ignored env file", () => {
   );
 });
 
-test("defaults to the dedicated Edge E2E profile", () => {
+test("defaults to the dedicated Chrome E2E profile", () => {
   const localAppData = "C:\\Users\\tester\\AppData\\Local";
   assert.equal(
-    readEdgeUserDataDir({
+    readChromeUserDataDir({
       environment: { LOCALAPPDATA: localAppData },
       existsSync: () => true,
       platform: "win32",
     }),
-    path.win32.join(localAppData, "kakomonn-edge-e2e"),
+    path.win32.join(localAppData, "kakomonn-chrome-e2e"),
   );
 });
 
-test("reads the Edge E2E profile from the ignored env file", () => {
+test("reads the Chrome E2E profile from the ignored env file", () => {
   const localAppData = "C:\\Users\\tester\\AppData\\Local";
   const envFilePath = "C:\\workspace\\kakomonn\\.env";
   const envProfile = "C:\\profiles\\from-env-file";
@@ -275,20 +357,20 @@ test("reads the Edge E2E profile from the ignored env file", () => {
     existsSync: () => true,
     platform: "win32",
     readFileSync: () =>
-      `OTHER=value\nKAKOMONN_EDGE_USER_DATA_DIR="${envProfile}"\n`,
+      `OTHER=value\nKAKOMONN_CHROME_USER_DATA_DIR="${envProfile}"\n`,
   };
   assert.equal(
-    readEdgeUserDataDir({
+    readChromeUserDataDir({
       ...readOptions,
       environment: { LOCALAPPDATA: localAppData },
     }),
     envProfile,
   );
   assert.equal(
-    readEdgeUserDataDir({
+    readChromeUserDataDir({
       ...readOptions,
       environment: {
-        KAKOMONN_EDGE_USER_DATA_DIR: processProfile,
+        KAKOMONN_CHROME_USER_DATA_DIR: processProfile,
         LOCALAPPDATA: localAppData,
       },
     }),
@@ -296,31 +378,31 @@ test("reads the Edge E2E profile from the ignored env file", () => {
   );
 });
 
-test("rejects the standard Edge profile and accepts an explicit dedicated profile", () => {
+test("rejects the standard Chrome profile and accepts an explicit dedicated profile", () => {
   const localAppData = "C:\\Users\\tester\\AppData\\Local";
   const standard = path.win32.join(
     localAppData,
-    "Microsoft",
-    "Edge",
+    "Google",
+    "Chrome",
     "User Data",
   );
   assert.throws(
     () =>
-      readEdgeUserDataDir({
+      readChromeUserDataDir({
         environment: {
-          KAKOMONN_EDGE_USER_DATA_DIR: path.win32.join(standard, "Default"),
+          KAKOMONN_CHROME_USER_DATA_DIR: path.win32.join(standard, "Default"),
           LOCALAPPDATA: localAppData,
         },
         existsSync: () => true,
         platform: "win32",
       }),
-    /must be outside the standard Edge user data directory/,
+    /must be outside the standard Chrome user data directory/,
   );
-  const dedicated = path.win32.join(localAppData, "kakomonn-edge-e2e");
+  const dedicated = path.win32.join(localAppData, "kakomonn-chrome-e2e");
   assert.equal(
-    readEdgeUserDataDir({
+    readChromeUserDataDir({
       environment: {
-        KAKOMONN_EDGE_USER_DATA_DIR: dedicated,
+        KAKOMONN_CHROME_USER_DATA_DIR: dedicated,
         LOCALAPPDATA: localAppData,
       },
       existsSync: () => true,
@@ -330,19 +412,17 @@ test("rejects the standard Edge profile and accepts an explicit dedicated profil
   );
 });
 
-test("launches the dedicated Edge profile minimized", () => {
-  const extensionPath = "C:\\profiles\\tampermonkey";
-  const args = edgeLaunchArguments(
-    "C:\\profiles\\kakomonn-edge-e2e",
-    extensionPath,
-  );
+test("launches the dedicated Chrome profile minimized", () => {
+  const args = chromeLaunchArguments("C:\\profiles\\kakomonn-chrome-e2e");
   assert.equal(args.includes("--start-minimized"), true);
   assert.equal(args.some((argument) => argument.startsWith("--headless")), false);
   assert.equal(args.includes("--remote-debugging-port=0"), true);
-  assert.equal(args.includes(`--load-extension=${extensionPath}`), true);
-  assert.equal(args.includes(`--disable-extensions-except=${extensionPath}`), true);
-  assert.equal(args.some((argument) => argument.startsWith("edge://")), false);
-  assert.doesNotMatch(stopDedicatedEdgePowerShell, /UIAutomation|許可/);
+  assert.equal(args.some((argument) => argument.startsWith("--load-extension")), false);
+  assert.equal(
+    args.some((argument) => argument.startsWith("--disable-extensions-except")),
+    false,
+  );
+  assert.doesNotMatch(stopDedicatedChromePowerShell, /UIAutomation|許可/);
 });
 
 test("does not pass the production token to browser subprocesses", () => {

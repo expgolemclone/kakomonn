@@ -13,7 +13,7 @@ const {
 
 const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
-const edgeUserAgent =
+const windowsEdgeUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) " +
   "Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0";
@@ -24,6 +24,13 @@ const chromeUserAgent =
 const iosUserAgent =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 " +
+  "Mobile/15E148 Safari/604.1";
+const windowsFirefoxUserAgent =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) " +
+  "Gecko/20100101 Firefox/141.0";
+const iosChromeUserAgent =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) " +
+  "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/150.0.0.0 " +
   "Mobile/15E148 Safari/604.1";
 const azureSpeechUrl =
   "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
@@ -362,6 +369,47 @@ async function loadMockQuestion(page, script) {
   return childFrame;
 }
 
+async function assertRuntimeRejected(
+  browser,
+  script,
+  {
+    userAgent,
+    scriptHandler = "Tampermonkey",
+    missingAPI = null,
+  },
+) {
+  const context = await browser.newContext({ userAgent });
+  const page = await context.newPage();
+  const errors = await preparePage(page, "audio");
+  await page.evaluate(
+    ({ handler, missing }) => {
+      if (missing === "GM") {
+        window.GM = undefined;
+      } else if (missing === "GM_info") {
+        window.GM_info = undefined;
+      } else if (missing !== null) {
+        delete window.GM[missing];
+      }
+      if (missing !== "GM_info") {
+        window.GM_info = { scriptHandler: handler };
+      }
+    },
+    { handler: scriptHandler, missing: missingAPI },
+  );
+  await page.addScriptTag({ content: script });
+  assert.equal(await page.locator("#kakomonn-reader-shell").count(), 0);
+  assert.equal(await page.locator("style").count(), 0);
+  assert.deepEqual(
+    await page.evaluate(() => ({
+      calls: window.__syncMock.calls.length,
+      clipboardWrites: window.__syncMock.clipboardWrites.length,
+    })),
+    { calls: 0, clipboardWrites: 0 },
+  );
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
 async function markAnswerCorrect(childFrame) {
   await childFrame.evaluate(() => {
     document.querySelector("#correct-result").hidden = false;
@@ -462,7 +510,7 @@ async function main() {
 
   const browser = await chromium.launch({ headless: true });
   try {
-    const context = await browser.newContext({ userAgent: edgeUserAgent });
+    const context = await browser.newContext({ userAgent: chromeUserAgent });
     const page = await context.newPage();
     const errors = await preparePage(page, "audio");
     const childFrame = await loadMockQuestion(page, script);
@@ -1023,12 +1071,9 @@ async function main() {
     assert.equal(await speechTokenCallCount(page), 1);
 
     await page.evaluate(() => {
-      window.__syncMock.holdNextRequest = true;
+      window.__syncMock.timeoutNextRequest = true;
       window.dispatchEvent(new Event("focus"));
     });
-    await page.waitForFunction(
-      () => window.__syncMock.releaseHeldRequest !== null,
-    );
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
@@ -1044,10 +1089,7 @@ async function main() {
       await page.locator("#kakomonn-reader-next").isDisabled(),
       false,
     );
-    await page.evaluate(() => {
-      window.__syncMock.releaseHeldRequest();
-      window.dispatchEvent(new Event("focus"));
-    });
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-next").textContent ===
@@ -1482,23 +1524,22 @@ async function main() {
     assert.equal(await speechTokenCallCount(unsupportedPage), 0);
     assert.deepEqual(unsupportedErrors, []);
 
-    const chromeContext = await browser.newContext({
-      userAgent: chromeUserAgent,
-    });
-    const chromePage = await chromeContext.newPage();
-    const chromeErrors = await preparePage(chromePage, "audio");
-    await chromePage.addScriptTag({ content: script });
-    await chromePage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "読み上げ非対応",
-    );
-    assert.equal(
-      await chromePage.locator("#kakomonn-reader-start").count(),
-      0,
-    );
-    assert.deepEqual(chromeErrors, []);
-    await chromeContext.close();
+    const rejectedRuntimeCases = [
+      { userAgent: windowsEdgeUserAgent },
+      { userAgent: windowsFirefoxUserAgent },
+      { userAgent: iosChromeUserAgent },
+      { userAgent: chromeUserAgent, scriptHandler: "Userscripts" },
+      { userAgent: chromeUserAgent, missingAPI: "GM" },
+      { userAgent: chromeUserAgent, missingAPI: "GM_info" },
+      { userAgent: chromeUserAgent, missingAPI: "getValue" },
+      { userAgent: chromeUserAgent, missingAPI: "setValue" },
+      { userAgent: chromeUserAgent, missingAPI: "deleteValue" },
+      { userAgent: chromeUserAgent, missingAPI: "xmlHttpRequest" },
+      { userAgent: chromeUserAgent, missingAPI: "setClipboard" },
+    ];
+    for (const runtimeCase of rejectedRuntimeCases) {
+      await assertRuntimeRejected(browser, script, runtimeCase);
+    }
 
     const iosContext = await browser.newContext({
       userAgent: iosUserAgent,
@@ -1508,9 +1549,7 @@ async function main() {
       isMobile: true,
     });
     const iosPage = await iosContext.newPage();
-    const iosErrors = await preparePage(iosPage, "audio", {
-      userscriptsPromise: true,
-    });
+    const iosErrors = await preparePage(iosPage, "audio");
     const iosFrame = await loadMockQuestion(iosPage, script);
     await iosPage.waitForFunction(
       () =>

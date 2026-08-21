@@ -8,6 +8,8 @@ export const KAKOMONN_ORIGIN = `https://${KAKOMONN_SITE}`;
 export const SYNC_API_ORIGIN = "https://kakomonn-sync.kakomonn.workers.dev";
 export const CHROME_AUTOPLAY_ARGUMENT =
   "--autoplay-policy=no-user-gesture-required";
+export const CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT =
+  "--hide-crash-restore-bubble";
 
 function validatedQuestionURL(candidateURL) {
   if (typeof candidateURL !== "string") {
@@ -144,6 +146,7 @@ export function resolveKakomonnLaunch({
   return {
     arguments: [
       `--user-data-dir=${userDataDir}`,
+      CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT,
       CHROME_AUTOPLAY_ARGUMENT,
       validatedURL,
     ],

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   CHROME_AUTOPLAY_ARGUMENT,
+  CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT,
   KAKOMONN_SITE,
   KAKOMONN_ORIGIN,
   SYNC_API_ORIGIN,
@@ -86,6 +87,7 @@ test("resolves the dedicated Chrome profile and scheduled URL", () => {
   assert.deepEqual(launch, {
     arguments: [
       `--user-data-dir=${PROFILE_PATH}`,
+      CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT,
       CHROME_AUTOPLAY_ARGUMENT,
       QUESTION_URL,
     ],
@@ -118,6 +120,7 @@ test("opens the scheduled question detached without passing the sync token", asy
   assert.equal(calls[0][0], CHROME_PATH);
   assert.deepEqual(calls[0][1], [
     `--user-data-dir=${PROFILE_PATH}`,
+    CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT,
     CHROME_AUTOPLAY_ARGUMENT,
     QUESTION_URL,
   ]);

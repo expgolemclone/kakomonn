@@ -19,10 +19,6 @@ import {
   DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL,
   initializeLearningSchema,
 } from "./storage/schema.js";
-import {
-  applyQuestionHistoryRepair,
-  previewQuestionHistoryRepair,
-} from "./repair-question-history.js";
 
 export { initializeLearningSchema } from "./storage/schema.js";
 
@@ -373,21 +369,6 @@ export class LearningState extends DurableObject {
       initializeLearningSchema(this.ctx.storage);
       await this.ctx.storage.delete(LEGACY_SETTINGS_STORAGE_KEY);
     });
-  }
-
-  previewQuestionHistoryRepair() {
-    return this.ctx.storage.transactionSync(() =>
-      previewQuestionHistoryRepair(this.ctx.storage)
-    );
-  }
-
-  applyQuestionHistoryRepair(expectedDigest, nowMs = Date.now()) {
-    if (typeof expectedDigest !== "string" || !Number.isSafeInteger(nowMs)) {
-      throw new TypeError("invalid question history repair");
-    }
-    return this.ctx.storage.transactionSync(() =>
-      applyQuestionHistoryRepair(this.ctx.storage, expectedDigest, nowMs)
-    );
   }
 
   recordAttempt(site, questionId, operationId, answerResult, nowMs = Date.now()) {

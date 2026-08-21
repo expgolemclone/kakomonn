@@ -19,7 +19,3 @@ export function createNewCard(nowMs) {
 export function scheduleAnswer(card, result, nowMs) {
   return scheduler.next(card, new Date(nowMs), ratingForResult(result)).card;
 }
-
-export function scheduleRating(card, rating, nowMs) {
-  return scheduler.next(card, new Date(nowMs), rating).card;
-}

@@ -8,7 +8,6 @@ import { handleDailyDetails } from "./api/daily-details.js";
 import { handleNext } from "./api/next.js";
 import { handleQuestions } from "./api/questions.js";
 import { handleSettings } from "./api/settings.js";
-import { handleMaintenanceRepair } from "./api/maintenance-repair.js";
 import { issueSpeechToken } from "./speech.js";
 
 export { LearningState, issueSpeechToken };
@@ -27,7 +26,6 @@ export async function handleRequest(request, env, fetcher = fetch) {
     ["/questions", ["POST"]],
     ["/settings", ["GET", "PUT"]],
     ["/speech-token", ["POST"]],
-    ["/maintenance/repair-86956", ["GET", "POST"]],
   ]);
   if (!url.pathname.startsWith("/v7/")) {
     return errorResponse("not_found", 404);
@@ -76,9 +74,6 @@ export async function handleRequest(request, env, fetcher = fetch) {
       return errorResponse("invalid_request", 400);
     }
     return issueSpeechToken(env, fetcher);
-  }
-  if (route === "/maintenance/repair-86956") {
-    return handleMaintenanceRepair(request, url, env);
   }
   if (url.search !== "") {
     return errorResponse("invalid_request", 400);

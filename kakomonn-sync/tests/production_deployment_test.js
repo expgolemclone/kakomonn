@@ -129,7 +129,7 @@ test("production serves only the authenticated v7 API backed by LearningState", 
   assert.equal(dashboardBody.selectedSite, site);
   assert.equal(dashboardBody.state.site, site);
   assert.equal(dashboardBody.history.site, site);
-  assert.equal(dashboardBody.history.days.length, 7);
+  assert.equal(dashboardBody.history.days.length, 31);
   assert.equal(dashboardBody.settings.site, site);
 
   const settingsResponse = await authorizedGet(

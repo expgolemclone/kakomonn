@@ -1297,13 +1297,15 @@ describe("v7 HTTP contract", () => {
       { headers: AUTHORIZATION }
     );
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    const dashboardBody = await response.json();
+    expect(dashboardBody).toMatchObject({
       sites: [SITE],
       selectedSite: SITE,
       state: { site: SITE, learningMetrics: { stabilityDays: 0 } },
       history: { site: SITE, days: expect.any(Array) },
       settings: { site: SITE, dailyStabilityDaysDeltaGoal: 30 },
     });
+    expect(dashboardBody.history.days).toHaveLength(31);
 
     const selectedDefault = await SELF.fetch(
       "https://example.test/v7/dashboard",

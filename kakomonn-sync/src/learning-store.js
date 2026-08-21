@@ -944,7 +944,7 @@ export class LearningState extends DurableObject {
       sites,
       selectedSite,
       state: this.getState(selectedSite, nowMs),
-      history: this.getHistory(selectedSite, 7, nowMs),
+      history: this.getHistory(selectedSite, 31, nowMs),
       settings: this.getSettings(selectedSite),
     };
   }

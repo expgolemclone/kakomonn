@@ -9,12 +9,16 @@ const site = "chushoks.kakomonn.com";
 const otherSite = "shindans.kakomonn.com";
 const attemptedQuestionCountHistory = [18, 22, 19, 26, 31, 24, 28];
 const deltaHistory = [null, 112, -14, 0, 138, 106, 104];
-const history = [null, 9307, 9412, 9550, 9688, 9794, 9912].map((closingStabilityDays, index) => ({
-  date: `2026-08-${String(index + 4).padStart(2, "0")}`,
-  closingStabilityDays,
-  stabilityDaysDelta: deltaHistory[index],
-  dailyAttemptedQuestionCount: attemptedQuestionCountHistory[index],
-}));
+const closingStabilityDaysHistory = [null, 9307, 9412, 9550, 9688, 9794, 9912];
+const history = Array.from({ length: 31 }, (_, index) => {
+  const currentWeekIndex = index - 24;
+  return {
+    date: new Date(Date.UTC(2026, 7, 10 - (30 - index))).toISOString().slice(0, 10),
+    closingStabilityDays: currentWeekIndex < 0 ? null : closingStabilityDaysHistory[currentWeekIndex],
+    stabilityDaysDelta: currentWeekIndex < 0 ? null : deltaHistory[currentWeekIndex],
+    dailyAttemptedQuestionCount: currentWeekIndex < 0 ? 0 : attemptedQuestionCountHistory[currentWeekIndex],
+  };
+});
 const dailyDetails = {
   site,
   date: "2026-08-10",
@@ -190,8 +194,8 @@ async function assertDashboard(page) {
   assert.equal(await page.locator("#today-attempted-question-count").innerText(), "28");
   assert.equal(await page.locator("#goal-label, #goal-progress, .stability-card, .stability-meta").count(), 0);
   assert.equal(await page.locator("#dashboard *").evaluateAll((elements) => elements.filter((element) => element.childElementCount === 0 && element.textContent.trim() === "+104" && element.getClientRects().length > 0).length), 1);
-  assert.equal(await page.locator("#history-title").innerText(), "stabilityDaysDeltaの7日推移");
-  assert.equal(await page.locator("#stability-chart .chart-day").count(), 7);
+  assert.equal(await page.locator("#history-title").innerText(), "stabilityDaysDeltaの31日推移");
+  assert.equal(await page.locator("#stability-chart .chart-day").count(), 31);
   assert.equal(await page.locator("#stability-chart rect.delta-bar").count(), 6);
   assert.equal(await page.locator("#stability-chart rect.delta-bar.negative").count(), 1);
   assert.equal(await page.locator("#stability-chart rect.delta-bar.zero").count(), 1);
@@ -199,9 +203,22 @@ async function assertDashboard(page) {
   assert.equal(await page.locator('[data-chart-date="2026-08-10"] .delta-value-label').count(), 0);
   assert.equal(await page.locator('[data-chart-date="2026-08-09"] .delta-value-label').textContent(), "+106");
   assert.match(await page.locator('[data-chart-date="2026-08-10"]').getAttribute("aria-label"), /stabilityDaysDelta \+104日/);
-  assert.equal((await page.locator("#stability-chart .delta-axis-label").count()) >= 2, true);
+  assert.equal((await page.locator("#stability-chart-axis .delta-axis-label").count()) >= 2, true);
   assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-04, stabilityDaysDelta 記録なし/);
   assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-10, stabilityDaysDelta \+104日/);
+  await page.waitForFunction(() => {
+    const scroller = document.querySelector("#history-scroll");
+    return scroller !== null && scroller.scrollWidth > scroller.clientWidth && Math.abs(scroller.scrollLeft - (scroller.scrollWidth - scroller.clientWidth)) <= 1;
+  });
+  assert.equal(await page.locator("#history-scroll").getAttribute("tabindex"), "0");
+  assert.match(await page.locator("#history-scroll").getAttribute("aria-label"), /左右にスワイプまたはスクロール/);
+  await page.locator("#history-scroll").evaluate((scroller) => { scroller.scrollLeft = 0; });
+  assert.equal(await page.locator('[data-chart-date="2026-07-11"]').evaluate((day) => {
+    const dayRect = day.getBoundingClientRect();
+    const scrollRect = day.closest("#history-scroll").getBoundingClientRect();
+    return dayRect.left >= scrollRect.left - 1 && dayRect.right <= scrollRect.right + 1;
+  }), true);
+  await page.locator("#history-scroll").evaluate((scroller) => { scroller.scrollLeft = scroller.scrollWidth; });
   assert.equal(await page.locator("#daily-details-instruction").isVisible(), true);
   assert.equal(await page.locator("#daily-details-tables").isHidden(), true);
 

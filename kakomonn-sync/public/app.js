@@ -2,6 +2,10 @@ const TOKEN_KEY = "kakomonn-dashboard.sync-token";
 const SITE_KEY = "kakomonn-dashboard.site";
 const API_TIMEOUT_MS = 15000;
 const SVG_NS = "http://www.w3.org/2000/svg";
+const DASHBOARD_HISTORY_DAYS = 31;
+const CHART_DAY_WIDTH = 88;
+const CHART_RIGHT_PADDING = 24;
+const CHART_HEIGHT = 270;
 
 const byId = (id) => {
   const element = document.getElementById(id);
@@ -13,7 +17,7 @@ const el = {
   authPanel: byId("auth-panel"), authForm: byId("auth-form"), authToken: byId("auth-token"), authMessage: byId("auth-message"),
   dashboard: byId("dashboard"), siteEmpty: byId("site-empty"), loadError: byId("load-error"), errorMessage: byId("error-message"), retryButton: byId("retry-button"),
   settingsButton: byId("settings-button"), settingsDialog: byId("settings-dialog"), settingsForm: byId("settings-form"), settingsToken: byId("settings-token"), settingsMessage: byId("settings-message"), settingsClose: byId("settings-close"), forgetToken: byId("forget-token"),
-  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), todayStabilityDaysDeltaElement: byId("today-stability-days-delta"), dailyStabilityDaysDeltaGoalInput: byId("daily-goal"), saveGoal: byId("save-goal"), stabilityDaysElement: byId("stability-days"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
+  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), todayStabilityDaysDeltaElement: byId("today-stability-days-delta"), dailyStabilityDaysDeltaGoalInput: byId("daily-goal"), saveGoal: byId("save-goal"), stabilityDaysElement: byId("stability-days"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), stabilityChartAxis: byId("stability-chart-axis"), historyScroll: byId("history-scroll"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
   dailyDetails: byId("daily-details"), dailyDetailsDate: byId("daily-details-date"), dailyDetailsInstruction: byId("daily-details-instruction"), dailyDetailsStatus: byId("daily-details-status"), dailyDetailsTables: byId("daily-details-tables"), stabilityHistoryTable: byId("stability-history-table"), attemptsTable: byId("attempts-table"),
 };
 
@@ -49,7 +53,7 @@ function validState(value, site) {
   return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && validLearningMetrics(value.learningMetrics);
 }
 function validHistory(value, site) {
-  return value && value.site === site && Array.isArray(value.days) && value.days.length === 7 && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && (day.closingStabilityDays === null || (Number.isSafeInteger(day.closingStabilityDays) && day.closingStabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.dailyAttemptedQuestionCount) && day.dailyAttemptedQuestionCount >= 0);
+  return value && value.site === site && Array.isArray(value.days) && value.days.length === DASHBOARD_HISTORY_DAYS && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && (day.closingStabilityDays === null || (Number.isSafeInteger(day.closingStabilityDays) && day.closingStabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.dailyAttemptedQuestionCount) && day.dailyAttemptedQuestionCount >= 0);
 }
 function validSettings(value, site) {
   return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 2 && value.site === site && Number.isSafeInteger(value.dailyStabilityDaysDeltaGoal) && value.dailyStabilityDaysDeltaGoal >= 1;
@@ -122,15 +126,25 @@ function chartY(axis, value, top, bottom) {
   return bottom - ((value - axis.minimum) / (axis.maximum - axis.minimum)) * (bottom - top);
 }
 
-function renderAxis(axis, left, right, top, bottom) {
+function renderAxis(axis, top, bottom) {
+  el.stabilityChartAxis.replaceChildren();
   const divisions = Math.round((axis.maximum - axis.minimum) / axis.step);
   for (let index = 0; index <= divisions; index += 1) {
     const value = axis.minimum + axis.step * index;
     const yy = chartY(axis, value, top, bottom);
-    el.stabilityChart.append(
-      svgNode("line", { x1: left, y1: yy, x2: right, y2: yy, class: value === 0 ? "zero-line" : "grid-line" }),
-      svgNode("text", { x: left - 10, y: yy + 4, class: "axis-label delta-axis-label", "text-anchor": "end" }, signed(value))
+    el.stabilityChartAxis.append(
+      svgNode("line", { x1: 52, y1: yy, x2: 62, y2: yy, class: value === 0 ? "zero-line" : "grid-line" }),
+      svgNode("text", { x: 48, y: yy + 4, class: "axis-label delta-axis-label", "text-anchor": "end" }, signed(value))
     );
+  }
+}
+
+function renderGrid(axis, right, top, bottom) {
+  const divisions = Math.round((axis.maximum - axis.minimum) / axis.step);
+  for (let index = 0; index <= divisions; index += 1) {
+    const value = axis.minimum + axis.step * index;
+    const yy = chartY(axis, value, top, bottom);
+    el.stabilityChart.append(svgNode("line", { x1: 0, y1: yy, x2: right, y2: yy, class: value === 0 ? "zero-line" : "grid-line" }));
   }
 }
 
@@ -138,18 +152,22 @@ function renderChart(days) {
   el.stabilityChart.replaceChildren();
   const values = days.map((day) => day.stabilityDaysDelta).filter((value) => value !== null);
   const axis = signedAxis(values);
-  const left = 62, right = 676, top = 26, bottom = 218;
-  const bandWidth = (right - left) / days.length;
+  const left = 0, right = CHART_DAY_WIDTH * days.length, top = 26, bottom = 218;
+  const chartWidth = right + CHART_RIGHT_PADDING;
+  const bandWidth = CHART_DAY_WIDTH;
   const zeroY = chartY(axis, 0, top, bottom);
+  el.stabilityChart.setAttribute("viewBox", `0 0 ${chartWidth} ${CHART_HEIGHT}`);
+  el.stabilityChart.style.width = `${chartWidth}px`;
   el.stabilityChart.append(
-    svgNode("title", { id: "history-chart-title" }, "stabilityDaysDeltaの7日推移"),
+    svgNode("title", { id: "history-chart-title" }, `stabilityDaysDeltaの${DASHBOARD_HISTORY_DAYS}日推移`),
     svgNode(
       "desc",
       { id: "history-chart-description" },
       days.map((day) => `${day.date}, stabilityDaysDelta ${day.stabilityDaysDelta === null ? "記録なし" : `${signed(day.stabilityDaysDelta)}日`}`).join(". ")
     )
   );
-  renderAxis(axis, left, right, top, bottom);
+  renderAxis(axis, top, bottom);
+  renderGrid(axis, right, top, bottom);
   const barWidth = Math.min(50, bandWidth * 0.56);
   days.forEach((day, index) => {
     const xx = left + bandWidth * (index + 0.5);
@@ -183,6 +201,12 @@ function renderChart(days) {
     el.stabilityChart.append(group);
   });
   el.historyEmpty.hidden = values.some((value) => value !== 0);
+}
+
+function scrollHistoryToLatest() {
+  requestAnimationFrame(() => {
+    el.historyScroll.scrollLeft = el.historyScroll.scrollWidth - el.historyScroll.clientWidth;
+  });
 }
 
 function renderRawTable(container, columns, rows) {
@@ -302,6 +326,7 @@ function renderDashboard() {
   el.loadError.hidden = true;
   el.settingsButton.hidden = false;
   el.dashboardStatus.textContent = `更新日 ${learning.today}`;
+  scrollHistoryToLatest();
 }
 
 function showError(error) {

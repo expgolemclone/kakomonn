@@ -86,13 +86,17 @@
           <figure class="history-card" aria-labelledby="history-title">
             <figcaption class="chart-heading">
               <div>
-                <p class="eyebrow">7 DAY LEARNING</p>
-                <h2 id="history-title">stabilityDaysDeltaの7日推移</h2>
+                <p class="eyebrow">31 DAY LEARNING</p>
+                <h2 id="history-title">stabilityDaysDeltaの31日推移</h2>
               </div>
             </figcaption>
-            <div class="chart-wrap">
-              <svg id="stability-chart" viewBox="0 0 700 270" role="group" aria-labelledby="history-chart-title history-chart-description"></svg>
+            <div class="chart-layout">
+              <svg id="stability-chart-axis" class="chart-axis" viewBox="0 0 62 270" aria-hidden="true"></svg>
+              <div id="history-scroll" class="chart-scroll" tabindex="0" aria-label="stabilityDaysDeltaの31日履歴. 左右にスワイプまたはスクロールして過去の日付を表示できます.">
+                <svg id="stability-chart" role="group" aria-labelledby="history-chart-title history-chart-description"></svg>
+              </div>
             </div>
+            <p class="chart-hint">横にスワイプ/スクロールして過去31日を表示できます.</p>
             <p id="history-empty" class="muted" hidden>stabilityDaysDeltaの変化はありません.</p>
             <section id="daily-details" class="daily-details" aria-labelledby="daily-details-title">
               <div class="daily-details-heading">

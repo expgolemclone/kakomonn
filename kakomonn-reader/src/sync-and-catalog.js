@@ -70,6 +70,7 @@
       metrics.attemptedQuestionCount >= 0 &&
       Number.isSafeInteger(metrics.todayAttemptedQuestionCount) &&
       metrics.todayAttemptedQuestionCount >= 0 &&
+      isNextQuestion(value.nextQuestion) &&
       validCelebration
     );
   }
@@ -99,33 +100,38 @@
     );
   }
 
-  function isNextResponse(value) {
-    if (value === null || typeof value !== "object") {
-      return false;
-    }
-    if (value.question === null) {
+  function isNextQuestion(question) {
+    if (question === null) {
       return true;
     }
-    if (typeof value.question !== "object") {
+    if (typeof question !== "object") {
       return false;
     }
-    const questionId = value.question.questionId;
+    const questionId = question.questionId;
     if (!/^\d+$/.test(questionId)) {
       return false;
     }
     try {
-      const url = new URL(value.question.url);
+      const url = new URL(question.url);
       return (
         url.origin === `https://${SITE_ID}` &&
         url.pathname === `/questions/${questionId}` &&
         url.search === "" &&
         url.hash === "" &&
-        (value.question.kind === "review" || value.question.kind === "new") &&
-        (value.question.dueMs === null || Number.isSafeInteger(value.question.dueMs))
+        (question.kind === "review" || question.kind === "new") &&
+        (question.dueMs === null || Number.isSafeInteger(question.dueMs))
       );
     } catch {
       return false;
     }
+  }
+
+  function isNextResponse(value) {
+    return (
+      value !== null &&
+      typeof value === "object" &&
+      isNextQuestion(value.question)
+    );
   }
 
   function isCatalogResponse(value) {

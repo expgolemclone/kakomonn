@@ -107,10 +107,15 @@ async function runQuestionIdCase(browser, startPath) {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].body.questionId, "123");
     assert.deepEqual(Object.keys(calls[0].body).sort(), ["answerResult", "operationId", "questionId", "site"]);
-    await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v7/next"),
-    );
     await frame.waitForURL(`https://${site}/questions/456`);
+    assert.equal(
+      await page.evaluate(() =>
+        window.__syncMock.calls.some(
+          (call) => new URL(call.url).pathname === "/v7/next",
+        ),
+      ),
+      false,
+    );
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").innerText(),
       "todayStabilityDaysDelta 31日"
@@ -169,10 +174,15 @@ async function runRetryCase(browser) {
     const calls = await attemptCalls(page);
     assert.equal(calls[0].body.operationId, calls[1].body.operationId);
     assert.equal(await page.evaluate(() => window.__syncMock.stabilityDays), 31);
-    await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v7/next"),
-    );
     await frame.waitForURL(`https://${site}/questions/456`);
+    assert.equal(
+      await page.evaluate(() =>
+        window.__syncMock.calls.some(
+          (call) => new URL(call.url).pathname === "/v7/next",
+        ),
+      ),
+      false,
+    );
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").innerText(),
       "todayStabilityDaysDelta 31日"

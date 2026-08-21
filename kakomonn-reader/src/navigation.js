@@ -281,12 +281,12 @@
           await savePendingCelebration(result.celebration);
         }
 
-        const next = await requestNextQuestion(syncToken, operation.questionId);
+        const nextQuestion = result.nextQuestion;
         syncReady = true;
         navigationInProgress = false;
         setStatus("解答記録を同期しました");
 
-        if (next.question === null) {
+        if (nextQuestion === null) {
           await clearPendingAttempt();
           setStatus(
             pendingCelebration === null
@@ -295,7 +295,7 @@
           );
           return true;
         }
-        await markPendingAttemptAwaitingNavigation(operation, next.question.url);
+        await markPendingAttemptAwaitingNavigation(operation, nextQuestion.url);
         return true;
       } catch (error) {
         navigationInProgress = false;
@@ -492,11 +492,6 @@
       readPendingCurrentPage();
       return;
     }
-    if (isIPhoneSafari) {
-      setStatus(SPEECH_GESTURE_STATUS);
-      return;
-    }
-
     startSpeechForCurrentPage();
   }
 

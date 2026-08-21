@@ -104,14 +104,13 @@ async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
     assert.equal(answerCalls[0].body.answerResult, "incorrect");
     assert.equal(answerCalls[0].body.questionId, "100");
     assert.equal(await page.evaluate(() => window.__syncMock.attemptCount), 1);
-    const nextCall = await page.evaluate(() =>
-      window.__syncMock.calls.find(
-        (call) => new URL(call.url).pathname === "/v7/next"
-      )
-    );
     assert.equal(
-      new URL(nextCall.url).searchParams.get("excludeQuestionId"),
-      "100"
+      await page.evaluate(() =>
+        window.__syncMock.calls.some(
+          (call) => new URL(call.url).pathname === "/v7/next"
+        )
+      ),
+      false
     );
     assert.deepEqual(browserErrors, []);
   } finally {

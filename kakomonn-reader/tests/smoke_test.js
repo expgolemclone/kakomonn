@@ -475,11 +475,7 @@ async function assertIncorrectSkip(context, script, inputMethod) {
     assert.equal(calls.attempts.length, 1);
     assert.equal(calls.attempts[0].body.questionId, "45124");
     assert.equal(calls.attempts[0].body.answerResult, "incorrect");
-    assert.equal(calls.next.length, 1);
-    assert.equal(
-      new URL(calls.next[0].url).searchParams.get("excludeQuestionId"),
-      "45124",
-    );
+    assert.equal(calls.next.length, 0);
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-frame")?.contentWindow
@@ -1551,16 +1547,9 @@ async function main() {
     const iosPage = await iosContext.newPage();
     const iosErrors = await preparePage(iosPage, "audio");
     const iosFrame = await loadMockQuestion(iosPage, script);
-    await iosPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "画面をクリックまたはタップすると読み上げます",
-    );
     assert.equal(await iosPage.locator("#kakomonn-reader-start").count(), 0);
-    assert.equal((await azureSpeechCalls(iosPage)).length, 0);
     const firstAnswer = iosFrame.locator("input[name='answer']").first();
-    await firstAnswer.click();
-    assert.equal(await firstAnswer.isChecked(), true);
+    assert.equal(await firstAnswer.isChecked(), false);
     await iosPage.waitForFunction(
       (url) =>
         window.__syncMock.calls.filter((call) => call.url === url).length === 1,
@@ -1586,6 +1575,8 @@ async function main() {
       ),
     });
     assert.equal(await speechTokenCallCount(iosPage), 1);
+    await firstAnswer.tap();
+    assert.equal(await firstAnswer.isChecked(), true);
     await markAnswerCorrect(iosFrame);
     await iosPage.waitForFunction(
       (url) =>
@@ -1640,6 +1631,40 @@ async function main() {
       1,
     );
     assert.deepEqual(iosErrors, []);
+
+    const iosGestureRetryPage = await iosContext.newPage();
+    const iosGestureRetryErrors = await preparePage(
+      iosGestureRetryPage,
+      "audio-gesture-required",
+    );
+    const iosGestureRetryFrame = await loadMockQuestion(
+      iosGestureRetryPage,
+      script,
+    );
+    await iosGestureRetryPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "画面をクリックまたはタップすると読み上げます",
+    );
+    assert.equal((await azureSpeechCalls(iosGestureRetryPage)).length, 0);
+    assert.equal(await speechTokenCallCount(iosGestureRetryPage), 0);
+    const iosGestureAnswer = iosGestureRetryFrame
+      .locator("input[name='answer']")
+      .first();
+    await iosGestureAnswer.tap();
+    assert.equal(await iosGestureAnswer.isChecked(), true);
+    await iosGestureRetryPage.waitForFunction(
+      (url) =>
+        window.__syncMock.calls.filter((call) => call.url === url).length === 1,
+      azureSpeechUrl,
+    );
+    await iosGestureRetryPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status").textContent ===
+        "問題文完了",
+    );
+    assert.equal(await speechTokenCallCount(iosGestureRetryPage), 1);
+    assert.deepEqual(iosGestureRetryErrors, []);
     await iosContext.close();
   } finally {
     await browser.close();

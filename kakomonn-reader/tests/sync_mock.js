@@ -376,6 +376,15 @@ function installSyncMockInWindow({
               attemptedQuestionCount: mock.attemptedQuestionCount,
               todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
             },
+            nextQuestion:
+              mock.nextQuestionId === null
+                ? null
+                : {
+                    questionId: mock.nextQuestionId,
+                    url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
+                    kind: "new",
+                    dueMs: null,
+                  },
             ...(item.celebration === undefined
               ? {}
               : { celebration: item.celebration }),

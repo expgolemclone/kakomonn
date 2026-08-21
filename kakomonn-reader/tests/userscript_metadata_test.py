@@ -18,6 +18,10 @@ DIRECTIVE_PATTERN = re.compile(
 MATCH_PATTERN = re.compile(
     r"(?:\*|https?|http\*)://(?:\*|\*\.[^/*\s]+|[^/*\s]+)/\S*"
 )
+EXPECTED_MATCH_VALUES = {
+    "https://*.kakomonn.com/*",
+    "https://kakomonn-sync.kakomonn.workers.dev/open",
+}
 
 # https://www.tampermonkey.net/documentation.php#meta:script
 SUPPORTED_DIRECTIVES = frozenset(
@@ -133,6 +137,9 @@ def validate(script_path: Path) -> None:
         assert value is not None and MATCH_PATTERN.fullmatch(value), (
             f"invalid Tampermonkey @match pattern: {value}"
         )
+    assert set(match_values) == EXPECTED_MATCH_VALUES, (
+        f"unexpected Tampermonkey @match patterns: {match_values}"
+    )
 
     run_at = require_single_value(metadata, "run-at")
     assert run_at in RUN_AT_VALUES, f"unsupported Tampermonkey @run-at value: {run_at}"

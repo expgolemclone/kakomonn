@@ -183,12 +183,3 @@
   function setStatus(message) {
     statusBadge.textContent = message;
   }
-
-  class SyncRequestError extends Error {
-    constructor(code, status = 0) {
-      super(code);
-      this.name = "SyncRequestError";
-      this.code = code;
-      this.status = status;
-    }
-  }

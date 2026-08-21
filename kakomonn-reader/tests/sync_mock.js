@@ -27,6 +27,7 @@ function installSyncMockInWindow({
   expectedSpeechToken,
   writeClipboardToSystem,
   initialNextQuestionId,
+  initialNextError,
   initialCatalogQuestionCount,
   initialCatalogGeneration,
 }) {
@@ -76,6 +77,7 @@ function installSyncMockInWindow({
     releaseHeldRequest: null,
     clipboardWrites: [],
     nextQuestionId: initialNextQuestionId,
+    nextError: initialNextError,
     nextAttemptStabilityDaysDelta: 0,
     nextCelebration: null,
     catalogUpdatedAtMs: Date.now(),
@@ -240,6 +242,10 @@ function installSyncMockInWindow({
           requestURL.searchParams.getAll("site").length === 1 &&
           requestURL.searchParams.getAll("excludeQuestionId").length <= 1
         ) {
+          if (mock.nextError !== null) {
+            respondJSON(409, { error: mock.nextError });
+            return;
+          }
           const questionId = mock.nextQuestionId;
           respondJSON(200, {
             question:
@@ -414,6 +420,7 @@ function createSyncMockConfiguration({
   systemClipboard = false,
   site = SITE,
   nextQuestionId = "45125",
+  nextError = null,
   catalogQuestionCount = 999,
   catalogGeneration = catalogQuestionCount === null ? 0 : 1,
 } = {}) {
@@ -437,6 +444,7 @@ function createSyncMockConfiguration({
     expectedSpeechToken: AZURE_SPEECH_TOKEN,
     writeClipboardToSystem: systemClipboard,
     initialNextQuestionId: nextQuestionId,
+    initialNextError: nextError,
     initialCatalogQuestionCount: catalogQuestionCount,
     initialCatalogGeneration: catalogGeneration,
   };

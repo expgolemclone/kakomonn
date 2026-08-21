@@ -1,3 +1,12 @@
+  class SyncRequestError extends Error {
+    constructor(code, status = 0) {
+      super(code);
+      this.name = "SyncRequestError";
+      this.code = code;
+      this.status = status;
+    }
+  }
+
   function isSyncState(value) {
     const validCatalog =
       value?.catalog === null ||

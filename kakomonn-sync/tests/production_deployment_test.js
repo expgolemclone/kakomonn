@@ -74,6 +74,24 @@ test("production assets match the repository", async (context) => {
   }
 });
 
+test("production serves the canonical next-question launcher", async () => {
+  const response = await fetch(new URL("/open", productionOrigin), {
+    headers: { "cache-control": "no-cache" },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(new URL(response.url).pathname, "/open");
+  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.match(
+    response.headers.get("content-security-policy") ?? "",
+    /default-src 'self'/,
+  );
+  const body = await response.text();
+  assert.match(body, /id="next-question-status"/);
+  assert.match(body, /id="next-question-retry"/);
+});
+
 test("production serves only the authenticated v7 API backed by LearningState", async () => {
   const unauthorized = await fetch(new URL("/v7/sites", productionOrigin));
   assert.equal(unauthorized.status, 401);

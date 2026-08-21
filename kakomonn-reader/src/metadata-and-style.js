@@ -3,6 +3,7 @@
 // @namespace    local.kakomonn.reader
 // @description  問題文と解説の読み上げ, コピー, stabilityDays合計日数の端末間同期と日次目標の祝福を提供します.
 // @match        https://*.kakomonn.com/*
+// @match        https://kakomonn-sync.kakomonn.workers.dev/open
 // @connect      kakomonn-sync.kakomonn.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com
 // @run-at       document-end
@@ -43,9 +44,14 @@
     !/(?:CriOS|FxiOS|EdgiOS|OPiOS)\//.test(userAgent);
   const SYNC_API_URL =
     "https://kakomonn-sync.kakomonn.workers.dev";
+  const NEXT_QUESTION_LAUNCHER_URL = `${SYNC_API_URL}/open`;
+  const NEXT_QUESTION_SITE_ID = "chushoks.kakomonn.com";
+  const isNextQuestionLauncher = location.href === NEXT_QUESTION_LAUNCHER_URL;
   const CONGRATULATIONS_URL =
     "https://kakomonn-congratulations.kakomonn.workers.dev/";
-  const SITE_ID = location.hostname.toLowerCase();
+  const SITE_ID = isNextQuestionLauncher
+    ? NEXT_QUESTION_SITE_ID
+    : location.hostname.toLowerCase();
   if (
     !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(
       SITE_ID

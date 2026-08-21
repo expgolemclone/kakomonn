@@ -4,12 +4,21 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const { webkit } = require("playwright");
-const { installSyncMock } = require("./sync_mock");
+const { installSyncMock, SYNC_API_ORIGIN } = require("./sync_mock");
 
 const projectRoot = path.resolve(__dirname, "..");
 const defaultScriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const currentQuestionURL = "https://chushoks.kakomonn.com/questions/86956";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
+const nextQuestionLauncherURL = `${SYNC_API_ORIGIN}/open`;
+const nextQuestionLauncherHTML = fs.readFileSync(
+  path.resolve(projectRoot, "..", "kakomonn-sync", "public", "open.html"),
+  "utf8",
+);
+const syncStyles = fs.readFileSync(
+  path.resolve(projectRoot, "..", "kakomonn-sync", "public", "styles.css"),
+  "utf8",
+);
 const iosUserAgent =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 " +
@@ -142,6 +151,46 @@ Markdown記号 \\* と \\[ \\] を含みます.
 \\===
 \\~\\~取消\\~\\~`;
 
+async function prepareLauncherPage(
+  context,
+  script,
+  { syncOptions = {}, mutateMock = null } = {},
+) {
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  await page.goto(nextQuestionLauncherURL);
+  await installSyncMock(page, syncOptions);
+  if (mutateMock !== null) {
+    await page.evaluate(mutateMock);
+  }
+  await page.addScriptTag({ content: script });
+  return { errors, page };
+}
+
+async function assertLauncherFailure(
+  context,
+  script,
+  { expectedStatus, syncOptions = {}, mutateMock = null },
+) {
+  const { errors, page } = await prepareLauncherPage(context, script, {
+    syncOptions,
+    mutateMock,
+  });
+  try {
+    await page.locator("#next-question-retry").waitFor({ state: "visible" });
+    assert.equal(
+      await page.locator("#next-question-status").innerText(),
+      expectedStatus,
+    );
+    assert.equal(page.url(), nextQuestionLauncherURL);
+    assert.equal(await page.locator("#kakomonn-reader-shell").count(), 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
 async function main() {
   const configuredScriptPath = process.env.KAKOMONN_READER_SCRIPT_PATH;
   if (!configuredScriptPath) {
@@ -164,10 +213,20 @@ async function main() {
       hasTouch: true,
       isMobile: true,
     });
-    const page = await context.newPage();
-    const pageErrors = [];
-    page.on("pageerror", (error) => pageErrors.push(String(error)));
-    await page.route("https://chushoks.kakomonn.com/**", (route) =>
+    await context.route(`${SYNC_API_ORIGIN}/**`, (route) => {
+      const pathname = new URL(route.request().url()).pathname;
+      if (pathname === "/open") {
+        return route.fulfill({
+          body: nextQuestionLauncherHTML,
+          contentType: "text/html; charset=utf-8",
+        });
+      }
+      if (pathname === "/styles.css") {
+        return route.fulfill({ body: syncStyles, contentType: "text/css" });
+      }
+      return route.abort();
+    });
+    await context.route("https://chushoks.kakomonn.com/**", (route) =>
       route.fulfill({
         contentType: "text/html; charset=utf-8",
         body:
@@ -176,6 +235,85 @@ async function main() {
           "</head><body></body></html>",
       }),
     );
+
+    const noNextLauncher = await prepareLauncherPage(context, script, {
+      syncOptions: { nextQuestionId: null },
+    });
+    try {
+      await noNextLauncher.page
+        .locator("#next-question-retry")
+        .waitFor({ state: "visible" });
+      assert.equal(
+        await noNextLauncher.page.locator("#next-question-status").innerText(),
+        "現在解くべき問題はありません. 時間を置いて再試行してください.",
+      );
+      assert.equal(
+        await noNextLauncher.page
+          .locator("#next-question-status")
+          .getAttribute("role"),
+        "alert",
+      );
+      assert.deepEqual(
+        await noNextLauncher.page.evaluate(() =>
+          window.__syncMock.calls.map((call) => ({
+            authorization: call.authorization,
+            method: call.method,
+            url: call.url,
+          })),
+        ),
+        [
+          {
+            authorization: "Bearer test-sync-token",
+            method: "GET",
+            url: `${SYNC_API_ORIGIN}/v7/next?site=chushoks.kakomonn.com`,
+          },
+        ],
+      );
+      assert.deepEqual(noNextLauncher.errors, []);
+    } finally {
+      await noNextLauncher.page.close();
+    }
+
+    await assertLauncherFailure(context, script, {
+      expectedStatus:
+        "同期tokenが設定されていません. 過去問readerの同期設定でtokenを保存してから, 再試行してください.",
+      syncOptions: { configured: false },
+    });
+    await assertLauncherFailure(context, script, {
+      expectedStatus:
+        "同期トークンが正しくありません. 通信状態または同期設定を確認してから, 再試行してください.",
+      mutateMock: () => {
+        window.__syncMock.token = "server-token";
+      },
+    });
+    await assertLauncherFailure(context, script, {
+      expectedStatus:
+        "学習記録を同期できません. 通信状態または同期設定を確認してから, 再試行してください.",
+      mutateMock: () => {
+        window.__syncMock.failNextRequest = true;
+      },
+    });
+    await assertLauncherFailure(context, script, {
+      expectedStatus:
+        "問題一覧を同期できません. 通信状態または同期設定を確認してから, 再試行してください.",
+      syncOptions: { nextError: "catalog_missing" },
+    });
+    await assertLauncherFailure(context, script, {
+      expectedStatus:
+        "同期APIの応答が不正です. 通信状態または同期設定を確認してから, 再試行してください.",
+      syncOptions: { nextQuestionId: "invalid" },
+    });
+
+    const successfulLauncher = await prepareLauncherPage(context, script, {
+      syncOptions: { nextQuestionId: "86957" },
+    });
+    await successfulLauncher.page.waitForURL(nextQuestionURL);
+    assert.deepEqual(successfulLauncher.errors, []);
+    await successfulLauncher.page.close();
+
+    const page = await context.newPage();
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(String(error)));
     await page.goto(currentQuestionURL);
     await page.evaluate(() => {
       Object.defineProperty(window, "Audio", {

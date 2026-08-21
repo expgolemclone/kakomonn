@@ -14,6 +14,16 @@ https://kakomonn-sync.kakomonn.workers.dev/
 
 dashboardは`todayStabilityDaysDelta`をprimary KPIとして表示し, `stabilityDays`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`は表示専用の指標として扱います. 各指標の数値は画面内の1か所だけに表示します. graphは`stabilityDaysDelta`だけを表示し, 当日barではprimary KPIと重複する数値labelを省きます. graphの日付を選択すると, 該当する`stability_history`と`attempts`の全columnをDBのcolumn名と保存値のまま確認できます.
 
+## 次の問題を開く
+
+iPhone SafariのTampermonkeyへ最新の`kakomonn-reader`をinstallして同期tokenを保存すると, 次の固定URLからFSRSに基づく次の問題へ移動できます.
+
+```text
+https://kakomonn-sync.kakomonn.workers.dev/open
+```
+
+`/open`は静的assetとして配信します. userscriptが専用storageの同期tokenで既存の`GET /v7/next`を呼ぶため, tokenをURLやdashboardの`localStorage`へ保存しません.
+
 ## ローカルテスト
 
 repository rootで実行します.

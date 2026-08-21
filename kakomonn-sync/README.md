@@ -64,10 +64,11 @@ npm run deploy:kakomonn-sync
 APIは`/v7`だけを提供し, LearningState Durable Objectを唯一のsource of truthとします. `GET /v7/state`と`POST /v7/attempts`は`stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`を`learningMetrics`として返します. `POST /v7/attempts`は`attempt`として`answerResult`, `attemptedAtMs`, card単位の`previousCardStabilityDays`と`resultingCardStabilityDays`, 集計値の`previousStabilityDays`と`resultingStabilityDays`も返します. 解答によって`todayStabilityDaysDelta`が`dailyStabilityDaysDeltaGoal`へ初めて到達した場合だけ, `celebration`として`site`, `date`, `todayStabilityDaysDelta`, `dailyStabilityDaysDeltaGoal`も返します.
 
 - `GET /v7/sites`は,問題catalogを登録済みのサイト一覧を返します.
+- `GET /v7/dashboard?site=<host>`は, dashboard用のsite一覧, 選択siteのstate, 直近7日間のhistory, settingsを1回で返します. site未指定または未登録の場合は, 登録済みsiteの先頭を選択します.
 - `GET /v7/state?site=<host>`は,`learningMetrics`と問題catalog情報を返します.
 - `GET /v7/history?site=<host>&days=<1-31>`は, 日本時間の日別`closingStabilityDays`, `stabilityDaysDelta`, `dailyAttemptedQuestionCount`を返します. 計測開始前の`closingStabilityDays`と`stabilityDaysDelta`は`null`で, 計測開始後にrowがない日の`stabilityDaysDelta`は`0`です.
 - `GET /v7/daily-details?site=<host>&date=<YYYY-MM-DD>`は, 指定した日本時間の日付に対応する`stability_history`と`attempts`の全raw rowを返します.
-- `POST /v7/attempts`は,`site`,`questionId`,`operationId`,`answerResult`だけを受け取ります.同じ操作の再送は重複記録せず,異なるpayloadで同じ操作IDを使用した場合は拒否します.
+- `POST /v7/attempts`は,`site`,`questionId`,`operationId`,`answerResult`だけを受け取り, 解答保存後の`nextQuestion`も返します.同じ操作の再送は重複記録せず,異なるpayloadで同じ操作IDを使用した場合は拒否します.
 - `GET /v7/next`は,FSRSに基づく次の問題を返します.
 - `POST /v7/questions`は,siteの問題catalogを世代番号付きで置き換えます.
 - `GET /v7/settings?site=<host>`は,site別の`dailyStabilityDaysDeltaGoal`を返します.`PUT /v7/settings`は,siteと1以上の整数で同じ値を更新します.
@@ -83,6 +84,8 @@ APIは`/v7`だけを提供し, LearningState Durable Objectを唯一のsource of
 
 `learningMetrics`の現在値はsiteごとの`learning_metrics` rowへ保持し, 解答と同じtransactionで更新します. 通常のstate取得と解答ではcatalog, card全体, attempt全履歴をaggregate scanしません. `stabilityDays`だけはcatalog置換時に現在のcatalogから再集計し, 増分更新の誤差とcatalogから外れたcardの影響を補正します.
 
+問題catalogの再同期では, 保存済みIDと新しいIDの差分だけを書き込みます. 内容が同一の場合は`updatedAtMs`だけを更新し, 問題row, generation, 学習指標, 履歴を書き直しません.
+
 `stabilityDaysDelta`は, 日ごとの`closing_stability_days - opening_stability_days`です. `todayStabilityDaysDelta`は当日の同じ値で, `dailyStabilityDaysDeltaGoal`はこの純増に対する目標です.
 
 祝福判定は解答前の`todayStabilityDaysDelta`が目標未満で, 解答後の値が目標以上になった場合だけ成立します. siteと日本時間の日付ごとに1回だけ記録し, 同じ`operationId`の再送では同じeventを返します. 目標変更, catalog変更, 初回同期では祝福を作成しません.
@@ -91,4 +94,4 @@ APIは`/v7`だけを提供し, LearningState Durable Objectを唯一のsource of
 
 ## 互換性方針
 
-v1からv6のAPIは提供しません. legacy v4 schemaのcard, attempt, catalog, 解答履歴はschema v5へ明示的に移行し, 30日判定の履歴と目標設定は破棄します. schema v2からv4のdataはschema v5へ移行します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.
+v1からv6のAPIは提供しません. legacy v4 schemaのcard, attempt, catalog, 解答履歴はschema v6へ明示的に移行し, 30日判定の履歴と目標設定は破棄します. schema v2からv5のdataはschema v6へ移行します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.

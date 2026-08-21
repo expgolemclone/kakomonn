@@ -110,38 +110,36 @@ async function installApiMock(page) {
         if (headers.get("Authorization") !== `Bearer ${tokenValue}`) {
           return respond(401, { error: "unauthorized" });
         }
-        if (url.pathname === "/v7/sites") {
-          return respond(200, { sites: [siteValue, otherSiteValue] });
-        }
-        if (url.pathname === "/v7/state") {
-          const requestedSite = url.searchParams.get("site");
+        if (url.pathname === "/v7/dashboard") {
+          const requestedSite = [siteValue, otherSiteValue].includes(url.searchParams.get("site"))
+            ? url.searchParams.get("site")
+            : siteValue;
           if (requestedSite === window.__delayedSite) {
             await new Promise((resolve) => window.__delayedResolvers.push(resolve));
           }
           return respond(200, {
-            site: requestedSite,
-            today: "2026-08-10",
-            learningMetrics: {
-              stabilityDays: requestedSite === siteValue ? 9912 : 2999,
-              todayStabilityDaysDelta: requestedSite === siteValue ? 104 : 21,
-              attemptedQuestionCount: requestedSite === siteValue ? 640 : 100,
-              todayAttemptedQuestionCount: requestedSite === siteValue ? 28 : 4,
+            sites: [siteValue, otherSiteValue],
+            selectedSite: requestedSite,
+            state: {
+              site: requestedSite,
+              today: "2026-08-10",
+              learningMetrics: {
+                stabilityDays: requestedSite === siteValue ? 9912 : 2999,
+                todayStabilityDaysDelta: requestedSite === siteValue ? 104 : 21,
+                attemptedQuestionCount: requestedSite === siteValue ? 640 : 100,
+                todayAttemptedQuestionCount: requestedSite === siteValue ? 28 : 4,
+              },
+              catalog: { questionCount: 999, updatedAtMs: Date.now() },
             },
-            catalog: { questionCount: 999, updatedAtMs: Date.now() },
-          });
-        }
-        if (url.pathname === "/v7/history") {
-          const requestedSite = url.searchParams.get("site");
-          if (requestedSite === window.__delayedSite) {
-            await new Promise((resolve) => window.__delayedResolvers.push(resolve));
-          }
-          return respond(200, {
-            site: requestedSite,
-            timeZone: "Asia/Tokyo",
-            today: "2026-08-10",
-            days: requestedSite === siteValue
-              ? historyValue
-              : historyValue.map((day) => ({ ...day, closingStabilityDays: 2999 })),
+            history: {
+              site: requestedSite,
+              timeZone: "Asia/Tokyo",
+              today: "2026-08-10",
+              days: requestedSite === siteValue
+                ? historyValue
+                : historyValue.map((day) => ({ ...day, closingStabilityDays: 2999 })),
+            },
+            settings: settingsValues.get(requestedSite),
           });
         }
         if (url.pathname === "/v7/daily-details") {
@@ -158,9 +156,6 @@ async function installApiMock(page) {
             timeZone: "Asia/Tokyo",
             tables: { stability_history: [], attempts: [] },
           });
-        }
-        if (url.pathname === "/v7/settings" && (init.method ?? "GET") === "GET") {
-          return respond(200, settingsValues.get(url.searchParams.get("site")));
         }
         if (url.pathname === "/v7/settings" && init.method === "PUT") {
           const settingsValue = JSON.parse(init.body);
@@ -220,9 +215,9 @@ async function assertDashboard(page) {
   assert.equal(await page.locator(".goal-card").allInnerTexts().then((values) => values.some((value) => value.includes("解いた問題数"))), false);
   const calls = await page.evaluate(() => window.__apiCalls);
   assert.equal(calls.some((call) => !call.pathname.startsWith("/v7/")), false);
-  assert.equal(calls.filter((call) => call.pathname === "/v7/state").length, 1);
-  assert.equal(calls.filter((call) => call.pathname === "/v7/history").length, 1);
-  assert.equal(calls.filter((call) => call.pathname === "/v7/settings" && call.method === "GET").length, 1);
+  assert.equal(calls.filter((call) => call.pathname === "/v7/dashboard").length, 1);
+  assert.equal(calls.filter((call) => ["/v7/sites", "/v7/state", "/v7/history"].includes(call.pathname)).length, 0);
+  assert.equal(calls.filter((call) => call.pathname === "/v7/settings" && call.method === "GET").length, 0);
   assert.deepEqual(errors, []);
 
   await page.locator('[data-chart-date="2026-08-10"]').click();
@@ -286,8 +281,8 @@ async function assertDashboard(page) {
   await page.locator("#refresh-button").click();
   await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "更新日 2026-08-10");
   const finalCalls = await page.evaluate(() => window.__apiCalls);
-  const finalStateCall = finalCalls.filter((call) => call.pathname === "/v7/state").at(-1);
-  assert.equal(finalStateCall.authorization, `Bearer ${token}`);
+  const finalDashboardCall = finalCalls.filter((call) => call.pathname === "/v7/dashboard").at(-1);
+  assert.equal(finalDashboardCall.authorization, `Bearer ${token}`);
 }
 
 async function main() {

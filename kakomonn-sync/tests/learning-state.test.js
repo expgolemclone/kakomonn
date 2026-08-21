@@ -28,6 +28,13 @@ function stub() {
 async function reset() {
   const raw = stub();
   await runInRawDurableObject(raw, (_instance, state) => {
+    state.storage.sql.exec(`
+      DROP TRIGGER IF EXISTS audit_questions_insert;
+      DROP TRIGGER IF EXISTS audit_questions_delete;
+      DROP TRIGGER IF EXISTS audit_learning_metrics_update;
+      DROP TRIGGER IF EXISTS audit_stability_history_update;
+      DROP TABLE IF EXISTS usage_audit;
+    `);
     for (const table of [
       "daily_stability_days_delta_achievements",
       "attempts",
@@ -107,13 +114,35 @@ async function seedReviewCard(
 beforeEach(reset);
 
 describe("LearningState schema", () => {
-  it("installs query indexes idempotently", async () => {
+  it("returns immediately for the current schema version", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       initializeLearningSchema(state.storage, NOW);
       state.storage.sql.exec(
         "CREATE INDEX IF NOT EXISTS attempts_by_site ON attempts (site)"
       );
       initializeLearningSchema(state.storage, NOW);
+      const indexes = state.storage.sql
+        .exec(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'attempts_by_site'"
+        )
+        .toArray()
+        .map((row) => row.name);
+      expect(indexes).toEqual(["attempts_by_site"]);
+    });
+  });
+
+  it("migrates schema v5 and removes write-amplifying indexes", async () => {
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec(`
+        CREATE INDEX IF NOT EXISTS attempts_by_site ON attempts (site);
+        CREATE INDEX IF NOT EXISTS cards_by_site_stability
+          ON cards (site, stability);
+        UPDATE schema_metadata SET version = 5 WHERE singleton = 1;
+      `);
+      initializeLearningSchema(state.storage, NOW);
+      expect(
+        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
+      ).toEqual({ version: 6 });
       const indexes = state.storage.sql
         .exec(
           `SELECT name FROM sqlite_master
@@ -129,12 +158,11 @@ describe("LearningState schema", () => {
       expect(indexes).toEqual([
         "attempts_by_site_attempted_at_question",
         "cards_by_site_due",
-        "cards_by_site_stability",
       ]);
     });
   });
 
-  it("migrates legacy data to schema v5 without retaining threshold-based fields", async () => {
+  it("migrates legacy data to schema v6 without retaining threshold-based fields", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
         DROP TABLE daily_stability_days_delta_achievements;
@@ -212,7 +240,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 5 });
+      ).toEqual({ version: 6 });
       expect(
         state.storage.sql
           .exec("SELECT * FROM daily_stability_days_delta_achievements")
@@ -259,7 +287,7 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates schema v2 data to v5 without losing rows", async () => {
+  it("migrates schema v2 data to v6 without losing rows", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
         DROP TABLE daily_stability_days_delta_achievements;
@@ -340,7 +368,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 5 });
+      ).toEqual({ version: 6 });
       expect(
         state.storage.sql
           .exec("SELECT * FROM daily_stability_days_delta_achievements")
@@ -387,7 +415,7 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates schema v4 aggregates into one indexed metrics row", async () => {
+  it("migrates schema v4 aggregates into one metrics row", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(
         "INSERT INTO cards VALUES (?, '1', ?, 1.9, 5, 1, 0, 1, 0, 2, ?)",
@@ -410,7 +438,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 5 });
+      ).toEqual({ version: 6 });
       const cursor = state.storage.sql.exec(
         `SELECT stability_days, attempted_question_count,
                 attempted_question_count_date, today_attempted_question_count
@@ -457,6 +485,45 @@ describe("learning metrics", () => {
         attemptedQuestionCount: 2,
       },
       catalog: { questionCount: 3, generation: 2 },
+    });
+  });
+
+  it("refreshes identical catalogs without rewriting question rows", async () => {
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec(`
+        CREATE TABLE usage_audit (event TEXT NOT NULL);
+        CREATE TRIGGER audit_questions_insert AFTER INSERT ON questions
+        BEGIN
+          INSERT INTO usage_audit VALUES ('insert:' || NEW.question_id);
+        END;
+        CREATE TRIGGER audit_questions_delete AFTER DELETE ON questions
+        BEGIN
+          INSERT INTO usage_audit VALUES ('delete:' || OLD.question_id);
+        END;
+      `);
+    });
+
+    await expect(
+      stub().replaceCatalog(SITE, ["1", "2", "3", "4"], 1, NOW + 1000)
+    ).resolves.toEqual({
+      site: SITE,
+      questionCount: 4,
+      updatedAtMs: NOW + 1000,
+      generation: 1,
+    });
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual(
+        []
+      );
+    });
+
+    await expect(
+      stub().replaceCatalog(SITE, ["2", "3", "4", "5"], 1, NOW + 2000)
+    ).resolves.toMatchObject({ questionCount: 4, generation: 2 });
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(
+        state.storage.sql.exec("SELECT event FROM usage_audit ORDER BY event").toArray()
+      ).toEqual([{ event: "delete:1" }, { event: "insert:5" }]);
     });
   });
 
@@ -516,6 +583,51 @@ describe("learning metrics", () => {
 });
 
 describe("attempt idempotency and attempted question totals", () => {
+  it("does not rewrite unchanged metrics during an early same-day repeat", async () => {
+    await seedReviewCard("1", 35, NOW + DAY_MS, NOW - DAY_MS);
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec(
+        `UPDATE stability_history
+         SET opening_stability_days = 35, closing_stability_days = 35
+         WHERE site = ? AND date = '2026-08-10'`,
+        SITE
+      );
+    });
+    await stub().recordAttempt(SITE, "1", operationId(39), "correct", NOW);
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec(`
+        CREATE TABLE usage_audit (event TEXT NOT NULL);
+        CREATE TRIGGER audit_learning_metrics_update AFTER UPDATE ON learning_metrics
+        BEGIN
+          INSERT INTO usage_audit VALUES ('learning_metrics');
+        END;
+        CREATE TRIGGER audit_stability_history_update AFTER UPDATE ON stability_history
+        BEGIN
+          INSERT INTO usage_audit VALUES ('stability_history');
+        END;
+      `);
+    });
+
+    const repeated = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(40),
+      "incorrect",
+      NOW + 1000
+    );
+    expect(repeated.learningMetrics).toMatchObject({
+      stabilityDays: 35,
+      todayStabilityDaysDelta: 0,
+      attemptedQuestionCount: 1,
+      todayAttemptedQuestionCount: 1,
+    });
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual(
+        []
+      );
+    });
+  });
+
   it("records early practice without changing the card or stability metrics", async () => {
     await seedReviewCard("1", 35, NOW + DAY_MS, NOW - 30 * DAY_MS);
     const before = await runInRawDurableObject(stub(), (_instance, state) =>
@@ -1179,6 +1291,52 @@ describe("v7 HTTP contract", () => {
     });
   });
 
+  it("returns all dashboard reads through one endpoint", async () => {
+    const response = await SELF.fetch(
+      `https://example.test/v7/dashboard?site=${SITE}`,
+      { headers: AUTHORIZATION }
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      sites: [SITE],
+      selectedSite: SITE,
+      state: { site: SITE, learningMetrics: { stabilityDays: 0 } },
+      history: { site: SITE, days: expect.any(Array) },
+      settings: { site: SITE, dailyStabilityDaysDeltaGoal: 30 },
+    });
+
+    const selectedDefault = await SELF.fetch(
+      "https://example.test/v7/dashboard",
+      { headers: AUTHORIZATION }
+    );
+    await expect(selectedDefault.json()).resolves.toMatchObject({
+      sites: [SITE],
+      selectedSite: SITE,
+    });
+
+    for (const search of ["site=invalid.example", `site=${SITE}&site=${SITE}`, "extra=true"]) {
+      const invalid = await SELF.fetch(
+        `https://example.test/v7/dashboard?${search}`,
+        { headers: AUTHORIZATION }
+      );
+      expect(invalid.status).toBe(400);
+    }
+
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec("DELETE FROM catalog_metadata");
+    });
+    const empty = await SELF.fetch("https://example.test/v7/dashboard", {
+      headers: AUTHORIZATION,
+    });
+    await expect(empty.json()).resolves.toEqual({
+      sites: [],
+      selectedSite: null,
+      state: null,
+      history: null,
+      settings: null,
+    });
+  });
+
   it("validates the daily details query", async () => {
     for (const search of [
       `site=${SITE}`,
@@ -1313,6 +1471,12 @@ describe("v7 HTTP contract", () => {
         todayStabilityDaysDelta: expect.any(Number),
         attemptedQuestionCount: 1,
         todayAttemptedQuestionCount: 1,
+      },
+      nextQuestion: {
+        questionId: "2",
+        url: `https://${SITE}/questions/2`,
+        kind: "new",
+        dueMs: null,
       },
     });
   });

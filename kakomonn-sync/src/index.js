@@ -5,6 +5,7 @@ import { handleAttempts } from "./api/attempts.js";
 import { handleState } from "./api/state.js";
 import { handleHistory } from "./api/history.js";
 import { handleDailyDetails } from "./api/daily-details.js";
+import { handleDashboard } from "./api/dashboard.js";
 import { handleNext } from "./api/next.js";
 import { handleQuestions } from "./api/questions.js";
 import { handleSettings } from "./api/settings.js";
@@ -21,6 +22,7 @@ export async function handleRequest(request, env, fetcher = fetch) {
     ["/state", ["GET"]],
     ["/history", ["GET"]],
     ["/daily-details", ["GET"]],
+    ["/dashboard", ["GET"]],
     ["/attempts", ["POST"]],
     ["/next", ["GET"]],
     ["/questions", ["POST"]],
@@ -62,6 +64,9 @@ export async function handleRequest(request, env, fetcher = fetch) {
   }
   if (route === "/daily-details") {
     return handleDailyDetails(url, env);
+  }
+  if (route === "/dashboard") {
+    return handleDashboard(url, env);
   }
   if (route === "/next") {
     return handleNext(url, env);

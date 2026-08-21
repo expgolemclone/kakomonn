@@ -25,7 +25,6 @@ export { initializeLearningSchema } from "./storage/schema.js";
 export const LEARNING_STATE_OBJECT_NAME = "primary";
 export { DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL };
 export { OPERATION_ID_PATTERN, QUESTION_ID_PATTERN } from "./contracts.js";
-const LEGACY_SETTINGS_STORAGE_KEY = "settings";
 
 function rowToCard(row) {
   if (row === undefined) {
@@ -293,11 +292,20 @@ function recordCelebration(
   return celebrationFromRow(row);
 }
 
-function learningMetrics(storage, site, nowMs, storedMetrics) {
+function learningMetrics(
+  storage,
+  site,
+  nowMs,
+  storedMetrics,
+  todayStabilityDaysDelta = undefined
+) {
   const today = getTokyoDate(new Date(nowMs));
   return {
     stabilityDays: integerStabilityDays(storedMetrics),
-    todayStabilityDaysDelta: readTodayStabilityDaysDelta(storage, site, today),
+    todayStabilityDaysDelta:
+      todayStabilityDaysDelta === undefined
+        ? readTodayStabilityDaysDelta(storage, site, today)
+        : todayStabilityDaysDelta,
     attemptedQuestionCount: storedMetrics.attemptedQuestionCount,
     todayAttemptedQuestionCount:
       storedMetrics.attemptedQuestionCountDate === today
@@ -317,8 +325,10 @@ function recordDailyStabilityDays(
     `INSERT INTO stability_history (
        site, date, opening_stability_days, closing_stability_days
      ) VALUES (?, ?, ?, ?)
-     ON CONFLICT(site, date) DO UPDATE SET
-       closing_stability_days = excluded.closing_stability_days`,
+      ON CONFLICT(site, date) DO UPDATE SET
+        closing_stability_days = excluded.closing_stability_days
+      WHERE stability_history.closing_stability_days <>
+            excluded.closing_stability_days`,
     site,
     date,
     openingStabilityDays,
@@ -331,6 +341,7 @@ function attemptResponse(
   metrics,
   previousStabilityDays,
   resultingStabilityDays,
+  nextQuestion,
   celebration = undefined
 ) {
   const response = {
@@ -344,11 +355,65 @@ function attemptResponse(
       resultingStabilityDays,
     },
     learningMetrics: metrics,
+    nextQuestion:
+      nextQuestion.questionId === null
+        ? null
+        : {
+            questionId: nextQuestion.questionId,
+            url: `https://${row.site}/questions/${nextQuestion.questionId}`,
+            kind: nextQuestion.kind,
+            dueMs: nextQuestion.dueMs,
+          },
   };
   if (celebration !== undefined) {
     response.celebration = celebration;
   }
   return response;
+}
+
+function selectNextQuestion(storage, site, nowMs, excludeQuestionId) {
+  const catalog = storage.sql
+    .exec("SELECT question_count FROM catalog_metadata WHERE site = ?", site)
+    .toArray()[0];
+  if (catalog === undefined) {
+    return { error: "catalog_missing" };
+  }
+  const due = storage.sql
+    .exec(
+      `SELECT c.question_id, c.due_ms
+       FROM cards c
+       JOIN questions q ON q.site = c.site AND q.question_id = c.question_id
+       WHERE c.site = ? AND c.due_ms <= ?
+         AND (? IS NULL OR c.question_id <> ?)
+       ORDER BY c.due_ms ASC, CAST(c.question_id AS INTEGER) ASC, c.question_id ASC
+       LIMIT 1`,
+      site,
+      nowMs,
+      excludeQuestionId,
+      excludeQuestionId
+    )
+    .toArray()[0];
+  if (due !== undefined) {
+    return { questionId: due.question_id, kind: "review", dueMs: due.due_ms };
+  }
+  const unseen = storage.sql
+    .exec(
+      `SELECT q.question_id
+       FROM questions q
+       LEFT JOIN cards c ON c.site = q.site AND c.question_id = q.question_id
+       WHERE q.site = ? AND c.question_id IS NULL
+         AND (? IS NULL OR q.question_id <> ?)
+       ORDER BY CAST(q.question_id AS INTEGER) ASC, q.question_id ASC
+       LIMIT 1`,
+      site,
+      excludeQuestionId,
+      excludeQuestionId
+    )
+    .toArray()[0];
+  if (unseen !== undefined) {
+    return { questionId: unseen.question_id, kind: "new", dueMs: null };
+  }
+  return { questionId: null, kind: "none", dueMs: null };
 }
 
 function assertAttempt(site, questionId, operationId, result) {
@@ -365,10 +430,7 @@ function assertAttempt(site, questionId, operationId, result) {
 export class LearningState extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
-    this.ctx.blockConcurrencyWhile(async () => {
-      initializeLearningSchema(this.ctx.storage);
-      await this.ctx.storage.delete(LEGACY_SETTINGS_STORAGE_KEY);
-    });
+    initializeLearningSchema(this.ctx.storage);
   }
 
   recordAttempt(site, questionId, operationId, answerResult, nowMs = Date.now()) {
@@ -401,6 +463,7 @@ export class LearningState extends DurableObject {
           learningMetrics(this.ctx.storage, site, nowMs, storedMetrics),
           stabilityDays,
           stabilityDays,
+          selectNextQuestion(this.ctx.storage, site, nowMs, questionId),
           readCelebrationForOperation(this.ctx.storage, operationId)
         );
       }
@@ -452,15 +515,23 @@ export class LearningState extends DurableObject {
       if (schedulingApplied) {
         saveCard(this.ctx.storage, site, questionId, nextCard);
       }
-      const storedMetricsAfter = updateStoredLearningMetrics(
-        this.ctx.storage,
-        site,
-        previousCardStabilityDays,
-        nextCard.stability,
-        stored === undefined ? 1 : 0,
-        today,
-        todayAttemptedQuestionCountDelta
-      );
+      const attemptedQuestionCountDelta = stored === undefined ? 1 : 0;
+      const metricsChanged =
+        previousCardStabilityDays !== nextCard.stability ||
+        attemptedQuestionCountDelta !== 0 ||
+        todayAttemptedQuestionCountDelta !== 0 ||
+        storedMetricsBefore.attemptedQuestionCountDate !== today;
+      const storedMetricsAfter = metricsChanged
+        ? updateStoredLearningMetrics(
+            this.ctx.storage,
+            site,
+            previousCardStabilityDays,
+            nextCard.stability,
+            attemptedQuestionCountDelta,
+            today,
+            todayAttemptedQuestionCountDelta
+          )
+        : storedMetricsBefore;
       const stabilityDaysAfter = integerStabilityDays(storedMetricsAfter);
       const previousTodayStabilityDaysDelta = readTodayStabilityDaysDelta(
         this.ctx.storage,
@@ -491,19 +562,26 @@ export class LearningState extends DurableObject {
         this.ctx.storage,
         site,
         nowMs,
-        storedMetricsAfter
+        storedMetricsAfter,
+        previousTodayStabilityDaysDelta +
+          stabilityDaysAfter -
+          stabilityDaysBefore
       );
-      const celebration = recordCelebration(
-        this.ctx.storage,
-        site,
-        today,
-        operationId,
-        nowMs,
-        previousTodayStabilityDaysDelta,
-        metrics
-      );
+      const celebration =
+        metrics.todayStabilityDaysDelta > previousTodayStabilityDaysDelta
+          ? recordCelebration(
+              this.ctx.storage,
+              site,
+              today,
+              operationId,
+              nowMs,
+              previousTodayStabilityDaysDelta,
+              metrics
+            )
+          : undefined;
       return attemptResponse(
         {
+          site,
           question_id: questionId,
           attempted_at_ms: nowMs,
           answer_result: answerResult,
@@ -513,6 +591,7 @@ export class LearningState extends DurableObject {
         metrics,
         stabilityDaysBefore,
         stabilityDaysAfter,
+        selectNextQuestion(this.ctx.storage, site, nowMs, questionId),
         celebration
       );
     });
@@ -697,48 +776,12 @@ export class LearningState extends DurableObject {
     ) {
       throw new TypeError("invalid next request");
     }
-    const catalog = this.ctx.storage.sql
-      .exec("SELECT question_count FROM catalog_metadata WHERE site = ?", site)
-      .toArray()[0];
-    if (catalog === undefined) {
-      return { error: "catalog_missing" };
-    }
-    const due = this.ctx.storage.sql
-      .exec(
-        `SELECT c.question_id, c.due_ms
-         FROM cards c
-         JOIN questions q ON q.site = c.site AND q.question_id = c.question_id
-         WHERE c.site = ? AND c.due_ms <= ?
-           AND (? IS NULL OR c.question_id <> ?)
-         ORDER BY c.due_ms ASC, CAST(c.question_id AS INTEGER) ASC, c.question_id ASC
-         LIMIT 1`,
-        site,
-        nowMs,
-        excludeQuestionId,
-        excludeQuestionId
-      )
-      .toArray()[0];
-    if (due !== undefined) {
-      return { questionId: due.question_id, kind: "review", dueMs: due.due_ms };
-    }
-    const unseen = this.ctx.storage.sql
-      .exec(
-        `SELECT q.question_id
-         FROM questions q
-         LEFT JOIN cards c ON c.site = q.site AND c.question_id = q.question_id
-         WHERE q.site = ? AND c.question_id IS NULL
-           AND (? IS NULL OR q.question_id <> ?)
-         ORDER BY CAST(q.question_id AS INTEGER) ASC, q.question_id ASC
-         LIMIT 1`,
-        site,
-        excludeQuestionId,
-        excludeQuestionId
-      )
-      .toArray()[0];
-    if (unseen !== undefined) {
-      return { questionId: unseen.question_id, kind: "new", dueMs: null };
-    }
-    return { questionId: null, kind: "none", dueMs: null };
+    return selectNextQuestion(
+      this.ctx.storage,
+      site,
+      nowMs,
+      excludeQuestionId
+    );
   }
 
   replaceCatalog(site, questionIds, expectedGeneration, nowMs = Date.now()) {
@@ -758,11 +801,44 @@ export class LearningState extends DurableObject {
     return this.ctx.storage.transactionSync(() => {
       const today = getTokyoDate(new Date(nowMs));
       const metadata = this.ctx.storage.sql
-        .exec("SELECT generation FROM catalog_metadata WHERE site = ?", site)
+        .exec(
+          "SELECT question_count, generation FROM catalog_metadata WHERE site = ?",
+          site
+        )
         .toArray()[0];
       const currentGeneration = metadata?.generation ?? 0;
       if (currentGeneration !== expectedGeneration) {
         return { error: "catalog_conflict", currentGeneration };
+      }
+      const currentQuestionIds = new Set(
+        this.ctx.storage.sql
+          .exec("SELECT question_id FROM questions WHERE site = ?", site)
+          .toArray()
+          .map((row) => row.question_id)
+      );
+      const incomingQuestionIds = new Set(questionIds);
+      const removedQuestionIds = [...currentQuestionIds].filter(
+        (questionId) => !incomingQuestionIds.has(questionId)
+      );
+      const addedQuestionIds = questionIds.filter(
+        (questionId) => !currentQuestionIds.has(questionId)
+      );
+      if (
+        metadata !== undefined &&
+        removedQuestionIds.length === 0 &&
+        addedQuestionIds.length === 0
+      ) {
+        this.ctx.storage.sql.exec(
+          "UPDATE catalog_metadata SET updated_at_ms = ? WHERE site = ?",
+          nowMs,
+          site
+        );
+        return {
+          site,
+          questionCount: metadata.question_count,
+          updatedAtMs: nowMs,
+          generation: currentGeneration,
+        };
       }
       const storedMetricsBefore =
         metadata === undefined
@@ -775,8 +851,14 @@ export class LearningState extends DurableObject {
           : readStoredLearningMetrics(this.ctx.storage, site);
       const stabilityDaysBefore = integerStabilityDays(storedMetricsBefore);
       const generation = currentGeneration + 1;
-      this.ctx.storage.sql.exec("DELETE FROM questions WHERE site = ?", site);
-      for (const questionId of questionIds) {
+      for (const questionId of removedQuestionIds) {
+        this.ctx.storage.sql.exec(
+          "DELETE FROM questions WHERE site = ? AND question_id = ?",
+          site,
+          questionId
+        );
+      }
+      for (const questionId of addedQuestionIds) {
         this.ctx.storage.sql.exec(
           "INSERT INTO questions (site, question_id) VALUES (?, ?)",
           site,
@@ -836,6 +918,35 @@ export class LearningState extends DurableObject {
       .exec("SELECT site FROM catalog_metadata ORDER BY site")
       .toArray()
       .map((row) => row.site);
+  }
+
+  getDashboard(requestedSite = null, nowMs = Date.now()) {
+    if (
+      (requestedSite !== null && !isSite(requestedSite)) ||
+      !Number.isSafeInteger(nowMs)
+    ) {
+      throw new TypeError("invalid dashboard request");
+    }
+    const sites = this.listSites();
+    const selectedSite = sites.includes(requestedSite)
+      ? requestedSite
+      : sites[0] ?? null;
+    if (selectedSite === null) {
+      return {
+        sites,
+        selectedSite: null,
+        state: null,
+        history: null,
+        settings: null,
+      };
+    }
+    return {
+      sites,
+      selectedSite,
+      state: this.getState(selectedSite, nowMs),
+      history: this.getHistory(selectedSite, 7, nowMs),
+      settings: this.getSettings(selectedSite),
+    };
   }
 }
 

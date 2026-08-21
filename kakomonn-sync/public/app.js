@@ -54,6 +54,11 @@ function validHistory(value, site) {
 function validSettings(value, site) {
   return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 2 && value.site === site && Number.isSafeInteger(value.dailyStabilityDaysDeltaGoal) && value.dailyStabilityDaysDeltaGoal >= 1;
 }
+function validDashboard(value) {
+  if (!hasExactKeys(value, ["sites", "selectedSite", "state", "history", "settings"]) || !Array.isArray(value.sites) || value.sites.some((site) => !validSite(site)) || new Set(value.sites).size !== value.sites.length) return false;
+  if (value.sites.length === 0) return value.selectedSite === null && value.state === null && value.history === null && value.settings === null;
+  return validSite(value.selectedSite) && value.sites.includes(value.selectedSite) && validState(value.state, value.selectedSite) && validHistory(value.history, value.selectedSite) && validSettings(value.settings, value.selectedSite);
+}
 function hasExactKeys(value, keys) {
   return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join("\0") === [...keys].sort().join("\0");
 }
@@ -309,26 +314,19 @@ function showError(error) {
   el.siteEmpty.hidden = true;
 }
 
-async function loadSites(token) {
-  const body = await requestJSON("/v7/sites", token);
-  if (body === null || typeof body !== "object" || !Array.isArray(body.sites) || body.sites.some((site) => !validSite(site))) throw new DashboardError("invalid_response");
-  return body.sites;
+async function fetchDashboardData(site, token) {
+  const parameters = new URLSearchParams();
+  if (site !== null) parameters.set("site", site);
+  const suffix = parameters.size === 0 ? "" : `?${parameters}`;
+  const data = await requestJSON(`/v7/dashboard${suffix}`, token);
+  if (!validDashboard(data)) throw new DashboardError("invalid_response");
+  return data;
 }
 
-async function fetchSiteData(site, token) {
-  const parameters = new URLSearchParams({ site });
-  const [learning, history, settings] = await Promise.all([
-    requestJSON(`/v7/state?${parameters}`, token),
-    requestJSON(`/v7/history?${new URLSearchParams({ site, days: "7" })}`, token),
-    requestJSON(`/v7/settings?${parameters}`, token),
-  ]);
-  if (!validState(learning, site) || !validHistory(history, site) || !validSettings(settings, site)) throw new DashboardError("invalid_response");
-  return { learning, history, settings };
-}
-
-function applySiteData({ learning, history, settings }) {
-  state.learning = learning; state.history = history; state.settings = settings;
-  if (state.selectedDate !== "" && !history.days.some((day) => day.date === state.selectedDate)) resetDailyDetails();
+function applySiteData(data) {
+  state.sites = data.sites; state.site = data.selectedSite ?? "";
+  state.learning = data.state; state.history = data.history; state.settings = data.settings;
+  if (state.selectedDate !== "" && !data.history.days.some((day) => day.date === state.selectedDate)) resetDailyDetails();
   renderDashboard();
 }
 
@@ -338,12 +336,12 @@ async function loadSelectedSite() {
   const token = state.token;
   let data;
   try {
-    data = await fetchSiteData(site, token);
+    data = await fetchDashboardData(site, token);
   } catch (error) {
     if (generation !== loadGeneration || site !== state.site || token !== state.token) return false;
     throw error;
   }
-  if (generation !== loadGeneration || site !== state.site || token !== state.token) return false;
+  if (generation !== loadGeneration || site !== state.site || token !== state.token || data.selectedSite !== site) return false;
   applySiteData(data);
   return true;
 }
@@ -357,32 +355,22 @@ function renderSiteOptions() {
 
 async function connect(token, { persist = true } = {}) {
   const generation = ++loadGeneration;
-  let sites;
+  const saved = storageGet(SITE_KEY);
+  let data;
   try {
-    sites = await loadSites(token);
+    data = await fetchDashboardData(validSite(saved) ? saved : null, token);
   } catch (error) {
     if (generation !== loadGeneration) return false;
     throw error;
   }
   if (generation !== loadGeneration) return false;
-  const saved = storageGet(SITE_KEY);
-  const site = sites.includes(saved) ? saved : (sites[0] ?? "");
-  let data = null;
-  if (site !== "") {
-    try {
-      data = await fetchSiteData(site, token);
-    } catch (error) {
-      if (generation !== loadGeneration) return false;
-      throw error;
-    }
-  }
-  if (generation !== loadGeneration) return false;
+  const site = data.selectedSite ?? "";
   if (persist) storageSet(TOKEN_KEY, token);
   if (site === "") storageRemove(SITE_KEY); else storageSet(SITE_KEY, site);
-  state.token = token; state.sites = sites; state.site = site;
+  state.token = token; state.sites = data.sites; state.site = site;
   state.learning = null; state.history = null; state.settings = null;
   resetDailyDetails();
-  if (sites.length === 0) {
+  if (data.sites.length === 0) {
     el.authPanel.hidden = true; el.dashboard.hidden = true; el.loadError.hidden = true; el.siteEmpty.hidden = false; el.settingsButton.hidden = false; return true;
   }
   renderSiteOptions();

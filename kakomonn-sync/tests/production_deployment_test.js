@@ -113,6 +113,25 @@ test("production serves only the authenticated v7 API backed by LearningState", 
   }
 
   const site = sitesBody.sites[0];
+  const dashboardResponse = await authorizedGet(
+    `/v7/dashboard?${new URLSearchParams({ site })}`,
+  );
+  assert.equal(dashboardResponse.status, 200);
+  const dashboardBody = await dashboardResponse.json();
+  assert.deepEqual(Object.keys(dashboardBody), [
+    "sites",
+    "selectedSite",
+    "state",
+    "history",
+    "settings",
+  ]);
+  assert.deepEqual(dashboardBody.sites, sitesBody.sites);
+  assert.equal(dashboardBody.selectedSite, site);
+  assert.equal(dashboardBody.state.site, site);
+  assert.equal(dashboardBody.history.site, site);
+  assert.equal(dashboardBody.history.days.length, 7);
+  assert.equal(dashboardBody.settings.site, site);
+
   const settingsResponse = await authorizedGet(
     `/v7/settings?${new URLSearchParams({ site })}`,
   );

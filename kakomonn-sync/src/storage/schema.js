@@ -1,6 +1,6 @@
 import { getTokyoDate, tokyoDateRangeMs } from "../dates.js";
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 export const DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL = 30;
 
 function tableDefinition(storage, tableName) {
@@ -192,7 +192,14 @@ function migrateSchemaV4ToV5(storage, today, startMs, endMs) {
   );
 
   storage.sql.exec(`
-    UPDATE schema_metadata SET version = ${CURRENT_SCHEMA_VERSION} WHERE singleton = 1;
+    UPDATE schema_metadata SET version = 5 WHERE singleton = 1;
+  `);
+}
+
+function migrateSchemaV5ToV6(storage) {
+  storage.sql.exec(`
+    DROP INDEX IF EXISTS cards_by_site_stability;
+    UPDATE schema_metadata SET version = 6 WHERE singleton = 1;
   `);
 }
 
@@ -328,8 +335,6 @@ function migrateLegacySchema(storage, today) {
 function installIndexes(storage) {
   storage.sql.exec("DROP INDEX IF EXISTS attempts_by_site");
   storage.sql.exec(`
-    CREATE INDEX IF NOT EXISTS cards_by_site_stability
-      ON cards (site, stability);
     CREATE INDEX IF NOT EXISTS cards_by_site_due
       ON cards (site, due_ms, question_id);
     CREATE INDEX IF NOT EXISTS attempts_by_site_attempted_at_question
@@ -366,27 +371,39 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       "mastery_history",
       "questions",
     ];
-    const existingSchemaV3 = schemaV3Tables.filter(
-      (name) => tableDefinition(storage, name) !== undefined
-    );
-    const existingLegacy = legacyTables.filter(
-      (name) => tableDefinition(storage, name) !== undefined
-    );
-
-    if (existingSchemaV3.length === 0 && existingLegacy.length === 0) {
-      createCurrentTables(storage);
-    } else if (
-      tableDefinition(storage, "schema_metadata") === undefined &&
-      existingLegacy.length === legacyTables.length
-    ) {
-      migrateLegacySchema(storage, today);
-    } else if (existingSchemaV3.length !== schemaV3Tables.length) {
-      throw new Error("incomplete LearningState schema");
+    const hasSchemaMetadata =
+      tableDefinition(storage, "schema_metadata") !== undefined;
+    let version;
+    if (hasSchemaMetadata) {
+      version = storage.sql
+        .exec("SELECT version FROM schema_metadata WHERE singleton = 1")
+        .toArray()[0]?.version;
+      if (version === CURRENT_SCHEMA_VERSION) {
+        return;
+      }
+      const existingSchemaV3 = schemaV3Tables.filter(
+        (name) => tableDefinition(storage, name) !== undefined
+      );
+      if (existingSchemaV3.length !== schemaV3Tables.length) {
+        throw new Error("incomplete LearningState schema");
+      }
+    } else {
+      const existingSchemaV3 = schemaV3Tables.filter(
+        (name) => tableDefinition(storage, name) !== undefined
+      );
+      const existingLegacy = legacyTables.filter(
+        (name) => tableDefinition(storage, name) !== undefined
+      );
+      if (existingSchemaV3.length === 0 && existingLegacy.length === 0) {
+        createCurrentTables(storage);
+      } else if (existingLegacy.length === legacyTables.length) {
+        migrateLegacySchema(storage, today);
+      } else {
+        throw new Error("incomplete LearningState schema");
+      }
+      version = CURRENT_SCHEMA_VERSION;
     }
 
-    let version = storage.sql
-      .exec("SELECT version FROM schema_metadata WHERE singleton = 1")
-      .toArray()[0]?.version;
     if (version === 2) {
       migrateSchemaV2ToV3(storage);
       version = 3;
@@ -397,7 +414,11 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     }
     if (version === 4) {
       migrateSchemaV4ToV5(storage, today, startMs, endMs);
-      version = CURRENT_SCHEMA_VERSION;
+      version = 5;
+    }
+    if (version === 5) {
+      migrateSchemaV5ToV6(storage);
+      version = 6;
     }
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error("unsupported LearningState schema version");

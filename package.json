@@ -10,7 +10,7 @@
   "scripts": {
     "build": "npm run build:kakomonn-reader",
     "postinstall": "playwright install chromium webkit",
-    "open:kakomonn": "node scripts/open-kakomonn.mjs",
+    "open:kakomonn": "node --use-system-ca --env-file-if-exists=.env scripts/open-kakomonn.mjs",
     "build:kakomonn-reader": "python3 kakomonn-reader/build.py",
     "test": "npm run test:local && npm run test:smoke && npm run test:kakomonn-live-site && npm run test:kakomonn-live-sync",
     "test:local": "npm run test:repository-naming && npm run test:open-kakomonn && npm run test:release-script && npm run test:live-sync-script && npm run test:kakomonn-reader && npm run test:kakomonn-sync && npm run test:congratulations",

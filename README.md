@@ -10,7 +10,7 @@
 
 ## 普段使いのChrome
 
-次のcommandは, `%LOCALAPPDATA%\kakomonn-chrome-e2e` の専用profileでChromeを起動し, `https://chushoks.kakomonn.com/questions` を開きます.
+次のcommandは, production同期WorkerからFSRSに基づく次の問題を取得し, `%LOCALAPPDATA%\kakomonn-chrome-e2e` の専用profileでChromeを起動して, `https://chushoks.kakomonn.com/questions/<questionId>` を開きます. `KAKOMONN_SYNC_TOKEN` はprocess環境変数またはrepository rootのignore済み`.env`へ設定します. token未設定, API error, 不正responseの場合はChromeを起動しません.
 
 ```powershell
 npm run open:kakomonn

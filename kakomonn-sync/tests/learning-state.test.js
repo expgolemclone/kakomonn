@@ -4,7 +4,11 @@ import {
   SELF,
 } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import { ratingForResult } from "../src/fsrs.js";
+import {
+  createNewCard,
+  ratingForResult,
+  scheduleRating,
+} from "../src/fsrs.js";
 import { initializeLearningSchema } from "../src/storage/schema.js";
 import { Rating } from "ts-fsrs";
 
@@ -102,6 +106,109 @@ async function seedReviewCard(
       site
     );
   });
+}
+
+async function seedQuestionHistoryRepairFixture() {
+  const attemptedAtMs = [
+    Date.parse("2026-08-11T16:07:37.548Z"),
+    Date.parse("2026-08-11T16:15:38.000Z"),
+    Date.parse("2026-08-11T17:04:59.793Z"),
+    Date.parse("2026-08-12T09:33:59.000Z"),
+    Date.parse("2026-08-13T22:27:45.865Z"),
+    Date.parse("2026-08-16T02:43:02.000Z"),
+  ];
+  await stub().replaceCatalog(SITE, ["86956"], 1, attemptedAtMs[0] - 1000);
+  let card;
+  const attempts = attemptedAtMs.map((time, index) => {
+    const previousCardStabilityDays = card?.stability ?? 0;
+    card = scheduleRating(
+      card ?? createNewCard(time),
+      time < Date.parse("2026-08-14T04:08:17.000Z")
+        ? Rating.Good
+        : Rating.Easy,
+      time
+    );
+    return {
+      operationId: operationId(100 + index),
+      attemptedAtMs: time,
+      previousCardStabilityDays,
+      resultingCardStabilityDays: card.stability,
+    };
+  });
+  await runInRawDurableObject(stub(), (_instance, state) => {
+    state.storage.transactionSync(() => {
+      state.storage.sql.exec(
+        `INSERT INTO cards (
+           site, question_id, due_ms, stability, difficulty, scheduled_days,
+           learning_steps, reps, lapses, state, last_review_ms
+         ) VALUES (?, '86956', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        SITE,
+        card.due.getTime(),
+        card.stability,
+        card.difficulty,
+        card.scheduled_days,
+        card.learning_steps,
+        card.reps,
+        card.lapses,
+        card.state,
+        card.last_review.getTime()
+      );
+      for (const attempt of attempts) {
+        state.storage.sql.exec(
+          `INSERT INTO attempts (
+             site, operation_id, question_id, attempted_at_ms, answer_result,
+             previous_card_stability_days, resulting_card_stability_days
+           ) VALUES (?, ?, '86956', ?, 'correct', ?, ?)`,
+          SITE,
+          attempt.operationId,
+          attempt.attemptedAtMs,
+          attempt.previousCardStabilityDays,
+          attempt.resultingCardStabilityDays
+        );
+      }
+      const august12Closing = Math.trunc(attempts[3].resultingCardStabilityDays);
+      const august14Closing = Math.trunc(attempts[4].resultingCardStabilityDays);
+      const august16Closing = Math.trunc(attempts[5].resultingCardStabilityDays);
+      state.storage.sql.exec(
+        `UPDATE stability_history
+         SET opening_stability_days = 0, closing_stability_days = ?
+         WHERE site = ? AND date = '2026-08-12'`,
+        august12Closing,
+        SITE
+      );
+      state.storage.sql.exec(
+        `INSERT INTO stability_history (
+           site, date, opening_stability_days, closing_stability_days
+         ) VALUES (?, '2026-08-14', ?, ?), (?, '2026-08-16', ?, ?)`,
+        SITE,
+        august12Closing,
+        august14Closing,
+        SITE,
+        august14Closing,
+        august16Closing
+      );
+      state.storage.sql.exec(
+        `UPDATE learning_metrics
+         SET stability_days = ?, attempted_question_count = 1,
+             attempted_question_count_date = '2026-08-16',
+             today_attempted_question_count = 1
+         WHERE site = ?`,
+        card.stability,
+        SITE
+      );
+      state.storage.sql.exec(
+        `INSERT INTO daily_stability_days_delta_achievements (
+           site, date, operation_id, achieved_at_ms,
+           today_stability_days_delta, daily_stability_days_delta_goal
+         ) VALUES (?, '2026-08-16', ?, ?, ?, 1)`,
+        SITE,
+        attempts[5].operationId,
+        attempts[5].attemptedAtMs,
+        august16Closing - august14Closing
+      );
+    });
+  });
+  return { attempts, oldCard: card };
 }
 
 beforeEach(reset);
@@ -516,6 +623,108 @@ describe("learning metrics", () => {
 });
 
 describe("attempt idempotency and attempted question totals", () => {
+  it("records early practice without changing the card or stability metrics", async () => {
+    await seedReviewCard("1", 35, NOW + DAY_MS, NOW - 30 * DAY_MS);
+    const before = await runInRawDurableObject(stub(), (_instance, state) =>
+      state.storage.transactionSync(() => {
+        state.storage.sql.exec(
+          `UPDATE stability_history
+           SET opening_stability_days = 35, closing_stability_days = 35
+           WHERE site = ? AND date = '2026-08-10'`,
+          SITE
+        );
+        return state.storage.sql
+          .exec("SELECT * FROM cards WHERE site = ? AND question_id = '1'", SITE)
+          .toArray()[0];
+      })
+    );
+
+    const correct = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(40),
+      "correct",
+      NOW
+    );
+    expect(correct.attempt).toMatchObject({
+      previousCardStabilityDays: 35,
+      resultingCardStabilityDays: 35,
+      previousStabilityDays: 35,
+      resultingStabilityDays: 35,
+    });
+    expect(correct.learningMetrics).toMatchObject({
+      stabilityDays: 35,
+      todayStabilityDaysDelta: 0,
+      attemptedQuestionCount: 1,
+      todayAttemptedQuestionCount: 1,
+    });
+
+    const incorrect = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(41),
+      "incorrect",
+      NOW + 1000
+    );
+    expect(incorrect.attempt).toMatchObject({
+      previousCardStabilityDays: 35,
+      resultingCardStabilityDays: 35,
+      previousStabilityDays: 35,
+      resultingStabilityDays: 35,
+    });
+    expect(incorrect.learningMetrics).toMatchObject({
+      stabilityDays: 35,
+      todayStabilityDaysDelta: 0,
+      attemptedQuestionCount: 1,
+      todayAttemptedQuestionCount: 1,
+    });
+
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec("SELECT * FROM cards WHERE site = ? AND question_id = '1'", SITE)
+          .toArray()[0]
+      ).toEqual(before);
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT answer_result, previous_card_stability_days,
+                    resulting_card_stability_days
+             FROM attempts WHERE site = ? AND question_id = '1'
+             ORDER BY attempted_at_ms`,
+            SITE
+          )
+          .toArray()
+      ).toEqual([
+        {
+          answer_result: "correct",
+          previous_card_stability_days: 35,
+          resulting_card_stability_days: 35,
+        },
+        {
+          answer_result: "incorrect",
+          previous_card_stability_days: 35,
+          resulting_card_stability_days: 35,
+        },
+      ]);
+    });
+  });
+
+  it("applies a review exactly when its due time arrives", async () => {
+    await seedReviewCard("1", 35, NOW, NOW - 30 * DAY_MS);
+    const result = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(42),
+      "correct",
+      NOW
+    );
+    expect(result.attempt.resultingCardStabilityDays).toBeGreaterThan(35);
+    expect(result.attempt.resultingStabilityDays).toBeGreaterThan(
+      result.attempt.previousStabilityDays
+    );
+  });
+
   it("does not apply the same operation twice", async () => {
     const first = await stub().recordAttempt(
       SITE,
@@ -764,6 +973,136 @@ describe("daily stability delta celebrations", () => {
           .toArray()[0].count
       ).toBe(0);
     });
+  });
+});
+
+describe("temporary question history repair", () => {
+  it("previews and atomically repairs question 86956 without deleting attempts", async () => {
+    const fixture = await seedQuestionHistoryRepairFixture();
+    const previewResponse = await SELF.fetch(
+      "https://example.test/v7/maintenance/repair-86956",
+      { headers: AUTHORIZATION }
+    );
+    expect(previewResponse.status).toBe(200);
+    const preview = await previewResponse.json();
+    expect(preview).toMatchObject({
+      repairId: "chushoks-86956-full-history-v1",
+      site: SITE,
+      questionId: "86956",
+      totalAttemptCount: 6,
+      schedulingAppliedCount: 3,
+      practiceCount: 3,
+      repairedAchievementCount: 0,
+      removedAchievementDates: ["2026-08-16"],
+    });
+    expect(preview.correctedCard.stability).toBeCloseTo(10.97104786);
+    expect(preview.previousCard.stability).toBeCloseTo(fixture.oldCard.stability);
+    expect(preview.stabilityDaysReduction).toBeGreaterThan(0);
+
+    const stale = await SELF.fetch(
+      "https://example.test/v7/maintenance/repair-86956",
+      {
+        method: "POST",
+        headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repairId: preview.repairId,
+          digest: "0000000000000000",
+        }),
+      }
+    );
+    expect(stale.status).toBe(409);
+    await expect(stale.json()).resolves.toMatchObject({
+      error: "repair_state_changed",
+    });
+
+    const apply = await SELF.fetch(
+      "https://example.test/v7/maintenance/repair-86956",
+      {
+        method: "POST",
+        headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repairId: preview.repairId,
+          digest: preview.digest,
+        }),
+      }
+    );
+    expect(apply.status).toBe(200);
+    await expect(apply.json()).resolves.toMatchObject({
+      applied: true,
+      correctedCard: { stability: expect.closeTo(10.97104786) },
+    });
+
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec(
+            "SELECT COUNT(*) AS count FROM attempts WHERE site = ? AND question_id = '86956'",
+            SITE
+          )
+          .toArray()[0].count
+      ).toBe(6);
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT previous_card_stability_days, resulting_card_stability_days
+             FROM attempts WHERE operation_id IN (?, ?, ?) ORDER BY attempted_at_ms`,
+            fixture.attempts[1].operationId,
+            fixture.attempts[3].operationId,
+            fixture.attempts[5].operationId
+          )
+          .toArray()
+          .every(
+            (row) =>
+              row.previous_card_stability_days ===
+              row.resulting_card_stability_days
+          )
+      ).toBe(true);
+      expect(
+        state.storage.sql
+          .exec(
+            "SELECT stability FROM cards WHERE site = ? AND question_id = '86956'",
+            SITE
+          )
+          .toArray()[0].stability
+      ).toBeCloseTo(10.97104786);
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT date, opening_stability_days, closing_stability_days
+             FROM stability_history WHERE site = ? AND date >= '2026-08-12'
+             ORDER BY date`,
+            SITE
+          )
+          .toArray()
+      ).toEqual([
+        {
+          date: "2026-08-12",
+          opening_stability_days: 0,
+          closing_stability_days: 2,
+        },
+        {
+          date: "2026-08-14",
+          opening_stability_days: 2,
+          closing_stability_days: 10,
+        },
+        {
+          date: "2026-08-16",
+          opening_stability_days: 10,
+          closing_stability_days: 10,
+        },
+      ]);
+      expect(
+        state.storage.sql
+          .exec(
+            "SELECT COUNT(*) AS count FROM daily_stability_days_delta_achievements"
+          )
+          .toArray()[0].count
+      ).toBe(0);
+    });
+
+    const repairedPreview = await stub().previewQuestionHistoryRepair();
+    expect(repairedPreview.stabilityDaysReduction).toBeCloseTo(0);
+    expect(repairedPreview.correctedCard).toEqual(preview.correctedCard);
   });
 });
 

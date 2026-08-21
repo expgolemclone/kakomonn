@@ -19,6 +19,10 @@ import {
   DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL,
   initializeLearningSchema,
 } from "./storage/schema.js";
+import {
+  applyQuestionHistoryRepair,
+  previewQuestionHistoryRepair,
+} from "./repair-question-history.js";
 
 export { initializeLearningSchema } from "./storage/schema.js";
 
@@ -371,6 +375,21 @@ export class LearningState extends DurableObject {
     });
   }
 
+  previewQuestionHistoryRepair() {
+    return this.ctx.storage.transactionSync(() =>
+      previewQuestionHistoryRepair(this.ctx.storage)
+    );
+  }
+
+  applyQuestionHistoryRepair(expectedDigest, nowMs = Date.now()) {
+    if (typeof expectedDigest !== "string" || !Number.isSafeInteger(nowMs)) {
+      throw new TypeError("invalid question history repair");
+    }
+    return this.ctx.storage.transactionSync(() =>
+      applyQuestionHistoryRepair(this.ctx.storage, expectedDigest, nowMs)
+    );
+  }
+
   recordAttempt(site, questionId, operationId, answerResult, nowMs = Date.now()) {
     assertAttempt(site, questionId, operationId, answerResult);
     if (!Number.isSafeInteger(nowMs) || nowMs <= 0) {
@@ -427,20 +446,31 @@ export class LearningState extends DurableObject {
         .toArray()[0];
       const card = rowToCard(stored) ?? createNewCard(nowMs);
       const previousCardStabilityDays = card.stability;
-      const nextCard = scheduleAnswer(card, answerResult, nowMs);
+      const schedulingApplied = stored === undefined || stored.due_ms <= nowMs;
+      const nextCard = schedulingApplied
+        ? scheduleAnswer(card, answerResult, nowMs)
+        : card;
       const today = getTokyoDate(new Date(nowMs));
       const { startMs, endMs } = tokyoDateRangeMs(today);
-      const previousAttemptedAtMs = stored?.last_review_ms;
-      const todayAttemptedQuestionCountDelta =
-        previousAttemptedAtMs === null ||
-        previousAttemptedAtMs === undefined ||
-        previousAttemptedAtMs < startMs ||
-        previousAttemptedAtMs >= endMs
-          ? 1
-          : 0;
+      const attemptedToday = this.ctx.storage.sql
+        .exec(
+          `SELECT 1 AS found
+           FROM attempts
+           WHERE site = ? AND question_id = ?
+             AND attempted_at_ms >= ? AND attempted_at_ms < ?
+           LIMIT 1`,
+          site,
+          questionId,
+          startMs,
+          endMs
+        )
+        .toArray()[0];
+      const todayAttemptedQuestionCountDelta = attemptedToday === undefined ? 1 : 0;
       const storedMetricsBefore = readStoredLearningMetrics(this.ctx.storage, site);
       const stabilityDaysBefore = integerStabilityDays(storedMetricsBefore);
-      saveCard(this.ctx.storage, site, questionId, nextCard);
+      if (schedulingApplied) {
+        saveCard(this.ctx.storage, site, questionId, nextCard);
+      }
       const storedMetricsAfter = updateStoredLearningMetrics(
         this.ctx.storage,
         site,

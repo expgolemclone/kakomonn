@@ -75,6 +75,8 @@ APIは`/v7`だけを提供し, LearningState Durable Objectを唯一のsource of
 
 `answerResult`が`correct`の場合はFSRSの`Easy`, `incorrect`の場合は`Again`としてcardを更新します. 保存済みのcardは再計算せず, 次の解答時から現在のmappingを適用します.
 
+未回答問題と`due_ms`へ到達した問題だけをFSRSの更新対象にします. 期限前にURLから再解答した場合はattemptを履歴へ保存し, `attemptedQuestionCount`と`todayAttemptedQuestionCount`へ含めますが, card, `stabilityDays`, `todayStabilityDaysDelta`は変更しません.
+
 `kakomonn-reader`はSpeech tokenを約9分間再利用し,`ja-JP-NanamiNeural`のMP3をAzureから直接取得します.Workerは音声dataを中継せず,Workers AI,Durable Objects,R2も音声処理には使用しません.Azure Speech F0の無料枠を超過した場合は読み上げを停止し,別の音声へ切り替えません.
 
 `stabilityDays`は, 現在の問題catalogに含まれる全cardのFSRS stabilityを合計してから整数へ切り捨てた値です. 未回答問題は0日として扱います. catalogから外れたcardは再登録時に学習状態を復元できるよう保存しますが, `stabilityDays`と次問候補には含めません. catalog置換で`stabilityDays`が変化した場合も, その日の履歴へ新しい値を記録します.

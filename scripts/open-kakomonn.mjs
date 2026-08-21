@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 export const KAKOMONN_SITE = "chushoks.kakomonn.com";
 export const KAKOMONN_ORIGIN = `https://${KAKOMONN_SITE}`;
 export const SYNC_API_ORIGIN = "https://kakomonn-sync.kakomonn.workers.dev";
+export const CHROME_AUTOPLAY_ARGUMENT =
+  "--autoplay-policy=no-user-gesture-required";
 
 function validatedQuestionURL(candidateURL) {
   if (typeof candidateURL !== "string") {
@@ -140,7 +142,11 @@ export function resolveKakomonnLaunch({
   const validatedURL = validatedQuestionURL(questionURL).url;
 
   return {
-    arguments: [`--user-data-dir=${userDataDir}`, validatedURL],
+    arguments: [
+      `--user-data-dir=${userDataDir}`,
+      CHROME_AUTOPLAY_ARGUMENT,
+      validatedURL,
+    ],
     executablePath,
     userDataDir,
   };

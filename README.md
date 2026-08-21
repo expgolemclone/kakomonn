@@ -10,13 +10,13 @@
 
 ## 普段使いのChrome
 
-次のcommandは, production同期WorkerからFSRSに基づく次の問題を取得し, `%LOCALAPPDATA%\kakomonn-chrome-e2e` の専用profileでChromeを起動して, `https://chushoks.kakomonn.com/questions/<questionId>` を開きます. `KAKOMONN_SYNC_TOKEN` はprocess環境変数またはrepository rootのignore済み`.env`へ設定します. token未設定, API error, 不正responseの場合はChromeを起動しません.
+次のcommandは, production同期WorkerからFSRSに基づく次の問題を取得し, `%LOCALAPPDATA%\kakomonn-chrome-e2e` の専用profileでChromeを起動して, `https://chushoks.kakomonn.com/questions/<questionId>` を開きます. この専用Chrome processでは音声の自動再生を許可し, 画面をクリックせずに最初の問題文から読み上げます. `KAKOMONN_SYNC_TOKEN` はprocess環境変数またはrepository rootのignore済み`.env`へ設定します. token未設定, API error, 不正responseの場合はChromeを起動しません.
 
 ```powershell
 npm run open:kakomonn
 ```
 
-Chromeが同じprofileで起動済みの場合は, 既存windowへ新しいtabを追加します. `npm test`のlive E2Eはこのprofileの既存Chrome processを終了するため, test前に普段使いの作業を保存してください.
+Chromeが同じprofileで起動済みの場合は, 既存windowへ新しいtabを追加します. 自動再生を許可せずに起動した古いprocessには新しい起動optionが反映されないため, この変更後の初回だけ同じprofileのChromeを終了してからcommandを実行してください. `npm test`のlive E2Eはこのprofileの既存Chrome processを終了するため, test前に普段使いの作業を保存してください.
 
 ## iPhone Safari
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CHROME_AUTOPLAY_ARGUMENT,
   KAKOMONN_SITE,
   KAKOMONN_ORIGIN,
   SYNC_API_ORIGIN,
@@ -83,7 +84,11 @@ test("resolves the dedicated Chrome profile and scheduled URL", () => {
   });
 
   assert.deepEqual(launch, {
-    arguments: [`--user-data-dir=${PROFILE_PATH}`, QUESTION_URL],
+    arguments: [
+      `--user-data-dir=${PROFILE_PATH}`,
+      CHROME_AUTOPLAY_ARGUMENT,
+      QUESTION_URL,
+    ],
     executablePath: CHROME_PATH,
     userDataDir: PROFILE_PATH,
   });
@@ -113,6 +118,7 @@ test("opens the scheduled question detached without passing the sync token", asy
   assert.equal(calls[0][0], CHROME_PATH);
   assert.deepEqual(calls[0][1], [
     `--user-data-dir=${PROFILE_PATH}`,
+    CHROME_AUTOPLAY_ARGUMENT,
     QUESTION_URL,
   ]);
   assert.deepEqual(calls[0][2], {

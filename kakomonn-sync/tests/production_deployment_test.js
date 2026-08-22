@@ -83,10 +83,8 @@ test("production serves the canonical next-question launcher", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/);
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("referrer-policy"), "no-referrer");
-  assert.match(
-    response.headers.get("content-security-policy") ?? "",
-    /default-src 'self'/,
-  );
+  assert.equal(response.headers.get("content-security-policy"), null);
+  assert.equal(response.headers.get("x-frame-options"), "DENY");
   const body = await response.text();
   assert.match(body, /id="next-question-status"/);
   assert.match(body, /id="next-question-retry"/);

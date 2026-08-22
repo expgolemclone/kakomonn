@@ -3,7 +3,6 @@
 // @namespace    local.kakomonn.reader
 // @description  問題文と解説の読み上げ, コピー, stabilityDays合計日数の端末間同期と日次目標の祝福を提供します.
 // @match        https://*.kakomonn.com/*
-// @match        https://kakomonn-sync.kakomonn.workers.dev/open
 // @connect      kakomonn-sync.kakomonn.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com
 // @run-at       document-end
@@ -44,14 +43,13 @@
     !/(?:CriOS|FxiOS|EdgiOS|OPiOS)\//.test(userAgent);
   const SYNC_API_URL =
     "https://kakomonn-sync.kakomonn.workers.dev";
-  const NEXT_QUESTION_LAUNCHER_URL = `${SYNC_API_URL}/open`;
   const NEXT_QUESTION_SITE_ID = "chushoks.kakomonn.com";
+  const NEXT_QUESTION_LAUNCHER_URL =
+    `https://${NEXT_QUESTION_SITE_ID}/createques#kakomonn-next`;
   const isNextQuestionLauncher = location.href === NEXT_QUESTION_LAUNCHER_URL;
   const CONGRATULATIONS_URL =
     "https://kakomonn-congratulations.kakomonn.workers.dev/";
-  const SITE_ID = isNextQuestionLauncher
-    ? NEXT_QUESTION_SITE_ID
-    : location.hostname.toLowerCase();
+  const SITE_ID = location.hostname.toLowerCase();
   if (
     !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(
       SITE_ID
@@ -264,6 +262,8 @@
       --kakomonn-reader-text: #f3f4f6;
       --kakomonn-reader-muted: #a8b0bb;
       --kakomonn-reader-border: #343b45;
+      --kakomonn-reader-primary: #1473e6;
+      --kakomonn-reader-focus-ring: #a8c7fa;
       --kakomonn-reader-time-track: oklch(0.32 0.02 255);
       --kakomonn-reader-time-question: oklch(0.72 0.16 245);
       --kakomonn-reader-time-explanation: oklch(0.74 0.16 150);
@@ -283,6 +283,56 @@
       overflow: hidden !important;
       background: var(--kakomonn-reader-canvas) !important;
       color: var(--kakomonn-reader-text) !important;
+    }
+
+    #kakomonn-next-question-launcher {
+      min-height: 100%;
+      display: grid;
+      place-content: center;
+      gap: 16px;
+      padding: max(24px, env(safe-area-inset-top)) 24px
+        max(24px, env(safe-area-inset-bottom));
+      box-sizing: border-box;
+      background: var(--kakomonn-reader-canvas);
+      color: var(--kakomonn-reader-text);
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      text-align: center;
+    }
+
+    #kakomonn-next-question-title,
+    #next-question-status {
+      margin: 0;
+    }
+
+    #kakomonn-next-question-title {
+      font-size: clamp(24px, 8vw, 36px);
+      line-height: 1.2;
+    }
+
+    #next-question-status {
+      max-width: 36rem;
+      color: var(--kakomonn-reader-muted);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    #next-question-retry {
+      min-width: 8rem;
+      min-height: 48px;
+      justify-self: center;
+      padding: 0 20px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--kakomonn-reader-primary);
+      color: var(--kakomonn-reader-text);
+      font: 700 16px/1 -apple-system, BlinkMacSystemFont, sans-serif;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    #next-question-retry:focus-visible {
+      outline: 3px solid var(--kakomonn-reader-focus-ring);
+      outline-offset: 3px;
     }
 
     #kakomonn-reader-shell {
@@ -439,7 +489,7 @@
     }
 
     #kakomonn-reader-next {
-      background: #1473e6;
+      background: var(--kakomonn-reader-primary);
       font-size: 17px;
     }
 
@@ -606,7 +656,7 @@
     }
 
     #kakomonn-reader-sync-settings-save {
-      background: #1473e6;
+      background: var(--kakomonn-reader-primary);
       color: var(--kakomonn-reader-text);
     }
 
@@ -627,7 +677,7 @@
     #kakomonn-reader-sync-token:focus-visible,
     #kakomonn-reader-sync-settings-save:focus-visible,
     #kakomonn-reader-sync-settings-cancel:focus-visible {
-      outline: 3px solid #a8c7fa;
+      outline: 3px solid var(--kakomonn-reader-focus-ring);
       outline-offset: 2px;
     }
   `;

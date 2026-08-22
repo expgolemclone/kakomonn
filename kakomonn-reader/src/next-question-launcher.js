@@ -1,19 +1,34 @@
   if (isNextQuestionLauncher) {
-    const launcherStatus = document.getElementById("next-question-status");
-    const launcherRetry = document.getElementById("next-question-retry");
+    document.title = "次の問題へ | KAKOMONN";
+
+    const launcher = document.createElement("main");
+    launcher.id = "kakomonn-next-question-launcher";
+    launcher.setAttribute("aria-labelledby", "kakomonn-next-question-title");
+
+    const launcherTitle = document.createElement("h1");
+    launcherTitle.id = "kakomonn-next-question-title";
+    launcherTitle.textContent = "次の問題へ";
+
+    const launcherStatus = document.createElement("p");
+    launcherStatus.id = "next-question-status";
+    launcherStatus.setAttribute("role", "status");
+    launcherStatus.setAttribute("aria-live", "polite");
+    launcherStatus.textContent = "次に解く問題を確認しています.";
+
+    const launcherRetry = document.createElement("button");
+    launcherRetry.id = "next-question-retry";
+    launcherRetry.type = "button";
+    launcherRetry.hidden = true;
+    launcherRetry.textContent = "再試行";
+    launcherRetry.addEventListener("click", () => location.reload());
+
+    launcher.append(launcherTitle, launcherStatus, launcherRetry);
+    document.body.replaceChildren(launcher);
 
     function showLauncherFailure(message) {
-      if (launcherStatus !== null) {
-        launcherStatus.setAttribute("role", "alert");
-        launcherStatus.textContent = message;
-      }
-      if (launcherRetry !== null) {
-        launcherRetry.hidden = false;
-      }
-    }
-
-    if (launcherStatus === null || launcherRetry === null) {
-      return;
+      launcherStatus.setAttribute("role", "alert");
+      launcherStatus.textContent = message;
+      launcherRetry.hidden = false;
     }
 
     let storedToken;

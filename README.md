@@ -20,13 +20,13 @@ Chromeが同じprofileで起動済みの場合は, 既存windowへ新しいtab�
 
 ## iPhone Safari
 
-iPhone Safariでは, 最新の`kakomonn-reader`をTampermonkeyへinstallして同期tokenを保存した後, 次の固定URLをbookmarkまたはshortcutへ設定します. URLを開くと, FSRSに基づく次の問題へ移動します. 同期tokenはURLやpageの`localStorage`へ保存しません.
+iPhone Safariでは, 最新の`kakomonn-reader`をTampermonkeyへinstallして同期tokenを保存した後, 次の固定URLをbookmarkまたはshortcutへ設定します. URLを開くと, Tampermonkeyが既に動作する`chushoks.kakomonn.com`へredirectしてから, FSRSに基づく次の問題へ移動します. 同期tokenはURLやpageの`localStorage`へ保存しません.
 
 ```text
 https://kakomonn-sync.kakomonn.workers.dev/open
 ```
 
-token未設定, 認証失敗, 通信失敗, 問題catalog未同期, 次問なしの場合は移動せず, 固定URLのpageへ原因と再試行操作を表示します.
+token未設定, 認証失敗, 通信失敗, 問題catalog未同期, 次問なしの場合は移動せず, redirect先へ原因と再試行操作を表示します.
 
 ## テスト
 

@@ -22,7 +22,7 @@ iPhone SafariのTampermonkeyへ最新の`kakomonn-reader`をinstallして同期t
 https://kakomonn-sync.kakomonn.workers.dev/open
 ```
 
-`/open`は静的assetとして配信します. userscriptが専用storageの同期tokenで既存の`GET /v7/next`を呼ぶため, tokenをURLやdashboardの`localStorage`へ保存しません.
+`/open`はTampermonkeyが既に動作する`https://chushoks.kakomonn.com/createques#kakomonn-next`へredirectします. redirect先のuserscriptが専用storageの同期tokenで既存の`GET /v7/next`を呼ぶため, tokenをURLやdashboardの`localStorage`へ保存しません.
 
 ## ローカルテスト
 

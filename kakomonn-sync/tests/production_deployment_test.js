@@ -5,8 +5,10 @@ const { extname, resolve } = require("node:path");
 const test = require("node:test");
 
 const productionOrigin = "https://kakomonn-sync.kakomonn.workers.dev";
+const nextQuestionLauncherURL =
+  "https://chushoks.kakomonn.com/createques#kakomonn-next";
 const publicDirectory = resolve(__dirname, "..", "public");
-const assetControlFiles = new Set(["_headers"]);
+const assetControlFiles = new Set(["_headers", "_redirects"]);
 const textAssetExtensions = new Set([".css", ".html", ".js"]);
 const sitePattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/;
 
@@ -74,20 +76,13 @@ test("production assets match the repository", async (context) => {
   }
 });
 
-test("production serves the canonical next-question launcher", async () => {
+test("production redirects to the canonical next-question launcher", async () => {
   const response = await fetch(new URL("/open", productionOrigin), {
     headers: { "cache-control": "no-cache" },
+    redirect: "manual",
   });
-  assert.equal(response.status, 200);
-  assert.equal(new URL(response.url).pathname, "/open");
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/);
-  assert.equal(response.headers.get("cache-control"), "no-store");
-  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
-  assert.equal(response.headers.get("content-security-policy"), null);
-  assert.equal(response.headers.get("x-frame-options"), "DENY");
-  const body = await response.text();
-  assert.match(body, /id="next-question-status"/);
-  assert.match(body, /id="next-question-retry"/);
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), nextQuestionLauncherURL);
 });
 
 test("production serves only the authenticated v7 API backed by LearningState", async () => {

@@ -10,15 +10,8 @@ const projectRoot = path.resolve(__dirname, "..");
 const defaultScriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const currentQuestionURL = "https://chushoks.kakomonn.com/questions/86956";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
-const nextQuestionLauncherURL = `${SYNC_API_ORIGIN}/open`;
-const nextQuestionLauncherHTML = fs.readFileSync(
-  path.resolve(projectRoot, "..", "kakomonn-sync", "public", "open.html"),
-  "utf8",
-);
-const syncStyles = fs.readFileSync(
-  path.resolve(projectRoot, "..", "kakomonn-sync", "public", "styles.css"),
-  "utf8",
-);
+const nextQuestionLauncherURL =
+  "https://chushoks.kakomonn.com/createques#kakomonn-next";
 const iosUserAgent =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 " +
@@ -213,19 +206,7 @@ async function main() {
       hasTouch: true,
       isMobile: true,
     });
-    await context.route(`${SYNC_API_ORIGIN}/**`, (route) => {
-      const pathname = new URL(route.request().url()).pathname;
-      if (pathname === "/open") {
-        return route.fulfill({
-          body: nextQuestionLauncherHTML,
-          contentType: "text/html; charset=utf-8",
-        });
-      }
-      if (pathname === "/styles.css") {
-        return route.fulfill({ body: syncStyles, contentType: "text/css" });
-      }
-      return route.abort();
-    });
+    await context.route(`${SYNC_API_ORIGIN}/**`, (route) => route.abort());
     await context.route("https://chushoks.kakomonn.com/**", (route) =>
       route.fulfill({
         contentType: "text/html; charset=utf-8",

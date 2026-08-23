@@ -1,5 +1,13 @@
 # kakomonn
 
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare_Workers-F38020?style=flat-square&logo=cloudflareworkers&logoColor=white)](https://developers.cloudflare.com/workers/)
+[![Tampermonkey](https://img.shields.io/badge/Tampermonkey-00485B?style=flat-square&logo=tampermonkey&logoColor=white)](https://www.tampermonkey.net/)
+[![ts-fsrs](https://img.shields.io/badge/ts--fsrs-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://github.com/open-spaced-repetition/ts-fsrs)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vite.dev/)
+[![Vitest](https://img.shields.io/badge/Vitest-6E9F18?style=flat-square&logo=vitest&logoColor=white)](https://vitest.dev/)
+[![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
+[![License](https://img.shields.io/badge/License-MIT-A31F34?style=flat-square)](LICENSE)
+
 中小企業診断士試験の過去問学習を支援するユーザースクリプトと関連serviceを管理するリポジトリです.
 
 ## Extensions
@@ -59,3 +67,7 @@ KAKOMONN_SYNC_TOKEN=<SYNC_TOKEN>
 ```
 
 `npm ci`でPlaywrightと対応するChromiumおよびWebKitもインストールします. `npm test`はlocal testとsmoke testに続けて, 実サイトE2Eと, 専用profileの最小化Chrome, 実Tampermonkey, 本番同期Workerを使用するlive E2Eを実行します. test scriptは専用profileのChromeを起動し, Tampermonkeyを`UserScripts API Dynamic`に固定して, 最新userscriptを更新します. その後, 実OS clipboardへのMarkdownコピーまでを検証します. 専用profile, Tampermonkey, 本番token, 最新buildのいずれかが欠けている場合は失敗し, live E2Eをskipするoptionはありません.
+
+## License
+
+このリポジトリは[MIT License](LICENSE)で提供します.

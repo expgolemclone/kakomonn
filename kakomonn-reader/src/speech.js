@@ -256,30 +256,29 @@
     void speakAzureSpeechChunks(chunks, runId, label, rate);
   }
 
+  function speakAnswerResult(answerResult) {
+    const label = answerResult === "correct" ? "正解" : "不正解";
+    awaitingAnswerResultSpeech = false;
+    speakText(`${label}.`, label, ANSWER_RESULT_SPEECH_RATE);
+  }
+
   function readCurrentPage() {
     if (!speechEnabled) {
       return;
     }
 
-    const { questionText, explanationText } = extractReadableSections();
-    lastExplanationText = explanationText;
-
-    if (explanationText) {
-      currentQuestionText = "";
-      speakText(
-        `解説。${explanationText}`,
-        "解説",
-        EXPLANATION_SPEECH_RATE
-      );
+    const answerResult = getCurrentAnswerResult();
+    if (answerResult !== "unknown") {
+      speakAnswerResult(answerResult);
       return;
     }
 
+    const questionText = extractQuestionText();
     if (!questionText) {
       setStatus("問題文を取得できません");
       return;
     }
 
-    currentQuestionText = questionText;
+    awaitingAnswerResultSpeech = true;
     speakText(`問題文。${questionText}`, "問題文", QUESTION_SPEECH_RATE);
   }
-

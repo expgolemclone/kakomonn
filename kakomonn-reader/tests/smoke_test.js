@@ -410,10 +410,14 @@ async function assertRuntimeRejected(
   await context.close();
 }
 
-async function markAnswerCorrect(childFrame) {
-  await childFrame.evaluate(() => {
-    document.querySelector("#correct-result").hidden = false;
-    document.querySelector("#js-answer-result-box").classList.add("is-correct");
+async function markAnswerResult(childFrame, answerResult) {
+  await childFrame.evaluate((result) => {
+    if (result === "correct") {
+      document.querySelector("#correct-result").hidden = false;
+    }
+    document
+      .querySelector("#js-answer-result-box")
+      .classList.add(result === "correct" ? "is-correct" : "is-wrong");
     for (const lock of document.querySelectorAll(
       "#js-commentary-wrap > .item > .none_text"
     )) {
@@ -424,7 +428,7 @@ async function markAnswerCorrect(childFrame) {
     )) {
       explanation.hidden = false;
     }
-  });
+  }, answerResult);
 }
 
 async function azureSpeechCalls(page) {
@@ -1020,7 +1024,7 @@ async function main() {
     );
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 0);
 
-    await markAnswerCorrect(childFrame);
+    await markAnswerResult(childFrame, "correct");
     assert.deepEqual(
       await childFrame.locator("#js-answer-result-box").evaluate((element) => {
         const style = getComputedStyle(element);
@@ -1053,16 +1057,13 @@ async function main() {
     );
     await page.waitForFunction(
       () =>
-        window.__readerStatusHistory.includes("解説 1/1") &&
+        window.__readerStatusHistory.includes("正解 1/1") &&
         document.querySelector("#kakomonn-reader-status").textContent ===
-          "解説完了",
+          "正解完了",
     );
     assert.equal(
       (await azureSpeechCalls(page))[1].body,
-      expectedSpeechSSML(
-        "解説。これは動作確認用の解説です.。これは二つ目の解説です.",
-        "+70%",
-      ),
+      expectedSpeechSSML("正解.", "+70%"),
     );
     assert.equal(await speechTokenCallCount(page), 1);
 
@@ -1577,7 +1578,7 @@ async function main() {
     assert.equal(await speechTokenCallCount(iosPage), 1);
     await firstAnswer.tap();
     assert.equal(await firstAnswer.isChecked(), true);
-    await markAnswerCorrect(iosFrame);
+    await markAnswerResult(iosFrame, "incorrect");
     await iosPage.waitForFunction(
       (url) =>
         window.__syncMock.calls.filter((call) => call.url === url).length === 2,
@@ -1586,14 +1587,11 @@ async function main() {
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-status").textContent ===
-        "解説完了",
+        "不正解完了",
     );
     assert.equal(
       (await azureSpeechCalls(iosPage))[1].body,
-      expectedSpeechSSML(
-        "解説。これは動作確認用の解説です.。これは二つ目の解説です.",
-        "+70%",
-      ),
+      expectedSpeechSSML("不正解.", "+70%"),
     );
     assert.equal(await speechTokenCallCount(iosPage), 1);
     await iosPage.evaluate(() => { window.__syncMock.nextAttemptStabilityDaysDelta = 31; });

@@ -77,7 +77,7 @@
   const SYNC_TIMEOUT_MS = 15000;
   const SPEECH_TIMEOUT_MS = 30000;
   const FRAME_LOAD_DELAY_MS = 900;
-  const EXPLANATION_CHANGE_DELAY_MS = 700;
+  const FRAME_CHANGE_DELAY_MS = 700;
   const FRAME_PROBLEM_SCROLL_DELAYS_MS = [0, 120, 600];
   const COPY_FEEDBACK_DURATION_MS = 1400;
   const SHORTCUT_SEQUENCE_TIMEOUT_MS = 400;
@@ -195,7 +195,7 @@
     }
   `;
   const QUESTION_SPEECH_RATE = 2.0;
-  const EXPLANATION_SPEECH_RATE = 1.7;
+  const ANSWER_RESULT_SPEECH_RATE = 1.7;
   const SPEECH_TOKEN_RENEWAL_SKEW_MS = 60000;
   const AZURE_SPEECH_URL =
     "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
@@ -229,7 +229,7 @@
   let currentPageReadPending = false;
   let currentFrameURL = location.href;
   let loadTimer = null;
-  let explanationTimer = null;
+  let frameChangeTimer = null;
   let timeLimitPhase = null;
   let timeLimitDeadline = 0;
   let timeLimitTimeout = null;
@@ -238,8 +238,7 @@
   let frameProblemScrollTimers = [];
   let copyFeedbackTimer = null;
   let frameMutationObserver = null;
-  let lastExplanationText = "";
-  let currentQuestionText = "";
+  let awaitingAnswerResultSpeech = false;
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
   let todayStabilityDaysDelta = null;

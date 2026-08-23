@@ -282,9 +282,9 @@
       loadTimer = null;
     }
 
-    if (explanationTimer !== null) {
-      clearTimeout(explanationTimer);
-      explanationTimer = null;
+    if (frameChangeTimer !== null) {
+      clearTimeout(frameChangeTimer);
+      frameChangeTimer = null;
     }
 
     clearFrameProblemScrollTimers();
@@ -292,8 +292,7 @@
     frameMutationObserver?.disconnect();
     frameMutationObserver = null;
     currentPageReadPending = false;
-    lastExplanationText = "";
-    currentQuestionText = "";
+    awaitingAnswerResultSpeech = false;
   }
 
   function applyFrameDarkMode(sourceDocument) {
@@ -347,7 +346,7 @@
       onReaderKeyDown,
       true
     );
-    observeExplanationChanges();
+    observeFrameChanges();
 
     try {
       currentFrameURL = nextURL;

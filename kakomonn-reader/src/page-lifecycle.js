@@ -1,49 +1,38 @@
-  function checkForNewExplanation() {
+  function checkForNewAnswerResult() {
     if (
       !speechEnabled ||
-      !currentQuestionText ||
-      getCurrentAnswerResult() === "unknown"
+      !awaitingAnswerResultSpeech
     ) {
       return;
     }
 
-    const lines = getVisibleLines();
-    if (hasVisibleExplanationLock(lines)) {
+    const answerResult = getCurrentAnswerResult();
+    if (answerResult === "unknown") {
       return;
     }
 
-    const explanationText = extractExplanationText(lines);
-    if (!explanationText || explanationText === lastExplanationText) {
-      return;
-    }
-
-    lastExplanationText = explanationText;
-    speakText(
-      `解説。${explanationText}`,
-      "解説",
-      EXPLANATION_SPEECH_RATE
-    );
+    speakAnswerResult(answerResult);
   }
 
-  function scheduleExplanationCheck() {
-    if (explanationTimer !== null) {
-      clearTimeout(explanationTimer);
+  function scheduleFrameChangeCheck() {
+    if (frameChangeTimer !== null) {
+      clearTimeout(frameChangeTimer);
     }
 
-    explanationTimer = window.setTimeout(() => {
-      explanationTimer = null;
+    frameChangeTimer = window.setTimeout(() => {
+      frameChangeTimer = null;
       updateNextQuestionButton();
       updateCopyButton();
       synchronizeTimeLimitPhase();
-      checkForNewExplanation();
-    }, EXPLANATION_CHANGE_DELAY_MS);
+      checkForNewAnswerResult();
+    }, FRAME_CHANGE_DELAY_MS);
   }
 
-  function observeExplanationChanges() {
+  function observeFrameChanges() {
     frameMutationObserver?.disconnect();
     frameMutationObserver = new MutationObserver(() => {
       synchronizeAnswerPresentation();
-      scheduleExplanationCheck();
+      scheduleFrameChangeCheck();
     });
     frameMutationObserver.observe(frameDocument.body, {
       subtree: true,
@@ -307,4 +296,3 @@
     clearTimeout(copyFeedbackTimer);
     copyFeedbackTimer = null;
   }
-

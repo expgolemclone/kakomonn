@@ -302,12 +302,17 @@ async function main() {
         value: undefined,
       });
       window.__copiedTexts = [];
+      window.__pageClipboardWrites = [];
       window.__clipboardWriteFails = false;
       Object.defineProperty(navigator, "clipboard", {
         configurable: true,
         value: {
-          async writeText() {
-            throw new Error("page clipboard API must not be used");
+          async writeText(value) {
+            if (window.__clipboardWriteFails) {
+              throw new Error("mock clipboard write failed");
+            }
+            window.__copiedTexts.push(value);
+            window.__pageClipboardWrites.push(value);
           },
         },
       });
@@ -462,6 +467,14 @@ async function main() {
       await page.evaluate(() => window.__copiedTexts[0]),
       expectedCopiedMarkdown,
     );
+    assert.deepEqual(
+      await page.evaluate(() => window.__pageClipboardWrites),
+      [expectedCopiedMarkdown],
+    );
+    assert.deepEqual(
+      await page.evaluate(() => window.__syncMock.clipboardWrites),
+      [],
+    );
     assert.equal(
       (await page.evaluate(() => window.__copiedTexts[0])).split(
         "https://cdn.example.test/webkit-explanation-1.png"
@@ -535,6 +548,14 @@ async function main() {
         "クリップボードへコピーできません",
     );
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
+    assert.equal(
+      await page.evaluate(() => window.__pageClipboardWrites.length),
+      1,
+    );
+    assert.deepEqual(
+      await page.evaluate(() => window.__syncMock.clipboardWrites),
+      [],
+    );
     await page.evaluate(() => {
       window.__clipboardWriteFails = false;
     });

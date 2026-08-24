@@ -432,6 +432,25 @@
     copyButton.disabled = false;
   }
 
+  async function writeCopyMarkdownToClipboard(markdown) {
+    if (isIPhoneSafari) {
+      if (
+        typeof navigator.clipboard !== "object" ||
+        navigator.clipboard === null ||
+        typeof navigator.clipboard.writeText !== "function"
+      ) {
+        throw new Error("Clipboard API is unavailable");
+      }
+      await navigator.clipboard.writeText(markdown);
+      return;
+    }
+
+    const copied = await GM.setClipboard(markdown);
+    if (copied === false) {
+      throw new Error("clipboard write was rejected");
+    }
+  }
+
   async function copyReadableSections() {
     const copyDocument = buildCopyMarkdown(frameDocument);
     if (copyDocument.state === "locked") {
@@ -446,10 +465,7 @@
     }
 
     try {
-      const copied = await GM.setClipboard(copyDocument.markdown);
-      if (copied === false) {
-        throw new Error("clipboard write was rejected");
-      }
+      await writeCopyMarkdownToClipboard(copyDocument.markdown);
       copyButton.textContent = "コピー済み";
       copyButton.disabled = true;
       setStatus("問題文,自分の回答,解説をMarkdownでコピーしました");

@@ -431,25 +431,33 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
   storage.transactionSync(() => {
     const today = getTokyoDate(new Date(nowMs));
     const { startMs, endMs } = tokyoDateRangeMs(today);
-    const schemaV3Tables = [
+    const versionedCoreTables = [
       "attempts",
       "cards",
       "catalog_metadata",
       "questions",
       "schema_metadata",
-      "site_settings",
       "stability_history",
     ];
+    const schemaV3Tables = [...versionedCoreTables, "site_settings"];
     const currentTables = [
-      "attempts",
-      "cards",
-      "catalog_metadata",
-      "questions",
-      "schema_metadata",
-      "stability_history",
+      ...versionedCoreTables,
       "daily_due_card_achievements",
       "learning_metrics",
     ];
+    const thresholdMetricTables = [
+      ...schemaV3Tables,
+      "daily_stability_days_delta_achievements",
+    ];
+    const requiredTablesByVersion = new Map([
+      [2, schemaV3Tables],
+      [3, schemaV3Tables],
+      [4, thresholdMetricTables],
+      [5, [...thresholdMetricTables, "learning_metrics"]],
+      [6, [...thresholdMetricTables, "learning_metrics"]],
+      [7, currentTables],
+      [CURRENT_SCHEMA_VERSION, currentTables],
+    ]);
     const legacyTables = [
       "attempts",
       "cards",
@@ -465,14 +473,15 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       version = storage.sql
         .exec("SELECT version FROM schema_metadata WHERE singleton = 1")
         .toArray()[0]?.version;
+      const requiredTables = requiredTablesByVersion.get(version);
+      if (requiredTables === undefined) {
+        throw new Error("unsupported LearningState schema version");
+      }
+      if (requiredTables.some((name) => tableDefinition(storage, name) === undefined)) {
+        throw new Error("incomplete LearningState schema");
+      }
       if (version === CURRENT_SCHEMA_VERSION) {
         return;
-      }
-      const existingSchemaV3 = schemaV3Tables.filter(
-        (name) => tableDefinition(storage, name) !== undefined
-      );
-      if (existingSchemaV3.length !== schemaV3Tables.length) {
-        throw new Error("incomplete LearningState schema");
       }
     } else {
       const existingSchemaV3 = schemaV3Tables.filter(

@@ -198,6 +198,48 @@ describe("LearningState schema", () => {
     });
   });
 
+  it("migrates the deployed schema v7 after retired tables were removed", async () => {
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec(`
+        ALTER TABLE learning_metrics RENAME TO learning_metrics_v8;
+        CREATE TABLE learning_metrics (
+          site TEXT PRIMARY KEY,
+          stability_days REAL NOT NULL,
+          attempted_question_count INTEGER NOT NULL,
+          attempted_question_count_date TEXT NOT NULL,
+          today_attempted_question_count INTEGER NOT NULL
+        ) WITHOUT ROWID;
+        INSERT INTO learning_metrics
+        SELECT site, stability_days, attempted_question_count,
+               daily_metrics_date, today_attempted_question_count
+        FROM learning_metrics_v8;
+        DROP TABLE learning_metrics_v8;
+        UPDATE schema_metadata SET version = 7 WHERE singleton = 1;
+      `);
+
+      initializeLearningSchema(state.storage, NOW);
+
+      expect(
+        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
+      ).toEqual({ version: 8 });
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT daily_metrics_date, today_attempted_question_count,
+                    today_attempt_count, today_correct_attempt_count
+             FROM learning_metrics WHERE site = ?`,
+            SITE
+          )
+          .toArray()[0]
+      ).toEqual({
+        daily_metrics_date: "2026-08-10",
+        today_attempted_question_count: 0,
+        today_attempt_count: 0,
+        today_correct_attempt_count: 0,
+      });
+    });
+  });
+
   it("migrates legacy data to schema v8 without retaining threshold-based fields", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`

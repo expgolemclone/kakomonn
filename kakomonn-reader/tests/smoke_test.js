@@ -587,6 +587,14 @@ async function main() {
       const controls = document
         .querySelector("#kakomonn-reader-controls")
         .getBoundingClientRect();
+      const statusElement = document.querySelector("#kakomonn-reader-status");
+      const status = statusElement.getBoundingClientRect();
+      const statusStyle = getComputedStyle(statusElement);
+      const metricsElement = document.querySelector(
+        "#kakomonn-reader-learning-metrics",
+      );
+      const metrics = metricsElement.getBoundingClientRect();
+      const metricsStyle = getComputedStyle(metricsElement);
       const frame = document
         .querySelector("#kakomonn-reader-frame")
         .getBoundingClientRect();
@@ -598,6 +606,11 @@ async function main() {
         controlsBottom: controls.bottom,
         frameBottom: frame.bottom,
         frameTop: frame.top,
+        metricsFlexShrink: metricsStyle.flexShrink,
+        metricsWidth: metrics.width,
+        statusFlexGrow: statusStyle.flexGrow,
+        statusMaxWidth: Number.parseFloat(statusStyle.maxWidth),
+        statusWidth: status.width,
       };
     });
     assert.equal(
@@ -607,6 +620,18 @@ async function main() {
     );
     assert.equal(
       readerLayout.frameBottom <= readerLayout.actionsTop,
+      true,
+      JSON.stringify(readerLayout),
+    );
+    assert.equal(readerLayout.statusFlexGrow, "0");
+    assert.equal(readerLayout.metricsFlexShrink, "0");
+    assert.equal(
+      readerLayout.statusWidth <= readerLayout.statusMaxWidth,
+      true,
+      JSON.stringify(readerLayout),
+    );
+    assert.equal(
+      readerLayout.statusWidth < readerLayout.metricsWidth,
       true,
       JSON.stringify(readerLayout),
     );
@@ -768,6 +793,16 @@ async function main() {
         window.__readerStatusHistory.includes("問題文 1/1") &&
         document.querySelector("#kakomonn-reader-status").textContent ===
           "問題文完了",
+    );
+    assert.equal(
+      await page.evaluate(() => window.__readerStatusHistory.includes("準備中")),
+      true,
+    );
+    assert.equal(
+      await page.evaluate(() =>
+        window.__readerStatusHistory.includes("問題文準備中"),
+      ),
+      false,
     );
     assert.equal(
       await page.locator("#kakomonn-reader-next").isDisabled(),

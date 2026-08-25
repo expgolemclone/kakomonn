@@ -1,5 +1,5 @@
   function initializeSpeechPlayback(runId, onReady, onUnavailable) {
-    setStatus("音声準備中");
+    setStatus("準備中", "音声準備中");
     speechAudio.src = SILENT_AUDIO_DATA_URL;
 
     let playPromise;
@@ -252,7 +252,7 @@
     speechRunId += 1;
     const runId = speechRunId;
     cancelActiveSpeech();
-    setStatus(`${label}準備中`);
+    setStatus("準備中", `${label}準備中`);
     void speakAzureSpeechChunks(chunks, runId, label, rate);
   }
 

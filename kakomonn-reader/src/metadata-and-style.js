@@ -263,6 +263,10 @@
       --kakomonn-reader-border: #343b45;
       --kakomonn-reader-primary: #1473e6;
       --kakomonn-reader-focus-ring: #a8c7fa;
+      --kakomonn-reader-status-accent: oklch(0.74 0.14 245);
+      --kakomonn-reader-metric-accent: oklch(0.79 0.12 221);
+      --kakomonn-reader-success: oklch(0.79 0.14 151);
+      --kakomonn-reader-panel-highlight: rgba(255, 255, 255, 0.035);
       --kakomonn-reader-time-track: oklch(0.32 0.02 255);
       --kakomonn-reader-time-question: oklch(0.72 0.16 245);
       --kakomonn-reader-time-explanation: oklch(0.74 0.16 150);
@@ -360,7 +364,7 @@
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 8px;
+      gap: 10px;
       height: var(--kakomonn-reader-controls-height);
       padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
       box-sizing: border-box;
@@ -407,7 +411,7 @@
     #kakomonn-reader-status,
     #kakomonn-reader-skip,
     #kakomonn-reader-sync-settings-button {
-      border: 0;
+      border: 1px solid var(--kakomonn-reader-border);
       border-radius: 999px;
       background: var(--kakomonn-reader-raised);
       color: var(--kakomonn-reader-text);
@@ -419,22 +423,51 @@
     }
 
     #kakomonn-reader-status {
-      flex: 1 1 auto;
+      flex: 0 1 auto;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      width: fit-content;
+      max-width: 10rem;
       min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
+    #kakomonn-reader-status > span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #kakomonn-reader-status::before {
+      width: 7px;
+      height: 7px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--kakomonn-reader-status-accent);
+      box-shadow: 0 0 0 4px color-mix(
+        in oklch,
+        var(--kakomonn-reader-status-accent) 16%,
+        transparent
+      );
+      content: "";
+    }
+
     #kakomonn-reader-learning-metrics {
-      flex: 0 1 auto;
+      flex: 0 0 auto;
       min-width: 0;
       display: grid;
       gap: 5px;
       padding: 7px 12px;
-      border: 0;
+      border: 1px solid var(--kakomonn-reader-border);
       border-radius: 14px;
-      background: var(--kakomonn-reader-raised);
+      background:
+        linear-gradient(
+          135deg,
+          var(--kakomonn-reader-panel-highlight),
+          transparent 52%
+        ),
+        var(--kakomonn-reader-raised);
       color: var(--kakomonn-reader-text);
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
       font-weight: 700;
@@ -451,6 +484,8 @@
     #kakomonn-reader-due-card-progress {
       justify-content: space-between;
       gap: 16px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--kakomonn-reader-border);
     }
 
     .kakomonn-reader-metric {
@@ -464,7 +499,7 @@
     .kakomonn-reader-metric-label {
       color: var(--kakomonn-reader-muted);
       font-size: 10px;
-      overflow-wrap: anywhere;
+      letter-spacing: 0.015em;
     }
 
     #kakomonn-reader-due-cards-completed {
@@ -472,14 +507,14 @@
     }
 
     #kakomonn-reader-due-cards-completed[data-completed="true"] {
-      color: var(--kakomonn-reader-focus-ring);
+      color: var(--kakomonn-reader-success);
     }
 
     .kakomonn-reader-remaining-value {
       display: flex;
       align-items: baseline;
       gap: 3px;
-      color: var(--kakomonn-reader-focus-ring);
+      color: var(--kakomonn-reader-metric-accent);
     }
 
     #kakomonn-reader-due-cards-remaining {
@@ -506,7 +541,7 @@
     #kakomonn-reader-today-metrics dt {
       color: var(--kakomonn-reader-muted);
       font-size: 10px;
-      overflow-wrap: anywhere;
+      letter-spacing: 0.015em;
     }
 
     #kakomonn-reader-today-metrics dd {
@@ -594,7 +629,7 @@
       opacity: 0.72;
     }
 
-    @media (max-width: 620px) {
+    @media (max-width: 900px) {
       :root {
         --kakomonn-reader-controls-height: calc(
           136px + env(safe-area-inset-top)
@@ -621,6 +656,7 @@
       #kakomonn-reader-status {
         grid-row: 1;
         grid-column: 1;
+        justify-self: start;
       }
 
       #kakomonn-reader-skip {
@@ -664,6 +700,12 @@
 
       #kakomonn-reader-today-metrics dd {
         justify-content: center;
+      }
+
+      #kakomonn-reader-status,
+      #kakomonn-reader-skip,
+      #kakomonn-reader-sync-settings-button {
+        box-shadow: none;
       }
 
       #kakomonn-reader-actions {

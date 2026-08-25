@@ -41,7 +41,12 @@
 
   const statusBadge = document.createElement("div");
   statusBadge.id = "kakomonn-reader-status";
-  statusBadge.textContent = "ページ読込中";
+  statusBadge.setAttribute("role", "status");
+  statusBadge.setAttribute("aria-live", "polite");
+  statusBadge.setAttribute("aria-atomic", "true");
+  const statusText = document.createElement("span");
+  statusText.textContent = "読込中";
+  statusBadge.appendChild(statusText);
 
   const learningMetricsBadge = document.createElement("div");
   learningMetricsBadge.id = "kakomonn-reader-learning-metrics";
@@ -293,6 +298,11 @@
     );
   }
 
-  function setStatus(message) {
-    statusBadge.textContent = message;
+  function setStatus(message, accessibleMessage = message) {
+    statusText.textContent = message;
+    if (accessibleMessage === message) {
+      statusBadge.removeAttribute("aria-label");
+    } else {
+      statusBadge.setAttribute("aria-label", accessibleMessage);
+    }
   }

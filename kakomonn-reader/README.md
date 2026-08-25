@@ -90,3 +90,7 @@ npm test
 `KAKOMONN_CHROME_USER_DATA_DIR`はprocess環境変数またはrepository rootのignore済み`.env`で指定できます. process環境変数がある場合はその値を優先し, 省略した場合は`%LOCALAPPDATA%\kakomonn-chrome-e2e`を使用します. 通常利用するChrome user data directoryとその配下は使用できません. `KAKOMONN_CHROME_EXECUTABLE`を省略した場合は`%ProgramFiles%\Google\Chrome\Application\chrome.exe`を使用します. test scriptが指定された専用profileの既存processを終了し, 最小化Chromeの起動から終了までを所有します.
 
 `npm run test:kakomonn-live-sync`で最後のlive E2Eだけを再実行できますが,build,local test,smoke test,live-site E2Eを含む完全な完了条件は`npm test`です. live-sync E2Eをskipまたはforce通過させるoptionはありません. `npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます.
+
+GitHub Actionsでは, `macos-26`, Xcode 26.6, iPhone 17, iOS 26.5 Simulator上のactual Mobile Safari E2Eも実行します. Appium XCUITestによるnative tapで回答, Markdown copy, 次問遷移を操作し, copy結果はSimulatorのactual pasteboardから取得します. 同期とTampermonkeyの`GM` APIだけをtest doubleへ置換し, `navigator.clipboard`はactual Safari implementationを使用します.
+
+同じMac環境では`npm run test:kakomonn-ios-safari`で再実行できます. actual Tampermonkey extension, iPhone実機, production同期, actual音声再生はこのtestの対象外です.

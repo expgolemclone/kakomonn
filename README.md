@@ -68,6 +68,18 @@ KAKOMONN_SYNC_TOKEN=<SYNC_TOKEN>
 
 `npm ci`でPlaywrightと対応するChromiumおよびWebKitもインストールします. `npm test`はlocal testとsmoke testに続けて, 実サイトE2Eと, 専用profileの最小化Chrome, 実Tampermonkey, 本番同期Workerを使用するlive E2Eを実行します. test scriptは専用profileのChromeを起動し, Tampermonkeyを`UserScripts API Dynamic`に固定して, 最新userscriptを更新します. その後, 実OS clipboardへのMarkdownコピーまでを検証します. 専用profile, Tampermonkey, 本番token, 最新buildのいずれかが欠けている場合は失敗し, live E2Eをskipするoptionはありません.
 
+## iOS Safari CI
+
+GitHub Actionsはreaderまたは関連test設定が変更されたpull requestと`main`へのpushで, `macos-26`, Xcode 26.6, iPhone 17, iOS 26.5 Simulatorを使用するMobile Safari E2Eを実行します. Appium XCUITestで実際のSafariをnative tapし, SimulatorのpasteboardへMarkdownが書き込まれたことまで検証します. productionの固定問題pageを使用しますが, 同期APIとTampermonkeyの`GM` APIはtest doubleへ置換するため, secretとproductionの学習dataは使用しません.
+
+同じ構成を用意したMacでは, 次のcommandで再実行できます. 指定したXcodeまたはSimulatorがない場合は, 別versionへ切り替えず失敗します.
+
+```bash
+npm run test:kakomonn-ios-safari
+```
+
+このE2Eはactual Mobile Safariのuserscript動作, layout, 回答, Markdown copy, 次問遷移を対象とします. actual Tampermonkey extension, iPhone実機, production同期, actual音声再生は対象外です.
+
 ## License
 
 このリポジトリは[MIT License](LICENSE)で提供します.

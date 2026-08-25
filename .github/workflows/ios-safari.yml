@@ -1,0 +1,71 @@
+name: iOS Safari
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ios-safari.yml"
+      - "kakomonn-reader/**"
+      - "package-lock.json"
+      - "package.json"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/ios-safari.yml"
+      - "kakomonn-reader/**"
+      - "package-lock.json"
+      - "package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-safari-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-safari:
+    name: iOS Safari
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      KAKOMONN_IOS_DEVICE: iPhone 17
+      KAKOMONN_IOS_VERSION: "26.5"
+      KAKOMONN_XCODE_VERSION: "26.6"
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          cache: npm
+          node-version: 22.23.1
+
+      - name: Verify Xcode and Simulator
+        run: |
+          test "$(xcodebuild -version | head -n 1)" = "Xcode ${KAKOMONN_XCODE_VERSION}"
+          xcrun simctl list devices available
+          xcrun simctl list devices available --json | jq -e \
+            --arg runtime "com.apple.CoreSimulator.SimRuntime.iOS-${KAKOMONN_IOS_VERSION//./-}" \
+            --arg device "${KAKOMONN_IOS_DEVICE}" \
+            '.devices[$runtime] | any(.name == $device and .isAvailable == true)'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run iOS Safari E2E
+        run: npm run test:kakomonn-ios-safari
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          if-no-files-found: warn
+          name: ios-safari-failure-${{ github.run_id }}
+          path: kakomonn-reader/test-results/ios-safari/
+          retention-days: 7

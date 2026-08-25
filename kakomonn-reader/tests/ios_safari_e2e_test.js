@@ -1,0 +1,928 @@
+const assert = require("node:assert/strict");
+const { spawn, execFileSync } = require("node:child_process");
+const fs = require("node:fs");
+const http = require("node:http");
+const net = require("node:net");
+const path = require("node:path");
+
+const {
+  createSyncMockConfiguration,
+  installSyncMockInWindow,
+} = require("./sync_mock");
+const {
+  assertMarkdownCopy,
+  MARKDOWN_ANSWER_TEXT,
+  MARKDOWN_CHOICES,
+  MARKDOWN_EXPLANATION_IMAGE_URLS,
+  MARKDOWN_EXPLANATION_PREFIXES,
+  MARKDOWN_QUESTION_HEADING,
+  MARKDOWN_QUESTION_IMAGE_URLS,
+  MARKDOWN_QUESTION_TEXT,
+  MARKDOWN_QUESTION_URL,
+  normalizeContent,
+} = require("./support/markdown_copy_fixture");
+
+const projectRoot = path.resolve(__dirname, "..");
+const repositoryRoot = path.resolve(projectRoot, "..");
+const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
+const resultDirectory = path.join(projectRoot, "test-results", "ios-safari");
+const appiumLogPath = path.join(resultDirectory, "appium.log");
+const simulatorLogPath = path.join(resultDirectory, "simulator.log");
+const failureScreenshotPath = path.join(
+  resultDirectory,
+  "failure-screenshot.png",
+);
+const failureSourcePath = path.join(resultDirectory, "failure-source.xml");
+const safariNativeSourcePath = path.join(
+  resultDirectory,
+  "safari-native-source.xml",
+);
+const failureDiagnosticsPath = path.join(
+  resultDirectory,
+  "failure-diagnostics.json",
+);
+const readerSourceURL = "kakomonn-reader.user.js";
+const expectedXcodeVersion =
+  process.env.KAKOMONN_XCODE_VERSION ?? "26.6";
+const simulatorPlatformVersion =
+  process.env.KAKOMONN_IOS_VERSION ?? "26.5";
+const simulatorDeviceName =
+  process.env.KAKOMONN_IOS_DEVICE ?? "iPhone 17";
+const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
+const testTimeout = 60_000;
+const webDriverElementKey = "element-6066-11e4-a52e-4f735466cecf";
+
+class IOSWebElement {
+  constructor(driver, reference) {
+    this.driver = driver;
+    this.reference = reference;
+  }
+
+  async click() {
+    await this.driver.sessionRequest(
+      "POST",
+      `/element/${encodeURIComponent(this.id)}/click`,
+      {},
+    );
+  }
+
+  async getText() {
+    return this.driver.sessionRequest(
+      "GET",
+      `/element/${encodeURIComponent(this.id)}/text`,
+    );
+  }
+
+  async isDisplayed() {
+    return this.driver.sessionRequest(
+      "GET",
+      `/element/${encodeURIComponent(this.id)}/displayed`,
+    );
+  }
+
+  async isSelected() {
+    return this.driver.sessionRequest(
+      "GET",
+      `/element/${encodeURIComponent(this.id)}/selected`,
+    );
+  }
+
+  async waitForDisplayed({ timeout = testTimeout } = {}) {
+    await this.driver.waitUntil(() => this.isDisplayed(), {
+      interval: 250,
+      timeout,
+      timeoutMsg: `Element was not displayed: ${this.id}`,
+    });
+  }
+
+  get id() {
+    const id = this.reference?.[webDriverElementKey];
+    assert.equal(typeof id, "string", "Invalid WebDriver element reference");
+    return id;
+  }
+}
+
+class IOSWebDriver {
+  constructor(port, sessionId = null) {
+    this.port = port;
+    this.sessionId = sessionId;
+  }
+
+  static async create(port, capabilities) {
+    const client = new IOSWebDriver(port);
+    const session = await client.request(
+      "POST",
+      "/session",
+      {
+        capabilities: {
+          alwaysMatch: capabilities,
+          firstMatch: [{}],
+        },
+      },
+      1_200_000,
+    );
+    assert.equal(typeof session?.sessionId, "string");
+    client.sessionId = session.sessionId;
+    return client;
+  }
+
+  async $(selector) {
+    return this.findElement("css selector", selector);
+  }
+
+  async $$(selector) {
+    const references = await this.sessionRequest("POST", "/elements", {
+      using: "css selector",
+      value: selector,
+    });
+    return references.map((reference) => new IOSWebElement(this, reference));
+  }
+
+  async deleteSession() {
+    if (this.sessionId === null) {
+      return;
+    }
+    const sessionId = this.sessionId;
+    this.sessionId = null;
+    await this.request("DELETE", `/session/${encodeURIComponent(sessionId)}`);
+  }
+
+  async findElement(using, value) {
+    const reference = await this.sessionRequest("POST", "/element", {
+      using,
+      value,
+    });
+    return new IOSWebElement(this, reference);
+  }
+
+  async getContext() {
+    return this.sessionRequest("GET", "/context");
+  }
+
+  async getContexts() {
+    return this.sessionRequest("GET", "/contexts");
+  }
+
+  async execute(script, ...args) {
+    const source =
+      typeof script === "function"
+        ? `return (${script.toString()}).apply(null, arguments)`
+        : script;
+    return this.sessionRequest("POST", "/execute/sync", {
+      args,
+      script: source,
+    });
+  }
+
+  async executeScript(script, args) {
+    return this.sessionRequest("POST", "/execute/sync", { args, script });
+  }
+
+  async getLogs(type) {
+    return this.sessionRequest("POST", "/log", { type });
+  }
+
+  async getPageSource() {
+    return this.sessionRequest("GET", "/source");
+  }
+
+  async getUrl() {
+    return this.sessionRequest("GET", "/url");
+  }
+
+  async request(method, endpoint, body, timeout = 180_000) {
+    const requestBody = body === undefined ? null : JSON.stringify(body);
+    const response = await new Promise((resolve, reject) => {
+      const request = http.request(
+        {
+          host: "127.0.0.1",
+          port: this.port,
+          path: endpoint,
+          method,
+          headers:
+            requestBody === null
+              ? undefined
+              : {
+                  "content-length": Buffer.byteLength(requestBody),
+                  "content-type": "application/json",
+                },
+        },
+        (incoming) => {
+          const chunks = [];
+          incoming.on("data", (chunk) => chunks.push(chunk));
+          incoming.once("error", reject);
+          incoming.once("end", () => {
+            resolve({
+              body: Buffer.concat(chunks).toString("utf8"),
+              statusCode: incoming.statusCode,
+              statusMessage: incoming.statusMessage,
+            });
+          });
+        },
+      );
+      request.once("error", reject);
+      request.setTimeout(timeout, () => {
+        request.destroy(
+          new Error(
+            `WebDriver command timed out after ${timeout}ms for ${method} ${endpoint}`,
+          ),
+        );
+      });
+      if (requestBody !== null) {
+        request.write(requestBody);
+      }
+      request.end();
+    });
+    const responseText = response.body;
+    let payload;
+    try {
+      payload = JSON.parse(responseText);
+    } catch {
+      throw new Error(
+        `WebDriver returned invalid JSON for ${method} ${endpoint}: ${responseText}`,
+      );
+    }
+    if (
+      response.statusCode === undefined ||
+      response.statusCode < 200 ||
+      response.statusCode >= 300 ||
+      payload.value?.error
+    ) {
+      const message =
+        payload.value?.message ??
+        payload.value?.error ??
+        `${response.statusCode ?? "unknown"} ${response.statusMessage ?? ""}`.trim();
+      const error = new Error(
+        `WebDriver command failed for ${method} ${endpoint}: ${message}`,
+      );
+      if (typeof payload.value?.stacktrace === "string") {
+        error.stack += `\n${payload.value.stacktrace}`;
+      }
+      throw error;
+    }
+    return payload.value;
+  }
+
+  async saveScreenshot(filePath) {
+    const screenshot = await this.sessionRequest("GET", "/screenshot");
+    fs.writeFileSync(filePath, Buffer.from(screenshot, "base64"));
+  }
+
+  async getClipboardText() {
+    const content = await this.executeScript("mobile: getClipboard", [
+      { contentType: "plaintext" },
+    ]);
+    assert.equal(typeof content, "string");
+    return Buffer.from(content, "base64").toString("utf8");
+  }
+
+  async setClipboardText(content) {
+    await this.executeScript("mobile: setClipboard", [
+      {
+        content: Buffer.from(content, "utf8").toString("base64"),
+        contentType: "plaintext",
+      },
+    ]);
+  }
+
+  async sessionRequest(method, endpoint, body, timeout) {
+    assert.notEqual(this.sessionId, null, "WebDriver session is not active");
+    return this.request(
+      method,
+      `/session/${encodeURIComponent(this.sessionId)}${endpoint}`,
+      body,
+      timeout,
+    );
+  }
+
+  async switchToFrame(element) {
+    await this.sessionRequest("POST", "/frame", { id: element.reference });
+  }
+
+  async switchToTopFrame() {
+    await this.sessionRequest("POST", "/frame", { id: null });
+  }
+
+  async switchToContext(name) {
+    await this.sessionRequest("POST", "/context", { name });
+  }
+
+  async waitUntil(
+    condition,
+    { interval = 250, timeout = testTimeout, timeoutMsg = "Condition timed out" },
+  ) {
+    const deadline = Date.now() + timeout;
+    let lastError = null;
+    while (Date.now() < deadline) {
+      try {
+        if (await condition()) {
+          return;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+    const error = new Error(timeoutMsg);
+    if (lastError !== null) {
+      error.cause = lastError;
+    }
+    throw error;
+  }
+}
+
+function verifyHostEnvironment() {
+  assert.equal(
+    process.platform,
+    "darwin",
+    "The iOS Safari E2E requires macOS",
+  );
+
+  const xcodeVersion = execFileSync("xcodebuild", ["-version"], {
+    encoding: "utf8",
+  });
+  assert.match(
+    xcodeVersion,
+    new RegExp(`^Xcode ${expectedXcodeVersion.replace(/\./g, "\\.")}\\r?$`, "m"),
+    `Xcode ${expectedXcodeVersion} is required:\n${xcodeVersion}`,
+  );
+
+  const simulatorList = JSON.parse(
+    execFileSync("xcrun", ["simctl", "list", "devices", "available", "--json"], {
+      encoding: "utf8",
+    }),
+  );
+  const runtimeKey = `com.apple.CoreSimulator.SimRuntime.iOS-${simulatorPlatformVersion.replace(/\./g, "-")}`;
+  const availableDevices = simulatorList.devices?.[runtimeKey] ?? [];
+  assert.equal(
+    availableDevices.some(
+      (device) => device.name === simulatorDeviceName && device.isAvailable,
+    ),
+    true,
+    `${simulatorDeviceName} with iOS ${simulatorPlatformVersion} is required`,
+  );
+}
+
+async function reservePort() {
+  const server = net.createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+  return address.port;
+}
+
+async function waitForAppium(port, appiumProcess) {
+  const statusURL = `http://127.0.0.1:${port}/status`;
+  const deadline = Date.now() + 90_000;
+  while (Date.now() < deadline) {
+    if (appiumProcess.exitCode !== null) {
+      throw new Error(
+        `Appium exited before becoming ready with code ${appiumProcess.exitCode}`,
+      );
+    }
+    try {
+      const response = await fetch(statusURL);
+      if (response.ok) {
+        const status = await response.json();
+        if (status.value?.ready === true) {
+          return;
+        }
+      }
+    } catch {
+      // Appium has not bound its HTTP listener yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error("Appium did not become ready within 90 seconds");
+}
+
+async function startAppium() {
+  const port = await reservePort();
+  const appiumEntryPoint = require.resolve("appium");
+  const appiumProcess = spawn(
+    process.execPath,
+    [
+      appiumEntryPoint,
+      "server",
+      "--address",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--use-drivers",
+      "xcuitest",
+      "--log",
+      appiumLogPath,
+      "--log-level",
+      "info:debug",
+      "--log-no-colors",
+      "--log-timestamp",
+      "--keep-alive-timeout",
+      "1500",
+      "--shutdown-timeout",
+      "0",
+    ],
+    {
+      cwd: repositoryRoot,
+      stdio: "ignore",
+      windowsHide: true,
+    },
+  );
+  await waitForAppium(port, appiumProcess);
+  return { appiumProcess, port };
+}
+
+async function stopAppium(appiumProcess) {
+  if (appiumProcess === null || appiumProcess.exitCode !== null) {
+    return;
+  }
+  const exited = new Promise((resolve) => appiumProcess.once("exit", resolve));
+  appiumProcess.kill("SIGTERM");
+  const stopped = await Promise.race([
+    exited.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 10_000)),
+  ]);
+  if (!stopped && appiumProcess.exitCode === null) {
+    appiumProcess.kill("SIGKILL");
+    await exited;
+  }
+}
+
+async function waitForElement(driver, selector, timeout = testTimeout) {
+  await driver.waitUntil(
+    async () => {
+      try {
+        const element = await driver.$(selector);
+        return await element.isDisplayed();
+      } catch {
+        return false;
+      }
+    },
+    { interval: 250, timeout, timeoutMsg: `Element was not visible: ${selector}` },
+  );
+  return driver.$(selector);
+}
+
+async function waitForElementPresent(driver, selector, timeout = testTimeout) {
+  await driver.waitUntil(
+    async () => {
+      try {
+        await driver.$(selector);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { interval: 250, timeout, timeoutMsg: `Element was not present: ${selector}` },
+  );
+  return driver.$(selector);
+}
+
+async function waitForElementText(
+  driver,
+  selector,
+  expectedText,
+  timeout = testTimeout,
+) {
+  await driver.waitUntil(
+    async () => {
+      try {
+        const element = await driver.$(selector);
+        return (await element.getText()) === expectedText;
+      } catch {
+        return false;
+      }
+    },
+    {
+      interval: 250,
+      timeout,
+      timeoutMsg: `Element did not contain expected text: ${selector}`,
+    },
+  );
+  return driver.$(selector);
+}
+
+async function dismissSafariToolbarTip(driver) {
+  const webContext = await driver.getContext();
+  assert.match(webContext, /^WEBVIEW_/);
+  assert.ok((await driver.getContexts()).includes("NATIVE_APP"));
+  await driver.switchToContext("NATIVE_APP");
+  try {
+    const nativeSource = await driver.getPageSource();
+    fs.writeFileSync(safariNativeSourcePath, nativeSource, "utf8");
+    assert.match(nativeSource, /width="402" height="874"/);
+    // iOS 26 renders this TipKit overlay outside Safari's accessibility tree.
+    await driver.executeScript("mobile: tap", [{ x: 363, y: 620 }]);
+  } finally {
+    await driver.switchToContext(webContext);
+  }
+}
+
+async function installReader(driver, script) {
+  await driver.execute(() => {
+    localStorage.clear();
+    Object.defineProperty(window, "Audio", {
+      configurable: true,
+      value: undefined,
+    });
+    window.__kakomonnReaderErrors = [];
+    window.__kakomonnReaderRejections = [];
+    window.addEventListener("error", (event) => {
+      window.__kakomonnReaderErrors.push({
+        column: event.colno,
+        filename: event.filename,
+        line: event.lineno,
+        message: event.message,
+      });
+    });
+    window.addEventListener("unhandledrejection", (event) => {
+      window.__kakomonnReaderRejections.push(
+        event.reason?.stack ?? event.reason?.message ?? String(event.reason),
+      );
+    });
+  });
+
+  const syncConfiguration = createSyncMockConfiguration({
+    nextQuestionId: new URL(nextQuestionURL).pathname.split("/").at(-1),
+  });
+  await driver.execute(
+    `(${installSyncMockInWindow.toString()})(${JSON.stringify(syncConfiguration)});`,
+  );
+  await driver.execute(`${script}\n//# sourceURL=${readerSourceURL}`);
+}
+
+async function readQuestionContent(driver) {
+  const heading = await driver.execute(() =>
+    Array.from(document.querySelector(".problem_detail > .when").childNodes)
+      .filter((node) => node.nodeType === Node.TEXT_NODE)
+      .map((node) => node.nodeValue || "")
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+  const questionTitle = await driver.$(".problem_detail > .ttl");
+  const questionText = normalizeContent(await questionTitle.getText());
+  const choiceElements = await driver.$$(".problem_detail > ul.list > li");
+  const choices = [];
+  for (const choice of choiceElements) {
+    choices.push((await choice.getText()).replace(/\s+/g, " ").trim());
+  }
+  const questionImageURLs = await driver.execute(() =>
+    Array.from(
+      document.querySelectorAll(".problem_detail > .zoomin img[src]"),
+      (image) => image.src,
+    ),
+  );
+  return { choices, heading, questionImageURLs, questionText };
+}
+
+async function switchToReaderFrame(driver) {
+  await driver.switchToTopFrame();
+  const readerFrame = await driver.$("#kakomonn-reader-frame");
+  await driver.switchToFrame(readerFrame);
+}
+
+async function submitAnswer(driver, answerText) {
+  const choiceElements = await driver.$$(".problem_detail ul.list > li");
+  const choiceTexts = [];
+  for (const choice of choiceElements) {
+    choiceTexts.push(normalizeContent(await choice.getText()));
+  }
+  const choiceIndex = choiceTexts.findIndex(
+    (choice) => choice === normalizeContent(answerText),
+  );
+  assert.notEqual(choiceIndex, -1, `Answer choice was not found: ${answerText}`);
+
+  const answerInputs = await driver.$$(
+    ".problem_detail ul.check input[name='intAnswerData']",
+  );
+  const answerLabels = await driver.$$(
+    ".problem_detail ul.check > li > label",
+  );
+  assert.equal(answerInputs.length, choiceTexts.length);
+  assert.equal(answerLabels.length, choiceTexts.length);
+  await answerLabels[choiceIndex].click();
+  await switchToReaderFrame(driver);
+  const selectedAnswerInputs = await driver.$$(
+    ".problem_detail ul.check input[name='intAnswerData']",
+  );
+  assert.equal(selectedAnswerInputs.length, choiceTexts.length);
+  assert.equal(await selectedAnswerInputs[choiceIndex].isSelected(), true);
+  const submitButton = await driver.$("#send_exam_btn");
+  await submitButton.click();
+  await switchToReaderFrame(driver);
+}
+
+async function readExplanationContents(driver) {
+  await waitForElement(driver, "#js-answer-result-box.is-correct", 30_000);
+  const explanationElements = await driver.$$(
+    "#js-commentary-wrap > .item > .text",
+  );
+  assert.equal(explanationElements.length, 3);
+  const explanationContents = [];
+  for (const explanation of explanationElements) {
+    await explanation.waitForDisplayed({ timeout: 30_000 });
+    explanationContents.push(normalizeContent(await explanation.getText()));
+  }
+  const explanationImageURLs = await driver.execute(() =>
+    Array.from(
+      document.querySelectorAll("#js-commentary-wrap > .item .text img[src]"),
+      (image) => image.src,
+    ),
+  );
+  return { explanationContents, explanationImageURLs };
+}
+
+async function captureFailureArtifacts(driver, error) {
+  const diagnostics = {
+    error: error?.stack ?? String(error),
+    simulatorDeviceName,
+    simulatorPlatformVersion,
+    url: null,
+  };
+  if (driver !== null) {
+    diagnostics.url = await driver.getUrl().catch(() => null);
+    await driver.saveScreenshot(failureScreenshotPath).catch(() => {});
+    const source = await driver.getPageSource().catch(() => null);
+    if (source !== null) {
+      fs.writeFileSync(failureSourcePath, source, "utf8");
+    }
+    const safariConsole = await driver.getLogs("safariConsole").catch(() => []);
+    diagnostics.safariConsole = safariConsole;
+  }
+  fs.writeFileSync(
+    failureDiagnosticsPath,
+    `${JSON.stringify(diagnostics, null, 2)}\n`,
+    "utf8",
+  );
+  try {
+    const simulatorLog = execFileSync(
+      "xcrun",
+      [
+        "simctl",
+        "spawn",
+        "booted",
+        "log",
+        "show",
+        "--last",
+        "5m",
+        "--predicate",
+        'process == "MobileSafari" OR process == "WebDriverAgentRunner"',
+        "--style",
+        "compact",
+      ],
+      { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 },
+    );
+    fs.writeFileSync(simulatorLogPath, simulatorLog, "utf8");
+  } catch (simulatorLogError) {
+    fs.appendFileSync(
+      failureDiagnosticsPath,
+      `${JSON.stringify({ simulatorLogError: String(simulatorLogError) })}\n`,
+      "utf8",
+    );
+  }
+}
+
+async function runTest() {
+  verifyHostEnvironment();
+  fs.mkdirSync(resultDirectory, { recursive: true });
+  execFileSync("python3", ["build.py"], {
+    cwd: projectRoot,
+    stdio: "inherit",
+  });
+  const script = fs.readFileSync(scriptPath, "utf8");
+
+  let appiumProcess = null;
+  let driver = null;
+  try {
+    const appium = await startAppium();
+    appiumProcess = appium.appiumProcess;
+    driver = await IOSWebDriver.create(appium.port, {
+      platformName: "iOS",
+      browserName: "Safari",
+      "appium:automationName": "XCUITest",
+      "appium:deviceName": simulatorDeviceName,
+      "appium:platformVersion": simulatorPlatformVersion,
+      "appium:enforceFreshSimulatorCreation": true,
+      "appium:isHeadless": true,
+      "appium:nativeWebTap": true,
+      "appium:nativeWebTapStrict": true,
+      "appium:reduceMotion": true,
+      "appium:safariInitialUrl": MARKDOWN_QUESTION_URL,
+      "appium:showSafariConsoleLog": true,
+      "appium:showXcodeLog": true,
+      "appium:simulatorPasteboardAutomaticSync": "off",
+      "appium:simulatorStartupTimeout": 300_000,
+      "appium:wdaLaunchTimeout": 600_000,
+      "appium:webviewConnectTimeout": 60_000,
+    });
+
+    await dismissSafariToolbarTip(driver);
+    await waitForElement(driver, "#send_exam_btn");
+    const browserIdentity = await driver.execute(() => ({
+      clipboardWriteText: typeof navigator.clipboard?.writeText,
+      secureContext: window.isSecureContext,
+      userAgent: navigator.userAgent,
+    }));
+    assert.equal(browserIdentity.clipboardWriteText, "function");
+    assert.equal(browserIdentity.secureContext, true);
+    assert.match(browserIdentity.userAgent, /iPhone/);
+    assert.match(browserIdentity.userAgent, /Version\/\d+(?:\.\d+)+/);
+    assert.match(browserIdentity.userAgent, /Mobile\/\S+ Safari\//);
+
+    await installReader(driver, script);
+    await waitForElement(driver, "#kakomonn-reader-frame");
+    await waitForElementText(
+      driver,
+      "#kakomonn-reader-status",
+      "読み上げ非対応",
+    );
+    await waitForElementText(
+      driver,
+      "#kakomonn-reader-learning-metrics",
+      "todayStabilityDaysDelta 0日",
+    );
+
+    const layout = await driver.execute(() => {
+      const controls = document.querySelector("#kakomonn-reader-controls");
+      const status = document.querySelector("#kakomonn-reader-status");
+      const learningMetrics = document.querySelector(
+        "#kakomonn-reader-learning-metrics",
+      );
+      const shell = document.querySelector("#kakomonn-reader-shell");
+      const controlsRect = controls.getBoundingClientRect();
+      const statusRect = status.getBoundingClientRect();
+      const learningMetricsRect = learningMetrics.getBoundingClientRect();
+      const shellRect = shell.getBoundingClientRect();
+      return {
+        controlsOverflow: controls.scrollWidth > controls.clientWidth,
+        learningMetricsClipped:
+          learningMetrics.scrollWidth > learningMetrics.clientWidth ||
+          learningMetrics.scrollHeight > learningMetrics.clientHeight,
+        learningMetricsInsideHeader:
+          learningMetricsRect.left >= controlsRect.left &&
+          learningMetricsRect.right <= controlsRect.right &&
+          learningMetricsRect.bottom <= controlsRect.bottom,
+        learningMetricsOnSecondRow:
+          learningMetricsRect.top >= statusRect.bottom,
+        shellStartsBelowHeader: shellRect.top >= controlsRect.bottom,
+      };
+    });
+    assert.deepEqual(layout, {
+      controlsOverflow: false,
+      learningMetricsClipped: false,
+      learningMetricsInsideHeader: true,
+      learningMetricsOnSecondRow: true,
+      shellStartsBelowHeader: true,
+    });
+
+    await switchToReaderFrame(driver);
+    await waitForElement(driver, "#send_exam_btn");
+    await waitForElementPresent(driver, "#kakomonn-reader-dark-mode");
+    const { choices, heading, questionImageURLs, questionText } =
+      await readQuestionContent(driver);
+    assert.equal(heading, MARKDOWN_QUESTION_HEADING);
+    assert.equal(questionText, MARKDOWN_QUESTION_TEXT);
+    assert.deepEqual(choices, MARKDOWN_CHOICES);
+    assert.deepEqual(questionImageURLs, MARKDOWN_QUESTION_IMAGE_URLS);
+
+    await submitAnswer(driver, MARKDOWN_ANSWER_TEXT);
+    const { explanationContents, explanationImageURLs } =
+      await readExplanationContents(driver);
+    for (
+      let index = 0;
+      index < MARKDOWN_EXPLANATION_PREFIXES.length;
+      index += 1
+    ) {
+      assert.equal(
+        explanationContents[index].startsWith(
+          MARKDOWN_EXPLANATION_PREFIXES[index],
+        ),
+        true,
+      );
+    }
+    assert.deepEqual(
+      explanationImageURLs,
+      MARKDOWN_EXPLANATION_IMAGE_URLS,
+    );
+
+    await driver.switchToTopFrame();
+    const copyButton = await waitForElementText(
+      driver,
+      "#kakomonn-reader-copy",
+      "Markdownをコピー",
+      30_000,
+    );
+    await driver.execute(() => {
+      window.__kakomonnCopyEvents = [];
+      document
+        .querySelector("#kakomonn-reader-copy")
+        .addEventListener("click", (event) => {
+          window.__kakomonnCopyEvents.push({ isTrusted: event.isTrusted });
+        });
+    });
+    const clipboardNonce = `kakomonn-ios-copy-before-${Date.now()}`;
+    await driver.setClipboardText(clipboardNonce);
+    assert.equal(await driver.getClipboardText(), clipboardNonce);
+
+    await copyButton.click();
+    await waitForElementText(
+      driver,
+      "#kakomonn-reader-copy",
+      "コピー済み",
+      30_000,
+    );
+    const copiedMarkdown = (await driver.getClipboardText()).replace(
+      /\r\n/g,
+      "\n",
+    );
+    assert.notEqual(copiedMarkdown, clipboardNonce);
+    assertMarkdownCopy({
+      choices,
+      copiedMarkdown,
+      explanationContents,
+      questionText,
+    });
+    assert.deepEqual(await driver.execute(() => window.__kakomonnCopyEvents), [
+      { isTrusted: true },
+    ]);
+    assert.deepEqual(
+      await driver.execute(() => window.__syncMock.clipboardWrites),
+      [],
+    );
+
+    const nextButton = await waitForElementText(
+      driver,
+      "#kakomonn-reader-next",
+      "次の問題へ",
+      30_000,
+    );
+    await nextButton.click();
+    await driver.waitUntil(
+      () =>
+        driver.execute(
+          (expectedURL) =>
+            document.querySelector("#kakomonn-reader-frame")?.contentWindow
+              .location.href === expectedURL,
+          nextQuestionURL,
+        ),
+      {
+        interval: 250,
+        timeout: 30_000,
+        timeoutMsg: "The reader did not navigate to the scheduled question",
+      },
+    );
+    assert.equal(
+      await driver.execute(
+        () =>
+          window.__syncMock.calls.filter(
+            (call) =>
+              call.method === "POST" &&
+              new URL(call.url).pathname === "/v7/attempts",
+          ).length,
+      ),
+      1,
+    );
+
+    const readerDiagnostics = await driver.execute(() => ({
+      errors: window.__kakomonnReaderErrors.filter(
+        (error) => error.filename === "kakomonn-reader.user.js",
+      ),
+      rejections: window.__kakomonnReaderRejections.filter((rejection) =>
+        rejection.includes("kakomonn-reader.user.js"),
+      ),
+    }));
+    assert.deepEqual(readerDiagnostics, { errors: [], rejections: [] });
+    console.log(
+      JSON.stringify({
+        browser: "iOS Simulator Mobile Safari",
+        device: simulatorDeviceName,
+        iOS: simulatorPlatformVersion,
+        status: "passed",
+        xcode: expectedXcodeVersion,
+      }),
+    );
+  } catch (error) {
+    await captureFailureArtifacts(driver, error);
+    throw error;
+  } finally {
+    if (driver !== null) {
+      await driver.deleteSession().catch(() => {});
+    }
+    await stopAppium(appiumProcess);
+  }
+}
+
+runTest().then(
+  () => process.exit(0),
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
+);

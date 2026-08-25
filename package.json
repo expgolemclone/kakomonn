@@ -27,6 +27,7 @@
     "test:kakomonn-dashboard": "node kakomonn-sync/tests/dashboard_e2e_test.js",
     "test:smoke": "node kakomonn-reader/tests/smoke_test.js && node kakomonn-reader/tests/learning_metrics_smoke_test.js && node kakomonn-reader/tests/time_limit_smoke_test.js && node kakomonn-reader/tests/webkit_smoke_test.js && node kakomonn-sync/tests/dashboard_e2e_test.js",
     "test:kakomonn-webkit": "node kakomonn-reader/tests/webkit_smoke_test.js",
+    "test:kakomonn-ios-safari": "node --use-system-ca kakomonn-reader/tests/ios_safari_e2e_test.js",
     "test:kakomonn-live-site": "node kakomonn-reader/tests/live_site_e2e_test.js",
     "test:kakomonn-live-sync": "npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader/tests/live_sync_e2e_test.js",
     "release:kakomonn-reader": "node scripts/release-kakomonn-reader.mjs",
@@ -35,6 +36,8 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.20.3",
+    "appium": "3.7.0",
+    "appium-xcuitest-driver": "12.8.0",
     "es-check": "9.6.4",
     "playwright": "1.61.1",
     "vitest": "4.1.10",

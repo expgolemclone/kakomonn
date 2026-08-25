@@ -10,7 +10,7 @@
 - `a,s,d,f,g`で表示選択肢1から5の取り消し線を切り替えます.
 - 問題pageを開くたびに, `問題`見出しがpage topへ来る位置まで自動でscrollします. `z`で100px下へ,`x`で100px上へscrollし,`gg`でpage topへ戻ります. 検索欄や計算欄などへ入力中はkeyboard shortcutを無効にします.
 - `Enter`は未解答なら解答を実行し,解答後は次問へ進みます. 下部の`次の問題へ`をクリックまたはタップして進むこともできます.
-- iPhone Safariでは`https://kakomonn-sync.kakomonn.workers.dev/open`を開くと, 保存済みの同期tokenでFSRSに基づく次の問題を取得して移動します. tokenはURLへ含めません.
+- iPhone Safariでは`https://kakomonn-sync.kakomonn.workers.dev/open`を開くと, 保存済みの同期tokenでFSRSに基づく次の問題を取得して移動します. token未設定または認証失敗時は, 同じoriginの同期設定画面へ移動してtokenを保存できます. tokenはURLへ含めません.
 - 期限を迎えた最後のcardを解答して`dueCardsCompleted`が`true`になると, その日のprimary KPI達成を祝う専用pageへ移動します. 同じ日の祝福はsiteごとに1回だけです.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
 - 現在の問題catalogに含まれる全問題のstabilityを合計して切り捨てた定着日数stabilityDaysと解答履歴. 値は`kakomonn-sync`へ保存され,Windows 11 ChromeとiPhone Safariで共有されます. 問題画面では`dueCardsRemaining`を常時表示し, クリックすると`dueCardsCompleted`, `todayStabilityDaysDelta`, `todayAttemptedQuestionCount`も確認できます. 同期Workerのrootでは`dueCardsCompleted`, `dueCardsRemaining`, `stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`, 直近31日間のhistoryを確認できます. 解いた問題数は問題IDの種類数で,同じ問題を同じ日に繰り返しても1問として数えます.
@@ -23,7 +23,7 @@
 python3 build.py
 ```
 
-`src/`にはmetadataとstyle,syncとcatalog,次問launcher,UI,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyへ生成されたファイルを登録してください.
+`src/`にはmetadataとruntime,style,syncとcatalog,次問launcher,UI,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyへ生成されたファイルを登録してください.
 
 ## Release
 
@@ -49,7 +49,7 @@ Windows 11 Chrome + TampermonkeyとiPhone Safari + Tampermonkeyだけに対応�
 
 ## 学習記録の同期設定
 
-読み上げを利用する場合は,先に[`kakomonn-sync`](../kakomonn-sync/README.md)へAzure Speech F0のkeyを設定してCloudflareへデプロイし,生成されたAPI URLを`src/metadata-and-style.js`の`SYNC_API_URL`と`@connect`へ設定してビルドします. Speech resourceは,音声endpointと同じ`Japan East`に作成します.
+読み上げを利用する場合は,先に[`kakomonn-sync`](../kakomonn-sync/README.md)へAzure Speech F0のkeyを設定してCloudflareへデプロイし,生成されたAPI URLを`src/metadata-and-runtime.js`の`SYNC_API_URL`と`@connect`へ設定してビルドします. Speech resourceは,音声endpointと同じ`Japan East`に作成します.
 
 初回起動時に同期トークンの入力画面が開きます.Win11とiPhoneへ,Worker Secretの`SYNC_TOKEN`と同じ値を入力してください.トークンは各ユーザースクリプトマネージャーの専用ストレージへ保存され,対象サイトの`localStorage`には保存されません.
 

@@ -1,5 +1,3 @@
-  document.documentElement.appendChild(style);
-
   const shell = document.createElement("div");
   shell.id = "kakomonn-reader-shell";
   shell.dataset.buildFingerprint = BUILD_FINGERPRINT;

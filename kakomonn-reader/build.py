@@ -9,7 +9,8 @@ SOURCE_DIR = ROOT / "src"
 OUTPUT_PATH = ROOT / "kakomonn-reader.user.js"
 BUILD_FINGERPRINT_PLACEHOLDER = "__KAKOMONN_READER_BUILD_FINGERPRINT__"
 SOURCE_NAMES = (
-    "metadata-and-style.js",
+    "metadata-and-runtime.js",
+    "styles.js",
     "sync-and-catalog.js",
     "next-question-launcher.js",
     "ui.js",

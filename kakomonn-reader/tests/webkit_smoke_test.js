@@ -4,7 +4,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const { webkit } = require("playwright");
-const { installSyncMock, SYNC_API_ORIGIN } = require("./sync_mock");
+const {
+  installSyncMock,
+  SYNC_API_ORIGIN,
+} = require("./sync_mock");
 
 const projectRoot = path.resolve(__dirname, "..");
 const defaultScriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
@@ -12,6 +15,8 @@ const currentQuestionURL = "https://chushoks.kakomonn.com/questions/86956";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
 const nextQuestionLauncherURL =
   "https://chushoks.kakomonn.com/createques#kakomonn-next";
+const syncSettingsEntryURL =
+  "https://chushoks.kakomonn.com/createques#kakomonn-sync-settings";
 const iosUserAgent =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 " +
@@ -161,21 +166,93 @@ async function prepareLauncherPage(
   return { errors, page };
 }
 
+async function waitForLauncherState(page, errors, expectedState) {
+  try {
+    await page.waitForFunction(
+      (state) =>
+        document.querySelector("#kakomonn-next-question-panel")?.dataset
+          .state === state,
+      expectedState,
+    );
+  } catch (error) {
+    error.launcherDiagnostics = await page.evaluate(() => ({
+      body: document.body.innerText,
+      state: document.querySelector("#kakomonn-next-question-panel")?.dataset
+        .state,
+      status: document.querySelector("#next-question-status")?.textContent,
+    }));
+    error.pageErrors = errors;
+    throw error;
+  }
+}
+
 async function assertLauncherFailure(
   context,
   script,
-  { expectedStatus, syncOptions = {}, mutateMock = null },
+  {
+    expectedState,
+    expectedStatus,
+    expectedTitle,
+    showSettings,
+    syncOptions = {},
+    mutateMock = null,
+  },
 ) {
   const { errors, page } = await prepareLauncherPage(context, script, {
     syncOptions,
     mutateMock,
   });
   try {
+    await waitForLauncherState(page, errors, expectedState);
     await page.locator("#next-question-retry").waitFor({ state: "visible" });
     assert.equal(
       await page.locator("#next-question-status").innerText(),
       expectedStatus,
     );
+    assert.equal(
+      await page.locator("#kakomonn-next-question-title").innerText(),
+      expectedTitle,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-next-question-panel").getAttribute("data-state"),
+      expectedState,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-next-question-panel").getAttribute("aria-busy"),
+      "false",
+    );
+    assert.equal(
+      await page.locator("#next-question-settings").isVisible(),
+      showSettings,
+    );
+    if (showSettings) {
+      assert.equal(
+        await page.locator("#next-question-settings").getAttribute("href"),
+        syncSettingsEntryURL,
+      );
+    }
+    const layout = await page.evaluate(() => {
+      const panel = document.querySelector("#kakomonn-next-question-panel");
+      const retry = document.querySelector("#next-question-retry");
+      const settings = document.querySelector("#next-question-settings");
+      const panelRect = panel.getBoundingClientRect();
+      const retryRect = retry.getBoundingClientRect();
+      const settingsRect = settings.getBoundingClientRect();
+      return {
+        horizontalOverflow:
+          document.documentElement.scrollWidth > window.innerWidth,
+        panelInsideViewport:
+          panelRect.left >= 0 && panelRect.right <= window.innerWidth,
+        retryHeight: retryRect.height,
+        settingsHeight: settingsRect.height,
+      };
+    });
+    assert.equal(layout.horizontalOverflow, false, JSON.stringify(layout));
+    assert.equal(layout.panelInsideViewport, true, JSON.stringify(layout));
+    assert.equal(layout.retryHeight >= 44, true, JSON.stringify(layout));
+    if (showSettings) {
+      assert.equal(layout.settingsHeight >= 44, true, JSON.stringify(layout));
+    }
     assert.equal(page.url(), nextQuestionLauncherURL);
     assert.equal(await page.locator("#kakomonn-reader-shell").count(), 0);
     assert.deepEqual(errors, []);
@@ -221,18 +298,35 @@ async function main() {
       syncOptions: { nextQuestionId: null },
     });
     try {
-      await noNextLauncher.page
-        .locator("#next-question-retry")
-        .waitFor({ state: "visible" });
+      await waitForLauncherState(
+        noNextLauncher.page,
+        noNextLauncher.errors,
+        "empty",
+      );
+      await noNextLauncher.page.locator("#next-question-retry").waitFor({
+        state: "visible",
+      });
       assert.equal(
         await noNextLauncher.page.locator("#next-question-status").innerText(),
-        "現在解くべき問題はありません. 時間を置いて再試行してください.",
+        "時間を置いてから, 学習状況をもう一度確認してください.",
+      );
+      assert.equal(
+        await noNextLauncher.page
+          .locator("#kakomonn-next-question-title")
+          .innerText(),
+        "今解く問題はありません",
+      );
+      assert.equal(
+        await noNextLauncher.page
+          .locator("#kakomonn-next-question-panel")
+          .getAttribute("data-state"),
+        "empty",
       );
       assert.equal(
         await noNextLauncher.page
           .locator("#next-question-status")
           .getAttribute("role"),
-        "alert",
+        "status",
       );
       assert.deepEqual(
         await noNextLauncher.page.evaluate(() =>
@@ -256,34 +350,123 @@ async function main() {
     }
 
     await assertLauncherFailure(context, script, {
+      expectedState: "configuration-error",
+      expectedTitle: "同期設定が必要です",
       expectedStatus:
-        "同期tokenが設定されていません. 過去問readerの同期設定でtokenを保存してから, 再試行してください.",
+        "このiPhoneに同期トークンが保存されていません. 同期設定でトークンを保存してください.",
+      showSettings: true,
       syncOptions: { configured: false },
     });
     await assertLauncherFailure(context, script, {
+      expectedState: "configuration-error",
+      expectedTitle: "同期トークンを確認してください",
       expectedStatus:
-        "同期トークンが正しくありません. 通信状態または同期設定を確認してから, 再試行してください.",
+        "保存済みの同期トークンでは接続できませんでした. 同期設定で正しいトークンを保存してください.",
+      showSettings: true,
       mutateMock: () => {
         window.__syncMock.token = "server-token";
       },
     });
     await assertLauncherFailure(context, script, {
+      expectedState: "service-error",
+      expectedTitle: "同期サービスに接続できません",
       expectedStatus:
-        "学習記録を同期できません. 通信状態または同期設定を確認してから, 再試行してください.",
+        "ネットワーク接続を確認してから, もう一度試してください.",
+      showSettings: false,
       mutateMock: () => {
         window.__syncMock.failNextRequest = true;
       },
     });
     await assertLauncherFailure(context, script, {
+      expectedState: "service-error",
+      expectedTitle: "問題一覧を同期できません",
       expectedStatus:
-        "問題一覧を同期できません. 通信状態または同期設定を確認してから, 再試行してください.",
+        "問題画面で問題一覧を同期してから, もう一度試してください.",
+      showSettings: false,
       syncOptions: { nextError: "catalog_missing" },
     });
     await assertLauncherFailure(context, script, {
+      expectedState: "service-error",
+      expectedTitle: "同期サービスを利用できません",
       expectedStatus:
-        "同期APIの応答が不正です. 通信状態または同期設定を確認してから, 再試行してください.",
+        "同期APIの応答を確認できませんでした. 時間を置いて, もう一度試してください.",
+      showSettings: false,
       syncOptions: { nextQuestionId: "invalid" },
     });
+
+    const settingsEntryPage = await context.newPage();
+    const settingsEntryErrors = [];
+    settingsEntryPage.on("pageerror", (error) =>
+      settingsEntryErrors.push(String(error)),
+    );
+    await settingsEntryPage.goto(syncSettingsEntryURL);
+    await installSyncMock(settingsEntryPage, { configured: false });
+    await settingsEntryPage.addScriptTag({ content: script });
+    await settingsEntryPage
+      .locator("#kakomonn-reader-sync-settings")
+      .waitFor({ state: "visible" });
+    await settingsEntryPage.waitForFunction(
+      () => document.activeElement?.id === "kakomonn-reader-sync-token",
+    );
+    assert.equal(
+      await settingsEntryPage
+        .locator("#kakomonn-reader-sync-settings-cancel")
+        .isHidden(),
+      true,
+    );
+    const settingsLayout = await settingsEntryPage.evaluate(() => {
+      const panel = document.querySelector("#kakomonn-reader-sync-settings-panel");
+      const input = document.querySelector("#kakomonn-reader-sync-token");
+      const save = document.querySelector("#kakomonn-reader-sync-settings-save");
+      const panelRect = panel.getBoundingClientRect();
+      return {
+        horizontalOverflow:
+          document.documentElement.scrollWidth > window.innerWidth,
+        inputHeight: input.getBoundingClientRect().height,
+        panelInsideViewport:
+          panelRect.left >= 0 && panelRect.right <= window.innerWidth,
+        saveHeight: save.getBoundingClientRect().height,
+      };
+    });
+    assert.equal(
+      settingsLayout.horizontalOverflow,
+      false,
+      JSON.stringify(settingsLayout),
+    );
+    assert.equal(
+      settingsLayout.panelInsideViewport,
+      true,
+      JSON.stringify(settingsLayout),
+    );
+    assert.equal(
+      settingsLayout.inputHeight >= 44,
+      true,
+      JSON.stringify(settingsLayout),
+    );
+    assert.equal(
+      settingsLayout.saveHeight >= 44,
+      true,
+      JSON.stringify(settingsLayout),
+    );
+    await settingsEntryPage.evaluate(() => {
+      window.__syncMock.holdNextSetValue = true;
+    });
+    await settingsEntryPage
+      .locator("#kakomonn-reader-sync-token")
+      .fill("test-sync-token");
+    await settingsEntryPage
+      .locator("#kakomonn-reader-sync-settings-save")
+      .click();
+    await settingsEntryPage.waitForFunction(
+      () => window.__syncMock.releaseHeldSetValue !== null,
+    );
+    assert.equal(settingsEntryPage.url(), syncSettingsEntryURL);
+    await settingsEntryPage.evaluate(() =>
+      window.__syncMock.releaseHeldSetValue(),
+    );
+    await settingsEntryPage.waitForURL(nextQuestionLauncherURL);
+    assert.deepEqual(settingsEntryErrors, []);
+    await settingsEntryPage.close();
 
     const successfulLauncher = await prepareLauncherPage(context, script, {
       syncOptions: { nextQuestionId: "86957" },

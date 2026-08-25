@@ -695,9 +695,9 @@ async function main() {
       }),
       {
         colorScheme: "dark",
-        panelBackground: "rgb(29, 35, 43)",
-        panelColor: "rgb(243, 244, 246)",
-        rootBackground: "rgb(11, 13, 16)",
+        panelBackground: "oklch(0.22 0.018 255)",
+        panelColor: "oklch(0.97 0.006 255)",
+        rootBackground: "oklch(0.13 0.012 255)",
       },
     );
     assert.deepEqual(

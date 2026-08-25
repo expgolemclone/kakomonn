@@ -350,7 +350,9 @@
 
     try {
       currentFrameURL = nextURL;
-      history.replaceState(null, "", currentFrameURL);
+      if (!isSyncSettingsEntry) {
+        history.replaceState(null, "", currentFrameURL);
+      }
     } catch {
       setStatus("URLを取得できません");
       return;

@@ -34,7 +34,7 @@ iPhone Safariでは, 最新の`kakomonn-reader`をTampermonkeyへinstallして�
 https://kakomonn-sync.kakomonn.workers.dev/open
 ```
 
-token未設定, 認証失敗, 通信失敗, 問題catalog未同期, 次問なしの場合は移動せず, redirect先へ原因と再試行操作を表示します.
+token未設定または認証失敗の場合は, redirect先から同期設定画面を開いてtokenを保存できます. 通信失敗, 問題catalog未同期, 次問なしの場合は, 原因と再試行操作を表示します.
 
 ## テスト
 

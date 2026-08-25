@@ -1,269 +1,29 @@
-// ==UserScript==
-// @name         過去問reader＋連続自動読み上げ
-// @namespace    local.kakomonn.reader
-// @description  問題文と解説の読み上げ, コピー, 学習記録の端末間同期とdue card完了時の祝福を提供します.
-// @match        https://*.kakomonn.com/*
-// @connect      kakomonn-sync.kakomonn.workers.dev
-// @connect      japaneast.tts.speech.microsoft.com
-// @run-at       document-end
-// @noframes
-// @grant        GM.getValue
-// @grant        GM.setValue
-// @grant        GM.deleteValue
-// @grant        GM.xmlHttpRequest
-// @grant        GM.setClipboard
-// @grant        GM_info
-// ==/UserScript==
-
-(async () => {
-  "use strict";
-
-  if (window.top !== window.self) {
-    return;
-  }
-
-  const BUILD_FINGERPRINT = "__KAKOMONN_READER_BUILD_FINGERPRINT__";
-  const SCRIPT_HANDLER =
-    typeof GM_info === "object" &&
-    GM_info !== null &&
-    typeof GM_info.scriptHandler === "string"
-      ? GM_info.scriptHandler
-      : "";
-  const userAgent = navigator.userAgent;
-  const isWindowsChrome =
-    userAgent.includes("Windows NT") &&
-    /\bChrome\/\d+(?:\.\d+)+/.test(userAgent) &&
-    !userAgent.includes("Edg/");
-  const isIPhoneSafari =
-    userAgent.includes("iPhone") &&
-    userAgent.includes("AppleWebKit/") &&
-    /\bVersion\/\d+(?:\.\d+)+/.test(userAgent) &&
-    /\bMobile\/\S+/.test(userAgent) &&
-    /\bSafari\/\d+(?:\.\d+)+/.test(userAgent) &&
-    !/(?:CriOS|FxiOS|EdgiOS|OPiOS)\//.test(userAgent);
-  const SYNC_API_URL =
-    "https://kakomonn-sync.kakomonn.workers.dev";
-  const NEXT_QUESTION_SITE_ID = "chushoks.kakomonn.com";
-  const NEXT_QUESTION_LAUNCHER_URL =
-    `https://${NEXT_QUESTION_SITE_ID}/createques#kakomonn-next`;
-  const isNextQuestionLauncher = location.href === NEXT_QUESTION_LAUNCHER_URL;
-  const CONGRATULATIONS_URL =
-    "https://kakomonn-congratulations.kakomonn.workers.dev/";
-  const SITE_ID = location.hostname.toLowerCase();
-  if (
-    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(
-      SITE_ID
-    )
-  ) {
-    return;
-  }
-  if (
-    SCRIPT_HANDLER !== "Tampermonkey" ||
-    (!isWindowsChrome && !isIPhoneSafari) ||
-    typeof GM !== "object" ||
-    GM === null ||
-    typeof GM.getValue !== "function" ||
-    typeof GM.setValue !== "function" ||
-    typeof GM.deleteValue !== "function" ||
-    typeof GM.xmlHttpRequest !== "function" ||
-    typeof GM.setClipboard !== "function"
-  ) {
-    return;
-  }
-  const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
-  const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE_ID}.v8.pending-attempt`;
-  const PENDING_CELEBRATION_KEY =
-    `kakomonn-reader.${SITE_ID}.v8.pending-celebration`;
-  const SYNC_TIMEOUT_MS = 15000;
-  const SPEECH_TIMEOUT_MS = 30000;
-  const FRAME_LOAD_DELAY_MS = 900;
-  const FRAME_CHANGE_DELAY_MS = 700;
-  const FRAME_PROBLEM_SCROLL_DELAYS_MS = [0, 120, 600];
-  const COPY_FEEDBACK_DURATION_MS = 1400;
-  const SHORTCUT_SEQUENCE_TIMEOUT_MS = 400;
-  const TIME_LIMIT_MS = 5 * 60 * 1000;
-  const MAX_CHUNK_LENGTH = 1500;
-  const FRAME_DARK_MODE_STYLE_ID = "kakomonn-reader-dark-mode";
-  const FRAME_DARK_MODE_CSS = `
-    :root {
-      color-scheme: dark;
-      --kakomonn-frame-canvas: #0b0d10;
-      --kakomonn-frame-surface: #15191e;
-      --kakomonn-frame-raised: #1d232b;
-      --kakomonn-frame-text: #f3f4f6;
-      --kakomonn-frame-muted: #a8b0bb;
-      --kakomonn-frame-border: #343b45;
-      --kakomonn-frame-link: #8ab4f8;
-    }
-
-    html,
-    body,
-    .l-header,
-    .l-main,
-    .l-footer,
-    .p-post,
-    .inner,
-    #js-img-zoom-area,
-    .sect_problem,
-    .sect_commentary,
-    #js-commentary-section {
-      background-color: var(--kakomonn-frame-canvas) !important;
-      color: var(--kakomonn-frame-text) !important;
-      border-color: var(--kakomonn-frame-border) !important;
-    }
-
-    .problem_detail,
-    #js-commentary-wrap,
-    #js-expound-head,
-    #calculator {
-      background-color: var(--kakomonn-frame-surface) !important;
-      border-color: var(--kakomonn-frame-border) !important;
-    }
-
-    .problem_detail,
-    .problem_detail > .when,
-    .problem_detail > .ttl,
-    .problem_detail > .zoomin,
-    .problem_detail > ul.list,
-    .problem_detail > ul.list > li,
-    .problem_detail > ul.list > li > div,
-    .problem_detail > ul.check,
-    .problem_detail > ul.check > li,
-    .problem_detail > ul.check > li > label,
-    #js-commentary-wrap,
-    #js-commentary-wrap > .item,
-    #js-commentary-wrap > .item > .none_text,
-    #js-commentary-wrap > .item > .num,
-    #js-commentary-wrap > .item > .text,
-    #js-commentary-wrap > .item > .reference {
-      color: var(--kakomonn-frame-text) !important;
-      border-color: var(--kakomonn-frame-border) !important;
-    }
-
-    .problem_detail > ul.list > li,
-    .problem_detail > ul.list > li > div,
-    .problem_detail > ul.check > li,
-    .problem_detail > ul.check > li > label,
-    #js-commentary-wrap > .item > .text,
-    #js-commentary-wrap > .item > .reference {
-      background-color: var(--kakomonn-frame-raised) !important;
-    }
-
-    :root[data-kakomonn-reader-phase="question"] .answer-right,
-    :root[data-kakomonn-reader-phase="question"] .answer-mistake,
-    :root[data-kakomonn-reader-phase="question"] #explst,
-    :root[data-kakomonn-reader-phase="question"] .sect_commentary {
-      display: none !important;
-    }
-
-    .problem_detail > ul.list > li.is-active > div,
-    #js-commentary-wrap > .item > .none_text,
-    #js-commentary-wrap > .item > .num {
-      color: var(--kakomonn-frame-muted) !important;
-    }
-
-    .problem_detail > ul.list > li::before,
-    .problem_detail > ul.check > li > label > span::before {
-      color: var(--kakomonn-frame-text) !important;
-      border-color: var(--kakomonn-frame-border) !important;
-    }
-
-    .problem_detail a,
-    #js-commentary-wrap a {
-      color: var(--kakomonn-frame-link) !important;
-    }
-
-    .problem_detail input,
-    .problem_detail select,
-    .problem_detail textarea,
-    #calculator input,
-    #calculator select,
-    #calculator textarea {
-      background-color: var(--kakomonn-frame-canvas) !important;
-      color: var(--kakomonn-frame-text) !important;
-      border-color: var(--kakomonn-frame-border) !important;
-    }
-
-    .problem_detail .next_ques_btn .button_entity {
-      background-color: var(--kakomonn-frame-surface) !important;
-    }
-
-    .problem_detail > .zoomin img,
-    .problem_detail > ul.list img,
-    #js-commentary-wrap > .item .text img {
-      filter: invert(100%) hue-rotate(180deg) !important;
-    }
-  `;
-  const QUESTION_SPEECH_RATE = 2.0;
-  const ANSWER_RESULT_SPEECH_RATE = 1.7;
-  const SPEECH_TOKEN_RENEWAL_SKEW_MS = 60000;
-  const AZURE_SPEECH_URL =
-    "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
-  const AZURE_SPEECH_VOICE_NAME = "ja-JP-NanamiNeural";
-  const AZURE_SPEECH_OUTPUT_FORMAT =
-    "audio-24khz-48kbitrate-mono-mp3";
-  const SILENT_AUDIO_DATA_URL =
-    "data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
-  const SPEECH_GESTURE_STATUS =
-    "画面をクリックまたはタップすると読み上げます";
-
-  const speechAudio =
-    typeof window.Audio === "function" ? new window.Audio() : null;
-  const speechSupported =
-    typeof speechAudio?.play === "function" &&
-    typeof speechAudio?.pause === "function" &&
-    typeof speechAudio?.canPlayType === "function" &&
-    speechAudio.canPlayType("audio/mpeg") !== "" &&
-    (isIPhoneSafari || isWindowsChrome);
-  let speechEnabled = false;
-  let speechPaused = false;
-  let speechInitializationInProgress = false;
-  let speechRunId = 0;
-  let activeSpeechRequest = null;
-  let activeSpeechAudioURL = "";
-  let azureSpeechToken = "";
-  let azureSpeechTokenExpiresAt = 0;
-  let azureSpeechTokenPromise = null;
-  let frameDocument = null;
-  let boundFrameDocument = null;
-  let currentPageReadPending = false;
-  let currentFrameURL = location.href;
-  let loadTimer = null;
-  let frameChangeTimer = null;
-  let timeLimitPhase = null;
-  let timeLimitDeadline = 0;
-  let timeLimitTimeout = null;
-  let timeLimitInterval = null;
-  let timeLimitSourceDocument = null;
-  let frameProblemScrollTimers = [];
-  let copyFeedbackTimer = null;
-  let frameMutationObserver = null;
-  let awaitingAnswerResultSpeech = false;
-  let navigationInProgress = false;
-  let nextQuestionOperationInProgress = false;
-  let learningMetrics = null;
-  let syncToken = "";
-  let syncReady = false;
-  let syncInProgress = false;
-  let syncPromise = null;
-  let pendingAttempt = null;
-  let pendingAttemptTransitionPromise = null;
-  let pendingCelebration = null;
-  let celebrationTransitionPromise = null;
-
   const style = document.createElement("style");
   style.textContent = `
     :root {
       color-scheme: dark;
-      --kakomonn-reader-canvas: #0b0d10;
-      --kakomonn-reader-surface: #15191e;
-      --kakomonn-reader-raised: #1d232b;
-      --kakomonn-reader-text: #f3f4f6;
-      --kakomonn-reader-muted: #a8b0bb;
-      --kakomonn-reader-border: #343b45;
-      --kakomonn-reader-primary: #1473e6;
-      --kakomonn-reader-copy: #2f855a;
-      --kakomonn-reader-focus-ring: #a8c7fa;
+      --kakomonn-reader-p-ink-1000: oklch(0.13 0.012 255);
+      --kakomonn-reader-p-ink-950: oklch(0.17 0.014 255);
+      --kakomonn-reader-p-ink-900: oklch(0.22 0.018 255);
+      --kakomonn-reader-p-ink-850: oklch(0.27 0.022 255);
+      --kakomonn-reader-p-ink-700: oklch(0.36 0.025 255);
+      --kakomonn-reader-p-ink-400: oklch(0.75 0.025 255);
+      --kakomonn-reader-p-ink-50: oklch(0.97 0.006 255);
+      --kakomonn-reader-p-blue-500: oklch(0.62 0.18 255);
+      --kakomonn-reader-p-blue-300: oklch(0.83 0.08 255);
+      --kakomonn-reader-p-green-500: oklch(0.57 0.12 155);
+      --kakomonn-reader-p-amber-400: oklch(0.79 0.14 80);
+      --kakomonn-reader-p-red-400: oklch(0.74 0.17 25);
+      --kakomonn-reader-canvas: var(--kakomonn-reader-p-ink-1000);
+      --kakomonn-reader-surface: var(--kakomonn-reader-p-ink-950);
+      --kakomonn-reader-raised: var(--kakomonn-reader-p-ink-900);
+      --kakomonn-reader-text: var(--kakomonn-reader-p-ink-50);
+      --kakomonn-reader-muted: var(--kakomonn-reader-p-ink-400);
+      --kakomonn-reader-border: var(--kakomonn-reader-p-ink-700);
+      --kakomonn-reader-primary: var(--kakomonn-reader-p-blue-500);
+      --kakomonn-reader-copy: var(--kakomonn-reader-p-green-500);
+      --kakomonn-reader-focus-ring: var(--kakomonn-reader-p-blue-300);
+      --kakomonn-reader-error: var(--kakomonn-reader-p-red-400);
       --kakomonn-reader-metric-accent: oklch(0.79 0.12 221);
       --kakomonn-reader-success: oklch(0.79 0.14 151);
       --kakomonn-reader-time-track: oklch(0.32 0.02 255);
@@ -272,7 +32,8 @@
       --kakomonn-reader-control-gap: 8px;
       --kakomonn-reader-control-gutter: 8px;
       --kakomonn-reader-control-radius: 16px;
-      --kakomonn-reader-control-shadow: 0 6px 22px rgba(0, 0, 0, 0.30);
+      --kakomonn-reader-control-shadow:
+        0 6px 22px oklch(0.04 0.01 255 / 0.34);
     }
 
     html, body {
@@ -291,17 +52,143 @@
     }
 
     #kakomonn-next-question-launcher {
-      min-height: 100%;
+      min-height: 100svh;
+      height: 100%;
       display: grid;
-      place-content: center;
-      gap: 16px;
-      padding: max(24px, env(safe-area-inset-top)) 24px
-        max(24px, env(safe-area-inset-bottom));
+      place-items: center;
+      padding:
+        max(32px, env(safe-area-inset-top))
+        max(20px, env(safe-area-inset-right))
+        max(32px, env(safe-area-inset-bottom))
+        max(20px, env(safe-area-inset-left));
       box-sizing: border-box;
-      background: var(--kakomonn-reader-canvas);
+      overflow-y: auto;
+      background:
+        radial-gradient(
+          circle at 18% 12%,
+          oklch(0.52 0.13 258 / 0.22),
+          transparent 42%
+        ),
+        radial-gradient(
+          circle at 88% 90%,
+          oklch(0.46 0.09 222 / 0.14),
+          transparent 38%
+        ),
+        var(--kakomonn-reader-canvas);
       color: var(--kakomonn-reader-text);
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      text-align: center;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #kakomonn-next-question-panel {
+      --kakomonn-launcher-accent: var(--kakomonn-reader-primary);
+      container-type: inline-size;
+      width: min(100%, 420px);
+      display: grid;
+      gap: 24px;
+      padding: 28px 24px 24px;
+      box-sizing: border-box;
+      border: 1px solid oklch(0.72 0.025 255 / 0.22);
+      border-radius: 28px;
+      background: oklch(0.19 0.018 255 / 0.92);
+      box-shadow:
+        0 28px 80px oklch(0.03 0.01 255 / 0.5),
+        inset 0 1px 0 oklch(0.97 0.006 255 / 0.06);
+      backdrop-filter: blur(20px);
+    }
+
+    #kakomonn-next-question-panel[data-state="configuration-error"] {
+      --kakomonn-launcher-accent: var(--kakomonn-reader-p-amber-400);
+    }
+
+    #kakomonn-next-question-panel[data-state="service-error"] {
+      --kakomonn-launcher-accent: var(--kakomonn-reader-error);
+    }
+
+    #kakomonn-next-question-panel[data-state="empty"] {
+      --kakomonn-launcher-accent: var(--kakomonn-reader-p-green-500);
+    }
+
+    #kakomonn-next-question-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--kakomonn-reader-muted);
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: 0.16em;
+    }
+
+    #kakomonn-next-question-brand::before {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--kakomonn-launcher-accent);
+      box-shadow: 0 0 18px var(--kakomonn-launcher-accent);
+      content: "";
+    }
+
+    #kakomonn-next-question-content {
+      display: grid;
+      gap: 14px;
+    }
+
+    #kakomonn-next-question-indicator {
+      position: relative;
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      border: 1px solid oklch(0.72 0.025 255 / 0.18);
+      border-radius: 17px;
+      background: oklch(0.25 0.025 255 / 0.78);
+      color: var(--kakomonn-launcher-accent);
+    }
+
+    #kakomonn-next-question-indicator::before,
+    #kakomonn-next-question-indicator::after {
+      position: absolute;
+      box-sizing: border-box;
+      content: "";
+    }
+
+    [data-state="loading"] #kakomonn-next-question-indicator::before {
+      width: 24px;
+      height: 24px;
+      border: 2px solid oklch(0.72 0.025 255 / 0.22);
+      border-top-color: var(--kakomonn-launcher-accent);
+      border-radius: 50%;
+      animation: kakomonn-launcher-spin 900ms linear infinite;
+    }
+
+    [data-state="configuration-error"]
+      #kakomonn-next-question-indicator::before,
+    [data-state="service-error"]
+      #kakomonn-next-question-indicator::before {
+      width: 4px;
+      height: 18px;
+      border-radius: 999px;
+      background: currentColor;
+      transform: translateY(-4px);
+    }
+
+    [data-state="configuration-error"]
+      #kakomonn-next-question-indicator::after,
+    [data-state="service-error"]
+      #kakomonn-next-question-indicator::after {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: currentColor;
+      transform: translateY(10px);
+    }
+
+    [data-state="empty"] #kakomonn-next-question-indicator::before {
+      width: 24px;
+      height: 13px;
+      border-bottom: 3px solid currentColor;
+      border-left: 3px solid currentColor;
+      transform: translateY(-3px) rotate(-45deg);
     }
 
     #kakomonn-next-question-title,
@@ -310,34 +197,95 @@
     }
 
     #kakomonn-next-question-title {
-      font-size: clamp(24px, 8vw, 36px);
-      line-height: 1.2;
+      max-width: 14ch;
+      font-size: clamp(26px, 21px + 2cqi, 34px);
+      font-weight: 760;
+      letter-spacing: -0.025em;
+      line-height: 1.18;
     }
 
     #next-question-status {
-      max-width: 36rem;
+      max-width: 34rem;
       color: var(--kakomonn-reader-muted);
-      font-size: 16px;
-      line-height: 1.6;
+      font-size: 15px;
+      line-height: 1.65;
+    }
+
+    #kakomonn-next-question-actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    #kakomonn-next-question-actions[hidden] {
+      display: none;
+    }
+
+    #next-question-retry,
+    #next-question-settings {
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 20px;
+      box-sizing: border-box;
+      border: 1px solid transparent;
+      border-radius: 15px;
+      color: var(--kakomonn-reader-text);
+      font: 750 16px/1 -apple-system, BlinkMacSystemFont, sans-serif;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #next-question-retry[hidden],
+    #next-question-settings[hidden] {
+      display: none;
+    }
+
+    #next-question-settings {
+      background: var(--kakomonn-reader-primary);
+      box-shadow: 0 10px 28px oklch(0.35 0.14 255 / 0.38);
     }
 
     #next-question-retry {
-      min-width: 8rem;
-      min-height: 48px;
-      justify-self: center;
-      padding: 0 20px;
-      border: 0;
-      border-radius: 12px;
       background: var(--kakomonn-reader-primary);
-      color: var(--kakomonn-reader-text);
-      font: 700 16px/1 -apple-system, BlinkMacSystemFont, sans-serif;
-      cursor: pointer;
-      touch-action: manipulation;
     }
 
-    #next-question-retry:focus-visible {
-      outline: 3px solid var(--kakomonn-reader-focus-ring);
-      outline-offset: 3px;
+    #next-question-retry[data-variant="secondary"] {
+      border-color: oklch(0.72 0.025 255 / 0.2);
+      background: var(--kakomonn-reader-raised);
+      box-shadow: none;
+    }
+
+    #next-question-retry:active,
+    #next-question-settings:active {
+      transform: scale(0.98);
+    }
+
+    #next-question-retry:focus-visible,
+    #next-question-settings:focus-visible {
+      outline: 2px solid var(--kakomonn-reader-focus-ring);
+      outline-offset: 4px;
+    }
+
+    @container (max-width: 340px) {
+      #kakomonn-next-question-panel {
+        gap: 20px;
+        padding: 24px 20px 20px;
+        border-radius: 24px;
+      }
+
+      #kakomonn-next-question-title {
+        font-size: 26px;
+      }
+    }
+
+    @keyframes kakomonn-launcher-spin {
+      to {
+        transform: rotate(1turn);
+      }
     }
 
     #kakomonn-reader-shell {
@@ -635,7 +583,7 @@
 
     #kakomonn-reader-next:disabled,
     #kakomonn-reader-copy:disabled {
-      background: rgba(90, 90, 90, 0.78);
+      background: oklch(0.46 0.01 255 / 0.78);
       opacity: 0.72;
     }
 
@@ -644,11 +592,17 @@
       inset: 0;
       z-index: 2147483647;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
-      padding: 24px;
+      padding:
+        max(24px, env(safe-area-inset-top))
+        max(20px, env(safe-area-inset-right))
+        max(24px, env(safe-area-inset-bottom))
+        max(20px, env(safe-area-inset-left));
       box-sizing: border-box;
-      background: rgba(0, 0, 0, 0.48);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      background: oklch(0.04 0.01 255 / 0.62);
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
@@ -658,13 +612,16 @@
 
     #kakomonn-reader-sync-settings-panel {
       width: min(420px, 100%);
+      max-height: calc(100svh - 48px);
+      margin: auto;
       padding: 22px;
       box-sizing: border-box;
+      overflow-y: auto;
       border: 1px solid var(--kakomonn-reader-border);
       border-radius: 18px;
       background: var(--kakomonn-reader-raised);
       color: var(--kakomonn-reader-text);
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.34);
+      box-shadow: 0 16px 48px oklch(0.04 0.01 255 / 0.38);
     }
 
     #kakomonn-reader-sync-settings-title {
@@ -697,7 +654,7 @@
     #kakomonn-reader-sync-settings-error {
       min-height: 20px;
       margin: 10px 0;
-      color: #ff8a8a;
+      color: var(--kakomonn-reader-error);
       font-size: 13px;
       line-height: 1.4;
     }
@@ -710,7 +667,7 @@
 
     #kakomonn-reader-sync-settings-save,
     #kakomonn-reader-sync-settings-cancel {
-      min-height: 42px;
+      min-height: 48px;
       padding: 0 16px;
       border: 0;
       border-radius: 10px;
@@ -745,8 +702,11 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      #kakomonn-reader-learning-metrics::after {
+      #kakomonn-reader-learning-metrics::after,
+      [data-state="loading"] #kakomonn-next-question-indicator::before {
         transition: none;
+        animation: none;
       }
     }
   `;
+  document.documentElement.appendChild(style);

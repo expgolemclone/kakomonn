@@ -773,6 +773,9 @@
         syncSettings.hidden = true;
         syncTokenInput.value = "";
         setStatus("学習記録を同期しました");
+        if (isSyncSettingsEntry) {
+          window.location.replace(NEXT_QUESTION_LAUNCHER_URL);
+        }
         return true;
       } catch (error) {
         syncReady = previousSyncReady;
@@ -825,6 +828,13 @@
       }
       clearAzureSpeechToken();
       await restorePendingState(storedPendingAttempt, storedCelebration);
+      if (isSyncSettingsEntry) {
+        syncReady = false;
+        setStatus("同期トークンを設定してください");
+        openSyncSettings(true);
+        updateSyncDependentControls();
+        return;
+      }
       if (!syncToken) {
         syncReady = false;
         setStatus("同期トークンを設定してください");

@@ -24,6 +24,7 @@
       typeof metrics === "object" &&
       Number.isSafeInteger(metrics.stabilityDays) &&
       metrics.stabilityDays >= 0 &&
+      typeof metrics.dueCardsCompleted === "boolean" &&
       Number.isSafeInteger(metrics.todayStabilityDaysDelta) &&
       Number.isSafeInteger(metrics.attemptedQuestionCount) &&
       metrics.attemptedQuestionCount >= 0 &&
@@ -65,6 +66,7 @@
       typeof metrics === "object" &&
       Number.isSafeInteger(metrics.stabilityDays) &&
       metrics.stabilityDays >= 0 &&
+      typeof metrics.dueCardsCompleted === "boolean" &&
       Number.isSafeInteger(metrics.todayStabilityDaysDelta) &&
       Number.isSafeInteger(metrics.attemptedQuestionCount) &&
       metrics.attemptedQuestionCount >= 0 &&
@@ -90,13 +92,10 @@
       typeof value === "object" &&
       !Array.isArray(value) &&
       Object.keys(value).sort().join(",") ===
-        "dailyStabilityDaysDeltaGoal,date,site,todayStabilityDaysDelta" &&
+        "date,dueCardsCompleted,site" &&
       value.site === SITE_ID &&
       isCalendarDate(value.date) &&
-      Number.isSafeInteger(value.todayStabilityDaysDelta) &&
-      Number.isSafeInteger(value.dailyStabilityDaysDeltaGoal) &&
-      value.dailyStabilityDaysDeltaGoal >= 1 &&
-      value.todayStabilityDaysDelta >= value.dailyStabilityDaysDeltaGoal
+      value.dueCardsCompleted === true
     );
   }
 
@@ -297,13 +296,13 @@
 
   function requestSyncState(token) {
     const parameters = new URLSearchParams({ site: SITE_ID });
-    return requestSyncResponse("GET", `/v7/state?${parameters}`, token, isSyncState);
+    return requestSyncResponse("GET", `/v8/state?${parameters}`, token, isSyncState);
   }
 
   function requestAttemptResult(token, operation) {
     return requestSyncResponse(
       "POST",
-      "/v7/attempts",
+      "/v8/attempts",
       token,
       isAttemptResponse,
       {
@@ -320,11 +319,11 @@
     if (excludeQuestionId !== null) {
       parameters.set("excludeQuestionId", excludeQuestionId);
     }
-    return requestSyncResponse("GET", `/v7/next?${parameters}`, token, isNextResponse);
+    return requestSyncResponse("GET", `/v8/next?${parameters}`, token, isNextResponse);
   }
 
   function requestCatalogUpdate(token, questionIds, expectedGeneration) {
-    return requestSyncResponse("POST", "/v7/questions", token, isCatalogResponse, {
+    return requestSyncResponse("POST", "/v8/questions", token, isCatalogResponse, {
       site: SITE_ID,
       questionIds,
       expectedGeneration,
@@ -332,7 +331,7 @@
   }
 
   function requestSpeechTokenResult(token) {
-    return requestSyncResponse("POST", "/v7/speech-token", token, isSpeechTokenResponse);
+    return requestSyncResponse("POST", "/v8/speech-token", token, isSpeechTokenResponse);
   }
 
   function clearAzureSpeechToken() {
@@ -392,7 +391,7 @@
     if (!isSyncState(state)) {
       throw new SyncRequestError("invalid_response");
     }
-    todayStabilityDaysDelta = state.learningMetrics.todayStabilityDaysDelta;
+    dueCardsCompleted = state.learningMetrics.dueCardsCompleted;
     renderLearningMetrics();
   }
 

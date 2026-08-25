@@ -21,6 +21,7 @@ const SCAN_EXTENSIONS = new Set([
 
 const SKIP_DIRECTORIES = new Set([
   ".claude",
+  ".env.cloudflare-migration",
   ".git",
   ".jj",
   ".qoder",
@@ -51,11 +52,15 @@ const RETIRED_PATTERNS = [
   /learning_metadata/,
   /highest_mastery_milestone/,
   /\bdailyStabilityDaysGoal\b/,
+  /dailyStabilityDaysDeltaGoal/,
+  /daily_stability_days_delta_goal/,
   /answered_at_ms/,
   /\bprevious_stability\b/,
   /\bresulting_stability\b/,
   /\/v6\//,
+  /\/v7\//,
   /v6\.pending-attempt/,
+  /v7\.pending-(?:attempt|celebration)/,
   /(?<![a-z_])result: "(correct|incorrect)"/,
 ];
 

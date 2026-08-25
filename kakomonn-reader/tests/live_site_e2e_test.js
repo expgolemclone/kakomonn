@@ -383,12 +383,12 @@ async function runLiveCatalogCrawlCase(browser, script) {
     await injectReader(page, script);
 
     await page.waitForFunction(
-      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v7/questions"),
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v8/questions"),
       null,
       { timeout: 180_000 },
     );
     const catalogCall = await page.evaluate(() =>
-      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v7/questions"),
+      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v8/questions"),
     );
     assert.equal(Array.isArray(catalogCall.body.questionIds), true);
     assert.equal(catalogCall.body.expectedGeneration, 0);
@@ -479,7 +479,7 @@ async function runCase(
     await waitForSyncReady(page);
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "todayStabilityDaysDelta 0日",
+      "dueCardsCompleted 未達成",
     );
     assert.deepEqual(
       await frame.locator("body").evaluate((body) => {
@@ -597,17 +597,17 @@ async function runCase(
     const expectedTodayStabilityDaysDelta = attemptStabilityDaysDelta;
     if (expectedTodayStabilityDaysDelta > 0) {
       await page.waitForFunction(
-        (days) =>
+        () =>
           document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
-          `todayStabilityDaysDelta ${days}日`,
-        expectedTodayStabilityDaysDelta,
+          "dueCardsCompleted 未達成",
+        null,
         { timeout: 10_000 },
       );
     } else {
       await page.waitForTimeout(1_500);
       assert.equal(
         await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-        "todayStabilityDaysDelta 0日",
+        "dueCardsCompleted 未達成",
       );
     }
 
@@ -1201,7 +1201,7 @@ async function runCrossDomainActivationCase(browser, script) {
       );
       const stateSites = await page.evaluate(() =>
         window.__syncMock.calls
-          .filter((call) => new URL(call.url).pathname === "/v7/state")
+          .filter((call) => new URL(call.url).pathname === "/v8/state")
           .map((call) => new URL(call.url).searchParams.get("site"))
       );
       assert.equal(stateSites.length >= 1, true);

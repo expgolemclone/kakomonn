@@ -16,16 +16,11 @@ if (!frame || !achievementLabel || !studyLogButton || !loading || !errorPanel) {
   throw new Error("Required celebration shell nodes are missing.");
 }
 
-function signed(value) {
-  return `${value >= 0 ? "+" : ""}${value.toLocaleString("ja-JP")}`;
-}
-
 function sameCelebration(left, right) {
   return (
     left?.site === right.site &&
     left?.date === right.date &&
-    left?.todayStabilityDaysDelta === right.todayStabilityDaysDelta &&
-    left?.dailyStabilityDaysDeltaGoal === right.dailyStabilityDaysDeltaGoal
+    left?.dueCardsCompleted === right.dueCardsCompleted
   );
 }
 
@@ -42,10 +37,9 @@ try {
   const entryUrl = new URL(selected.entry, window.location.href);
   entryUrl.search = window.location.search;
 
-  achievementLabel.textContent =
-    `todayStabilityDaysDelta ${signed(celebration.todayStabilityDaysDelta)}日`;
-  document.title = `todayStabilityDaysDelta達成 | ${selected.label}`;
-  frame.title = `todayStabilityDaysDelta達成 - ${selected.label}`;
+  achievementLabel.textContent = "dueCardsCompleted 達成";
+  document.title = `dueCardsCompleted達成 | ${selected.label}`;
+  frame.title = `dueCardsCompleted達成 - ${selected.label}`;
   frame.dataset.experienceId = selected.id;
 
   const readyTimeout = window.setTimeout(() => {

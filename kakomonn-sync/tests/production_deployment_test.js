@@ -85,17 +85,17 @@ test("production redirects to the canonical next-question launcher", async () =>
   assert.equal(response.headers.get("location"), nextQuestionLauncherURL);
 });
 
-test("production serves only the authenticated v7 API backed by LearningState", async () => {
-  const unauthorized = await fetch(new URL("/v7/sites", productionOrigin));
+test("production serves only the authenticated v8 API backed by LearningState", async () => {
+  const unauthorized = await fetch(new URL("/v8/sites", productionOrigin));
   assert.equal(unauthorized.status, 401);
   assert.deepEqual(await unauthorized.json(), { error: "unauthorized" });
 
-  for (const version of ["v3", "v4", "v5", "v6"]) {
+  for (const version of ["v3", "v4", "v5", "v6", "v7"]) {
     const removed = await authorizedGet(`/${version}/sites`);
     assert.equal(removed.status, 404, `/${version}/sites must be removed`);
   }
 
-  const sitesResponse = await authorizedGet("/v7/sites");
+  const sitesResponse = await authorizedGet("/v8/sites");
   assert.equal(sitesResponse.status, 200);
   const sitesBody = await sitesResponse.json();
   assert.equal(Array.isArray(sitesBody.sites), true);
@@ -107,7 +107,7 @@ test("production serves only the authenticated v7 API backed by LearningState", 
 
   const site = sitesBody.sites[0];
   const dashboardResponse = await authorizedGet(
-    `/v7/dashboard?${new URLSearchParams({ site })}`,
+    `/v8/dashboard?${new URLSearchParams({ site })}`,
   );
   assert.equal(dashboardResponse.status, 200);
   const dashboardBody = await dashboardResponse.json();
@@ -116,26 +116,14 @@ test("production serves only the authenticated v7 API backed by LearningState", 
     "selectedSite",
     "state",
     "history",
-    "settings",
   ]);
   assert.deepEqual(dashboardBody.sites, sitesBody.sites);
   assert.equal(dashboardBody.selectedSite, site);
   assert.equal(dashboardBody.state.site, site);
   assert.equal(dashboardBody.history.site, site);
   assert.equal(dashboardBody.history.days.length, 31);
-  assert.equal(dashboardBody.settings.site, site);
 
-  const settingsResponse = await authorizedGet(
-    `/v7/settings?${new URLSearchParams({ site })}`,
-  );
-  assert.equal(settingsResponse.status, 200);
-  const settingsBody = await settingsResponse.json();
-  assert.deepEqual(Object.keys(settingsBody), ["site", "dailyStabilityDaysDeltaGoal"]);
-  assert.equal(settingsBody.site, site);
-  assert.equal(Number.isSafeInteger(settingsBody.dailyStabilityDaysDeltaGoal), true);
-  assert.equal(settingsBody.dailyStabilityDaysDeltaGoal >= 1, true);
-
-  const stateResponse = await authorizedGet(`/v7/state?${new URLSearchParams({ site })}`);
+  const stateResponse = await authorizedGet(`/v8/state?${new URLSearchParams({ site })}`);
   assert.equal(stateResponse.status, 200);
   const stateBody = await stateResponse.json();
   assert.deepEqual(Object.keys(stateBody).sort(), [
@@ -149,12 +137,14 @@ test("production serves only the authenticated v7 API backed by LearningState", 
   const metrics = stateBody.learningMetrics;
   assert.deepEqual(Object.keys(metrics).sort(), [
     "attemptedQuestionCount",
+    "dueCardsCompleted",
     "stabilityDays",
     "todayAttemptedQuestionCount",
     "todayStabilityDaysDelta",
   ]);
   assert.equal(Number.isSafeInteger(metrics.stabilityDays), true);
   assert.equal(metrics.stabilityDays >= 0, true);
+  assert.equal(typeof metrics.dueCardsCompleted, "boolean");
   assert.equal(Number.isSafeInteger(metrics.todayStabilityDaysDelta), true);
   assert.equal(Number.isSafeInteger(metrics.attemptedQuestionCount), true);
   assert.equal(metrics.attemptedQuestionCount >= 0, true);
@@ -170,7 +160,7 @@ test("production serves only the authenticated v7 API backed by LearningState", 
   );
 
   const historyResponse = await authorizedGet(
-    `/v7/history?${new URLSearchParams({ site, days: "7" })}`,
+    `/v8/history?${new URLSearchParams({ site, days: "7" })}`,
   );
   assert.equal(historyResponse.status, 200);
   const historyBody = await historyResponse.json();
@@ -190,7 +180,7 @@ test("production serves only the authenticated v7 API backed by LearningState", 
   );
 
   const detailsResponse = await authorizedGet(
-    `/v7/daily-details?${new URLSearchParams({ site, date: historyBody.today })}`,
+    `/v8/daily-details?${new URLSearchParams({ site, date: historyBody.today })}`,
   );
   assert.equal(detailsResponse.status, 200);
   const detailsBody = await detailsResponse.json();
@@ -228,12 +218,12 @@ test("production serves only the authenticated v7 API backed by LearningState", 
 });
 
 test("production issues Azure speech tokens with the configured key", async () => {
-  const unauthorized = await fetch(new URL("/v7/speech-token", productionOrigin), {
+  const unauthorized = await fetch(new URL("/v8/speech-token", productionOrigin), {
     method: "POST",
   });
   assert.equal(unauthorized.status, 401);
 
-  const response = await fetch(new URL("/v7/speech-token", productionOrigin), {
+  const response = await fetch(new URL("/v8/speech-token", productionOrigin), {
     method: "POST",
     headers: { Authorization: `Bearer ${syncToken()}` },
   });

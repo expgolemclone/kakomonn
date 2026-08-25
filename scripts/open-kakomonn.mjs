@@ -65,7 +65,7 @@ export async function requestNextQuestionURL({
     throw new Error("KAKOMONN_SYNC_TOKEN is not set");
   }
 
-  const endpoint = new URL("/v7/next", SYNC_API_ORIGIN);
+  const endpoint = new URL("/v8/next", SYNC_API_ORIGIN);
   endpoint.searchParams.set("site", KAKOMONN_SITE);
   let response;
   try {

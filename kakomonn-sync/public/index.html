@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#090b12">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="description" content="FSRS stabilityの合計日数を確認する過去問学習dashboard">
+    <meta name="description" content="FSRSのdue card完了状態と定着指標を確認する過去問学習dashboard">
     <title>過去問 定着dashboard</title>
     <link rel="stylesheet" href="/styles.css">
     <script defer src="/app.js"></script>
@@ -48,26 +48,18 @@
           <section class="primary-kpi-card" aria-labelledby="primary-kpi-title">
             <div>
               <p class="eyebrow">PRIMARY KPI</p>
-              <h2 id="primary-kpi-title">todayStabilityDaysDelta</h2>
+              <h2 id="primary-kpi-title">dueCardsCompleted</h2>
             </div>
-            <div class="primary-kpi-number"><strong id="today-stability-days-delta">--</strong><span>日</span></div>
-          </section>
-
-          <section class="goal-card" aria-labelledby="goal-title">
-            <div>
-              <p class="eyebrow">TODAY</p>
-              <h2 id="goal-title">dailyStabilityDaysDeltaGoal</h2>
-            </div>
-            <div class="goal-controls">
-              <label for="daily-goal">dailyStabilityDaysDeltaGoal</label>
-              <input id="daily-goal" type="number" min="1" step="1" inputmode="numeric">
-              <button id="save-goal" class="primary-button" type="button">保存</button>
-            </div>
+            <div class="primary-kpi-status"><strong id="due-cards-completed">--</strong></div>
           </section>
 
           <section class="metrics-card" aria-label="DISPLAY ONLY">
             <p class="eyebrow">DISPLAY ONLY</p>
             <dl class="metric-list">
+              <div class="metric-item">
+                <dt>todayStabilityDaysDelta</dt>
+                <dd><strong id="today-stability-days-delta">--</strong><span>日</span></dd>
+              </div>
               <div class="metric-item">
                 <dt>stabilityDays</dt>
                 <dd><strong id="stability-days">--</strong><span>日</span></dd>

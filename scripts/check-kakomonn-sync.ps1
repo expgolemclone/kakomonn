@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$BaseUrl = "https://kakomonn-sync.kakomonn.workers.dev/v7",
+    [string]$BaseUrl = "https://kakomonn-sync.kakomonn.workers.dev/v8",
     [string]$Site
 )
 
@@ -252,7 +252,7 @@ function Show-ResponseSummary {
 
 try {
     $sitesResponse = Invoke-DiagnosticRequest "/sites"
-    Show-ResponseSummary "GET /v7/sites" $sitesResponse
+    Show-ResponseSummary "GET /v8/sites" $sitesResponse
 
     if ($sitesResponse.Status -ne 200) {
         Write-Host ""
@@ -289,7 +289,7 @@ try {
 
         $encodedSite = [Uri]::EscapeDataString([string]$currentSite)
         $stateResponse = Invoke-DiagnosticRequest "/state?site=$encodedSite"
-        Show-ResponseSummary "GET /v7/state" $stateResponse
+        Show-ResponseSummary "GET /v8/state" $stateResponse
 
         if ($stateResponse.Status -ne 200) {
             Write-Host "STATE CONTRACT: NOT TESTED, HTTP status is not 200."
@@ -316,8 +316,8 @@ try {
         }
 
         if ($null -eq $stateResponse.Json.catalog) {
-            Write-Host "CATALOG: null. The reader will crawl the question catalog and POST /v7/questions."
-            Write-Host "NOTE: this script does not POST /v7/questions because that mutates production state."
+            Write-Host "CATALOG: null. The reader will crawl the question catalog and POST /v8/questions."
+            Write-Host "NOTE: this script does not POST /v8/questions because that mutates production state."
         }
         else {
             $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
@@ -325,8 +325,8 @@ try {
             $ageHours = [Math]::Round($ageMs / 3600000.0, 2)
             Write-Host "CATALOG AGE HOURS: $ageHours"
             if ($ageMs -lt 0 -or $ageMs -ge 86400000) {
-                Write-Host "CATALOG REFRESH: YES. The reader will crawl the catalog and POST /v7/questions."
-                Write-Host "NOTE: if the browser error happens here, inspect the POST /v7/questions response in DevTools."
+                Write-Host "CATALOG REFRESH: YES. The reader will crawl the catalog and POST /v8/questions."
+                Write-Host "NOTE: if the browser error happens here, inspect the POST /v8/questions response in DevTools."
             }
             else {
                 Write-Host "CATALOG REFRESH: NO"
@@ -334,7 +334,7 @@ try {
         }
 
         $nextResponse = Invoke-DiagnosticRequest "/next?site=$encodedSite"
-        Show-ResponseSummary "GET /v7/next" $nextResponse
+        Show-ResponseSummary "GET /v8/next" $nextResponse
         if ($nextResponse.Status -eq 200 -and $null -ne $nextResponse.Json) {
             $nextErrors = @(Get-NextContractErrors $nextResponse.Json ([string]$currentSite))
             if ($nextErrors.Count -eq 0) {
@@ -361,7 +361,7 @@ try {
     }
 
     Write-Host "RESULT: non-mutating production endpoints satisfy the reader contract."
-    Write-Host "If the reader still shows invalid_response, the remaining likely path is POST /v7/questions or POST /v7/attempts."
+    Write-Host "If the reader still shows invalid_response, the remaining likely path is POST /v8/questions or POST /v8/attempts."
 }
 finally {
     $headers.Authorization = ""

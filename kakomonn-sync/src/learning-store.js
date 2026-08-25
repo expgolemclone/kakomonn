@@ -15,15 +15,11 @@ import {
   OPERATION_ID_PATTERN,
   QUESTION_ID_PATTERN,
 } from "./contracts.js";
-import {
-  DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL,
-  initializeLearningSchema,
-} from "./storage/schema.js";
+import { initializeLearningSchema } from "./storage/schema.js";
 
 export { initializeLearningSchema } from "./storage/schema.js";
 
 export const LEARNING_STATE_OBJECT_NAME = "primary";
-export { DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL };
 export { OPERATION_ID_PATTERN, QUESTION_ID_PATTERN } from "./contracts.js";
 
 function rowToCard(row) {
@@ -217,17 +213,18 @@ function readTodayStabilityDaysDelta(storage, site, today) {
     : row.closing_stability_days - row.opening_stability_days;
 }
 
-function readDailyStabilityDaysDeltaGoal(storage, site) {
-  const row = storage.sql
+function dueCardsCompleted(storage, site, nowMs) {
+  return storage.sql
     .exec(
-      `SELECT daily_stability_days_delta_goal FROM site_settings WHERE site = ?`,
-      site
+      `SELECT 1 AS found
+       FROM cards c
+       JOIN questions q ON q.site = c.site AND q.question_id = c.question_id
+       WHERE c.site = ? AND c.due_ms <= ?
+       LIMIT 1`,
+      site,
+      nowMs
     )
-    .toArray()[0];
-  if (row === undefined) {
-    throw new Error("missing LearningState settings");
-  }
-  return row.daily_stability_days_delta_goal;
+    .toArray()[0] === undefined;
 }
 
 function celebrationFromRow(row) {
@@ -237,8 +234,7 @@ function celebrationFromRow(row) {
   return {
     site: row.site,
     date: row.date,
-    todayStabilityDaysDelta: row.today_stability_days_delta,
-    dailyStabilityDaysDeltaGoal: row.daily_stability_days_delta_goal,
+    dueCardsCompleted: true,
   };
 }
 
@@ -246,9 +242,8 @@ function readCelebrationForOperation(storage, operationId) {
   return celebrationFromRow(
     storage.sql
       .exec(
-        `SELECT site, date, today_stability_days_delta,
-                daily_stability_days_delta_goal
-         FROM daily_stability_days_delta_achievements
+        `SELECT site, date
+         FROM daily_due_card_achievements
          WHERE operation_id = ?`,
         operationId
       )
@@ -262,31 +257,23 @@ function recordCelebration(
   date,
   operationId,
   achievedAtMs,
-  previousTodayStabilityDaysDelta,
-  metrics
+  metrics,
+  wasDueCard
 ) {
-  const dailyStabilityDaysDeltaGoal = readDailyStabilityDaysDeltaGoal(storage, site);
-  if (
-    previousTodayStabilityDaysDelta >= dailyStabilityDaysDeltaGoal ||
-    metrics.todayStabilityDaysDelta < dailyStabilityDaysDeltaGoal
-  ) {
+  if (!wasDueCard || !metrics.dueCardsCompleted) {
     return undefined;
   }
   const row = storage.sql
     .exec(
-      `INSERT INTO daily_stability_days_delta_achievements (
-         site, date, operation_id, achieved_at_ms,
-         today_stability_days_delta, daily_stability_days_delta_goal
-       ) VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO daily_due_card_achievements (
+         site, date, operation_id, achieved_at_ms
+       ) VALUES (?, ?, ?, ?)
        ON CONFLICT(site, date) DO NOTHING
-       RETURNING site, date, today_stability_days_delta,
-                 daily_stability_days_delta_goal`,
+       RETURNING site, date`,
       site,
       date,
       operationId,
-      achievedAtMs,
-      metrics.todayStabilityDaysDelta,
-      dailyStabilityDaysDeltaGoal
+      achievedAtMs
     )
     .toArray()[0];
   return celebrationFromRow(row);
@@ -302,6 +289,7 @@ function learningMetrics(
   const today = getTokyoDate(new Date(nowMs));
   return {
     stabilityDays: integerStabilityDays(storedMetrics),
+    dueCardsCompleted: dueCardsCompleted(storage, site, nowMs),
     todayStabilityDaysDelta:
       todayStabilityDaysDelta === undefined
         ? readTodayStabilityDaysDelta(storage, site, today)
@@ -490,6 +478,7 @@ export class LearningState extends DurableObject {
         .toArray()[0];
       const card = rowToCard(stored) ?? createNewCard(nowMs);
       const previousCardStabilityDays = card.stability;
+      const wasDueCard = stored !== undefined && stored.due_ms <= nowMs;
       const schedulingApplied = stored === undefined || stored.due_ms <= nowMs;
       const nextCard = schedulingApplied
         ? scheduleAnswer(card, answerResult, nowMs)
@@ -567,18 +556,15 @@ export class LearningState extends DurableObject {
           stabilityDaysAfter -
           stabilityDaysBefore
       );
-      const celebration =
-        metrics.todayStabilityDaysDelta > previousTodayStabilityDaysDelta
-          ? recordCelebration(
-              this.ctx.storage,
-              site,
-              today,
-              operationId,
-              nowMs,
-              previousTodayStabilityDaysDelta,
-              metrics
-            )
-          : undefined;
+      const celebration = recordCelebration(
+        this.ctx.storage,
+        site,
+        today,
+        operationId,
+        nowMs,
+        metrics,
+        wasDueCard
+      );
       return attemptResponse(
         {
           site,
@@ -729,44 +715,6 @@ export class LearningState extends DurableObject {
     });
   }
 
-  getSettings(site) {
-    if (!isSite(site)) {
-      throw new TypeError("invalid settings site");
-    }
-    return {
-      site,
-      dailyStabilityDaysDeltaGoal: readDailyStabilityDaysDeltaGoal(
-        this.ctx.storage,
-        site
-      ),
-    };
-  }
-
-  updateSettings(site, dailyStabilityDaysDeltaGoal) {
-    if (
-      !isSite(site) ||
-      !Number.isSafeInteger(dailyStabilityDaysDeltaGoal) ||
-      dailyStabilityDaysDeltaGoal < 1
-    ) {
-      throw new TypeError("invalid settings");
-    }
-    const updated = this.ctx.storage.sql
-      .exec(
-        `UPDATE site_settings SET daily_stability_days_delta_goal = ? WHERE site = ?
-         RETURNING daily_stability_days_delta_goal`,
-        dailyStabilityDaysDeltaGoal,
-        site
-      )
-      .toArray()[0];
-    if (updated === undefined) {
-      throw new Error("missing LearningState settings");
-    }
-    return {
-      site,
-      dailyStabilityDaysDeltaGoal: updated.daily_stability_days_delta_goal,
-    };
-  }
-
   nextQuestion(site, nowMs = Date.now(), excludeQuestionId = null) {
     if (
       !isSite(site) ||
@@ -877,13 +825,6 @@ export class LearningState extends DurableObject {
         nowMs,
         generation
       );
-      this.ctx.storage.sql.exec(
-        `INSERT INTO site_settings (site, daily_stability_days_delta_goal)
-         VALUES (?, ?)
-         ON CONFLICT(site) DO NOTHING`,
-        site,
-        DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL
-      );
       const storedMetricsAfter = replaceStoredLearningMetrics(
         this.ctx.storage,
         site,
@@ -937,7 +878,6 @@ export class LearningState extends DurableObject {
         selectedSite: null,
         state: null,
         history: null,
-        settings: null,
       };
     }
     return {
@@ -945,7 +885,6 @@ export class LearningState extends DurableObject {
       selectedSite,
       state: this.getState(selectedSite, nowMs),
       history: this.getHistory(selectedSite, 31, nowMs),
-      settings: this.getSettings(selectedSite),
     };
   }
 }

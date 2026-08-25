@@ -1,7 +1,6 @@
 import { getTokyoDate, tokyoDateRangeMs } from "../dates.js";
 
-const CURRENT_SCHEMA_VERSION = 6;
-export const DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL = 30;
+const CURRENT_SCHEMA_VERSION = 7;
 
 function tableDefinition(storage, tableName) {
   return storage.sql
@@ -58,11 +57,6 @@ function createCurrentTables(storage) {
       generation INTEGER NOT NULL CHECK (generation > 0)
     ) WITHOUT ROWID;
 
-    CREATE TABLE site_settings (
-      site TEXT PRIMARY KEY,
-      daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1)
-    ) WITHOUT ROWID;
-
     CREATE TABLE learning_metrics (
       site TEXT PRIMARY KEY,
       stability_days REAL NOT NULL CHECK (stability_days >= 0),
@@ -71,13 +65,11 @@ function createCurrentTables(storage) {
       today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0)
     ) WITHOUT ROWID;
 
-    CREATE TABLE daily_stability_days_delta_achievements (
+    CREATE TABLE daily_due_card_achievements (
       site TEXT NOT NULL,
       date TEXT NOT NULL,
       operation_id TEXT NOT NULL UNIQUE,
       achieved_at_ms INTEGER NOT NULL CHECK (achieved_at_ms > 0),
-      today_stability_days_delta INTEGER NOT NULL CHECK (today_stability_days_delta >= 1),
-      daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1),
       PRIMARY KEY (site, date)
     ) WITHOUT ROWID;
 
@@ -203,6 +195,23 @@ function migrateSchemaV5ToV6(storage) {
   `);
 }
 
+function migrateSchemaV6ToV7(storage) {
+  storage.sql.exec(`
+    DROP TABLE site_settings;
+    DROP TABLE daily_stability_days_delta_achievements;
+
+    CREATE TABLE daily_due_card_achievements (
+      site TEXT NOT NULL,
+      date TEXT NOT NULL,
+      operation_id TEXT NOT NULL UNIQUE,
+      achieved_at_ms INTEGER NOT NULL CHECK (achieved_at_ms > 0),
+      PRIMARY KEY (site, date)
+    ) WITHOUT ROWID;
+
+    UPDATE schema_metadata SET version = 7 WHERE singleton = 1;
+  `);
+}
+
 function migrateLegacySchema(storage, today) {
   const { startMs, endMs } = tokyoDateRangeMs(today);
   storage.sql.exec(`
@@ -242,11 +251,6 @@ function migrateLegacySchema(storage, today) {
       PRIMARY KEY (site, date)
     ) WITHOUT ROWID;
 
-    CREATE TABLE site_settings (
-      site TEXT PRIMARY KEY,
-      daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1)
-    ) WITHOUT ROWID;
-
     CREATE TABLE learning_metrics (
       site TEXT PRIMARY KEY,
       stability_days REAL NOT NULL CHECK (stability_days >= 0),
@@ -255,13 +259,11 @@ function migrateLegacySchema(storage, today) {
       today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0)
     ) WITHOUT ROWID;
 
-    CREATE TABLE daily_stability_days_delta_achievements (
+    CREATE TABLE daily_due_card_achievements (
       site TEXT NOT NULL,
       date TEXT NOT NULL,
       operation_id TEXT NOT NULL UNIQUE,
       achieved_at_ms INTEGER NOT NULL CHECK (achieved_at_ms > 0),
-      today_stability_days_delta INTEGER NOT NULL CHECK (today_stability_days_delta >= 1),
-      daily_stability_days_delta_goal INTEGER NOT NULL CHECK (daily_stability_days_delta_goal >= 1),
       PRIMARY KEY (site, date)
     ) WITHOUT ROWID;
 
@@ -274,11 +276,6 @@ function migrateLegacySchema(storage, today) {
     VALUES (1, ${CURRENT_SCHEMA_VERSION});
   `);
 
-  storage.sql.exec(
-    `INSERT INTO site_settings (site, daily_stability_days_delta_goal)
-     SELECT site, ? FROM catalog_metadata`,
-    DEFAULT_DAILY_STABILITY_DAYS_DELTA_GOAL
-  );
   const sites = storage.sql.exec("SELECT site FROM catalog_metadata").toArray();
   for (const { site } of sites) {
     const learningMetrics = storage.sql
@@ -359,8 +356,13 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       "stability_history",
     ];
     const currentTables = [
-      ...schemaV3Tables,
-      "daily_stability_days_delta_achievements",
+      "attempts",
+      "cards",
+      "catalog_metadata",
+      "questions",
+      "schema_metadata",
+      "stability_history",
+      "daily_due_card_achievements",
       "learning_metrics",
     ];
     const legacyTables = [
@@ -419,6 +421,10 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     if (version === 5) {
       migrateSchemaV5ToV6(storage);
       version = 6;
+    }
+    if (version === 6) {
+      migrateSchemaV6ToV7(storage);
+      version = 7;
     }
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error("unsupported LearningState schema version");

@@ -442,7 +442,7 @@ async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v7/speech-token",
+        (call) => new URL(call.url).pathname === "/v8/speech-token",
       ).length,
   );
 }
@@ -470,10 +470,10 @@ async function assertIncorrectSkip(context, script, inputMethod) {
     );
     const calls = await page.evaluate(() => ({
       attempts: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v7/attempts",
+        (call) => new URL(call.url).pathname === "/v8/attempts",
       ),
       next: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v7/next",
+        (call) => new URL(call.url).pathname === "/v8/next",
       ),
     }));
     assert.equal(calls.attempts.length, 1);
@@ -545,7 +545,7 @@ async function main() {
     assert.equal(await page.evaluate(() => typeof window.Audio), "function");
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "todayStabilityDaysDelta 0日",
+      "dueCardsCompleted 未達成",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-start").count(),
@@ -989,7 +989,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v7/attempts",
+              new URL(call.url).pathname === "/v8/attempts",
           ).length,
       ),
       0,
@@ -1184,7 +1184,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v7/attempts",
+              new URL(call.url).pathname === "/v8/attempts",
           ).length,
       ),
       0,
@@ -1199,7 +1199,7 @@ async function main() {
       await page.waitForFunction(
         () =>
           document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-          "todayStabilityDaysDelta 31日",
+          "dueCardsCompleted 未達成",
       );
     } catch (error) {
       error.readerState = await page.evaluate(() => ({
@@ -1219,7 +1219,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v7/attempts",
+              new URL(call.url).pathname === "/v8/attempts",
           ).length,
       ),
       1,
@@ -1240,7 +1240,7 @@ async function main() {
       window.__syncMock.attemptCount = 7;
       window.__syncMock.attemptedQuestionCount = 7;
       window.__syncMock.todayAttemptedQuestionCount = 7;
-      window.__syncMock.todayStabilityDaysDelta = 7;
+      window.__syncMock.dueCardsCompleted = true;
       window.__syncMock.holdNextRequest = true;
       window.dispatchEvent(new Event("focus"));
     });
@@ -1255,7 +1255,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-        "todayStabilityDaysDelta 7日",
+        "dueCardsCompleted 達成",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
@@ -1423,7 +1423,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "todayStabilityDaysDelta --日",
+      "dueCardsCompleted --",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").focus();
     await setupPage.keyboard.type("qwert asdfg n gg yy xz ");
@@ -1438,7 +1438,7 @@ async function main() {
     });
     assert.equal(
       await setupPage.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "todayStabilityDaysDelta 0日",
+      "dueCardsCompleted 未達成",
     );
     assert.equal(
       await setupPage.evaluate(
@@ -1602,20 +1602,20 @@ async function main() {
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-        "todayStabilityDaysDelta 31日",
+        "dueCardsCompleted 未達成",
     );
     await iosPage.evaluate(() => {
       window.__syncMock.stabilityDays = 6;
       window.__syncMock.attemptCount = 6;
       window.__syncMock.attemptedQuestionCount = 6;
       window.__syncMock.todayAttemptedQuestionCount = 6;
-      window.__syncMock.todayStabilityDaysDelta = 6;
+      window.__syncMock.dueCardsCompleted = true;
       window.dispatchEvent(new Event("focus"));
     });
     await iosPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-        "todayStabilityDaysDelta 6日",
+        "dueCardsCompleted 達成",
     );
     assert.equal(
       await iosPage.evaluate(
@@ -1623,7 +1623,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v7/attempts",
+              new URL(call.url).pathname === "/v8/attempts",
           ).length,
       ),
       1,

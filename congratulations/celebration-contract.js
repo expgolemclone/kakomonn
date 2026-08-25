@@ -1,22 +1,10 @@
 const SITE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const REQUIRED_KEYS = [
-  "dailyStabilityDaysDeltaGoal",
   "date",
+  "dueCardsCompleted",
   "site",
-  "todayStabilityDaysDelta",
 ];
-
-function parseInteger(value, name) {
-  if (!/^-?(?:0|[1-9]\d*)$/.test(value ?? "")) {
-    throw new TypeError(`${name} must be an integer.`);
-  }
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) {
-    throw new TypeError(`${name} must be a safe integer.`);
-  }
-  return parsed;
-}
 
 function validDate(value) {
   if (!DATE_PATTERN.test(value)) {
@@ -40,25 +28,13 @@ export function parseCelebration(search) {
   if (!SITE_PATTERN.test(site ?? "") || !validDate(date ?? "")) {
     throw new TypeError("Celebration identity is invalid.");
   }
-  const todayStabilityDaysDelta = parseInteger(
-    parameters.get("todayStabilityDaysDelta"),
-    "todayStabilityDaysDelta",
-  );
-  const dailyStabilityDaysDeltaGoal = parseInteger(
-    parameters.get("dailyStabilityDaysDeltaGoal"),
-    "dailyStabilityDaysDeltaGoal",
-  );
-  if (
-    dailyStabilityDaysDeltaGoal < 1 ||
-    todayStabilityDaysDelta < dailyStabilityDaysDeltaGoal
-  ) {
+  if (parameters.get("dueCardsCompleted") !== "true") {
     throw new TypeError("Celebration metrics are invalid.");
   }
   return {
     site,
     date,
-    todayStabilityDaysDelta,
-    dailyStabilityDaysDeltaGoal,
+    dueCardsCompleted: true,
   };
 }
 

@@ -34,8 +34,7 @@ assert.deepEqual(manifest.experiences.map((item) => item.id), expectedIds);
 const celebration = {
   site: "chushoks.kakomonn.com",
   date: "2026-08-13",
-  todayStabilityDaysDelta: 31,
-  dailyStabilityDaysDeltaGoal: 30,
+  dueCardsCompleted: true,
 };
 const search = celebrationSearch(celebration);
 assert.deepEqual(parseCelebration(search), celebration);
@@ -43,11 +42,10 @@ for (const invalidSearch of [
   "",
   `${search}&extra=1`,
   search.replace("2026-08-13", "2026-02-30"),
-  search.replace("todayStabilityDaysDelta=31", "todayStabilityDaysDelta=29"),
-  search.replace("dailyStabilityDaysDeltaGoal=30", "dailyStabilityDaysDeltaGoal=0"),
+  search.replace("dueCardsCompleted=true", "dueCardsCompleted=false"),
   `${search}&site=chushoks.kakomonn.com`,
 ]) {
-  assert.throws(() => parseCelebration(invalidSearch), /invalid|integer/i);
+  assert.throws(() => parseCelebration(invalidSearch), /invalid/i);
 }
 
 for (let index = 0; index < manifest.experiences.length; index += 1) {

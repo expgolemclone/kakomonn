@@ -66,7 +66,7 @@ test("requests the scheduled next question with the sync token", async () => {
   assert.equal(calls.length, 1);
   assert.equal(
     calls[0][0].href,
-    `${SYNC_API_ORIGIN}/v7/next?site=${KAKOMONN_SITE}`,
+    `${SYNC_API_ORIGIN}/v8/next?site=${KAKOMONN_SITE}`,
   );
   assert.deepEqual(calls[0][1], {
     headers: {

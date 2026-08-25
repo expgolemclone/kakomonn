@@ -8,7 +8,6 @@ import { handleDailyDetails } from "./api/daily-details.js";
 import { handleDashboard } from "./api/dashboard.js";
 import { handleNext } from "./api/next.js";
 import { handleQuestions } from "./api/questions.js";
-import { handleSettings } from "./api/settings.js";
 import { issueSpeechToken } from "./speech.js";
 
 export { LearningState, issueSpeechToken };
@@ -26,10 +25,9 @@ export async function handleRequest(request, env, fetcher = fetch) {
     ["/attempts", ["POST"]],
     ["/next", ["GET"]],
     ["/questions", ["POST"]],
-    ["/settings", ["GET", "PUT"]],
     ["/speech-token", ["POST"]],
   ]);
-  if (!url.pathname.startsWith("/v7/")) {
+  if (!url.pathname.startsWith("/v8/")) {
     return errorResponse("not_found", 404);
   }
   const route = url.pathname.slice(3);
@@ -70,9 +68,6 @@ export async function handleRequest(request, env, fetcher = fetch) {
   }
   if (route === "/next") {
     return handleNext(url, env);
-  }
-  if (route === "/settings") {
-    return handleSettings(request, url, env);
   }
   if (route === "/speech-token") {
     if (url.search !== "") {

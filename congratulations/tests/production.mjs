@@ -6,8 +6,7 @@ const origin = "https://kakomonn-congratulations.kakomonn.workers.dev";
 const search = celebrationSearch({
   site: "chushoks.kakomonn.com",
   date: "2026-08-13",
-  todayStabilityDaysDelta: 31,
-  dailyStabilityDaysDeltaGoal: 30,
+  dueCardsCompleted: true,
 });
 const browser = await chromium.launch({ headless: true });
 try {
@@ -20,7 +19,7 @@ try {
   const response = await page.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
   assert.equal(response?.status(), 200);
   await page.waitForSelector('html[data-state="ready"]');
-  assert.equal(await page.locator("#achievement-label").innerText(), "todayStabilityDaysDelta +31日");
+  assert.equal(await page.locator("#achievement-label").innerText(), "dueCardsCompleted 達成");
   const frame = page.locator("#celebration-frame").contentFrame();
   await frame.locator('[data-celebration-root][data-ready="true"]').waitFor();
   assert.deepEqual(errors, []);

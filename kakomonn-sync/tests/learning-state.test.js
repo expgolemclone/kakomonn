@@ -36,12 +36,11 @@ async function reset() {
       DROP TABLE IF EXISTS usage_audit;
     `);
     for (const table of [
-      "daily_stability_days_delta_achievements",
+      "daily_due_card_achievements",
       "attempts",
       "stability_history",
       "cards",
       "questions",
-      "site_settings",
       "learning_metrics",
       "catalog_metadata",
     ]) {
@@ -131,9 +130,21 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates schema v5 and removes write-amplifying indexes", async () => {
+  it("migrates schema v5 and removes retired KPI storage", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
+        DROP TABLE daily_due_card_achievements;
+        CREATE TABLE site_settings (
+          site TEXT PRIMARY KEY,
+          daily_stability_days_delta_goal INTEGER NOT NULL
+        ) WITHOUT ROWID;
+        CREATE TABLE daily_stability_days_delta_achievements (
+          site TEXT NOT NULL, date TEXT NOT NULL,
+          operation_id TEXT NOT NULL UNIQUE, achieved_at_ms INTEGER NOT NULL,
+          today_stability_days_delta INTEGER NOT NULL,
+          daily_stability_days_delta_goal INTEGER NOT NULL,
+          PRIMARY KEY (site, date)
+        ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS attempts_by_site ON attempts (site);
         CREATE INDEX IF NOT EXISTS cards_by_site_stability
           ON cards (site, stability);
@@ -142,7 +153,19 @@ describe("LearningState schema", () => {
       initializeLearningSchema(state.storage, NOW);
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 6 });
+      ).toEqual({ version: 7 });
+      expect(
+        state.storage.sql
+          .exec(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('site_settings', 'daily_stability_days_delta_achievements')"
+          )
+          .toArray()
+      ).toEqual([]);
+      expect(
+        state.storage.sql
+          .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daily_due_card_achievements'")
+          .toArray()
+      ).toEqual([{ name: "daily_due_card_achievements" }]);
       const indexes = state.storage.sql
         .exec(
           `SELECT name FROM sqlite_master
@@ -162,15 +185,14 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates legacy data to schema v6 without retaining threshold-based fields", async () => {
+  it("migrates legacy data to schema v7 without retaining threshold-based fields", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
-        DROP TABLE daily_stability_days_delta_achievements;
+        DROP TABLE daily_due_card_achievements;
         DROP TABLE attempts;
         DROP TABLE stability_history;
         DROP TABLE cards;
         DROP TABLE questions;
-        DROP TABLE site_settings;
         DROP TABLE learning_metrics;
         DROP TABLE catalog_metadata;
         DROP TABLE schema_metadata;
@@ -240,10 +262,10 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 6 });
+      ).toEqual({ version: 7 });
       expect(
         state.storage.sql
-          .exec("SELECT * FROM daily_stability_days_delta_achievements")
+          .exec("SELECT * FROM daily_due_card_achievements")
           .toArray()
       ).toEqual([]);
       expect(
@@ -254,9 +276,6 @@ describe("LearningState schema", () => {
         opening_stability_days: 12,
         closing_stability_days: 12,
       });
-      expect(
-        state.storage.sql.exec("SELECT * FROM site_settings").toArray()[0]
-      ).toEqual({ site: SITE, daily_stability_days_delta_goal: 30 });
       expect(
         state.storage.sql.exec("SELECT * FROM learning_metrics").toArray()[0]
       ).toEqual({
@@ -287,15 +306,14 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates schema v2 data to v6 without losing rows", async () => {
+  it("migrates schema v2 data to v7 without losing rows", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
-        DROP TABLE daily_stability_days_delta_achievements;
+        DROP TABLE daily_due_card_achievements;
         DROP TABLE attempts;
         DROP TABLE stability_history;
         DROP TABLE cards;
         DROP TABLE questions;
-        DROP TABLE site_settings;
         DROP TABLE learning_metrics;
         DROP TABLE catalog_metadata;
         DROP TABLE schema_metadata;
@@ -368,10 +386,10 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 6 });
+      ).toEqual({ version: 7 });
       expect(
         state.storage.sql
-          .exec("SELECT * FROM daily_stability_days_delta_achievements")
+          .exec("SELECT * FROM daily_due_card_achievements")
           .toArray()
       ).toEqual([]);
       expect(
@@ -386,8 +404,10 @@ describe("LearningState schema", () => {
         resulting_card_stability_days: 2.5,
       });
       expect(
-        state.storage.sql.exec("SELECT * FROM site_settings").toArray()[0]
-      ).toEqual({ site: SITE, daily_stability_days_delta_goal: 45 });
+        state.storage.sql
+          .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'site_settings'")
+          .toArray()
+      ).toEqual([]);
       expect(
         state.storage.sql.exec("SELECT * FROM learning_metrics").toArray()[0]
       ).toEqual({
@@ -417,6 +437,20 @@ describe("LearningState schema", () => {
 
   it("migrates schema v4 aggregates into one metrics row", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec(`
+        DROP TABLE daily_due_card_achievements;
+        CREATE TABLE site_settings (
+          site TEXT PRIMARY KEY,
+          daily_stability_days_delta_goal INTEGER NOT NULL
+        ) WITHOUT ROWID;
+        CREATE TABLE daily_stability_days_delta_achievements (
+          site TEXT NOT NULL, date TEXT NOT NULL,
+          operation_id TEXT NOT NULL UNIQUE, achieved_at_ms INTEGER NOT NULL,
+          today_stability_days_delta INTEGER NOT NULL,
+          daily_stability_days_delta_goal INTEGER NOT NULL,
+          PRIMARY KEY (site, date)
+        ) WITHOUT ROWID;
+      `);
       state.storage.sql.exec(
         "INSERT INTO cards VALUES (?, '1', ?, 1.9, 5, 1, 0, 1, 0, 2, ?)",
         SITE,
@@ -438,7 +472,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 6 });
+      ).toEqual({ version: 7 });
       const cursor = state.storage.sql.exec(
         `SELECT stability_days, attempted_question_count,
                 attempted_question_count_date, today_attempted_question_count
@@ -527,7 +561,7 @@ describe("learning metrics", () => {
     });
   });
 
-  it("returns the v7 attempt contract for correct and incorrect answers", async () => {
+  it("returns the v8 attempt contract for correct and incorrect answers", async () => {
     const correct = await stub().recordAttempt(
       SITE,
       "1",
@@ -857,28 +891,37 @@ describe("attempt idempotency and attempted question totals", () => {
   });
 });
 
-describe("daily stability delta celebrations", () => {
-  it("returns one celebration when an answer crosses the site goal", async () => {
-    await stub().updateSettings(SITE, 1);
+describe("daily due card celebrations", () => {
+  it("returns one celebration when the final due card is answered", async () => {
+    await seedReviewCard("1", 30);
+    await seedReviewCard("2", 30);
+    const partial = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(29),
+      "correct",
+      NOW
+    );
+    expect(partial.learningMetrics.dueCardsCompleted).toBe(false);
+    expect(partial).not.toHaveProperty("celebration");
 
     const first = await stub().recordAttempt(
       SITE,
-      "1",
+      "2",
       operationId(30),
       "correct",
       NOW
     );
-    expect(first.learningMetrics.todayStabilityDaysDelta).toBeGreaterThanOrEqual(1);
+    expect(first.learningMetrics.dueCardsCompleted).toBe(true);
     expect(first.celebration).toEqual({
       site: SITE,
       date: "2026-08-10",
-      todayStabilityDaysDelta: first.learningMetrics.todayStabilityDaysDelta,
-      dailyStabilityDaysDeltaGoal: 1,
+      dueCardsCompleted: true,
     });
 
     const retry = await stub().recordAttempt(
       SITE,
-      "1",
+      "2",
       operationId(30),
       "correct",
       NOW + 1000
@@ -887,7 +930,7 @@ describe("daily stability delta celebrations", () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(
         state.storage.sql
-          .exec("SELECT * FROM daily_stability_days_delta_achievements")
+          .exec("SELECT * FROM daily_due_card_achievements")
           .toArray()
       ).toEqual([
         {
@@ -895,15 +938,13 @@ describe("daily stability delta celebrations", () => {
           date: "2026-08-10",
           operation_id: operationId(30),
           achieved_at_ms: NOW,
-          today_stability_days_delta: first.learningMetrics.todayStabilityDaysDelta,
-          daily_stability_days_delta_goal: 1,
         },
       ]);
     });
   });
 
-  it("does not celebrate a second crossing on the same site and Tokyo date", async () => {
-    await stub().updateSettings(SITE, 1);
+  it("does not celebrate a second completion on the same site and Tokyo date", async () => {
+    await seedReviewCard("1", 30);
     const first = await stub().recordAttempt(
       SITE,
       "1",
@@ -913,22 +954,7 @@ describe("daily stability delta celebrations", () => {
     );
     expect(first).toHaveProperty("celebration");
 
-    await runInRawDurableObject(stub(), (_instance, state) => {
-      const current = state.storage.sql
-        .exec(
-          "SELECT closing_stability_days FROM stability_history WHERE site = ? AND date = '2026-08-10'",
-          SITE
-        )
-        .toArray()[0].closing_stability_days;
-      state.storage.sql.exec(
-        `UPDATE stability_history
-         SET opening_stability_days = ?, closing_stability_days = ?
-         WHERE site = ? AND date = '2026-08-10'`,
-        current,
-        current,
-        SITE
-      );
-    });
+    await seedReviewCard("2", 30, NOW + 500);
 
     const repeated = await stub().recordAttempt(
       SITE,
@@ -937,12 +963,12 @@ describe("daily stability delta celebrations", () => {
       "correct",
       NOW + 1000
     );
-    expect(repeated.learningMetrics.todayStabilityDaysDelta).toBeGreaterThanOrEqual(1);
+    expect(repeated.learningMetrics.dueCardsCompleted).toBe(true);
     expect(repeated).not.toHaveProperty("celebration");
   });
 
   it("allows another celebration on the next Tokyo date", async () => {
-    await stub().updateSettings(SITE, 1);
+    await seedReviewCard("1", 30);
     const first = await stub().recordAttempt(
       SITE,
       "1",
@@ -950,6 +976,7 @@ describe("daily stability delta celebrations", () => {
       "correct",
       NOW
     );
+    await seedReviewCard("2", 30, NOW + DAY_MS);
     const nextDay = await stub().recordAttempt(
       SITE,
       "2",
@@ -962,19 +989,18 @@ describe("daily stability delta celebrations", () => {
     expect(nextDay.celebration).toMatchObject({
       site: SITE,
       date: "2026-08-11",
-      dailyStabilityDaysDeltaGoal: 1,
+      dueCardsCompleted: true,
     });
   });
 
-  it("does not create celebrations from settings or catalog changes", async () => {
+  it("does not create celebrations from catalog changes", async () => {
     await seedReviewCard("1", 100);
-    await stub().updateSettings(SITE, 1);
     await stub().replaceCatalog(SITE, ["1", "2", "3"], 1, NOW + 1000);
 
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(
         state.storage.sql
-          .exec("SELECT COUNT(*) AS count FROM daily_stability_days_delta_achievements")
+          .exec("SELECT COUNT(*) AS count FROM daily_due_card_achievements")
           .toArray()[0].count
       ).toBe(0);
     });
@@ -1151,68 +1177,9 @@ describe("daily raw details", () => {
   });
 });
 
-describe("site settings", () => {
-  it("stores an independent goal for each site", async () => {
-    await stub().replaceCatalog(OTHER_SITE, ["1"], 0, NOW);
-    await expect(stub().getSettings(SITE)).resolves.toEqual({
-      site: SITE,
-      dailyStabilityDaysDeltaGoal: 30,
-    });
-    await expect(stub().getSettings(OTHER_SITE)).resolves.toEqual({
-      site: OTHER_SITE,
-      dailyStabilityDaysDeltaGoal: 30,
-    });
-    await expect(stub().updateSettings(SITE, 250)).resolves.toEqual({
-      site: SITE,
-      dailyStabilityDaysDeltaGoal: 250,
-    });
-    await expect(stub().getSettings(OTHER_SITE)).resolves.toEqual({
-      site: OTHER_SITE,
-      dailyStabilityDaysDeltaGoal: 30,
-    });
-  });
-
-  it("serves and validates the v7 settings contract", async () => {
-    const first = await SELF.fetch(`https://example.test/v7/settings?site=${SITE}`, {
-      headers: AUTHORIZATION,
-    });
-    expect(first.status).toBe(200);
-    await expect(first.json()).resolves.toEqual({
-      site: SITE,
-      dailyStabilityDaysDeltaGoal: 30,
-    });
-
-    const updated = await SELF.fetch("https://example.test/v7/settings", {
-      method: "PUT",
-      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-      body: JSON.stringify({ site: SITE, dailyStabilityDaysDeltaGoal: 1000 }),
-    });
-    expect(updated.status).toBe(200);
-    await expect(updated.json()).resolves.toEqual({
-      site: SITE,
-      dailyStabilityDaysDeltaGoal: 1000,
-    });
-
-    for (const body of [
-      { site: SITE, dailyStabilityDaysDeltaGoal: 0 },
-      { site: SITE, dailyStabilityDaysDeltaGoal: 1.5 },
-      { site: SITE, dailyStabilityDaysDeltaGoal: 5, extra: true },
-      { site: "invalid.example", dailyStabilityDaysDeltaGoal: 5 },
-      { site: SITE, dailyStabilityDaysGoal: 5 },
-    ]) {
-      const response = await SELF.fetch("https://example.test/v7/settings", {
-        method: "PUT",
-        headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      expect(response.status).toBe(400);
-    }
-  });
-});
-
-describe("v7 HTTP contract", () => {
+describe("v8 HTTP contract", () => {
   it("does not expose older API versions", async () => {
-    for (const version of ["v3", "v4", "v5", "v6"]) {
+    for (const version of ["v3", "v4", "v5", "v6", "v7"]) {
       const response = await SELF.fetch(
         `https://example.test/${version}/state?site=${SITE}`,
         { headers: AUTHORIZATION }
@@ -1223,8 +1190,8 @@ describe("v7 HTTP contract", () => {
 
   it("requires the configured bearer token", async () => {
     for (const url of [
-      "https://example.test/v7/sites",
-      `https://example.test/v7/daily-details?site=${SITE}&date=2026-08-10`,
+      "https://example.test/v8/sites",
+      `https://example.test/v8/daily-details?site=${SITE}&date=2026-08-10`,
     ]) {
       const missing = await SELF.fetch(url);
       const incorrect = await SELF.fetch(url, {
@@ -1236,12 +1203,12 @@ describe("v7 HTTP contract", () => {
   });
 
   it("lists sites and returns state and history", async () => {
-    const sites = await SELF.fetch("https://example.test/v7/sites", {
+    const sites = await SELF.fetch("https://example.test/v8/sites", {
       headers: AUTHORIZATION,
     });
     await expect(sites.json()).resolves.toEqual({ sites: [SITE] });
 
-    const state = await SELF.fetch(`https://example.test/v7/state?site=${SITE}`, {
+    const state = await SELF.fetch(`https://example.test/v8/state?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(state.status).toBe(200);
@@ -1256,6 +1223,7 @@ describe("v7 HTTP contract", () => {
       site: SITE,
       learningMetrics: {
         stabilityDays: 0,
+        dueCardsCompleted: true,
         todayStabilityDaysDelta: 0,
         attemptedQuestionCount: 0,
         todayAttemptedQuestionCount: 0,
@@ -1265,7 +1233,7 @@ describe("v7 HTTP contract", () => {
     expect(stateBody.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
     const history = await SELF.fetch(
-      `https://example.test/v7/history?site=${SITE}&days=7`,
+      `https://example.test/v8/history?site=${SITE}&days=7`,
       { headers: AUTHORIZATION }
     );
     expect(history.status).toBe(200);
@@ -1279,7 +1247,7 @@ describe("v7 HTTP contract", () => {
     });
 
     const details = await SELF.fetch(
-      `https://example.test/v7/daily-details?site=${SITE}&date=2026-08-10`,
+      `https://example.test/v8/daily-details?site=${SITE}&date=2026-08-10`,
       { headers: AUTHORIZATION }
     );
     expect(details.status).toBe(200);
@@ -1293,7 +1261,7 @@ describe("v7 HTTP contract", () => {
 
   it("returns all dashboard reads through one endpoint", async () => {
     const response = await SELF.fetch(
-      `https://example.test/v7/dashboard?site=${SITE}`,
+      `https://example.test/v8/dashboard?site=${SITE}`,
       { headers: AUTHORIZATION }
     );
     expect(response.status).toBe(200);
@@ -1303,12 +1271,11 @@ describe("v7 HTTP contract", () => {
       selectedSite: SITE,
       state: { site: SITE, learningMetrics: { stabilityDays: 0 } },
       history: { site: SITE, days: expect.any(Array) },
-      settings: { site: SITE, dailyStabilityDaysDeltaGoal: 30 },
     });
     expect(dashboardBody.history.days).toHaveLength(31);
 
     const selectedDefault = await SELF.fetch(
-      "https://example.test/v7/dashboard",
+      "https://example.test/v8/dashboard",
       { headers: AUTHORIZATION }
     );
     await expect(selectedDefault.json()).resolves.toMatchObject({
@@ -1318,7 +1285,7 @@ describe("v7 HTTP contract", () => {
 
     for (const search of ["site=invalid.example", `site=${SITE}&site=${SITE}`, "extra=true"]) {
       const invalid = await SELF.fetch(
-        `https://example.test/v7/dashboard?${search}`,
+        `https://example.test/v8/dashboard?${search}`,
         { headers: AUTHORIZATION }
       );
       expect(invalid.status).toBe(400);
@@ -1327,7 +1294,7 @@ describe("v7 HTTP contract", () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec("DELETE FROM catalog_metadata");
     });
-    const empty = await SELF.fetch("https://example.test/v7/dashboard", {
+    const empty = await SELF.fetch("https://example.test/v8/dashboard", {
       headers: AUTHORIZATION,
     });
     await expect(empty.json()).resolves.toEqual({
@@ -1335,7 +1302,6 @@ describe("v7 HTTP contract", () => {
       selectedSite: null,
       state: null,
       history: null,
-      settings: null,
     });
   });
 
@@ -1348,7 +1314,7 @@ describe("v7 HTTP contract", () => {
       `site=${SITE}&date=2026-08-10&extra=true`,
     ]) {
       const response = await SELF.fetch(
-        `https://example.test/v7/daily-details?${search}`,
+        `https://example.test/v8/daily-details?${search}`,
         { headers: AUTHORIZATION }
       );
       expect(response.status).toBe(400);
@@ -1356,7 +1322,7 @@ describe("v7 HTTP contract", () => {
   });
 
   it("replaces the catalog and serves the canonical next URL", async () => {
-    const replace = await SELF.fetch("https://example.test/v7/questions", {
+    const replace = await SELF.fetch("https://example.test/v8/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1367,7 +1333,7 @@ describe("v7 HTTP contract", () => {
     });
     expect(replace.status).toBe(200);
 
-    const next = await SELF.fetch(`https://example.test/v7/next?site=${SITE}`, {
+    const next = await SELF.fetch(`https://example.test/v8/next?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     await expect(next.json()).resolves.toEqual({
@@ -1379,7 +1345,7 @@ describe("v7 HTTP contract", () => {
       },
     });
 
-    const conflict = await SELF.fetch("https://example.test/v7/questions", {
+    const conflict = await SELF.fetch("https://example.test/v8/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1397,7 +1363,7 @@ describe("v7 HTTP contract", () => {
       { site: SITE, questionIds: ["1"], expectedGeneration: -1 },
       { site: SITE, questionIds: ["1"] },
     ]) {
-      const invalid = await SELF.fetch("https://example.test/v7/questions", {
+      const invalid = await SELF.fetch("https://example.test/v8/questions", {
         method: "POST",
         headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1407,7 +1373,7 @@ describe("v7 HTTP contract", () => {
   });
 
   it("rejects unknown questions and non-canonical attempt fields", async () => {
-    const unknown = await SELF.fetch("https://example.test/v7/attempts", {
+    const unknown = await SELF.fetch("https://example.test/v8/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1420,7 +1386,7 @@ describe("v7 HTTP contract", () => {
     expect(unknown.status).toBe(409);
     await expect(unknown.json()).resolves.toEqual({ error: "unknown_question" });
 
-    const extra = await SELF.fetch("https://example.test/v7/attempts", {
+    const extra = await SELF.fetch("https://example.test/v8/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1433,7 +1399,7 @@ describe("v7 HTTP contract", () => {
     });
     expect(extra.status).toBe(400);
 
-    const legacyKey = await SELF.fetch("https://example.test/v7/attempts", {
+    const legacyKey = await SELF.fetch("https://example.test/v8/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1446,8 +1412,8 @@ describe("v7 HTTP contract", () => {
     expect(legacyKey.status).toBe(400);
   });
 
-  it("returns the exact v7 attempt contract", async () => {
-    const response = await SELF.fetch("https://example.test/v7/attempts", {
+  it("returns the exact v8 attempt contract", async () => {
+    const response = await SELF.fetch("https://example.test/v8/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1470,6 +1436,7 @@ describe("v7 HTTP contract", () => {
       },
       learningMetrics: {
         stabilityDays: expect.any(Number),
+        dueCardsCompleted: true,
         todayStabilityDaysDelta: expect.any(Number),
         attemptedQuestionCount: 1,
         todayAttemptedQuestionCount: 1,
@@ -1484,15 +1451,7 @@ describe("v7 HTTP contract", () => {
   });
 
   it("returns and replays the exact primary KPI celebration contract", async () => {
-    const settings = await SELF.fetch("https://example.test/v7/settings", {
-      method: "PUT",
-      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        site: SITE,
-        dailyStabilityDaysDeltaGoal: 1,
-      }),
-    });
-    expect(settings.status).toBe(200);
+    await seedReviewCard("1", 30);
 
     const body = {
       site: SITE,
@@ -1500,7 +1459,7 @@ describe("v7 HTTP contract", () => {
       operationId: operationId(22),
       answerResult: "correct",
     };
-    const response = await SELF.fetch("https://example.test/v7/attempts", {
+    const response = await SELF.fetch("https://example.test/v8/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -1508,19 +1467,17 @@ describe("v7 HTTP contract", () => {
     expect(response.status).toBe(200);
     const result = await response.json();
     expect(Object.keys(result.celebration).sort()).toEqual([
-      "dailyStabilityDaysDeltaGoal",
       "date",
+      "dueCardsCompleted",
       "site",
-      "todayStabilityDaysDelta",
     ]);
     expect(result.celebration).toEqual({
       site: SITE,
       date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-      todayStabilityDaysDelta: result.learningMetrics.todayStabilityDaysDelta,
-      dailyStabilityDaysDeltaGoal: 1,
+      dueCardsCompleted: true,
     });
 
-    const retry = await SELF.fetch("https://example.test/v7/attempts", {
+    const retry = await SELF.fetch("https://example.test/v8/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -1537,7 +1494,7 @@ describe("v7 HTTP contract", () => {
       state.storage.sql.exec("DELETE FROM catalog_metadata WHERE site = ?", SITE);
     });
     const response = await SELF.fetch(
-      `https://example.test/v7/next?site=${SITE}`,
+      `https://example.test/v8/next?site=${SITE}`,
       { headers: AUTHORIZATION }
     );
     expect(response.status).toBe(409);

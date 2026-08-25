@@ -68,10 +68,6 @@ async function installApiMock(page) {
         ["kakomonn-dashboard.sync-token", tokenValue],
         ["kakomonn-dashboard.site", siteValue],
       ]);
-      const settingsValues = new Map([
-        [siteValue, { site: siteValue, dailyStabilityDaysDeltaGoal: 30 }],
-        [otherSiteValue, { site: otherSiteValue, dailyStabilityDaysDeltaGoal: 100 }],
-      ]);
       window.__delayedSite = "";
       window.__delayedResolvers = [];
       window.__releaseDelayedSite = () => {
@@ -114,7 +110,7 @@ async function installApiMock(page) {
         if (headers.get("Authorization") !== `Bearer ${tokenValue}`) {
           return respond(401, { error: "unauthorized" });
         }
-        if (url.pathname === "/v7/dashboard") {
+        if (url.pathname === "/v8/dashboard") {
           const requestedSite = [siteValue, otherSiteValue].includes(url.searchParams.get("site"))
             ? url.searchParams.get("site")
             : siteValue;
@@ -129,6 +125,7 @@ async function installApiMock(page) {
               today: "2026-08-10",
               learningMetrics: {
                 stabilityDays: requestedSite === siteValue ? 9912 : 2999,
+                dueCardsCompleted: requestedSite === siteValue,
                 todayStabilityDaysDelta: requestedSite === siteValue ? 104 : 21,
                 attemptedQuestionCount: requestedSite === siteValue ? 640 : 100,
                 todayAttemptedQuestionCount: requestedSite === siteValue ? 28 : 4,
@@ -143,10 +140,9 @@ async function installApiMock(page) {
                 ? historyValue
                 : historyValue.map((day) => ({ ...day, closingStabilityDays: 2999 })),
             },
-            settings: settingsValues.get(requestedSite),
           });
         }
-        if (url.pathname === "/v7/daily-details") {
+        if (url.pathname === "/v8/daily-details") {
           const requestedSite = url.searchParams.get("site");
           const date = url.searchParams.get("date");
           if (date === window.__delayedDetailDate) {
@@ -160,11 +156,6 @@ async function installApiMock(page) {
             timeZone: "Asia/Tokyo",
             tables: { stability_history: [], attempts: [] },
           });
-        }
-        if (url.pathname === "/v7/settings" && init.method === "PUT") {
-          const settingsValue = JSON.parse(init.body);
-          settingsValues.set(settingsValue.site, settingsValue);
-          return respond(200, settingsValue);
         }
         return respond(404, { error: "not_found" });
       };
@@ -183,24 +174,24 @@ async function assertDashboard(page) {
   await page.addScriptTag({ content: appSource });
   await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+104");
 
-  assert.equal(await page.locator("#primary-kpi-title").innerText(), "todayStabilityDaysDelta");
+  assert.equal(await page.locator("#primary-kpi-title").innerText(), "dueCardsCompleted");
+  assert.equal(await page.locator("#due-cards-completed").innerText(), "達成");
+  assert.equal(await page.locator("#due-cards-completed").getAttribute("data-completed"), "true");
   assert.equal(await page.locator("#today-stability-days-delta").innerText(), "+104");
   assert.equal(await page.locator("#stability-days").innerText(), "9,912");
-  assert.equal(await page.locator("#goal-title").innerText(), "dailyStabilityDaysDeltaGoal");
-  assert.equal(await page.locator('label[for="daily-goal"]').innerText(), "dailyStabilityDaysDeltaGoal");
-  assert.equal(await page.locator("#daily-goal").inputValue(), "30");
-  assert.deepEqual(await page.locator(".metric-list dt").allInnerTexts(), ["stabilityDays", "attemptedQuestionCount", "todayAttemptedQuestionCount"]);
+  assert.equal(await page.locator(".goal-card").count(), 0);
+  assert.deepEqual(await page.locator(".metric-list dt").allInnerTexts(), ["todayStabilityDaysDelta", "stabilityDays", "attemptedQuestionCount", "todayAttemptedQuestionCount"]);
   assert.equal(await page.locator("#attempted-question-count").innerText(), "640");
   assert.equal(await page.locator("#today-attempted-question-count").innerText(), "28");
   assert.equal(await page.locator("#goal-label, #goal-progress, .stability-card, .stability-meta").count(), 0);
-  assert.equal(await page.locator("#dashboard *").evaluateAll((elements) => elements.filter((element) => element.childElementCount === 0 && element.textContent.trim() === "+104" && element.getClientRects().length > 0).length), 1);
+  assert.equal(await page.locator("#dashboard *").evaluateAll((elements) => elements.filter((element) => element.childElementCount === 0 && element.textContent.trim() === "+104" && element.getClientRects().length > 0).length), 2);
   assert.equal(await page.locator("#history-title").innerText(), "stabilityDaysDeltaの31日推移");
   assert.equal(await page.locator("#stability-chart .chart-day").count(), 31);
   assert.equal(await page.locator("#stability-chart rect.delta-bar").count(), 6);
   assert.equal(await page.locator("#stability-chart rect.delta-bar.negative").count(), 1);
   assert.equal(await page.locator("#stability-chart rect.delta-bar.zero").count(), 1);
-  assert.equal(await page.locator("#stability-chart .delta-value-label").count(), 5);
-  assert.equal(await page.locator('[data-chart-date="2026-08-10"] .delta-value-label').count(), 0);
+  assert.equal(await page.locator("#stability-chart .delta-value-label").count(), 6);
+  assert.equal(await page.locator('[data-chart-date="2026-08-10"] .delta-value-label').textContent(), "+104");
   assert.equal(await page.locator('[data-chart-date="2026-08-09"] .delta-value-label').textContent(), "+106");
   assert.match(await page.locator('[data-chart-date="2026-08-10"]').getAttribute("aria-label"), /stabilityDaysDelta \+104日/);
   assert.equal((await page.locator("#stability-chart-axis .delta-axis-label").count()) >= 2, true);
@@ -229,12 +220,11 @@ async function assertDashboard(page) {
   assert.equal(text.includes("解いた問題数"), false);
   assert.equal(text.includes("30日以上"), false);
   assert.equal(text.includes("祝福"), false);
-  assert.equal(await page.locator(".goal-card").allInnerTexts().then((values) => values.some((value) => value.includes("解いた問題数"))), false);
+  assert.equal(await page.locator(".primary-kpi-card").innerText().then((value) => value.includes("解いた問題数")), false);
   const calls = await page.evaluate(() => window.__apiCalls);
-  assert.equal(calls.some((call) => !call.pathname.startsWith("/v7/")), false);
-  assert.equal(calls.filter((call) => call.pathname === "/v7/dashboard").length, 1);
-  assert.equal(calls.filter((call) => ["/v7/sites", "/v7/state", "/v7/history"].includes(call.pathname)).length, 0);
-  assert.equal(calls.filter((call) => call.pathname === "/v7/settings" && call.method === "GET").length, 0);
+  assert.equal(calls.some((call) => !call.pathname.startsWith("/v8/")), false);
+  assert.equal(calls.filter((call) => call.pathname === "/v8/dashboard").length, 1);
+  assert.equal(calls.filter((call) => ["/v8/sites", "/v8/state", "/v8/history"].includes(call.pathname)).length, 0);
   assert.deepEqual(errors, []);
 
   await page.locator('[data-chart-date="2026-08-10"]').click();
@@ -268,18 +258,6 @@ async function assertDashboard(page) {
   await page.locator('[data-chart-date="2026-08-10"]').click();
   await page.waitForFunction(() => document.querySelector("#daily-details-status")?.textContent === "2 rows");
 
-  await page.locator("#daily-goal").fill("250");
-  await page.locator("#save-goal").click();
-  await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "dailyStabilityDaysDeltaGoalを同期しました.");
-  assert.equal(await page.locator("#daily-goal").inputValue(), "250");
-  assert.equal((await page.locator(".goal-card").innerText()).includes("+104"), false);
-  assert.equal(
-    await page.evaluate(() => localStorage.getItem("今日の定着日数純増目標")),
-    null,
-  );
-  const updatedCalls = await page.evaluate(() => window.__apiCalls);
-  assert.equal(updatedCalls.filter((call) => call.pathname === "/v7/settings" && call.method === "PUT").length, 1);
-
   await page.evaluate((siteValue) => { window.__delayedSite = siteValue; }, otherSite);
   await page.locator("#site-select").selectOption(otherSite);
   await page.locator("#site-select").selectOption(site);
@@ -298,7 +276,7 @@ async function assertDashboard(page) {
   await page.locator("#refresh-button").click();
   await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "更新日 2026-08-10");
   const finalCalls = await page.evaluate(() => window.__apiCalls);
-  const finalDashboardCall = finalCalls.filter((call) => call.pathname === "/v7/dashboard").at(-1);
+  const finalDashboardCall = finalCalls.filter((call) => call.pathname === "/v8/dashboard").at(-1);
   assert.equal(finalDashboardCall.authorization, `Bearer ${token}`);
 }
 

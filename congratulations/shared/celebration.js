@@ -8,11 +8,11 @@ const celebrations = {
     mark: "HK",
     signal: "CREATOR STUDIO / ACHIEVEMENT LIVE",
     eyebrow: "TODAY'S RESULT / NO FILTER NEEDED",
-    title: ["今日の伸び,", "ちゃんとデカい."],
-    lead: "todayStabilityDaysDeltaは{delta}日. 目標の{target}日をクリアしました. 盛らなくても, 数字だけで十分に強い達成です.",
+    title: ["今日の復習,", "ちゃんと完了."],
+    lead: "今日のdue cardはすべて完了しました. 盛らなくても, やるべき復習を終えた事実だけで十分に強い達成です.",
     action: "もう一度, 派手に祝う",
     status: "祝砲をもう一度. 達成値はそのままです.",
-    quote: "大げさに見せなくても, 達成した数字はちゃんと強い.",
+    quote: "大げさに見せなくても, すべて終えた事実はちゃんと強い.",
     artLabel: "CREATOR MODE",
     artNote: "RESULT ON AIR",
   },
@@ -22,7 +22,7 @@ const celebrations = {
     signal: "PRIVATE CONCERT / RESULT CONFIRMED",
     eyebrow: "ONE NIGHT ONLY / THE SCORE IS COMPLETE",
     title: ["今夜の結果に,", "ちゃんと拍手を."],
-    lead: "todayStabilityDaysDeltaは{delta}日. dailyStabilityDaysDeltaGoalの{target}日を超えました. 静かな達成ほど, きちんと受け取る価値があります.",
+    lead: "今日のdue cardはすべて完了しました. 静かな達成ほど, きちんと受け取る価値があります.",
     action: "もう一度, 喝采を鳴らす",
     status: "夜のorchestraが, 達成をもう一度称えました.",
     quote: "静かな結果でも, 価値まで小さくなるわけではない.",
@@ -33,9 +33,9 @@ const celebrations = {
     name: "MIDNIGHT EMCEE",
     mark: "ME",
     signal: "HOUSE OPEN / RESULT ANNOUNCED",
-    eyebrow: "TONIGHT'S HEADLINE / TARGET CLEARED",
-    title: ["本日のheadlineは,", "目標達成."],
-    lead: "todayStabilityDaysDeltaは{delta}日. 目標は{target}日でした. 今夜は説明を足さなくても, この結果だけで主役になれます.",
+    eyebrow: "TONIGHT'S HEADLINE / DUE CARDS CLEARED",
+    title: ["本日のheadlineは,", "全due card完了."],
+    lead: "今日のdue cardはすべて完了しました. 今夜は説明を足さなくても, この結果だけで主役になれます.",
     action: "encoreを起こす",
     status: "客席から, もう一度拍手が返ってきました.",
     quote: "達成した日は, 自分の結果を脇役にしなくていい.",
@@ -45,13 +45,13 @@ const celebrations = {
   "midnight-orbit": {
     name: "MIDNIGHT ORBIT",
     mark: "MO",
-    signal: "ORBITAL SIGNAL / TARGET CLEARED",
-    eyebrow: "TRANSMISSION 01 / RESULT IN RANGE",
-    title: ["今日の伸びは,", "目標軌道を越えた."],
-    lead: "todayStabilityDaysDeltaは{delta}日. dailyStabilityDaysDeltaGoalは{target}日. 今日の結果は, 目標より先まで届いています.",
+    signal: "ORBITAL SIGNAL / DUE CARDS CLEARED",
+    eyebrow: "TRANSMISSION 01 / QUEUE IS CLEAR",
+    title: ["今日のdue cardは,", "軌道上から消えた."],
+    lead: "今日のdue cardはすべて完了しました. 今日の記憶cycleに必要な地点まで届いています.",
     action: "達成信号を再送する",
     status: "達成信号を, もう一度全周波数へ送りました.",
-    quote: "目標を越えた事実は, 次の一日まで持ち越さなくても残る.",
+    quote: "今日のdue cardを終えた事実は, 次の一日まで持ち越さなくても残る.",
     artLabel: "ORBITAL LOG",
     artNote: "VECTOR POSITIVE",
   },
@@ -61,7 +61,7 @@ const celebrations = {
     signal: "OFFICIAL RECORD / CLEARANCE GRANTED",
     eyebrow: "CASE REVIEW / REQUIREMENT SATISFIED",
     title: ["審査結果,", "達成を認可."],
-    lead: "todayStabilityDaysDeltaは{delta}日. 必要条件の{target}日を満たしました. 今日の達成は, これ以上の自己審査を必要としません.",
+    lead: "今日のdue cardはすべて完了しました. 今日の達成は, これ以上の自己審査を必要としません.",
     action: "認可stampを再発行する",
     status: "達成記録へ, 認可stampを再発行しました.",
     quote: "条件を満たした結果は, 何度も疑い直さなくていい.",
@@ -74,7 +74,7 @@ const celebrations = {
     signal: "ARCHIVE SYNC / RESULT SAVED",
     eyebrow: "ENTRY SEALED / TODAY IS ON RECORD",
     title: ["今日の達成は,", "もう記録に残った."],
-    lead: "todayStabilityDaysDeltaは{delta}日. 目標の{target}日を上回りました. 一日の結果として, これで十分に保存する価値があります.",
+    lead: "今日のdue cardはすべて完了しました. 一日の結果として, これで十分に保存する価値があります.",
     action: "記録をもう一度照らす",
     status: "今日の達成記録を, もう一度highlightしました.",
     quote: "記録に残る結果は, 気分が変わっても消えない.",
@@ -87,7 +87,7 @@ const celebrations = {
     signal: "BLACK DOHYO / VICTORY CONFIRMED",
     eyebrow: "RESULT IMPACT / HOLD NOTHING BACK",
     title: ["今日は,", "遠慮なく鳴らせ."],
-    lead: "todayStabilityDaysDeltaは{delta}日. 目標の{target}日をクリアしました. 達成した日くらい, 結果を小さく扱う必要はありません.",
+    lead: "今日のdue cardはすべて完了しました. 達成した日くらい, 結果を小さく扱う必要はありません.",
     action: "もう一丁, 勝ち四股",
     status: "ゴウテンの勝ち四股が, もう一度響きました.",
     quote: "結果が出た日は, 喜び方まで静かにしなくていい.",
@@ -97,23 +97,23 @@ const celebrations = {
   "imura-rally": {
     name: "IMURA RALLY LIVE",
     mark: "IR",
-    signal: "CLOSING BELL / TARGET OUTPERFORMED",
+    signal: "CLOSING BELL / DUE QUEUE CLOSED",
     eyebrow: "EFFORT INDEX / SESSION CLOSED GREEN",
-    title: ["今日の結果は,", "目標を上回った."],
-    lead: "todayStabilityDaysDeltaは{delta}日. dailyStabilityDaysDeltaGoalは{target}日. 比喩を足さなくても, 今日の数字はきれいな上振れです.",
+    title: ["今日のdue cardは,", "すべてcloseした."],
+    lead: "今日のdue cardはすべて完了しました. 比喩を足さなくても, 今日の復習はきれいにcloseしました.",
     action: "closing bellをもう一度",
     status: "closing bellが, 今日の達成をもう一度知らせました.",
-    quote: "上振れは, 明日の義務ではなく今日の達成として受け取る.",
+    quote: "完了した事実は, 明日の義務ではなく今日の達成として受け取る.",
     artLabel: "CLOSING BOARD",
-    artNote: "ABOVE TARGET",
+    artNote: "QUEUE CLOSED",
   },
   "taiko-oni": {
     name: "UNDERGROUND TAIKO",
     mark: "祝",
-    signal: "RITUAL BEAT / TARGET CLEARED",
+    signal: "RITUAL BEAT / DUE CARDS CLEARED",
     eyebrow: "ONE RESULT / FOUR BEATS",
     title: ["今日の達成を,", "ちゃんと鳴らし切る."],
-    lead: "todayStabilityDaysDeltaは{delta}日. 目標は{target}日. 今日の結果を一度きちんと祝ってから, 次のことは次の日に考えれば十分です.",
+    lead: "今日のdue cardはすべて完了しました. この結果を一度きちんと祝ってから, 次のことは次の日に考えれば十分です.",
     action: "もう一度, 太鼓を鳴らす",
     status: "達成の四連打が, もう一度響きました.",
     quote: "達成した事実を受け取る時間も, 学習の一区切りになる.",
@@ -126,7 +126,7 @@ const celebrations = {
     signal: "RESULT FILED / PASS CONFIRMED",
     eyebrow: "FINAL REVIEW / CONDITION MET",
     title: ["本日の判定,", "合格."],
-    lead: "todayStabilityDaysDeltaは{delta}日. dailyStabilityDaysDeltaGoalの{target}日を満たしました. 今日の判定は, これで確定です.",
+    lead: "今日のdue cardはすべて完了しました. 今日の判定は, これで確定です.",
     action: "合格印をもう一度押す",
     status: "答案ではなく, 今日の達成記録へ合格印を押しました.",
     quote: "条件を満たした日は, 追加採点をしなくても合格のままです.",
@@ -138,8 +138,8 @@ const celebrations = {
     mark: "琴",
     signal: "AKANE + AOI / RESULT CELEBRATION",
     eyebrow: "TWIN MESSAGE / TODAY'S WIN",
-    title: ["今日はええ日やな.", "目標, ちゃんと越えたで."],
-    lead: "todayStabilityDaysDeltaは{delta}日. 目標の{target}日をクリアしました. 茜は大きく, 葵は丁寧に, 今日の結果をそのまま祝います.",
+    title: ["今日はええ日やな.", "今日の分, 全部終えたで."],
+    lead: "今日のdue cardはすべて完了しました. 茜は大きく, 葵は丁寧に, 今日の結果をそのまま祝います.",
     action: "琴葉姉妹ともう一回祝う",
     status: "茜と葵から, もう一度拍手が届きました.",
     quote: "今日できたことは, 今日のうちにちゃんと褒めてええんやで.",
@@ -153,7 +153,7 @@ const celebrations = {
     signal: "FORGE LOG / RESULT TEMPERED",
     eyebrow: "HEAT DOWN / ACHIEVEMENT HOLDS",
     title: ["火花が消えても,", "今日の結果は残る."],
-    lead: "todayStabilityDaysDeltaは{delta}日. 目標は{target}日. 達成をさらに叩き続けなくても, 今日できた結果は十分に形になっています.",
+    lead: "今日のdue cardはすべて完了しました. さらに叩き続けなくても, 今日できた結果は十分に形になっています.",
     action: "祝賀hammerをもう一度",
     status: "GARAが, 今日の達成をもう一度刻みました.",
     quote: "達成を強くするために, 達成後まで無理を重ねる必要はない.",
@@ -164,9 +164,9 @@ const celebrations = {
     name: "STUDY COMPLETE",
     mark: "SC",
     signal: "SESSION RESULT / COMPLETE",
-    eyebrow: "TODAY IS DONE / TARGET CLEARED",
+    eyebrow: "TODAY IS DONE / DUE CARDS CLEARED",
     title: ["今日は,", "ちゃんと達成した."],
-    lead: "todayStabilityDaysDeltaは{delta}日. 目標の{target}日をクリアしました. 今日はここまで積み上がった, という事実をそのまま受け取れます.",
+    lead: "今日のdue cardはすべて完了しました. 今日は必要な復習を終えた, という事実をそのまま受け取れます.",
     action: "達成burstをもう一度",
     status: "今日の達成を, もう一度画面いっぱいに再生しました.",
     quote: "達成した日は, 次を急ぐ前に今日できたことを確認して終われる.",
@@ -187,21 +187,7 @@ function escapeAttribute(value) {
   return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
 }
 
-function signed(value) {
-  return `${value >= 0 ? "+" : ""}${value.toLocaleString("ja-JP")}`;
-}
-
-function sentence(template, delta, target) {
-  return template.replaceAll("{delta}", delta).replaceAll("{target}", target);
-}
-
 function renderCelebration(root, config, celebration) {
-  const delta = signed(celebration.todayStabilityDaysDelta);
-  const target = signed(celebration.dailyStabilityDaysDeltaGoal);
-  const margin = signed(
-    celebration.todayStabilityDaysDelta - celebration.dailyStabilityDaysDeltaGoal,
-  );
-
   root.dataset.celebrationRoot = "";
   root.dataset.ready = "false";
   root.innerHTML = `
@@ -218,10 +204,10 @@ function renderCelebration(root, config, celebration) {
       <div class="hero-copy">
         <p class="eyebrow">${config.eyebrow}</p>
         <h1 id="celebration-title"><span>${config.title[0]}</span><strong>${config.title[1]}</strong></h1>
-        <p class="lead">${sentence(config.lead, delta, target)}</p>
-        <div class="achievement-metric" aria-label="todayStabilityDaysDelta ${delta}日, dailyStabilityDaysDeltaGoal ${target}日">
-          <p><small>todayStabilityDaysDelta</small><span><strong data-today-stability-days-delta>${delta}</strong><b>日</b></span></p>
-          <p><small>dailyStabilityDaysDeltaGoal</small><span><strong data-daily-stability-days-delta-goal>${target}</strong><b>日</b></span></p>
+        <p class="lead">${config.lead}</p>
+        <div class="achievement-metric" aria-label="dueCardsCompleted true">
+          <p><small>dueCardsCompleted</small><span><strong data-due-cards-completed>true</strong></span></p>
+          <p><small>PRIMARY KPI</small><span><strong>達成</strong></span></p>
         </div>
         <div class="hero-actions">
           <button class="replay-button" type="button" data-replay><span>${config.action}</span><i aria-hidden="true">↗</i></button>
@@ -235,19 +221,19 @@ function renderCelebration(root, config, celebration) {
         <div class="art-beam beam-a" aria-hidden="true"></div>
         <div class="art-beam beam-b" aria-hidden="true"></div>
         <div class="art-core" aria-hidden="true"><span>${config.mark}</span></div>
-        <div class="art-token"><small>${config.artLabel}</small><strong data-today-stability-days-delta>${delta}</strong><span>days</span></div>
+        <div class="art-token"><small>${config.artLabel}</small><strong data-due-cards-completed>CLEAR</strong><span>due</span></div>
         <div class="art-note"><i></i><span>${config.artNote}</span></div>
       </div>
     </section>
     <section class="proof" aria-label="達成記録">
       <div class="proof-heading">
         <p>RESULT / ${celebration.date}</p>
-        <h2>数字で見ても, 今日の目標は達成済み.</h2>
+        <h2>今日のdue cardは, すべて完了済み.</h2>
       </div>
       <div class="proof-grid">
-        <article><small>01 / TARGET</small><strong>${target}<span>日</span></strong><p>dailyStabilityDaysDeltaGoal</p></article>
-        <article><small>02 / RESULT</small><strong>${delta}<span>日</span></strong><p>todayStabilityDaysDelta</p></article>
-        <article><small>03 / MARGIN</small><strong>${margin}<span>日</span></strong><p>目標との差分</p></article>
+        <article><small>01 / KPI</small><strong>due</strong><p>今日復習すべきcard</p></article>
+        <article><small>02 / RESULT</small><strong>true</strong><p>dueCardsCompleted</p></article>
+        <article><small>03 / NEXT</small><strong>FSRS</strong><p>次の期限は自動計算</p></article>
       </div>
       <blockquote>${config.quote}</blockquote>
     </section>
@@ -314,7 +300,7 @@ try {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   renderCelebration(root, config, celebration);
-  document.title = `todayStabilityDaysDelta達成 | ${config.name}`;
+  document.title = `dueCardsCompleted達成 | ${config.name}`;
   document.documentElement.dataset.state = "ready";
   root.dataset.ready = "true";
 

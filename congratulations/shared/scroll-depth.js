@@ -4,29 +4,29 @@ const stories = {
   hikakin: {
     motif: "studio",
     kicker: "AFTERSHOW / RESULT CHECK",
-    title: "派手に祝って, 数字は冷静に見る.",
-    meaning: "今日の結果は, 見せ方ではなく数値そのものが強い.",
-    next: "この上振れを明日のノルマにしなくていい. 今日の達成として閉じれば十分です.",
+    title: "派手に祝って, 完了した事実を確かめる.",
+    meaning: "今日の結果は, 見せ方ではなくdue cardをすべて終えた事実にある.",
+    next: "今日の完了を明日のノルマにしなくていい. 今日の達成として閉じれば十分です.",
   },
   "void-conductor": {
     motif: "score",
     kicker: "CODA / RESULT CHECK",
     title: "喝采のあとに, 今日のscoreを確認する.",
-    meaning: "静かな達成でも, 目標を超えた事実ははっきり残る.",
+    meaning: "静かな達成でも, 今日のdue cardをすべて終えた事実ははっきり残る.",
     next: "余韻は残しても, 追加課題までは持ち越さなくていい. 次の一音は次の日で十分です.",
   },
   "midnight-emcee": {
     motif: "stage",
     kicker: "CURTAIN CALL / RESULT CHECK",
     title: "幕を下ろす前に, 今日のheadlineを確認する.",
-    meaning: "今日の主役は演出ではなく, 目標を超えた結果そのもの.",
+    meaning: "今日の主役は演出ではなく, due cardをすべて終えた結果そのもの.",
     next: "encoreは祝福だけでいい. 明日の学習まで今夜に前倒しする必要はありません.",
   },
   "midnight-orbit": {
     motif: "orbit",
     kicker: "FLIGHT LOG / RESULT CHECK",
     title: "軌道を見れば, 今日の到達点は明確.",
-    meaning: "目標線より先へ出た分まで, 今日の結果として記録できる.",
+    meaning: "due cardが残っていない状態を, 今日の結果として記録できる.",
     next: "次のvectorは明日決めればいい. 今日の軌道は, 今日の達成として閉じます.",
   },
   "clearance-officer": {
@@ -40,28 +40,28 @@ const stories = {
     motif: "archive",
     kicker: "ARCHIVE / RESULT CHECK",
     title: "今日の記録を, 正しい大きさで保存する.",
-    meaning: "目標を超えた日として残せば, 気分が変わっても結果は変わらない.",
+    meaning: "due cardをすべて終えた日として残せば, 気分が変わっても結果は変わらない.",
     next: "archiveには余白があっていい. 次の記録は, 次の日に追加します.",
   },
   "gouten-stomp": {
     motif: "impact",
     kicker: "AFTERSHOCK / RESULT CHECK",
-    title: "地響きのあとに, 数字だけ確認する.",
+    title: "地響きのあとに, 完了状態を確認する.",
     meaning: "今日の達成は, 遠慮して小さく言い換える必要がない.",
     next: "踏み込みは今日で終わり. 次の一歩まで勢いで消費しなくていい.",
   },
   "imura-rally": {
     motif: "market",
     kicker: "CLOSE / RESULT CHECK",
-    title: "closing bellのあとに, 今日の数字を確定する.",
-    meaning: "上振れは予想ではなく, 今日すでに出た結果として扱える.",
-    next: "今日の上振れを, 明日の最低ラインにはしない. sessionはここでcloseです.",
+    title: "closing bellのあとに, 今日の完了を確定する.",
+    meaning: "due cardが残っていない状態は, 今日すでに出た結果として扱える.",
+    next: "今日の完了を, 明日の最低ラインにはしない. sessionはここでcloseです.",
   },
   "taiko-oni": {
     motif: "beat",
     kicker: "FINAL BEAT / RESULT CHECK",
     title: "最後の一打のあとに, 達成を確認する.",
-    meaning: "目標を超えた日は, その事実を一度きちんと鳴らして終われる.",
+    meaning: "due cardをすべて終えた日は, その事実を一度きちんと鳴らして終われる.",
     next: "次の拍は空けておく. 今日の達成に, 追加の一打は要りません.",
   },
   "night-examiner": {
@@ -75,45 +75,34 @@ const stories = {
     motif: "twin",
     kicker: "AFTER TALK / RESULT CHECK",
     title: "喜んだあとに, 今日できたことをもう一回だけ確認する.",
-    meaning: "目標を超えた日は, 遠慮せず今日の勝ちとして受け取ってええ.",
+    meaning: "due cardをすべて終えた日は, 遠慮せず今日の勝ちとして受け取ってええ.",
     next: "明日の分まで頑張らんでええで. 今日の達成は今日のまま, きれいに終わろう.",
   },
   "forge-fury": {
     motif: "forge",
     kicker: "COOL DOWN / RESULT CHECK",
     title: "火花が落ち着いたあとも, 結果は変わらない.",
-    meaning: "達成後まで叩き続けなくても, 今日の数字はすでに形になっている.",
+    meaning: "達成後まで叩き続けなくても, 今日のdue cardはすでに完了している.",
     next: "冷ます時間も仕上げの一部. 次に鍛えるのは, 次の学習日で十分です.",
   },
   "study-complete": {
     motif: "complete",
     kicker: "SESSION CLOSE / RESULT CHECK",
     title: "終わる前に, 今日の達成を正しく受け取る.",
-    meaning: "todayStabilityDaysDeltaが目標以上なら, 今日の達成条件は満たされています.",
+    meaning: "dueCardsCompletedがtrueなら, 今日の達成条件は満たされています.",
     next: "今日はここで閉じていい. 次の学習は, 次の一日として始めれば十分です.",
   },
 };
 
-function signed(value) {
-  return `${value >= 0 ? "+" : ""}${value.toLocaleString("ja-JP")}`;
-}
-
 function storyMarkup(story, celebration) {
-  const delta = signed(celebration.todayStabilityDaysDelta);
-  const target = signed(celebration.dailyStabilityDaysDeltaGoal);
-  const marginValue =
-    celebration.todayStabilityDaysDelta - celebration.dailyStabilityDaysDeltaGoal;
-  const margin = signed(marginValue);
-  const resultTitle = marginValue === 0
-    ? `目標${target}日に, ${delta}日で届いた.`
-    : `目標${target}日を, ${margin}日上回った.`;
+  const resultTitle = "今日のdue cardを, すべて完了した.";
 
   const chapters = [
     [
       "01",
-      "TARGET",
+      "KPI",
       resultTitle,
-      `todayStabilityDaysDeltaは${delta}日, dailyStabilityDaysDeltaGoalは${target}日. 今日の達成条件は満たされています.`,
+      `dueCardsCompletedは${celebration.dueCardsCompleted}. 今日の達成条件は満たされています.`,
     ],
     ["02", "MEANING", story.meaning, "結果を小さく言い換えず, 今日できたこととしてそのまま扱います."],
     ["03", "CLOSE", "今日は, 達成した日として閉じる.", story.next],
@@ -125,11 +114,11 @@ function storyMarkup(story, celebration) {
         <div class="scroll-intro-copy">
           <p class="scroll-kicker">${story.kicker}</p>
           <h2 id="scroll-story-title">${story.title}</h2>
-          <p class="scroll-lead">達成値は${delta}日, 目標は${target}日. ここから先は, 今日の結果を過不足なく受け取るための3つの確認です.</p>
+          <p class="scroll-lead">dueCardsCompletedはtrue. ここから先は, 今日の結果を過不足なく受け取るための3つの確認です.</p>
         </div>
         <div class="scroll-totem" aria-hidden="true">
           <span></span><span></span><span></span>
-          <b>${marginValue === 0 ? "ON TARGET" : `MARGIN ${margin}`}</b>
+          <b>DUE CLEAR</b>
         </div>
       </div>
       <div class="scroll-rail">

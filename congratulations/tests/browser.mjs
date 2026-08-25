@@ -14,8 +14,7 @@ const manifest = JSON.parse(
 const celebration = {
   site: "chushoks.kakomonn.com",
   date: "2026-08-13",
-  todayStabilityDaysDelta: 31,
-  dailyStabilityDaysDeltaGoal: 30,
+  dueCardsCompleted: true,
 };
 const search = celebrationSearch(celebration);
 
@@ -41,10 +40,10 @@ async function verifyExperience(browser, origin, experience, viewport, reducedMo
     const epilogue = page.locator("[data-scroll-epilogue]");
     await epilogue.waitFor({ state: "visible" });
     assert.equal(await page.locator("[data-scroll-chapter]").count(), 3, experience.id);
-    assert.equal(await page.title(), `todayStabilityDaysDelta達成 | ${experience.label}`);
+    assert.equal(await page.title(), `dueCardsCompleted達成 | ${experience.label}`);
     assert.equal(
       await page.locator(".achievement-metric").innerText(),
-      "todayStabilityDaysDelta\n+31\n日\n\ndailyStabilityDaysDeltaGoal\n+30\n日",
+      "dueCardsCompleted\ntrue\n\nPRIMARY KPI\n達成",
     );
     const layout = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
@@ -82,7 +81,7 @@ async function verifyShell(browser, origin) {
     );
     await page.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector('html[data-state="ready"]');
-    assert.equal(await page.locator("#achievement-label").innerText(), "todayStabilityDaysDelta +31日");
+    assert.equal(await page.locator("#achievement-label").innerText(), "dueCardsCompleted 達成");
     assert.equal(await page.locator("#celebration-frame").getAttribute("aria-busy"), null);
     const frameUrl = new URL(await page.locator("#celebration-frame").getAttribute("src"));
     assert.equal(frameUrl.search.slice(1), search);

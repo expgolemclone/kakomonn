@@ -169,14 +169,14 @@
   );
 
   function renderLearningMetrics() {
-    const todayStabilityDaysDeltaText =
-      todayStabilityDaysDelta === null
+    const dueCardsCompletedText =
+      dueCardsCompleted === null
         ? "--"
-        : todayStabilityDaysDelta.toLocaleString("ja-JP");
-    learningMetricsBadge.textContent = `todayStabilityDaysDelta ${todayStabilityDaysDeltaText}日`;
+        : dueCardsCompleted ? "達成" : "未達成";
+    learningMetricsBadge.textContent = `dueCardsCompleted ${dueCardsCompletedText}`;
     learningMetricsBadge.setAttribute(
       "aria-label",
-      `todayStabilityDaysDelta ${todayStabilityDaysDeltaText}日`
+      `dueCardsCompleted ${dueCardsCompletedText}`
     );
   }
 

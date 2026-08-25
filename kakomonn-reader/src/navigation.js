@@ -160,7 +160,7 @@
         setStatus(
           pendingCelebration === null
             ? "解答記録を同期しました"
-            : "dailyStabilityDaysDeltaGoal達成.祝福を準備中"
+            : "dueCardsCompleted達成.祝福を準備中"
         );
         return true;
       }
@@ -185,14 +185,7 @@
     const url = new URL(CONGRATULATIONS_URL);
     url.searchParams.set("site", celebration.site);
     url.searchParams.set("date", celebration.date);
-    url.searchParams.set(
-      "todayStabilityDaysDelta",
-      String(celebration.todayStabilityDaysDelta)
-    );
-    url.searchParams.set(
-      "dailyStabilityDaysDeltaGoal",
-      String(celebration.dailyStabilityDaysDeltaGoal)
-    );
+    url.searchParams.set("dueCardsCompleted", "true");
     return url.href;
   }
 
@@ -211,7 +204,7 @@
     celebrationTransitionPromise = (async () => {
       navigationInProgress = true;
       stopSpeech();
-      setStatus("dailyStabilityDaysDeltaGoal達成");
+      setStatus("dueCardsCompleted達成");
       updateSyncDependentControls();
       try {
         await clearPendingCelebration();
@@ -274,8 +267,7 @@
         ) {
           throw new SyncRequestError("invalid_response");
         }
-        todayStabilityDaysDelta =
-          result.learningMetrics.todayStabilityDaysDelta;
+        dueCardsCompleted = result.learningMetrics.dueCardsCompleted;
         renderLearningMetrics();
         if (result.celebration !== undefined) {
           await savePendingCelebration(result.celebration);
@@ -291,7 +283,7 @@
           setStatus(
             pendingCelebration === null
               ? "出題できる問題はありません"
-              : "dailyStabilityDaysDeltaGoal達成.祝福を準備中"
+              : "dueCardsCompleted達成.祝福を準備中"
           );
           return true;
         }

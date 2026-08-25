@@ -1,7 +1,7 @@
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SITE = "chushoks.kakomonn.com";
-const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE}.v7.pending-attempt`;
-const PENDING_CELEBRATION_KEY = `kakomonn-reader.${SITE}.v7.pending-celebration`;
+const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE}.v8.pending-attempt`;
+const PENDING_CELEBRATION_KEY = `kakomonn-reader.${SITE}.v8.pending-celebration`;
 const LEGACY_PENDING_CORRECT_KEY = `kakomonn-reader.${SITE}.pending-correct`;
 const SYNC_API_ORIGIN = "https://kakomonn-sync.kakomonn.workers.dev";
 const AZURE_SPEECH_ORIGIN = "https://japaneast.tts.speech.microsoft.com";
@@ -12,6 +12,7 @@ function installSyncMockInWindow({
   initialAttemptCount,
   initialAttemptedQuestionCount,
   initialTodayAttemptedQuestionCount,
+  initialDueCardsCompleted,
   initialDate,
   expectedToken,
   expectedSite,
@@ -63,6 +64,7 @@ function installSyncMockInWindow({
     attemptedQuestionCount: initialAttemptedQuestionCount,
     todayAttemptedQuestionCount: initialTodayAttemptedQuestionCount,
     todayStabilityDaysDelta: 0,
+    dueCardsCompleted: initialDueCardsCompleted,
     date: initialDate,
     token: expectedToken,
     calls: [],
@@ -91,6 +93,7 @@ function installSyncMockInWindow({
     today: mock.date,
     learningMetrics: {
       stabilityDays: mock.stabilityDays,
+      dueCardsCompleted: mock.dueCardsCompleted,
       todayStabilityDaysDelta: mock.todayStabilityDaysDelta,
       attemptedQuestionCount: mock.attemptedQuestionCount,
       todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
@@ -225,19 +228,19 @@ function installSyncMockInWindow({
         const pathname = requestURL.pathname;
         if (
           call.method === "GET" &&
-          pathname === "/v7/state" &&
+          pathname === "/v8/state" &&
           requestURL.searchParams.get("site") === expectedSite
         ) {
           respondJSON(200, syncState());
           return;
         }
-        if (call.method === "POST" && pathname === "/v7/speech-token") {
+        if (call.method === "POST" && pathname === "/v8/speech-token") {
           respondJSON(200, { token: expectedSpeechToken, expiresInSeconds: 600 });
           return;
         }
         if (
           call.method === "GET" &&
-          pathname === "/v7/next" &&
+          pathname === "/v8/next" &&
           requestURL.searchParams.get("site") === expectedSite &&
           requestURL.searchParams.getAll("site").length === 1 &&
           requestURL.searchParams.getAll("excludeQuestionId").length <= 1
@@ -260,7 +263,7 @@ function installSyncMockInWindow({
           });
           return;
         }
-        if (call.method === "POST" && pathname === "/v7/questions") {
+        if (call.method === "POST" && pathname === "/v8/questions") {
           if (mock.conflictNextCatalogUpdate) {
             mock.conflictNextCatalogUpdate = false;
             mock.catalogUpdatedAtMs = Date.now();
@@ -296,7 +299,7 @@ function installSyncMockInWindow({
           });
           return;
         }
-        if (call.method === "POST" && pathname === "/v7/attempts") {
+        if (call.method === "POST" && pathname === "/v8/attempts") {
           const operationId = call.body?.operationId;
           const questionId = call.body?.questionId;
           const answerResult = call.body?.answerResult;
@@ -352,6 +355,9 @@ function installSyncMockInWindow({
               resultingStabilityDays: mock.stabilityDays,
               celebration: mock.nextCelebration ?? undefined,
             };
+            if (item.celebration?.dueCardsCompleted === true) {
+              mock.dueCardsCompleted = true;
+            }
             mock.nextCelebration = null;
             processed.set(operationId, item);
           }
@@ -372,6 +378,7 @@ function installSyncMockInWindow({
             },
             learningMetrics: {
               stabilityDays: mock.stabilityDays,
+              dueCardsCompleted: mock.dueCardsCompleted,
               todayStabilityDaysDelta: mock.todayStabilityDaysDelta,
               attemptedQuestionCount: mock.attemptedQuestionCount,
               todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
@@ -420,6 +427,7 @@ function createSyncMockConfiguration({
   attemptCount = 0,
   attemptedQuestionCount = attemptCount,
   todayAttemptedQuestionCount = attemptedQuestionCount,
+  dueCardsCompleted = false,
   date = "2026-08-10",
   token = "test-sync-token",
   configured = true,
@@ -438,6 +446,7 @@ function createSyncMockConfiguration({
     initialAttemptCount: attemptCount,
     initialAttemptedQuestionCount: attemptedQuestionCount,
     initialTodayAttemptedQuestionCount: todayAttemptedQuestionCount,
+    initialDueCardsCompleted: dueCardsCompleted,
     initialDate: date,
     expectedToken: token,
     expectedSite: site,
@@ -446,8 +455,8 @@ function createSyncMockConfiguration({
     initialPendingCelebration: pendingCelebration,
     initialProcessedOperations: processedOperations,
     tokenKey: SYNC_TOKEN_KEY,
-    pendingAttemptKey: `kakomonn-reader.${site}.v7.pending-attempt`,
-    pendingCelebrationKey: `kakomonn-reader.${site}.v7.pending-celebration`,
+    pendingAttemptKey: `kakomonn-reader.${site}.v8.pending-attempt`,
+    pendingCelebrationKey: `kakomonn-reader.${site}.v8.pending-celebration`,
     expectedOrigin: SYNC_API_ORIGIN,
     expectedSpeechOrigin: AZURE_SPEECH_ORIGIN,
     expectedSpeechToken: AZURE_SPEECH_TOKEN,

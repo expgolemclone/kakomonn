@@ -150,6 +150,7 @@ function assertSyncState(state) {
   assert.equal(metrics !== null && typeof metrics === "object", true);
   assert.equal(Number.isSafeInteger(metrics.stabilityDays), true);
   assert.equal(metrics.stabilityDays >= 0, true);
+  assert.equal(typeof metrics.dueCardsCompleted, "boolean");
   assert.equal(Number.isSafeInteger(metrics.todayStabilityDaysDelta), true);
   assert.equal(Number.isSafeInteger(metrics.attemptedQuestionCount), true);
   assert.equal(metrics.attemptedQuestionCount >= 0, true);
@@ -168,7 +169,7 @@ function assertSyncState(state) {
 
 async function requestSyncState(token) {
   const query = new URLSearchParams({ site: "chushoks.kakomonn.com" });
-  const response = await fetch(`${syncApiOrigin}/v7/state?${query}`, {
+  const response = await fetch(`${syncApiOrigin}/v8/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
@@ -286,7 +287,7 @@ async function configureSyncToken(
     .getByRole("button", { name: "確認して保存" })
     .evaluate((button) => button.click());
 
-  const expectedCount = `todayStabilityDaysDelta ${baseline.learningMetrics.todayStabilityDaysDelta.toLocaleString("ja-JP")}日`;
+  const expectedCount = `dueCardsCompleted ${baseline.learningMetrics.dueCardsCompleted ? "達成" : "未達成"}`;
   return waitUntil("the production sync baseline", async () => {
     const state = await readReaderState(page);
     return state.settingsHidden && state.count === expectedCount ? state : null;
@@ -523,7 +524,7 @@ async function clickNextQuestion(page) {
       !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
         state.outerURL,
       ) ||
-      !/^todayStabilityDaysDelta -?\d+(?:,\d{3})*日$/.test(state.count ?? "")
+      !/^dueCardsCompleted (?:達成|未達成)$/.test(state.count ?? "")
     ) {
       return null;
     }
@@ -595,7 +596,7 @@ async function main() {
     );
     assert.equal(
       configuredState.count,
-      `todayStabilityDaysDelta ${baseline.learningMetrics.todayStabilityDaysDelta.toLocaleString("ja-JP")}日`,
+      `dueCardsCompleted ${baseline.learningMetrics.dueCardsCompleted ? "達成" : "未達成"}`,
     );
     await submitCorrectAnswer(page);
     await copyMarkdownInRealChrome(page);
@@ -607,29 +608,19 @@ async function main() {
       frameUrl = navigationResult.state.frameURL;
       assert.equal(
         navigationResult.state.count,
-        `todayStabilityDaysDelta ${finalState.learningMetrics.todayStabilityDaysDelta.toLocaleString("ja-JP")}日`,
+        `dueCardsCompleted ${finalState.learningMetrics.dueCardsCompleted ? "達成" : "未達成"}`,
       );
     } else {
       const celebrationURL = new URL(navigationResult.outerURL);
       assert.deepEqual([...celebrationURL.searchParams.keys()].sort(), [
-        "dailyStabilityDaysDeltaGoal",
         "date",
+        "dueCardsCompleted",
         "site",
-        "todayStabilityDaysDelta",
       ]);
       assert.equal(celebrationURL.searchParams.get("site"), finalState.site);
       assert.equal(celebrationURL.searchParams.get("date"), finalState.today);
-      assert.equal(
-        Number(celebrationURL.searchParams.get("todayStabilityDaysDelta")),
-        finalState.learningMetrics.todayStabilityDaysDelta,
-      );
-      assert.equal(
-        Number.isSafeInteger(
-          Number(celebrationURL.searchParams.get("dailyStabilityDaysDeltaGoal")),
-        ) &&
-          Number(celebrationURL.searchParams.get("dailyStabilityDaysDeltaGoal")) >= 1,
-        true,
-      );
+      assert.equal(celebrationURL.searchParams.get("dueCardsCompleted"), "true");
+      assert.equal(finalState.learningMetrics.dueCardsCompleted, true);
     }
     console.log(
       JSON.stringify({

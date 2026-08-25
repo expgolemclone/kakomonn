@@ -746,7 +746,7 @@ async function runTest() {
     await waitForElementText(
       driver,
       "#kakomonn-reader-learning-metrics",
-      "todayStabilityDaysDelta 0日",
+      "dueCardsCompleted 未達成",
     );
 
     const layout = await driver.execute(() => {
@@ -884,7 +884,7 @@ async function runTest() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v7/attempts",
+              new URL(call.url).pathname === "/v8/attempts",
           ).length,
       ),
       1,

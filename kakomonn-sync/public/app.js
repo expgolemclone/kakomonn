@@ -17,11 +17,11 @@ const el = {
   authPanel: byId("auth-panel"), authForm: byId("auth-form"), authToken: byId("auth-token"), authMessage: byId("auth-message"),
   dashboard: byId("dashboard"), siteEmpty: byId("site-empty"), loadError: byId("load-error"), errorMessage: byId("error-message"), retryButton: byId("retry-button"),
   settingsButton: byId("settings-button"), settingsDialog: byId("settings-dialog"), settingsForm: byId("settings-form"), settingsToken: byId("settings-token"), settingsMessage: byId("settings-message"), settingsClose: byId("settings-close"), forgetToken: byId("forget-token"),
-  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), todayStabilityDaysDeltaElement: byId("today-stability-days-delta"), dailyStabilityDaysDeltaGoalInput: byId("daily-goal"), saveGoal: byId("save-goal"), stabilityDaysElement: byId("stability-days"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), stabilityChartAxis: byId("stability-chart-axis"), historyScroll: byId("history-scroll"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
+  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), dueCardsCompletedElement: byId("due-cards-completed"), todayStabilityDaysDeltaElement: byId("today-stability-days-delta"), stabilityDaysElement: byId("stability-days"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), stabilityChartAxis: byId("stability-chart-axis"), historyScroll: byId("history-scroll"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
   dailyDetails: byId("daily-details"), dailyDetailsDate: byId("daily-details-date"), dailyDetailsInstruction: byId("daily-details-instruction"), dailyDetailsStatus: byId("daily-details-status"), dailyDetailsTables: byId("daily-details-tables"), stabilityHistoryTable: byId("stability-history-table"), attemptsTable: byId("attempts-table"),
 };
 
-const state = { token: "", site: "", sites: [], learning: null, history: null, settings: null, selectedDate: "", dailyDetails: null };
+const state = { token: "", site: "", sites: [], learning: null, history: null, selectedDate: "", dailyDetails: null };
 let loadGeneration = 0;
 let detailGeneration = 0;
 const RAW_TABLE_COLUMNS = {
@@ -47,7 +47,7 @@ function validSite(value) {
   return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(value);
 }
 function validLearningMetrics(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value) && Number.isSafeInteger(value.stabilityDays) && value.stabilityDays >= 0 && Number.isSafeInteger(value.todayStabilityDaysDelta) && Number.isSafeInteger(value.attemptedQuestionCount) && value.attemptedQuestionCount >= 0 && Number.isSafeInteger(value.todayAttemptedQuestionCount) && value.todayAttemptedQuestionCount >= 0;
+  return value !== null && typeof value === "object" && !Array.isArray(value) && Number.isSafeInteger(value.stabilityDays) && value.stabilityDays >= 0 && typeof value.dueCardsCompleted === "boolean" && Number.isSafeInteger(value.todayStabilityDaysDelta) && Number.isSafeInteger(value.attemptedQuestionCount) && value.attemptedQuestionCount >= 0 && Number.isSafeInteger(value.todayAttemptedQuestionCount) && value.todayAttemptedQuestionCount >= 0;
 }
 function validState(value, site) {
   return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && validLearningMetrics(value.learningMetrics);
@@ -55,13 +55,10 @@ function validState(value, site) {
 function validHistory(value, site) {
   return value && value.site === site && Array.isArray(value.days) && value.days.length === DASHBOARD_HISTORY_DAYS && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && (day.closingStabilityDays === null || (Number.isSafeInteger(day.closingStabilityDays) && day.closingStabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.dailyAttemptedQuestionCount) && day.dailyAttemptedQuestionCount >= 0);
 }
-function validSettings(value, site) {
-  return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 2 && value.site === site && Number.isSafeInteger(value.dailyStabilityDaysDeltaGoal) && value.dailyStabilityDaysDeltaGoal >= 1;
-}
 function validDashboard(value) {
-  if (!hasExactKeys(value, ["sites", "selectedSite", "state", "history", "settings"]) || !Array.isArray(value.sites) || value.sites.some((site) => !validSite(site)) || new Set(value.sites).size !== value.sites.length) return false;
-  if (value.sites.length === 0) return value.selectedSite === null && value.state === null && value.history === null && value.settings === null;
-  return validSite(value.selectedSite) && value.sites.includes(value.selectedSite) && validState(value.state, value.selectedSite) && validHistory(value.history, value.selectedSite) && validSettings(value.settings, value.selectedSite);
+  if (!hasExactKeys(value, ["sites", "selectedSite", "state", "history"]) || !Array.isArray(value.sites) || value.sites.some((site) => !validSite(site)) || new Set(value.sites).size !== value.sites.length) return false;
+  if (value.sites.length === 0) return value.selectedSite === null && value.state === null && value.history === null;
+  return validSite(value.selectedSite) && value.sites.includes(value.selectedSite) && validState(value.state, value.selectedSite) && validHistory(value.history, value.selectedSite);
 }
 function hasExactKeys(value, keys) {
   return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join("\0") === [...keys].sort().join("\0");
@@ -94,10 +91,6 @@ async function requestJSON(path, token, { method = "GET", body } = {}) {
 
 function formatted(value) { return value.toLocaleString("ja-JP"); }
 function signed(value) { return `${value >= 0 ? "+" : ""}${formatted(value)}`; }
-function renderGoal() {
-  el.dailyStabilityDaysDeltaGoalInput.value = String(state.settings.dailyStabilityDaysDeltaGoal);
-}
-
 function svgNode(name, attrs = {}, text = "") {
   const node = document.createElementNS(SVG_NS, name);
   for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
@@ -172,7 +165,6 @@ function renderChart(days) {
   days.forEach((day, index) => {
     const xx = left + bandWidth * (index + 0.5);
     const value = day.stabilityDaysDelta;
-    const isToday = day.date === state.learning.today;
     const selected = day.date === state.selectedDate;
     const group = svgNode("g", {
       class: "chart-day",
@@ -194,7 +186,7 @@ function renderChart(days) {
         barHeight = 2;
       }
       group.append(svgNode("rect", { x: xx - barWidth / 2, y: barY, width: barWidth, height: barHeight, rx: 5, class: `delta-bar ${value < 0 ? "negative" : value === 0 ? "zero" : "positive"}` }));
-      if (!isToday) group.append(svgNode("text", { x: xx, y: value >= 0 ? Math.max(top + 12, barY - 8) : Math.min(bottom + 16, barY + barHeight + 16), class: "delta-value-label", "text-anchor": "middle" }, signed(value)));
+      group.append(svgNode("text", { x: xx, y: value >= 0 ? Math.max(top + 12, barY - 8) : Math.min(bottom + 16, barY + barHeight + 16), class: "delta-value-label", "text-anchor": "middle" }, signed(value)));
     }
     const [, month, date] = day.date.split("-");
     group.append(svgNode("text", { x: xx, y: 252, class: "date-label", "text-anchor": "middle" }, `${Number(month)}/${Number(date)}`));
@@ -298,7 +290,7 @@ async function loadDailyDetails(date, { focusChart = false } = {}) {
   if (focusChart) el.stabilityChart.querySelector(`[data-chart-date="${date}"]`)?.focus();
   let details;
   try {
-    details = await requestJSON(`/v7/daily-details?${new URLSearchParams({ site, date })}`, token);
+    details = await requestJSON(`/v8/daily-details?${new URLSearchParams({ site, date })}`, token);
     if (!validDailyDetails(details, site, date)) throw new DashboardError("invalid_response");
   } catch (error) {
     if (generation !== detailGeneration || site !== state.site || token !== state.token || date !== state.selectedDate) return false;
@@ -314,11 +306,12 @@ async function loadDailyDetails(date, { focusChart = false } = {}) {
 function renderDashboard() {
   const learning = state.learning;
   const metrics = learning.learningMetrics;
+  el.dueCardsCompletedElement.textContent = metrics.dueCardsCompleted ? "達成" : "未達成";
+  el.dueCardsCompletedElement.dataset.completed = String(metrics.dueCardsCompleted);
   el.todayStabilityDaysDeltaElement.textContent = signed(metrics.todayStabilityDaysDelta);
   el.stabilityDaysElement.textContent = formatted(metrics.stabilityDays);
   el.attemptedQuestionCountElement.textContent = formatted(metrics.attemptedQuestionCount);
   el.todayAttemptedQuestionCountElement.textContent = formatted(metrics.todayAttemptedQuestionCount);
-  renderGoal();
   renderChart(state.history.days);
   el.dashboard.hidden = false;
   el.authPanel.hidden = true;
@@ -343,14 +336,14 @@ async function fetchDashboardData(site, token) {
   const parameters = new URLSearchParams();
   if (site !== null) parameters.set("site", site);
   const suffix = parameters.size === 0 ? "" : `?${parameters}`;
-  const data = await requestJSON(`/v7/dashboard${suffix}`, token);
+  const data = await requestJSON(`/v8/dashboard${suffix}`, token);
   if (!validDashboard(data)) throw new DashboardError("invalid_response");
   return data;
 }
 
 function applySiteData(data) {
   state.sites = data.sites; state.site = data.selectedSite ?? "";
-  state.learning = data.state; state.history = data.history; state.settings = data.settings;
+  state.learning = data.state; state.history = data.history;
   if (state.selectedDate !== "" && !data.history.days.some((day) => day.date === state.selectedDate)) resetDailyDetails();
   renderDashboard();
 }
@@ -393,7 +386,7 @@ async function connect(token, { persist = true } = {}) {
   if (persist) storageSet(TOKEN_KEY, token);
   if (site === "") storageRemove(SITE_KEY); else storageSet(SITE_KEY, site);
   state.token = token; state.sites = data.sites; state.site = site;
-  state.learning = null; state.history = null; state.settings = null;
+  state.learning = null; state.history = null;
   resetDailyDetails();
   if (data.sites.length === 0) {
     el.authPanel.hidden = true; el.dashboard.hidden = true; el.loadError.hidden = true; el.siteEmpty.hidden = false; el.settingsButton.hidden = false; return true;
@@ -433,31 +426,6 @@ el.stabilityChart.addEventListener("keydown", (event) => {
   event.preventDefault();
   void loadDailyDetails(target.getAttribute("data-chart-date"), { focusChart: true });
 });
-el.saveGoal.addEventListener("click", async () => {
-  const dailyStabilityDaysDeltaGoal = Number(el.dailyStabilityDaysDeltaGoalInput.value);
-  if (!Number.isSafeInteger(dailyStabilityDaysDeltaGoal) || dailyStabilityDaysDeltaGoal < 1) { el.dashboardStatus.textContent = "目標は1以上の整数で入力してください."; return; }
-  loadGeneration += 1;
-  const token = state.token;
-  const site = state.site;
-  el.saveGoal.disabled = true;
-  el.siteSelect.disabled = true;
-  el.refreshButton.disabled = true;
-  el.settingsButton.disabled = true;
-  el.dashboardStatus.textContent = "目標を同期中";
-  try {
-    const settings = await requestJSON("/v7/settings", token, { method: "PUT", body: { site, dailyStabilityDaysDeltaGoal } });
-    if (!validSettings(settings, site)) throw new DashboardError("invalid_response");
-    if (token === state.token && site === state.site) { state.settings = settings; renderGoal(); el.dashboardStatus.textContent = "dailyStabilityDaysDeltaGoalを同期しました."; }
-  } catch (error) {
-    if (token === state.token && site === state.site) el.dashboardStatus.textContent = error?.code === "unauthorized" ? "同期tokenを確認してください." : "目標を同期できませんでした.";
-  } finally {
-    el.saveGoal.disabled = false;
-    el.siteSelect.disabled = false;
-    el.refreshButton.disabled = false;
-    el.settingsButton.disabled = false;
-  }
-});
-
 el.settingsButton.addEventListener("click", () => { el.settingsMessage.textContent = ""; el.settingsToken.value = ""; el.settingsDialog.showModal(); });
 el.settingsClose.addEventListener("click", () => el.settingsDialog.close());
 el.settingsForm.addEventListener("submit", async (event) => {
@@ -467,7 +435,7 @@ el.settingsForm.addEventListener("submit", async (event) => {
 });
 el.forgetToken.addEventListener("click", () => {
   loadGeneration += 1;
-  storageRemove(TOKEN_KEY); storageRemove(SITE_KEY); state.token = ""; state.site = ""; state.sites = []; state.learning = null; state.history = null; state.settings = null;
+  storageRemove(TOKEN_KEY); storageRemove(SITE_KEY); state.token = ""; state.site = ""; state.sites = []; state.learning = null; state.history = null;
   resetDailyDetails();
   el.settingsDialog.close(); el.settingsButton.hidden = true; el.dashboard.hidden = true; el.siteEmpty.hidden = true; el.loadError.hidden = true; el.authPanel.hidden = false;
 });

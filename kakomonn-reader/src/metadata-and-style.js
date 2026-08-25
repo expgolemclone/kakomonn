@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @description  問題文と解説の読み上げ, コピー, stabilityDays合計日数の端末間同期と日次目標の祝福を提供します.
+// @description  問題文と解説の読み上げ, コピー, 学習記録の端末間同期とdue card完了時の祝福を提供します.
 // @match        https://*.kakomonn.com/*
 // @connect      kakomonn-sync.kakomonn.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com
@@ -71,9 +71,9 @@
     return;
   }
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
-  const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE_ID}.v7.pending-attempt`;
+  const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE_ID}.v8.pending-attempt`;
   const PENDING_CELEBRATION_KEY =
-    `kakomonn-reader.${SITE_ID}.v7.pending-celebration`;
+    `kakomonn-reader.${SITE_ID}.v8.pending-celebration`;
   const SYNC_TIMEOUT_MS = 15000;
   const SPEECH_TIMEOUT_MS = 30000;
   const FRAME_LOAD_DELAY_MS = 900;
@@ -241,7 +241,7 @@
   let awaitingAnswerResultSpeech = false;
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
-  let todayStabilityDaysDelta = null;
+  let dueCardsCompleted = null;
   let syncToken = "";
   let syncReady = false;
   let syncInProgress = false;

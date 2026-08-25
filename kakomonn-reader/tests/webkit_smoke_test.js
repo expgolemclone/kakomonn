@@ -246,7 +246,7 @@ async function main() {
           {
             authorization: "Bearer test-sync-token",
             method: "GET",
-            url: `${SYNC_API_ORIGIN}/v7/next?site=chushoks.kakomonn.com`,
+            url: `${SYNC_API_ORIGIN}/v8/next?site=chushoks.kakomonn.com`,
           },
         ],
       );
@@ -337,7 +337,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
-        "todayStabilityDaysDelta 0日",
+        "dueCardsCompleted 未達成",
     );
     assert.deepEqual(
       await page.evaluate(() => {
@@ -626,7 +626,7 @@ async function main() {
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
-        "todayStabilityDaysDelta 31日",
+        "dueCardsCompleted 未達成",
     );
     assert.equal(
       await page.evaluate(
@@ -634,7 +634,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v7/attempts",
+              new URL(call.url).pathname === "/v8/attempts",
           ).length,
       ),
       1,

@@ -10,9 +10,9 @@ productionのWorker rootを開くと,独立した学習ログを表示します.
 https://kakomonn-sync.kakomonn.workers.dev/
 ```
 
-初回だけ`kakomonn-reader`と同じ同期tokenを入力します. tokenと最後に表示したサイトだけをこのoriginの`localStorage`へ保存します. `dailyStabilityDaysDeltaGoal`はsiteごとにWorkerへ保存するため, 同じ同期tokenを使用する他の端末でも共有されます.
+初回だけ`kakomonn-reader`と同じ同期tokenを入力します. tokenと最後に表示したサイトだけをこのoriginの`localStorage`へ保存します.
 
-dashboardは`todayStabilityDaysDelta`をprimary KPIとして表示し, `stabilityDays`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`は表示専用の指標として扱います. 各指標の数値は画面内の1か所だけに表示します. graphは`stabilityDaysDelta`だけを表示し, 当日barではprimary KPIと重複する数値labelを省きます. graphの日付を選択すると, 該当する`stability_history`と`attempts`の全columnをDBのcolumn名と保存値のまま確認できます.
+dashboardは`dueCardsCompleted`をprimary KPIとして表示します. 現在の問題catalogにある保存済みcardのうち, `due_ms`が現在時刻以前のcardが1件もなければ達成です. 未回答問題はこの判定へ含めません. `todayStabilityDaysDelta`, `stabilityDays`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`は表示専用の指標として扱います. graphの日付を選択すると, 該当する`stability_history`と`attempts`の全columnをDBのcolumn名と保存値のまま確認できます.
 
 ## 次の問題を開く
 
@@ -22,7 +22,7 @@ iPhone SafariのTampermonkeyへ最新の`kakomonn-reader`をinstallして同期t
 https://kakomonn-sync.kakomonn.workers.dev/open
 ```
 
-`/open`はTampermonkeyが既に動作する`https://chushoks.kakomonn.com/createques#kakomonn-next`へredirectします. redirect先のuserscriptが専用storageの同期tokenで既存の`GET /v7/next`を呼ぶため, tokenをURLやdashboardの`localStorage`へ保存しません.
+`/open`はTampermonkeyが既に動作する`https://chushoks.kakomonn.com/createques#kakomonn-next`へredirectします. redirect先のuserscriptが専用storageの同期tokenで`GET /v8/next`を呼ぶため, tokenをURLやdashboardの`localStorage`へ保存しません.
 
 ## ローカルテスト
 
@@ -61,18 +61,17 @@ npm run deploy:kakomonn-sync
 
 ## API
 
-APIは`/v7`だけを提供し, LearningState Durable Objectを唯一のsource of truthとします. `GET /v7/state`と`POST /v7/attempts`は`stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`を`learningMetrics`として返します. `POST /v7/attempts`は`attempt`として`answerResult`, `attemptedAtMs`, card単位の`previousCardStabilityDays`と`resultingCardStabilityDays`, 集計値の`previousStabilityDays`と`resultingStabilityDays`も返します. 解答によって`todayStabilityDaysDelta`が`dailyStabilityDaysDeltaGoal`へ初めて到達した場合だけ, `celebration`として`site`, `date`, `todayStabilityDaysDelta`, `dailyStabilityDaysDeltaGoal`も返します.
+APIは`/v8`だけを提供し, LearningState Durable Objectを唯一のsource of truthとします. `GET /v8/state`と`POST /v8/attempts`は`dueCardsCompleted`, `stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`を`learningMetrics`として返します. `POST /v8/attempts`は`attempt`として`answerResult`, `attemptedAtMs`, card単位の`previousCardStabilityDays`と`resultingCardStabilityDays`, 集計値の`previousStabilityDays`と`resultingStabilityDays`も返します. 期限を迎えた最後のcardを解答して`dueCardsCompleted`が`true`になった場合だけ, `celebration`として`site`, `date`, `dueCardsCompleted`を返します.
 
-- `GET /v7/sites`は,問題catalogを登録済みのサイト一覧を返します.
-- `GET /v7/dashboard?site=<host>`は, dashboard用のsite一覧, 選択siteのstate, 直近7日間のhistory, settingsを1回で返します. site未指定または未登録の場合は, 登録済みsiteの先頭を選択します.
-- `GET /v7/state?site=<host>`は,`learningMetrics`と問題catalog情報を返します.
-- `GET /v7/history?site=<host>&days=<1-31>`は, 日本時間の日別`closingStabilityDays`, `stabilityDaysDelta`, `dailyAttemptedQuestionCount`を返します. 計測開始前の`closingStabilityDays`と`stabilityDaysDelta`は`null`で, 計測開始後にrowがない日の`stabilityDaysDelta`は`0`です.
-- `GET /v7/daily-details?site=<host>&date=<YYYY-MM-DD>`は, 指定した日本時間の日付に対応する`stability_history`と`attempts`の全raw rowを返します.
-- `POST /v7/attempts`は,`site`,`questionId`,`operationId`,`answerResult`だけを受け取り, 解答保存後の`nextQuestion`も返します.同じ操作の再送は重複記録せず,異なるpayloadで同じ操作IDを使用した場合は拒否します.
-- `GET /v7/next`は,FSRSに基づく次の問題を返します.
-- `POST /v7/questions`は,siteの問題catalogを世代番号付きで置き換えます.
-- `GET /v7/settings?site=<host>`は,site別の`dailyStabilityDaysDeltaGoal`を返します.`PUT /v7/settings`は,siteと1以上の整数で同じ値を更新します.
-- `POST /v7/speech-token`は,有効期間600秒のAzure Speech tokenを返します.
+- `GET /v8/sites`は,問題catalogを登録済みのサイト一覧を返します.
+- `GET /v8/dashboard?site=<host>`は, dashboard用のsite一覧, 選択siteのstate, 直近7日間のhistoryを1回で返します. site未指定または未登録の場合は, 登録済みsiteの先頭を選択します.
+- `GET /v8/state?site=<host>`は,`learningMetrics`と問題catalog情報を返します.
+- `GET /v8/history?site=<host>&days=<1-31>`は, 日本時間の日別`closingStabilityDays`, `stabilityDaysDelta`, `dailyAttemptedQuestionCount`を返します. 計測開始前の`closingStabilityDays`と`stabilityDaysDelta`は`null`で, 計測開始後にrowがない日の`stabilityDaysDelta`は`0`です.
+- `GET /v8/daily-details?site=<host>&date=<YYYY-MM-DD>`は, 指定した日本時間の日付に対応する`stability_history`と`attempts`の全raw rowを返します.
+- `POST /v8/attempts`は,`site`,`questionId`,`operationId`,`answerResult`だけを受け取り, 解答保存後の`nextQuestion`も返します.同じ操作の再送は重複記録せず,異なるpayloadで同じ操作IDを使用した場合は拒否します.
+- `GET /v8/next`は,FSRSに基づく次の問題を返します.
+- `POST /v8/questions`は,siteの問題catalogを世代番号付きで置き換えます.
+- `POST /v8/speech-token`は,有効期間600秒のAzure Speech tokenを返します.
 
 `answerResult`が`correct`の場合はFSRSの`Easy`, `incorrect`の場合は`Again`としてcardを更新します. 保存済みのcardは再計算せず, 次の解答時から現在のmappingを適用します.
 
@@ -82,16 +81,16 @@ APIは`/v7`だけを提供し, LearningState Durable Objectを唯一のsource of
 
 `stabilityDays`は, 現在の問題catalogに含まれる全cardのFSRS stabilityを合計してから整数へ切り捨てた値です. 未回答問題は0日として扱います. catalogから外れたcardは再登録時に学習状態を復元できるよう保存しますが, `stabilityDays`と次問候補には含めません. catalog置換で`stabilityDays`が変化した場合も, その日の履歴へ新しい値を記録します.
 
-`learningMetrics`の現在値はsiteごとの`learning_metrics` rowへ保持し, 解答と同じtransactionで更新します. 通常のstate取得と解答ではcatalog, card全体, attempt全履歴をaggregate scanしません. `stabilityDays`だけはcatalog置換時に現在のcatalogから再集計し, 増分更新の誤差とcatalogから外れたcardの影響を補正します.
+`learningMetrics`の集計値はsiteごとの`learning_metrics` rowへ保持し, 解答と同じtransactionで更新します. 通常のstate取得と解答ではcatalog, card全体, attempt全履歴をaggregate scanしません. `dueCardsCompleted`は`due_ms <= now`を満たす現在catalog内のcardが存在するか, indexと`LIMIT 1`で判定します. `stabilityDays`だけはcatalog置換時に現在のcatalogから再集計し, 増分更新の誤差とcatalogから外れたcardの影響を補正します.
 
 問題catalogの再同期では, 保存済みIDと新しいIDの差分だけを書き込みます. 内容が同一の場合は`updatedAtMs`だけを更新し, 問題row, generation, 学習指標, 履歴を書き直しません.
 
-`stabilityDaysDelta`は, 日ごとの`closing_stability_days - opening_stability_days`です. `todayStabilityDaysDelta`は当日の同じ値で, `dailyStabilityDaysDeltaGoal`はこの純増に対する目標です.
+`stabilityDaysDelta`は, 日ごとの`closing_stability_days - opening_stability_days`です. `todayStabilityDaysDelta`は当日の同じ値です. どちらもprimary KPIの達成判定には使用しません.
 
-祝福判定は解答前の`todayStabilityDaysDelta`が目標未満で, 解答後の値が目標以上になった場合だけ成立します. siteと日本時間の日付ごとに1回だけ記録し, 同じ`operationId`の再送では同じeventを返します. 目標変更, catalog変更, 初回同期では祝福を作成しません.
+祝福判定は, 解答前に期限を迎えていた最後のcardを解答し, 解答後の`dueCardsCompleted`が`true`になった場合だけ成立します. siteと日本時間の日付ごとに1回だけ記録し, 同じ`operationId`の再送では同じeventを返します. 未回答問題の初回解答, 期限前の再解答, catalog変更, 初回同期では祝福を作成しません.
 
 解いた問題数はsite内の問題IDの種類数です.同じ問題を複数回解いても累計では1問として数え,日別では同じ日に繰り返しても1問として数えます.別の日に同じ問題を解いた場合は,各日の解いた問題数へ1問ずつ数えます.正答,誤答,スキップはいずれも解答履歴へ含めます.過去に解いた問題は,現在の問題catalogから外れても累計へ含めます.
 
 ## 互換性方針
 
-v1からv6のAPIは提供しません. legacy v4 schemaのcard, attempt, catalog, 解答履歴はschema v6へ明示的に移行し, 30日判定の履歴と目標設定は破棄します. schema v2からv5のdataはschema v6へ移行します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.
+v1からv7のAPIは提供しません. legacy v4 schemaのcard, attempt, catalog, 解答履歴はschema v7へ明示的に移行し, 30日判定の履歴, stability純増目標, 旧祝福履歴は破棄します. schema v2からv6のdataはschema v7へ移行します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.

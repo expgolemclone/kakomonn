@@ -544,8 +544,8 @@ async function main() {
     assert.equal(initialProblemPresentation.scrollY > 300, true);
     assert.equal(await page.evaluate(() => typeof window.Audio), "function");
     assert.equal(
-      await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "dueCardsCompleted 未達成",
+      await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
+      "未達成",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-start").count(),
@@ -1198,8 +1198,8 @@ async function main() {
     try {
       await page.waitForFunction(
         () =>
-          document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-          "dueCardsCompleted 未達成",
+          document.querySelector("#kakomonn-reader-due-cards-completed").textContent ===
+          "未達成",
       );
     } catch (error) {
       error.readerState = await page.evaluate(() => ({
@@ -1241,6 +1241,7 @@ async function main() {
       window.__syncMock.attemptedQuestionCount = 7;
       window.__syncMock.todayAttemptedQuestionCount = 7;
       window.__syncMock.dueCardsCompleted = true;
+      window.__syncMock.dueCardsRemaining = 0;
       window.__syncMock.holdNextRequest = true;
       window.dispatchEvent(new Event("focus"));
     });
@@ -1254,8 +1255,12 @@ async function main() {
     await page.evaluate(() => window.__syncMock.releaseHeldRequest());
     await page.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-        "dueCardsCompleted 達成",
+        document.querySelector("#kakomonn-reader-due-cards-completed").textContent ===
+        "達成",
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-due-cards-remaining").innerText(),
+      "0",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
@@ -1422,8 +1427,8 @@ async function main() {
       state: "visible",
     });
     assert.equal(
-      await setupPage.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "dueCardsCompleted --",
+      await setupPage.locator("#kakomonn-reader-due-cards-completed").innerText(),
+      "--",
     );
     await setupPage.locator("#kakomonn-reader-sync-token").focus();
     await setupPage.keyboard.type("qwert asdfg n gg yy xz ");
@@ -1437,8 +1442,8 @@ async function main() {
       state: "hidden",
     });
     assert.equal(
-      await setupPage.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "dueCardsCompleted 未達成",
+      await setupPage.locator("#kakomonn-reader-due-cards-completed").innerText(),
+      "未達成",
     );
     assert.equal(
       await setupPage.evaluate(
@@ -1601,8 +1606,8 @@ async function main() {
     );
     await iosPage.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-        "dueCardsCompleted 未達成",
+        document.querySelector("#kakomonn-reader-due-cards-completed").textContent ===
+        "未達成",
     );
     await iosPage.evaluate(() => {
       window.__syncMock.stabilityDays = 6;
@@ -1610,12 +1615,17 @@ async function main() {
       window.__syncMock.attemptedQuestionCount = 6;
       window.__syncMock.todayAttemptedQuestionCount = 6;
       window.__syncMock.dueCardsCompleted = true;
+      window.__syncMock.dueCardsRemaining = 0;
       window.dispatchEvent(new Event("focus"));
     });
     await iosPage.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-learning-metrics").textContent ===
-        "dueCardsCompleted 達成",
+        document.querySelector("#kakomonn-reader-due-cards-completed").textContent ===
+        "達成",
+    );
+    assert.equal(
+      await iosPage.locator("#kakomonn-reader-due-cards-remaining").innerText(),
+      "0",
     );
     assert.equal(
       await iosPage.evaluate(

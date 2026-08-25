@@ -478,8 +478,8 @@ async function runCase(
     await page.locator("#kakomonn-reader-learning-metrics").waitFor({ state: "visible" });
     await waitForSyncReady(page);
     assert.equal(
-      await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "dueCardsCompleted 未達成",
+      await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
+      "未達成",
     );
     assert.deepEqual(
       await frame.locator("body").evaluate((body) => {
@@ -598,16 +598,16 @@ async function runCase(
     if (expectedTodayStabilityDaysDelta > 0) {
       await page.waitForFunction(
         () =>
-          document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
-          "dueCardsCompleted 未達成",
+          document.querySelector("#kakomonn-reader-due-cards-completed")?.textContent ===
+          "未達成",
         null,
         { timeout: 10_000 },
       );
     } else {
       await page.waitForTimeout(1_500);
       assert.equal(
-        await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-        "dueCardsCompleted 未達成",
+        await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
+        "未達成",
       );
     }
 

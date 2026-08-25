@@ -241,7 +241,7 @@
   let awaitingAnswerResultSpeech = false;
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
-  let dueCardsCompleted = null;
+  let learningMetrics = null;
   let syncToken = "";
   let syncReady = false;
   let syncInProgress = false;
@@ -267,7 +267,7 @@
       --kakomonn-reader-time-question: oklch(0.72 0.16 245);
       --kakomonn-reader-time-explanation: oklch(0.74 0.16 150);
       --kakomonn-reader-controls-height: calc(
-        56px + env(safe-area-inset-top)
+        78px + env(safe-area-inset-top)
       );
       --kakomonn-reader-actions-height: calc(
         76px + env(safe-area-inset-bottom)
@@ -404,7 +404,6 @@
       background: var(--kakomonn-reader-time-fill);
     }
 
-    #kakomonn-reader-learning-metrics,
     #kakomonn-reader-status,
     #kakomonn-reader-skip,
     #kakomonn-reader-sync-settings-button {
@@ -428,8 +427,95 @@
     }
 
     #kakomonn-reader-learning-metrics {
-      flex: 0 0 auto;
+      flex: 0 1 auto;
+      min-width: 0;
+      display: grid;
+      gap: 5px;
+      padding: 7px 12px;
+      border: 0;
+      border-radius: 14px;
+      background: var(--kakomonn-reader-raised);
+      color: var(--kakomonn-reader-text);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    #kakomonn-reader-due-card-progress,
+    #kakomonn-reader-today-metrics,
+    #kakomonn-reader-today-metrics > div {
+      display: flex;
+      align-items: baseline;
+    }
+
+    #kakomonn-reader-due-card-progress {
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .kakomonn-reader-metric {
+      display: flex;
+      min-width: 0;
+      align-items: baseline;
+      gap: 5px;
       white-space: nowrap;
+    }
+
+    .kakomonn-reader-metric-label {
+      color: var(--kakomonn-reader-muted);
+      font-size: 10px;
+      overflow-wrap: anywhere;
+    }
+
+    #kakomonn-reader-due-cards-completed {
+      font-size: 13px;
+    }
+
+    #kakomonn-reader-due-cards-completed[data-completed="true"] {
+      color: var(--kakomonn-reader-focus-ring);
+    }
+
+    .kakomonn-reader-remaining-value {
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+      color: var(--kakomonn-reader-focus-ring);
+    }
+
+    #kakomonn-reader-due-cards-remaining {
+      font-size: 21px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .kakomonn-reader-remaining-value small {
+      color: var(--kakomonn-reader-muted);
+      font-size: 10px;
+    }
+
+    #kakomonn-reader-today-metrics {
+      justify-content: flex-end;
+      gap: 14px;
+      margin: 0;
+    }
+
+    #kakomonn-reader-today-metrics > div {
+      min-width: 0;
+      gap: 5px;
+    }
+
+    #kakomonn-reader-today-metrics dt {
+      color: var(--kakomonn-reader-muted);
+      font-size: 10px;
+      overflow-wrap: anywhere;
+    }
+
+    #kakomonn-reader-today-metrics dd {
+      display: flex;
+      align-items: baseline;
+      gap: 2px;
+      margin: 0;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
     }
 
     #kakomonn-reader-skip {
@@ -511,20 +597,19 @@
     @media (max-width: 620px) {
       :root {
         --kakomonn-reader-controls-height: calc(
-          96px + env(safe-area-inset-top)
+          136px + env(safe-area-inset-top)
         );
       }
 
       #kakomonn-reader-controls {
         display: grid;
-        grid-template-rows: 32px minmax(32px, auto);
+        grid-template-rows: 32px minmax(88px, auto);
         grid-template-columns: minmax(0, 1fr) auto auto;
         align-content: center;
         gap: 4px;
         padding: calc(6px + env(safe-area-inset-top)) 6px 6px;
       }
 
-      #kakomonn-reader-learning-metrics,
       #kakomonn-reader-status,
       #kakomonn-reader-skip,
       #kakomonn-reader-sync-settings-button {
@@ -552,10 +637,33 @@
         grid-row: 2;
         grid-column: 1 / -1;
         justify-self: stretch;
-        overflow-wrap: anywhere;
-        line-height: 1.25;
+        align-self: stretch;
+        gap: 7px;
+        padding: 8px;
+      }
+
+      #kakomonn-reader-due-card-progress {
+        gap: 8px;
+      }
+
+      .kakomonn-reader-metric {
+        align-items: center;
+      }
+
+      #kakomonn-reader-today-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      #kakomonn-reader-today-metrics > div {
+        display: grid;
+        gap: 3px;
         text-align: center;
-        white-space: normal;
+      }
+
+      #kakomonn-reader-today-metrics dd {
+        justify-content: center;
       }
 
       #kakomonn-reader-actions {

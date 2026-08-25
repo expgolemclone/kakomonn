@@ -336,8 +336,8 @@ async function main() {
     }, fixtureBody);
     await page.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
-        "dueCardsCompleted 未達成",
+        document.querySelector("#kakomonn-reader-due-cards-completed")?.textContent ===
+        "未達成",
     );
     assert.deepEqual(
       await page.evaluate(() => {
@@ -625,8 +625,8 @@ async function main() {
     await childFrame.waitForURL(nextQuestionURL);
     await page.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ===
-        "dueCardsCompleted 未達成",
+        document.querySelector("#kakomonn-reader-due-cards-completed")?.textContent ===
+        "未達成",
     );
     assert.equal(
       await page.evaluate(

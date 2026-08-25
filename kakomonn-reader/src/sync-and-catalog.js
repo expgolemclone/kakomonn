@@ -25,6 +25,9 @@
       Number.isSafeInteger(metrics.stabilityDays) &&
       metrics.stabilityDays >= 0 &&
       typeof metrics.dueCardsCompleted === "boolean" &&
+      Number.isSafeInteger(metrics.dueCardsRemaining) &&
+      metrics.dueCardsRemaining >= 0 &&
+      metrics.dueCardsCompleted === (metrics.dueCardsRemaining === 0) &&
       Number.isSafeInteger(metrics.todayStabilityDaysDelta) &&
       Number.isSafeInteger(metrics.attemptedQuestionCount) &&
       metrics.attemptedQuestionCount >= 0 &&
@@ -67,6 +70,9 @@
       Number.isSafeInteger(metrics.stabilityDays) &&
       metrics.stabilityDays >= 0 &&
       typeof metrics.dueCardsCompleted === "boolean" &&
+      Number.isSafeInteger(metrics.dueCardsRemaining) &&
+      metrics.dueCardsRemaining >= 0 &&
+      metrics.dueCardsCompleted === (metrics.dueCardsRemaining === 0) &&
       Number.isSafeInteger(metrics.todayStabilityDaysDelta) &&
       Number.isSafeInteger(metrics.attemptedQuestionCount) &&
       metrics.attemptedQuestionCount >= 0 &&
@@ -391,7 +397,7 @@
     if (!isSyncState(state)) {
       throw new SyncRequestError("invalid_response");
     }
-    dueCardsCompleted = state.learningMetrics.dueCardsCompleted;
+    learningMetrics = state.learningMetrics;
     renderLearningMetrics();
   }
 

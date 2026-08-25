@@ -745,8 +745,8 @@ async function runTest() {
     );
     await waitForElementText(
       driver,
-      "#kakomonn-reader-learning-metrics",
-      "dueCardsCompleted 未達成",
+      "#kakomonn-reader-due-cards-completed",
+      "未達成",
     );
 
     const layout = await driver.execute(() => {

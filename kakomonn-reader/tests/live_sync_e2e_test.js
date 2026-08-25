@@ -151,6 +151,9 @@ function assertSyncState(state) {
   assert.equal(Number.isSafeInteger(metrics.stabilityDays), true);
   assert.equal(metrics.stabilityDays >= 0, true);
   assert.equal(typeof metrics.dueCardsCompleted, "boolean");
+  assert.equal(Number.isSafeInteger(metrics.dueCardsRemaining), true);
+  assert.equal(metrics.dueCardsRemaining >= 0, true);
+  assert.equal(metrics.dueCardsCompleted, metrics.dueCardsRemaining === 0);
   assert.equal(Number.isSafeInteger(metrics.todayStabilityDaysDelta), true);
   assert.equal(Number.isSafeInteger(metrics.attemptedQuestionCount), true);
   assert.equal(metrics.attemptedQuestionCount >= 0, true);
@@ -165,6 +168,17 @@ function assertSyncState(state) {
     true,
   );
   return state;
+}
+
+function expectedLearningMetricsLabel(metrics) {
+  const formatted = (value) => value.toLocaleString("ja-JP");
+  const signed = (value) => `${value >= 0 ? "+" : ""}${formatted(value)}`;
+  return [
+    `dueCardsCompleted ${metrics.dueCardsCompleted ? "達成" : "未達成"}`,
+    `dueCardsRemaining あと${formatted(metrics.dueCardsRemaining)}問`,
+    `todayStabilityDaysDelta ${signed(metrics.todayStabilityDaysDelta)}日`,
+    `todayAttemptedQuestionCount ${formatted(metrics.todayAttemptedQuestionCount)}問`,
+  ].join(". ");
 }
 
 async function requestSyncState(token) {
@@ -221,7 +235,7 @@ async function readReaderState(page) {
       return {
         actionsPresent: Boolean(document.querySelector("#kakomonn-reader-actions")),
         buildFingerprint: shell?.dataset.buildFingerprint ?? null,
-        count: document.querySelector("#kakomonn-reader-learning-metrics")?.textContent ?? null,
+        learningMetricsLabel: document.querySelector("#kakomonn-reader-learning-metrics")?.getAttribute("aria-label") ?? null,
         frameURL: frame?.contentWindow?.location?.href ?? null,
         frameClientHeight: frame?.clientHeight ?? null,
         frameClientWidth: frame?.clientWidth ?? null,
@@ -287,10 +301,15 @@ async function configureSyncToken(
     .getByRole("button", { name: "確認して保存" })
     .evaluate((button) => button.click());
 
-  const expectedCount = `dueCardsCompleted ${baseline.learningMetrics.dueCardsCompleted ? "達成" : "未達成"}`;
+  const expectedMetricsLabel = expectedLearningMetricsLabel(
+    baseline.learningMetrics,
+  );
   return waitUntil("the production sync baseline", async () => {
     const state = await readReaderState(page);
-    return state.settingsHidden && state.count === expectedCount ? state : null;
+    return state.settingsHidden &&
+      state.learningMetricsLabel === expectedMetricsLabel
+      ? state
+      : null;
   });
 }
 
@@ -524,7 +543,9 @@ async function clickNextQuestion(page) {
       !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
         state.outerURL,
       ) ||
-      !/^dueCardsCompleted (?:達成|未達成)$/.test(state.count ?? "")
+      !/^dueCardsCompleted (?:達成|未達成)\. dueCardsRemaining あと[\d,]+問\. todayStabilityDaysDelta [+-][\d,]+日\. todayAttemptedQuestionCount [\d,]+問$/.test(
+        state.learningMetricsLabel ?? "",
+      )
     ) {
       return null;
     }
@@ -595,8 +616,8 @@ async function main() {
       expectedBuildFingerprint,
     );
     assert.equal(
-      configuredState.count,
-      `dueCardsCompleted ${baseline.learningMetrics.dueCardsCompleted ? "達成" : "未達成"}`,
+      configuredState.learningMetricsLabel,
+      expectedLearningMetricsLabel(baseline.learningMetrics),
     );
     await submitCorrectAnswer(page);
     await copyMarkdownInRealChrome(page);
@@ -607,8 +628,8 @@ async function main() {
     if (navigationResult.kind === "question") {
       frameUrl = navigationResult.state.frameURL;
       assert.equal(
-        navigationResult.state.count,
-        `dueCardsCompleted ${finalState.learningMetrics.dueCardsCompleted ? "達成" : "未達成"}`,
+        navigationResult.state.learningMetricsLabel,
+        expectedLearningMetricsLabel(finalState.learningMetrics),
       );
     } else {
       const celebrationURL = new URL(navigationResult.outerURL);

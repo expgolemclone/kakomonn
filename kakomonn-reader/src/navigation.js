@@ -267,7 +267,7 @@
         ) {
           throw new SyncRequestError("invalid_response");
         }
-        dueCardsCompleted = result.learningMetrics.dueCardsCompleted;
+        learningMetrics = result.learningMetrics;
         renderLearningMetrics();
         if (result.celebration !== undefined) {
           await savePendingCelebration(result.celebration);

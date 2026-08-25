@@ -12,7 +12,9 @@ function installSyncMockInWindow({
   initialAttemptCount,
   initialAttemptedQuestionCount,
   initialTodayAttemptedQuestionCount,
+  initialTodayStabilityDaysDelta,
   initialDueCardsCompleted,
+  initialDueCardsRemaining,
   initialDate,
   expectedToken,
   expectedSite,
@@ -63,8 +65,9 @@ function installSyncMockInWindow({
     attemptCount: initialAttemptCount,
     attemptedQuestionCount: initialAttemptedQuestionCount,
     todayAttemptedQuestionCount: initialTodayAttemptedQuestionCount,
-    todayStabilityDaysDelta: 0,
+    todayStabilityDaysDelta: initialTodayStabilityDaysDelta,
     dueCardsCompleted: initialDueCardsCompleted,
+    dueCardsRemaining: initialDueCardsRemaining,
     date: initialDate,
     token: expectedToken,
     calls: [],
@@ -81,6 +84,7 @@ function installSyncMockInWindow({
     nextQuestionId: initialNextQuestionId,
     nextError: initialNextError,
     nextAttemptStabilityDaysDelta: 0,
+    nextAttemptDueCardsRemaining: null,
     nextCelebration: null,
     catalogUpdatedAtMs: Date.now(),
     catalogQuestionCount: initialCatalogQuestionCount,
@@ -94,6 +98,7 @@ function installSyncMockInWindow({
     learningMetrics: {
       stabilityDays: mock.stabilityDays,
       dueCardsCompleted: mock.dueCardsCompleted,
+      dueCardsRemaining: mock.dueCardsRemaining,
       todayStabilityDaysDelta: mock.todayStabilityDaysDelta,
       attemptedQuestionCount: mock.attemptedQuestionCount,
       todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
@@ -335,6 +340,11 @@ function installSyncMockInWindow({
             const previousStabilityDays = mock.stabilityDays;
             mock.stabilityDays += nextAttemptStabilityDaysDelta;
             mock.todayStabilityDaysDelta += nextAttemptStabilityDaysDelta;
+            if (mock.nextAttemptDueCardsRemaining !== null) {
+              mock.dueCardsRemaining = mock.nextAttemptDueCardsRemaining;
+              mock.dueCardsCompleted = mock.dueCardsRemaining === 0;
+              mock.nextAttemptDueCardsRemaining = null;
+            }
             item = {
               questionId,
               answerResult,
@@ -357,6 +367,7 @@ function installSyncMockInWindow({
             };
             if (item.celebration?.dueCardsCompleted === true) {
               mock.dueCardsCompleted = true;
+              mock.dueCardsRemaining = 0;
             }
             mock.nextCelebration = null;
             processed.set(operationId, item);
@@ -379,6 +390,7 @@ function installSyncMockInWindow({
             learningMetrics: {
               stabilityDays: mock.stabilityDays,
               dueCardsCompleted: mock.dueCardsCompleted,
+              dueCardsRemaining: mock.dueCardsRemaining,
               todayStabilityDaysDelta: mock.todayStabilityDaysDelta,
               attemptedQuestionCount: mock.attemptedQuestionCount,
               todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
@@ -427,7 +439,9 @@ function createSyncMockConfiguration({
   attemptCount = 0,
   attemptedQuestionCount = attemptCount,
   todayAttemptedQuestionCount = attemptedQuestionCount,
+  todayStabilityDaysDelta = 0,
   dueCardsCompleted = false,
+  dueCardsRemaining = dueCardsCompleted ? 0 : 12,
   date = "2026-08-10",
   token = "test-sync-token",
   configured = true,
@@ -446,7 +460,9 @@ function createSyncMockConfiguration({
     initialAttemptCount: attemptCount,
     initialAttemptedQuestionCount: attemptedQuestionCount,
     initialTodayAttemptedQuestionCount: todayAttemptedQuestionCount,
+    initialTodayStabilityDaysDelta: todayStabilityDaysDelta,
     initialDueCardsCompleted: dueCardsCompleted,
+    initialDueCardsRemaining: dueCardsRemaining,
     initialDate: date,
     expectedToken: token,
     expectedSite: site,

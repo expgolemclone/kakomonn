@@ -45,6 +45,91 @@
 
   const learningMetricsBadge = document.createElement("div");
   learningMetricsBadge.id = "kakomonn-reader-learning-metrics";
+  learningMetricsBadge.setAttribute("role", "status");
+  learningMetricsBadge.setAttribute("aria-live", "polite");
+  learningMetricsBadge.setAttribute("aria-atomic", "true");
+
+  const dueCardProgress = document.createElement("div");
+  dueCardProgress.id = "kakomonn-reader-due-card-progress";
+
+  const dueCardsCompletedMetric = document.createElement("div");
+  dueCardsCompletedMetric.className = "kakomonn-reader-metric";
+  const dueCardsCompletedLabel = document.createElement("span");
+  dueCardsCompletedLabel.className = "kakomonn-reader-metric-label";
+  dueCardsCompletedLabel.textContent = "dueCardsCompleted";
+  const dueCardsCompletedValue = document.createElement("strong");
+  dueCardsCompletedValue.id = "kakomonn-reader-due-cards-completed";
+  dueCardsCompletedMetric.append(
+    dueCardsCompletedLabel,
+    dueCardsCompletedValue
+  );
+
+  const dueCardsRemainingMetric = document.createElement("div");
+  dueCardsRemainingMetric.className = "kakomonn-reader-metric";
+  const dueCardsRemainingLabel = document.createElement("span");
+  dueCardsRemainingLabel.className = "kakomonn-reader-metric-label";
+  dueCardsRemainingLabel.textContent = "dueCardsRemaining";
+  const dueCardsRemainingValue = document.createElement("span");
+  dueCardsRemainingValue.className = "kakomonn-reader-remaining-value";
+  const dueCardsRemainingPrefix = document.createElement("small");
+  dueCardsRemainingPrefix.textContent = "あと";
+  const dueCardsRemainingNumber = document.createElement("strong");
+  dueCardsRemainingNumber.id = "kakomonn-reader-due-cards-remaining";
+  const dueCardsRemainingUnit = document.createElement("small");
+  dueCardsRemainingUnit.textContent = "問";
+  dueCardsRemainingValue.append(
+    dueCardsRemainingPrefix,
+    dueCardsRemainingNumber,
+    dueCardsRemainingUnit
+  );
+  dueCardsRemainingMetric.append(
+    dueCardsRemainingLabel,
+    dueCardsRemainingValue
+  );
+  dueCardProgress.append(dueCardsCompletedMetric, dueCardsRemainingMetric);
+
+  const todayMetrics = document.createElement("dl");
+  todayMetrics.id = "kakomonn-reader-today-metrics";
+  const todayStabilityDaysDeltaMetric = document.createElement("div");
+  const todayStabilityDaysDeltaLabel = document.createElement("dt");
+  todayStabilityDaysDeltaLabel.textContent = "todayStabilityDaysDelta";
+  const todayStabilityDaysDeltaValue = document.createElement("dd");
+  const todayStabilityDaysDeltaNumber = document.createElement("strong");
+  todayStabilityDaysDeltaNumber.id =
+    "kakomonn-reader-today-stability-days-delta";
+  const todayStabilityDaysDeltaUnit = document.createElement("span");
+  todayStabilityDaysDeltaUnit.textContent = "日";
+  todayStabilityDaysDeltaValue.append(
+    todayStabilityDaysDeltaNumber,
+    todayStabilityDaysDeltaUnit
+  );
+  todayStabilityDaysDeltaMetric.append(
+    todayStabilityDaysDeltaLabel,
+    todayStabilityDaysDeltaValue
+  );
+
+  const todayAttemptedQuestionCountMetric = document.createElement("div");
+  const todayAttemptedQuestionCountLabel = document.createElement("dt");
+  todayAttemptedQuestionCountLabel.textContent = "todayAttemptedQuestionCount";
+  const todayAttemptedQuestionCountValue = document.createElement("dd");
+  const todayAttemptedQuestionCountNumber = document.createElement("strong");
+  todayAttemptedQuestionCountNumber.id =
+    "kakomonn-reader-today-attempted-question-count";
+  const todayAttemptedQuestionCountUnit = document.createElement("span");
+  todayAttemptedQuestionCountUnit.textContent = "問";
+  todayAttemptedQuestionCountValue.append(
+    todayAttemptedQuestionCountNumber,
+    todayAttemptedQuestionCountUnit
+  );
+  todayAttemptedQuestionCountMetric.append(
+    todayAttemptedQuestionCountLabel,
+    todayAttemptedQuestionCountValue
+  );
+  todayMetrics.append(
+    todayStabilityDaysDeltaMetric,
+    todayAttemptedQuestionCountMetric
+  );
+  learningMetricsBadge.append(dueCardProgress, todayMetrics);
 
   const skipButton = document.createElement("button");
   skipButton.id = "kakomonn-reader-skip";
@@ -170,13 +255,41 @@
 
   function renderLearningMetrics() {
     const dueCardsCompletedText =
-      dueCardsCompleted === null
+      learningMetrics === null
         ? "--"
-        : dueCardsCompleted ? "達成" : "未達成";
-    learningMetricsBadge.textContent = `dueCardsCompleted ${dueCardsCompletedText}`;
+        : learningMetrics.dueCardsCompleted ? "達成" : "未達成";
+    const dueCardsRemainingText =
+      learningMetrics === null
+        ? "--"
+        : learningMetrics.dueCardsRemaining.toLocaleString("ja-JP");
+    const todayStabilityDaysDeltaText =
+      learningMetrics === null
+        ? "--"
+        : `${learningMetrics.todayStabilityDaysDelta >= 0 ? "+" : ""}${learningMetrics.todayStabilityDaysDelta.toLocaleString("ja-JP")}`;
+    const todayAttemptedQuestionCountText =
+      learningMetrics === null
+        ? "--"
+        : learningMetrics.todayAttemptedQuestionCount.toLocaleString("ja-JP");
+    dueCardsCompletedValue.textContent = dueCardsCompletedText;
+    if (learningMetrics === null) {
+      delete dueCardsCompletedValue.dataset.completed;
+    } else {
+      dueCardsCompletedValue.dataset.completed = String(
+        learningMetrics.dueCardsCompleted
+      );
+    }
+    dueCardsRemainingNumber.textContent = dueCardsRemainingText;
+    todayStabilityDaysDeltaNumber.textContent = todayStabilityDaysDeltaText;
+    todayAttemptedQuestionCountNumber.textContent =
+      todayAttemptedQuestionCountText;
     learningMetricsBadge.setAttribute(
       "aria-label",
-      `dueCardsCompleted ${dueCardsCompletedText}`
+      [
+        `dueCardsCompleted ${dueCardsCompletedText}`,
+        `dueCardsRemaining ${learningMetrics === null ? "--" : `あと${dueCardsRemainingText}問`}`,
+        `todayStabilityDaysDelta ${learningMetrics === null ? "--" : `${todayStabilityDaysDeltaText}日`}`,
+        `todayAttemptedQuestionCount ${learningMetrics === null ? "--" : `${todayAttemptedQuestionCountText}問`}`,
+      ].join(". ")
     );
   }
 

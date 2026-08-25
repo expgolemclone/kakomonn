@@ -68,6 +68,11 @@ async function prepare(page, startPath, options = {}) {
   });
   await installSyncMock(page, {
     stabilityDays: options.stabilityDays ?? 0,
+    todayStabilityDaysDelta: options.todayStabilityDaysDelta ?? 0,
+    todayAttemptedQuestionCount:
+      options.todayAttemptedQuestionCount ?? 0,
+    dueCardsCompleted: options.dueCardsCompleted ?? false,
+    dueCardsRemaining: options.dueCardsRemaining ?? 12,
     nextQuestionId: options.nextQuestionId === undefined ? "456" : options.nextQuestionId,
     pendingCelebration: options.pendingCelebration ?? null,
   });
@@ -77,7 +82,9 @@ async function prepare(page, startPath, options = {}) {
 
 async function readerFrame(page) {
   await page.waitForSelector("#kakomonn-reader-frame");
-  await page.waitForFunction(() => document.querySelector("#kakomonn-reader-learning-metrics")?.textContent?.startsWith("dueCardsCompleted "));
+  await page.waitForFunction(() =>
+    document.querySelector("#kakomonn-reader-due-cards-completed")?.textContent !== "--"
+  );
   const frame = page.frames().find((candidate) => candidate !== page.mainFrame());
   assert(frame, "reader frame must exist");
   await frame.waitForLoadState("load");
@@ -95,10 +102,18 @@ async function runQuestionIdCase(browser, startPath) {
   const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
-    const errors = await prepare(page, startPath, { nextQuestionId: "456" });
+    const errors = await prepare(page, startPath, {
+      dueCardsRemaining: 12,
+      nextQuestionId: "456",
+      todayAttemptedQuestionCount: 28,
+      todayStabilityDaysDelta: 104,
+    });
     const frame = await readerFrame(page);
     await page.waitForFunction(() => document.querySelector("#kakomonn-reader-next")?.disabled === false);
-    await page.evaluate(() => { window.__syncMock.nextAttemptStabilityDaysDelta = 31; });
+    await page.evaluate(() => {
+      window.__syncMock.nextAttemptStabilityDaysDelta = 31;
+      window.__syncMock.nextAttemptDueCardsRemaining = 11;
+    });
     await frame.locator("#native-next").click();
     await page.waitForFunction(() =>
       window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v8/attempts"),
@@ -117,12 +132,44 @@ async function runQuestionIdCase(browser, startPath) {
       false,
     );
     assert.equal(
-      await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "dueCardsCompleted 未達成"
+      await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
+      "未達成"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-due-cards-remaining").innerText(),
+      "11"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-today-stability-days-delta").innerText(),
+      "+135"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-today-attempted-question-count").innerText(),
+      "29"
     );
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-label"),
-      "dueCardsCompleted 未達成"
+      "dueCardsCompleted 未達成. dueCardsRemaining あと11問. todayStabilityDaysDelta +135日. todayAttemptedQuestionCount 29問"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics").getAttribute("role"),
+      "status"
+    );
+    assert.equal(
+      await page.evaluate(() => {
+        const remaining = Number.parseFloat(
+          getComputedStyle(
+            document.querySelector("#kakomonn-reader-due-cards-remaining")
+          ).fontSize
+        );
+        const today = Number.parseFloat(
+          getComputedStyle(
+            document.querySelector("#kakomonn-reader-today-stability-days-delta")
+          ).fontSize
+        );
+        return remaining > today;
+      }),
+      true
     );
     assert.deepEqual(errors, []);
   } finally {
@@ -184,8 +231,8 @@ async function runRetryCase(browser) {
       false,
     );
     assert.equal(
-      await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "dueCardsCompleted 未達成"
+      await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
+      "未達成"
     );
     assert.deepEqual(errors, []);
   } finally {
@@ -619,8 +666,20 @@ async function runStabilityDaysDecreaseCase(browser) {
       "出題できる問題はありません",
     );
     assert.equal(
-      await page.locator("#kakomonn-reader-learning-metrics").innerText(),
-      "dueCardsCompleted 未達成"
+      await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
+      "未達成"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-due-cards-remaining").innerText(),
+      "12"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-today-stability-days-delta").innerText(),
+      "-30"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-today-attempted-question-count").innerText(),
+      "1"
     );
     assert.deepEqual(errors, []);
   } finally {

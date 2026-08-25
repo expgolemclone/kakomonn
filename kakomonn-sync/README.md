@@ -12,7 +12,7 @@ https://kakomonn-sync.kakomonn.workers.dev/
 
 初回だけ`kakomonn-reader`と同じ同期tokenを入力します. tokenと最後に表示したサイトだけをこのoriginの`localStorage`へ保存します.
 
-dashboardは`dueCardsCompleted`をprimary KPIとして表示します. 現在の問題catalogにある保存済みcardのうち, `due_ms`が現在時刻以前のcardが1件もなければ達成です. 未回答問題はこの判定へ含めません. `todayStabilityDaysDelta`, `stabilityDays`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`は表示専用の指標として扱います. graphの日付を選択すると, 該当する`stability_history`と`attempts`の全columnをDBのcolumn名と保存値のまま確認できます.
+dashboardは`dueCardsCompleted`をprimary KPIとして表示し, 達成までの`dueCardsRemaining`も同じcard内に表示します. 現在の問題catalogにある保存済みcardのうち, `due_ms`が現在時刻以前のcardが1件もなければ達成です. 未回答問題はこの判定へ含めません. `todayStabilityDaysDelta`, `stabilityDays`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`は表示専用の指標として扱います. graphの日付を選択すると, 該当する`stability_history`と`attempts`の全columnをDBのcolumn名と保存値のまま確認できます.
 
 ## 次の問題を開く
 
@@ -61,7 +61,7 @@ npm run deploy:kakomonn-sync
 
 ## API
 
-APIは`/v8`だけを提供し, LearningState Durable Objectを唯一のsource of truthとします. `GET /v8/state`と`POST /v8/attempts`は`dueCardsCompleted`, `stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`を`learningMetrics`として返します. `POST /v8/attempts`は`attempt`として`answerResult`, `attemptedAtMs`, card単位の`previousCardStabilityDays`と`resultingCardStabilityDays`, 集計値の`previousStabilityDays`と`resultingStabilityDays`も返します. 期限を迎えた最後のcardを解答して`dueCardsCompleted`が`true`になった場合だけ, `celebration`として`site`, `date`, `dueCardsCompleted`を返します.
+APIは`/v8`だけを提供し, LearningState Durable Objectを唯一のsource of truthとします. `GET /v8/state`と`POST /v8/attempts`は`dueCardsCompleted`, `dueCardsRemaining`, `stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`を`learningMetrics`として返します. `POST /v8/attempts`は`attempt`として`answerResult`, `attemptedAtMs`, card単位の`previousCardStabilityDays`と`resultingCardStabilityDays`, 集計値の`previousStabilityDays`と`resultingStabilityDays`も返します. 期限を迎えた最後のcardを解答して`dueCardsCompleted`が`true`になった場合だけ, `celebration`として`site`, `date`, `dueCardsCompleted`を返します.
 
 - `GET /v8/sites`は,問題catalogを登録済みのサイト一覧を返します.
 - `GET /v8/dashboard?site=<host>`は, dashboard用のsite一覧, 選択siteのstate, 直近7日間のhistoryを1回で返します. site未指定または未登録の場合は, 登録済みsiteの先頭を選択します.
@@ -81,7 +81,7 @@ APIは`/v8`だけを提供し, LearningState Durable Objectを唯一のsource of
 
 `stabilityDays`は, 現在の問題catalogに含まれる全cardのFSRS stabilityを合計してから整数へ切り捨てた値です. 未回答問題は0日として扱います. catalogから外れたcardは再登録時に学習状態を復元できるよう保存しますが, `stabilityDays`と次問候補には含めません. catalog置換で`stabilityDays`が変化した場合も, その日の履歴へ新しい値を記録します.
 
-`learningMetrics`の集計値はsiteごとの`learning_metrics` rowへ保持し, 解答と同じtransactionで更新します. 通常のstate取得と解答ではcatalog, card全体, attempt全履歴をaggregate scanしません. `dueCardsCompleted`は`due_ms <= now`を満たす現在catalog内のcardが存在するか, indexと`LIMIT 1`で判定します. `stabilityDays`だけはcatalog置換時に現在のcatalogから再集計し, 増分更新の誤差とcatalogから外れたcardの影響を補正します.
+`learningMetrics`の集計値はsiteごとの`learning_metrics` rowへ保持し, 解答と同じtransactionで更新します. 通常のstate取得と解答ではcatalog, card全体, attempt全履歴をaggregate scanしません. `dueCardsRemaining`は`due_ms <= now`を満たす現在catalog内のcardをindexで数え, 0件なら`dueCardsCompleted`が`true`になります. `stabilityDays`だけはcatalog置換時に現在のcatalogから再集計し, 増分更新の誤差とcatalogから外れたcardの影響を補正します.
 
 問題catalogの再同期では, 保存済みIDと新しいIDの差分だけを書き込みます. 内容が同一の場合は`updatedAtMs`だけを更新し, 問題row, generation, 学習指標, 履歴を書き直しません.
 

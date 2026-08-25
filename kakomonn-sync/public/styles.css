@@ -43,8 +43,13 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .toolbar select { min-width: min(360px, 60vw); }
 .primary-kpi-card { padding: clamp(24px, 5vw, 46px); display: grid; grid-template-columns: 1fr auto; gap: 18px 30px; align-items: center; }
 .primary-kpi-card h2 { margin: 0; font-size: clamp(1.25rem, 3vw, 2rem); }
+.primary-kpi-values { display: flex; align-items: center; justify-content: flex-end; gap: clamp(18px, 4vw, 42px); }
 .primary-kpi-status strong { display: inline-flex; min-height: 3.1rem; align-items: center; border: 1px solid var(--accent); border-radius: 999px; padding: .55rem 1rem; color: var(--accent-2); font-size: clamp(1.35rem, 4vw, 2.2rem); letter-spacing: .04em; }
 .primary-kpi-status strong[data-completed="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.primary-kpi-remaining { display: grid; gap: 4px; color: var(--muted); font-size: .82rem; font-weight: 700; }
+.primary-kpi-remaining > span { overflow-wrap: anywhere; }
+.primary-kpi-remaining strong { display: flex; align-items: baseline; gap: 5px; color: var(--accent-2); font-size: clamp(2rem, 5vw, 3.35rem); font-variant-numeric: tabular-nums; line-height: 1; }
+.primary-kpi-remaining small { color: var(--muted); font-size: .9rem; }
 .metrics-card { margin-top: 18px; padding: 24px 28px; }
 .metric-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
 .metric-item { min-width: 0; padding: 0 20px; border-left: 1px solid var(--border); }
@@ -105,7 +110,7 @@ dialog::backdrop { background: rgba(0,0,0,.68); }
   .input-row, .toolbar { align-items: stretch; flex-direction: column; }
   .toolbar select { min-width: 100%; width: 100%; }
   .primary-kpi-card { grid-template-columns: 1fr; }
-  .primary-kpi-status { justify-self: start; }
+  .primary-kpi-values { justify-content: space-between; }
   .metric-list { grid-template-columns: 1fr; }
   .metric-item, .metric-item:first-child, .metric-item:last-child { padding: 14px 0; border-top: 1px solid var(--border); border-left: 0; }
   .metric-item:first-child { padding-top: 0; border-top: 0; }

@@ -126,6 +126,7 @@ async function installApiMock(page) {
               learningMetrics: {
                 stabilityDays: requestedSite === siteValue ? 9912 : 2999,
                 dueCardsCompleted: requestedSite === siteValue,
+                dueCardsRemaining: requestedSite === siteValue ? 0 : 12,
                 todayStabilityDaysDelta: requestedSite === siteValue ? 104 : 21,
                 attemptedQuestionCount: requestedSite === siteValue ? 640 : 100,
                 todayAttemptedQuestionCount: requestedSite === siteValue ? 28 : 4,
@@ -177,6 +178,8 @@ async function assertDashboard(page) {
   assert.equal(await page.locator("#primary-kpi-title").innerText(), "dueCardsCompleted");
   assert.equal(await page.locator("#due-cards-completed").innerText(), "達成");
   assert.equal(await page.locator("#due-cards-completed").getAttribute("data-completed"), "true");
+  assert.equal(await page.locator(".primary-kpi-remaining > span").innerText(), "dueCardsRemaining");
+  assert.equal(await page.locator("#due-cards-remaining").innerText(), "0");
   assert.equal(await page.locator("#today-stability-days-delta").innerText(), "+104");
   assert.equal(await page.locator("#stability-days").innerText(), "9,912");
   assert.equal(await page.locator(".goal-card").count(), 0);
@@ -257,6 +260,13 @@ async function assertDashboard(page) {
   await page.evaluate(() => { window.__detailErrorDate = ""; });
   await page.locator('[data-chart-date="2026-08-10"]').click();
   await page.waitForFunction(() => document.querySelector("#daily-details-status")?.textContent === "2 rows");
+
+  await page.locator("#site-select").selectOption(otherSite);
+  await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+21");
+  assert.equal(await page.locator("#due-cards-completed").innerText(), "未達成");
+  assert.equal(await page.locator("#due-cards-remaining").innerText(), "12");
+  await page.locator("#site-select").selectOption(site);
+  await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+104");
 
   await page.evaluate((siteValue) => { window.__delayedSite = siteValue; }, otherSite);
   await page.locator("#site-select").selectOption(otherSite);

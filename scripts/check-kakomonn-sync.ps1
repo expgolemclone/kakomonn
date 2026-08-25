@@ -80,6 +80,19 @@ function Get-StateContractErrors {
         if (-not (Test-Property $metrics "stabilityDays") -or -not (Test-SafeInteger $metrics.stabilityDays -NonNegative)) {
             $errors.Add("learningMetrics.stabilityDays must be a non-negative safe integer")
         }
+        if (-not (Test-Property $metrics "dueCardsCompleted") -or $metrics.dueCardsCompleted -isnot [bool]) {
+            $errors.Add("learningMetrics.dueCardsCompleted must be a boolean")
+        }
+        if (-not (Test-Property $metrics "dueCardsRemaining") -or -not (Test-SafeInteger $metrics.dueCardsRemaining -NonNegative)) {
+            $errors.Add("learningMetrics.dueCardsRemaining must be a non-negative safe integer")
+        }
+        elseif (
+            (Test-Property $metrics "dueCardsCompleted") -and
+            $metrics.dueCardsCompleted -is [bool] -and
+            $metrics.dueCardsCompleted -ne ($metrics.dueCardsRemaining -eq 0)
+        ) {
+            $errors.Add("learningMetrics.dueCardsCompleted must match dueCardsRemaining")
+        }
         if (-not (Test-Property $metrics "todayStabilityDaysDelta") -or -not (Test-SafeInteger $metrics.todayStabilityDaysDelta)) {
             $errors.Add("learningMetrics.todayStabilityDaysDelta must be a safe integer")
         }

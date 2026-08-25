@@ -138,6 +138,7 @@ test("production serves only the authenticated v8 API backed by LearningState", 
   assert.deepEqual(Object.keys(metrics).sort(), [
     "attemptedQuestionCount",
     "dueCardsCompleted",
+    "dueCardsRemaining",
     "stabilityDays",
     "todayAttemptedQuestionCount",
     "todayStabilityDaysDelta",
@@ -145,6 +146,9 @@ test("production serves only the authenticated v8 API backed by LearningState", 
   assert.equal(Number.isSafeInteger(metrics.stabilityDays), true);
   assert.equal(metrics.stabilityDays >= 0, true);
   assert.equal(typeof metrics.dueCardsCompleted, "boolean");
+  assert.equal(Number.isSafeInteger(metrics.dueCardsRemaining), true);
+  assert.equal(metrics.dueCardsRemaining >= 0, true);
+  assert.equal(metrics.dueCardsCompleted, metrics.dueCardsRemaining === 0);
   assert.equal(Number.isSafeInteger(metrics.todayStabilityDaysDelta), true);
   assert.equal(Number.isSafeInteger(metrics.attemptedQuestionCount), true);
   assert.equal(metrics.attemptedQuestionCount >= 0, true);

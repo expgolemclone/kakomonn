@@ -892,6 +892,45 @@ describe("attempt idempotency and attempted question totals", () => {
 });
 
 describe("daily due card celebrations", () => {
+  it("counts only due cards in the current catalog", async () => {
+    await seedReviewCard("1", 30, NOW);
+    await seedReviewCard("2", 30, NOW + 1);
+
+    await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
+      learningMetrics: {
+        dueCardsCompleted: false,
+        dueCardsRemaining: 1,
+      },
+    });
+
+    const earlyAttempt = await stub().recordAttempt(
+      SITE,
+      "2",
+      operationId(35),
+      "correct",
+      NOW
+    );
+    expect(earlyAttempt.learningMetrics).toMatchObject({
+      dueCardsCompleted: false,
+      dueCardsRemaining: 1,
+    });
+
+    await stub().replaceCatalog(SITE, ["2", "3", "4"], 1, NOW);
+    await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
+      learningMetrics: {
+        dueCardsCompleted: true,
+        dueCardsRemaining: 0,
+      },
+    });
+
+    await expect(stub().getState(SITE, NOW + 1)).resolves.toMatchObject({
+      learningMetrics: {
+        dueCardsCompleted: false,
+        dueCardsRemaining: 1,
+      },
+    });
+  });
+
   it("returns one celebration when the final due card is answered", async () => {
     await seedReviewCard("1", 30);
     await seedReviewCard("2", 30);
@@ -903,6 +942,7 @@ describe("daily due card celebrations", () => {
       NOW
     );
     expect(partial.learningMetrics.dueCardsCompleted).toBe(false);
+    expect(partial.learningMetrics.dueCardsRemaining).toBe(1);
     expect(partial).not.toHaveProperty("celebration");
 
     const first = await stub().recordAttempt(
@@ -913,6 +953,7 @@ describe("daily due card celebrations", () => {
       NOW
     );
     expect(first.learningMetrics.dueCardsCompleted).toBe(true);
+    expect(first.learningMetrics.dueCardsRemaining).toBe(0);
     expect(first.celebration).toEqual({
       site: SITE,
       date: "2026-08-10",
@@ -1224,6 +1265,7 @@ describe("v8 HTTP contract", () => {
       learningMetrics: {
         stabilityDays: 0,
         dueCardsCompleted: true,
+        dueCardsRemaining: 0,
         todayStabilityDaysDelta: 0,
         attemptedQuestionCount: 0,
         todayAttemptedQuestionCount: 0,
@@ -1437,6 +1479,7 @@ describe("v8 HTTP contract", () => {
       learningMetrics: {
         stabilityDays: expect.any(Number),
         dueCardsCompleted: true,
+        dueCardsRemaining: 0,
         todayStabilityDaysDelta: expect.any(Number),
         attemptedQuestionCount: 1,
         todayAttemptedQuestionCount: 1,

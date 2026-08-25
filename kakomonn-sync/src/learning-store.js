@@ -213,18 +213,17 @@ function readTodayStabilityDaysDelta(storage, site, today) {
     : row.closing_stability_days - row.opening_stability_days;
 }
 
-function dueCardsCompleted(storage, site, nowMs) {
+function dueCardsRemaining(storage, site, nowMs) {
   return storage.sql
     .exec(
-      `SELECT 1 AS found
+      `SELECT COUNT(*) AS due_cards_remaining
        FROM cards c
        JOIN questions q ON q.site = c.site AND q.question_id = c.question_id
-       WHERE c.site = ? AND c.due_ms <= ?
-       LIMIT 1`,
+       WHERE c.site = ? AND c.due_ms <= ?`,
       site,
       nowMs
     )
-    .toArray()[0] === undefined;
+    .toArray()[0].due_cards_remaining;
 }
 
 function celebrationFromRow(row) {
@@ -287,9 +286,11 @@ function learningMetrics(
   todayStabilityDaysDelta = undefined
 ) {
   const today = getTokyoDate(new Date(nowMs));
+  const remaining = dueCardsRemaining(storage, site, nowMs);
   return {
     stabilityDays: integerStabilityDays(storedMetrics),
-    dueCardsCompleted: dueCardsCompleted(storage, site, nowMs),
+    dueCardsCompleted: remaining === 0,
+    dueCardsRemaining: remaining,
     todayStabilityDaysDelta:
       todayStabilityDaysDelta === undefined
         ? readTodayStabilityDaysDelta(storage, site, today)

@@ -71,6 +71,8 @@ async function prepare(page, startPath, options = {}) {
     todayStabilityDaysDelta: options.todayStabilityDaysDelta ?? 0,
     todayAttemptedQuestionCount:
       options.todayAttemptedQuestionCount ?? 0,
+    todayAttemptCount: options.todayAttemptCount ?? 0,
+    todayCorrectAttemptCount: options.todayCorrectAttemptCount ?? 0,
     dueCardsCompleted: options.dueCardsCompleted ?? false,
     dueCardsRemaining: options.dueCardsRemaining ?? 12,
     nextQuestionId: options.nextQuestionId === undefined ? "456" : options.nextQuestionId,
@@ -106,6 +108,8 @@ async function runQuestionIdCase(browser, startPath) {
       dueCardsRemaining: 12,
       nextQuestionId: "456",
       todayAttemptedQuestionCount: 28,
+      todayAttemptCount: 2,
+      todayCorrectAttemptCount: 1,
       todayStabilityDaysDelta: 104,
     });
     const frame = await readerFrame(page);
@@ -187,6 +191,14 @@ async function runQuestionIdCase(browser, startPath) {
       await page.locator("#kakomonn-reader-today-attempted-question-count").innerText(),
       "29"
     );
+    assert.equal(
+      await page.locator("#kakomonn-reader-today-correct-rate-percent").innerText(),
+      "67"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-today-correct-rate-percent-unit").innerText(),
+      "%"
+    );
     assert.deepEqual(
       await page.evaluate((collapsedHeight) => {
         const controls = document
@@ -249,6 +261,19 @@ async function runUnknownURLCase(browser) {
     const page = await context.newPage();
     const errors = await prepare(page, "/questions/current");
     await readerFrame(page);
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics-details").isHidden(),
+      true
+    );
+    await page.locator("#kakomonn-reader-learning-metrics").click();
+    assert.equal(
+      await page.locator("#kakomonn-reader-today-correct-rate-percent").innerText(),
+      "--"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-today-correct-rate-percent-unit").isHidden(),
+      true
+    );
     await page.waitForFunction(() => document.querySelector("#kakomonn-reader-next")?.textContent === "問題IDを取得できません");
     assert.equal(await page.locator("#kakomonn-reader-next").isDisabled(), true);
     assert.equal((await attemptCalls(page)).length, 0);
@@ -746,6 +771,10 @@ async function runStabilityDaysDecreaseCase(browser) {
     assert.equal(
       await page.locator("#kakomonn-reader-today-attempted-question-count").innerText(),
       "1"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-today-correct-rate-percent").innerText(),
+      "0"
     );
     assert.deepEqual(errors, []);
   } finally {

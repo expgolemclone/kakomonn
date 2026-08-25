@@ -1,6 +1,6 @@
 # kakomonn-sync
 
-`kakomonn-reader`のサイト別の定着状態と解答履歴を端末間で共有し, 直近7日間の`stabilityDaysDelta`と日別のraw DB rowを表示するCloudflare Workerです. 認証済み端末へAzure Speechの短期tokenも発行します.
+`kakomonn-reader`のサイト別の定着状態と解答履歴を端末間で共有し, 直近31日間の`stabilityDaysDelta`, `dailyCorrectRatePercent`, 日別のraw DB rowを表示するCloudflare Workerです. 認証済み端末へAzure Speechの短期tokenも発行します.
 
 ## 学習ログ
 
@@ -12,7 +12,7 @@ https://kakomonn-sync.kakomonn.workers.dev/
 
 初回だけ`kakomonn-reader`と同じ同期tokenを入力します. tokenと最後に表示したサイトだけをこのoriginの`localStorage`へ保存します.
 
-dashboardは`dueCardsCompleted`をprimary KPIとして表示し, 達成までの`dueCardsRemaining`も同じcard内に表示します. 現在の問題catalogにある保存済みcardのうち, `due_ms`が現在時刻以前のcardが1件もなければ達成です. 未回答問題はこの判定へ含めません. `todayStabilityDaysDelta`, `stabilityDays`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`は表示専用の指標として扱います. graphの日付を選択すると, 該当する`stability_history`と`attempts`の全columnをDBのcolumn名と保存値のまま確認できます.
+dashboardは`dueCardsCompleted`をprimary KPIとして表示し, 達成までの`dueCardsRemaining`も同じcard内に表示します. 現在の問題catalogにある保存済みcardのうち, `due_ms`が現在時刻以前のcardが1件もなければ達成です. 未回答問題はこの判定へ含めません. `todayStabilityDaysDelta`, `stabilityDays`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`, `todayCorrectRatePercent`は表示専用の指標として扱います. 31日graphは`stabilityDaysDelta`をbar, `dailyCorrectRatePercent`を0%から100%のlineで表示します. graphの日付を選択すると, 該当する`stability_history`と`attempts`の全columnをDBのcolumn名と保存値のまま確認できます.
 
 ## 次の問題を開く
 
@@ -61,12 +61,12 @@ npm run deploy:kakomonn-sync
 
 ## API
 
-APIは`/v8`だけを提供し, LearningState Durable Objectを唯一のsource of truthとします. `GET /v8/state`と`POST /v8/attempts`は`dueCardsCompleted`, `dueCardsRemaining`, `stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`を`learningMetrics`として返します. `POST /v8/attempts`は`attempt`として`answerResult`, `attemptedAtMs`, card単位の`previousCardStabilityDays`と`resultingCardStabilityDays`, 集計値の`previousStabilityDays`と`resultingStabilityDays`も返します. 期限を迎えた最後のcardを解答して`dueCardsCompleted`が`true`になった場合だけ, `celebration`として`site`, `date`, `dueCardsCompleted`を返します.
+APIは`/v8`だけを提供し, LearningState Durable Objectを唯一のsource of truthとします. `GET /v8/state`と`POST /v8/attempts`は`dueCardsCompleted`, `dueCardsRemaining`, `stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`, `todayCorrectRatePercent`を`learningMetrics`として返します. `todayCorrectRatePercent`は0から100の整数で, 当日のattemptが0件なら`null`です. `POST /v8/attempts`は`attempt`として`answerResult`, `attemptedAtMs`, card単位の`previousCardStabilityDays`と`resultingCardStabilityDays`, 集計値の`previousStabilityDays`と`resultingStabilityDays`も返します. 期限を迎えた最後のcardを解答して`dueCardsCompleted`が`true`になった場合だけ, `celebration`として`site`, `date`, `dueCardsCompleted`を返します.
 
 - `GET /v8/sites`は,問題catalogを登録済みのサイト一覧を返します.
-- `GET /v8/dashboard?site=<host>`は, dashboard用のsite一覧, 選択siteのstate, 直近7日間のhistoryを1回で返します. site未指定または未登録の場合は, 登録済みsiteの先頭を選択します.
+- `GET /v8/dashboard?site=<host>`は, dashboard用のsite一覧, 選択siteのstate, 直近31日間のhistoryを1回で返します. site未指定または未登録の場合は, 登録済みsiteの先頭を選択します.
 - `GET /v8/state?site=<host>`は,`learningMetrics`と問題catalog情報を返します.
-- `GET /v8/history?site=<host>&days=<1-31>`は, 日本時間の日別`closingStabilityDays`, `stabilityDaysDelta`, `dailyAttemptedQuestionCount`を返します. 計測開始前の`closingStabilityDays`と`stabilityDaysDelta`は`null`で, 計測開始後にrowがない日の`stabilityDaysDelta`は`0`です.
+- `GET /v8/history?site=<host>&days=<1-31>`は, 日本時間の日別`closingStabilityDays`, `stabilityDaysDelta`, `dailyAttemptedQuestionCount`, `dailyCorrectRatePercent`を返します. 計測開始前の`closingStabilityDays`と`stabilityDaysDelta`は`null`で, 計測開始後にrowがない日の`stabilityDaysDelta`は`0`です. attemptが0件の日の`dailyCorrectRatePercent`は`null`です.
 - `GET /v8/daily-details?site=<host>&date=<YYYY-MM-DD>`は, 指定した日本時間の日付に対応する`stability_history`と`attempts`の全raw rowを返します.
 - `POST /v8/attempts`は,`site`,`questionId`,`operationId`,`answerResult`だけを受け取り, 解答保存後の`nextQuestion`も返します.同じ操作の再送は重複記録せず,異なるpayloadで同じ操作IDを使用した場合は拒否します.
 - `GET /v8/next`は,FSRSに基づく次の問題を返します.
@@ -75,7 +75,7 @@ APIは`/v8`だけを提供し, LearningState Durable Objectを唯一のsource of
 
 `answerResult`が`correct`の場合はFSRSの`Easy`, `incorrect`の場合は`Again`としてcardを更新します. 保存済みのcardは再計算せず, 次の解答時から現在のmappingを適用します.
 
-未回答問題と`due_ms`へ到達した問題だけをFSRSの更新対象にします. 期限前にURLから再解答した場合はattemptを履歴へ保存し, `attemptedQuestionCount`と`todayAttemptedQuestionCount`へ含めますが, card, `stabilityDays`, `todayStabilityDaysDelta`は変更しません.
+未回答問題と`due_ms`へ到達した問題だけをFSRSの更新対象にします. 期限前にURLから再解答した場合はattemptを履歴へ保存し, `attemptedQuestionCount`, `todayAttemptedQuestionCount`, `todayCorrectRatePercent`, `dailyCorrectRatePercent`へ含めますが, card, `stabilityDays`, `todayStabilityDaysDelta`は変更しません.
 
 `kakomonn-reader`はSpeech tokenを約9分間再利用し,`ja-JP-NanamiNeural`のMP3をAzureから直接取得します.Workerは音声dataを中継せず,Workers AI,Durable Objects,R2も音声処理には使用しません.Azure Speech F0の無料枠を超過した場合は読み上げを停止し,別の音声へ切り替えません.
 
@@ -87,10 +87,12 @@ APIは`/v8`だけを提供し, LearningState Durable Objectを唯一のsource of
 
 `stabilityDaysDelta`は, 日ごとの`closing_stability_days - opening_stability_days`です. `todayStabilityDaysDelta`は当日の同じ値です. どちらもprimary KPIの達成判定には使用しません.
 
+`todayCorrectRatePercent`と`dailyCorrectRatePercent`は, 日本時間の同じ日に保存された`correct`のattempt数を全attempt数で割り, 四捨五入した整数%です. 同じ問題の繰り返しも別attemptとして数えます. attemptが0件の日は`null`です. どちらもprimary KPIの達成判定には使用しません.
+
 祝福判定は, 解答前に期限を迎えていた最後のcardを解答し, 解答後の`dueCardsCompleted`が`true`になった場合だけ成立します. siteと日本時間の日付ごとに1回だけ記録し, 同じ`operationId`の再送では同じeventを返します. 未回答問題の初回解答, 期限前の再解答, catalog変更, 初回同期では祝福を作成しません.
 
 解いた問題数はsite内の問題IDの種類数です.同じ問題を複数回解いても累計では1問として数え,日別では同じ日に繰り返しても1問として数えます.別の日に同じ問題を解いた場合は,各日の解いた問題数へ1問ずつ数えます.正答,誤答,スキップはいずれも解答履歴へ含めます.過去に解いた問題は,現在の問題catalogから外れても累計へ含めます.
 
 ## 互換性方針
 
-v1からv7のAPIは提供しません. legacy v4 schemaのcard, attempt, catalog, 解答履歴はschema v7へ明示的に移行し, 30日判定の履歴, stability純増目標, 旧祝福履歴は破棄します. schema v2からv6のdataはschema v7へ移行します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.
+v1からv7のAPIは提供しません. legacy v4 schemaのcard, attempt, catalog, 解答履歴はschema v8へ明示的に移行し, 30日判定の履歴, stability純増目標, 旧祝福履歴は破棄します. schema v2からv7のdataはschema v8へ移行します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.

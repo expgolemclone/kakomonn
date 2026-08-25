@@ -32,7 +32,11 @@
       Number.isSafeInteger(metrics.attemptedQuestionCount) &&
       metrics.attemptedQuestionCount >= 0 &&
       Number.isSafeInteger(metrics.todayAttemptedQuestionCount) &&
-      metrics.todayAttemptedQuestionCount >= 0;
+      metrics.todayAttemptedQuestionCount >= 0 &&
+      (metrics.todayCorrectRatePercent === null ||
+        (Number.isSafeInteger(metrics.todayCorrectRatePercent) &&
+          metrics.todayCorrectRatePercent >= 0 &&
+          metrics.todayCorrectRatePercent <= 100));
     return (
       value !== null &&
       typeof value === "object" &&
@@ -78,6 +82,10 @@
       metrics.attemptedQuestionCount >= 0 &&
       Number.isSafeInteger(metrics.todayAttemptedQuestionCount) &&
       metrics.todayAttemptedQuestionCount >= 0 &&
+      (metrics.todayCorrectRatePercent === null ||
+        (Number.isSafeInteger(metrics.todayCorrectRatePercent) &&
+          metrics.todayCorrectRatePercent >= 0 &&
+          metrics.todayCorrectRatePercent <= 100)) &&
       isNextQuestion(value.nextQuestion) &&
       validCelebration
     );

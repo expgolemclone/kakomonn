@@ -160,6 +160,13 @@ function assertSyncState(state) {
   assert.equal(Number.isSafeInteger(metrics.todayAttemptedQuestionCount), true);
   assert.equal(metrics.todayAttemptedQuestionCount >= 0, true);
   assert.equal(
+    metrics.todayCorrectRatePercent === null ||
+      (Number.isSafeInteger(metrics.todayCorrectRatePercent) &&
+        metrics.todayCorrectRatePercent >= 0 &&
+        metrics.todayCorrectRatePercent <= 100),
+    true,
+  );
+  assert.equal(
     state.catalog === null ||
       (Number.isSafeInteger(state.catalog?.questionCount) &&
         state.catalog.questionCount > 0 &&

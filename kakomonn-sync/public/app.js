@@ -5,7 +5,12 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const DASHBOARD_HISTORY_DAYS = 31;
 const CHART_DAY_WIDTH = 88;
 const CHART_RIGHT_PADDING = 24;
-const CHART_HEIGHT = 270;
+const STABILITY_CHART_TOP = 26;
+const STABILITY_CHART_BOTTOM = 218;
+const CORRECT_RATE_CHART_TOP = 276;
+const CORRECT_RATE_CHART_BOTTOM = 400;
+const CHART_DATE_Y = 440;
+const CHART_HEIGHT = 456;
 
 const byId = (id) => {
   const element = document.getElementById(id);
@@ -17,7 +22,7 @@ const el = {
   authPanel: byId("auth-panel"), authForm: byId("auth-form"), authToken: byId("auth-token"), authMessage: byId("auth-message"),
   dashboard: byId("dashboard"), siteEmpty: byId("site-empty"), loadError: byId("load-error"), errorMessage: byId("error-message"), retryButton: byId("retry-button"),
   settingsButton: byId("settings-button"), settingsDialog: byId("settings-dialog"), settingsForm: byId("settings-form"), settingsToken: byId("settings-token"), settingsMessage: byId("settings-message"), settingsClose: byId("settings-close"), forgetToken: byId("forget-token"),
-  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), dueCardsCompletedElement: byId("due-cards-completed"), dueCardsRemainingElement: byId("due-cards-remaining"), todayStabilityDaysDeltaElement: byId("today-stability-days-delta"), stabilityDaysElement: byId("stability-days"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), stabilityChartAxis: byId("stability-chart-axis"), historyScroll: byId("history-scroll"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
+  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), dueCardsCompletedElement: byId("due-cards-completed"), dueCardsRemainingElement: byId("due-cards-remaining"), todayStabilityDaysDeltaElement: byId("today-stability-days-delta"), stabilityDaysElement: byId("stability-days"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), todayCorrectRatePercentElement: byId("today-correct-rate-percent"), todayCorrectRatePercentUnit: byId("today-correct-rate-percent-unit"), stabilityChartAxis: byId("stability-chart-axis"), historyScroll: byId("history-scroll"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
   dailyDetails: byId("daily-details"), dailyDetailsDate: byId("daily-details-date"), dailyDetailsInstruction: byId("daily-details-instruction"), dailyDetailsStatus: byId("daily-details-status"), dailyDetailsTables: byId("daily-details-tables"), stabilityHistoryTable: byId("stability-history-table"), attemptsTable: byId("attempts-table"),
 };
 
@@ -46,14 +51,17 @@ function storageRemove(key) {
 function validSite(value) {
   return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(value);
 }
+function validCorrectRatePercent(value) {
+  return value === null || (Number.isSafeInteger(value) && value >= 0 && value <= 100);
+}
 function validLearningMetrics(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value) && Number.isSafeInteger(value.stabilityDays) && value.stabilityDays >= 0 && typeof value.dueCardsCompleted === "boolean" && Number.isSafeInteger(value.dueCardsRemaining) && value.dueCardsRemaining >= 0 && value.dueCardsCompleted === (value.dueCardsRemaining === 0) && Number.isSafeInteger(value.todayStabilityDaysDelta) && Number.isSafeInteger(value.attemptedQuestionCount) && value.attemptedQuestionCount >= 0 && Number.isSafeInteger(value.todayAttemptedQuestionCount) && value.todayAttemptedQuestionCount >= 0;
+  return value !== null && typeof value === "object" && !Array.isArray(value) && Number.isSafeInteger(value.stabilityDays) && value.stabilityDays >= 0 && typeof value.dueCardsCompleted === "boolean" && Number.isSafeInteger(value.dueCardsRemaining) && value.dueCardsRemaining >= 0 && value.dueCardsCompleted === (value.dueCardsRemaining === 0) && Number.isSafeInteger(value.todayStabilityDaysDelta) && Number.isSafeInteger(value.attemptedQuestionCount) && value.attemptedQuestionCount >= 0 && Number.isSafeInteger(value.todayAttemptedQuestionCount) && value.todayAttemptedQuestionCount >= 0 && validCorrectRatePercent(value.todayCorrectRatePercent);
 }
 function validState(value, site) {
   return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && validLearningMetrics(value.learningMetrics);
 }
 function validHistory(value, site) {
-  return value && value.site === site && Array.isArray(value.days) && value.days.length === DASHBOARD_HISTORY_DAYS && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && (day.closingStabilityDays === null || (Number.isSafeInteger(day.closingStabilityDays) && day.closingStabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.dailyAttemptedQuestionCount) && day.dailyAttemptedQuestionCount >= 0);
+  return value && value.site === site && Array.isArray(value.days) && value.days.length === DASHBOARD_HISTORY_DAYS && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && (day.closingStabilityDays === null || (Number.isSafeInteger(day.closingStabilityDays) && day.closingStabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.dailyAttemptedQuestionCount) && day.dailyAttemptedQuestionCount >= 0 && validCorrectRatePercent(day.dailyCorrectRatePercent));
 }
 function validDashboard(value) {
   if (!hasExactKeys(value, ["sites", "selectedSite", "state", "history"]) || !Array.isArray(value.sites) || value.sites.some((site) => !validSite(site)) || new Set(value.sites).size !== value.sites.length) return false;
@@ -132,6 +140,21 @@ function renderAxis(axis, top, bottom) {
   }
 }
 
+function correctRateY(value) {
+  return CORRECT_RATE_CHART_BOTTOM -
+    (value / 100) * (CORRECT_RATE_CHART_BOTTOM - CORRECT_RATE_CHART_TOP);
+}
+
+function renderCorrectRateAxis() {
+  for (const value of [0, 25, 50, 75, 100]) {
+    const yy = correctRateY(value);
+    el.stabilityChartAxis.append(
+      svgNode("line", { x1: 52, y1: yy, x2: 62, y2: yy, class: "correct-rate-grid-line" }),
+      svgNode("text", { x: 48, y: yy + 4, class: "axis-label correct-rate-axis-label", "text-anchor": "end" }, `${value}%`)
+    );
+  }
+}
+
 function renderGrid(axis, right, top, bottom) {
   const divisions = Math.round((axis.maximum - axis.minimum) / axis.step);
   for (let index = 0; index <= divisions; index += 1) {
@@ -141,30 +164,61 @@ function renderGrid(axis, right, top, bottom) {
   }
 }
 
+function renderCorrectRateGrid(right) {
+  for (const value of [0, 25, 50, 75, 100]) {
+    el.stabilityChart.append(
+      svgNode("line", { x1: 0, y1: correctRateY(value), x2: right, y2: correctRateY(value), class: "correct-rate-grid-line" })
+    );
+  }
+}
+
+function correctRateLinePath(days, left, bandWidth) {
+  let segmentOpen = false;
+  return days.map((day, index) => {
+    if (day.dailyCorrectRatePercent === null) {
+      segmentOpen = false;
+      return "";
+    }
+    const xx = left + bandWidth * (index + 0.5);
+    const command = segmentOpen ? "L" : "M";
+    segmentOpen = true;
+    return `${command}${xx} ${correctRateY(day.dailyCorrectRatePercent)}`;
+  }).filter(Boolean).join(" ");
+}
+
 function renderChart(days) {
   el.stabilityChart.replaceChildren();
   const values = days.map((day) => day.stabilityDaysDelta).filter((value) => value !== null);
   const axis = signedAxis(values);
-  const left = 0, right = CHART_DAY_WIDTH * days.length, top = 26, bottom = 218;
+  const left = 0, right = CHART_DAY_WIDTH * days.length;
   const chartWidth = right + CHART_RIGHT_PADDING;
   const bandWidth = CHART_DAY_WIDTH;
-  const zeroY = chartY(axis, 0, top, bottom);
+  const zeroY = chartY(axis, 0, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
   el.stabilityChart.setAttribute("viewBox", `0 0 ${chartWidth} ${CHART_HEIGHT}`);
   el.stabilityChart.style.width = `${chartWidth}px`;
   el.stabilityChart.append(
-    svgNode("title", { id: "history-chart-title" }, `stabilityDaysDeltaの${DASHBOARD_HISTORY_DAYS}日推移`),
+    svgNode("title", { id: "history-chart-title" }, `stabilityDaysDeltaとdailyCorrectRatePercentの${DASHBOARD_HISTORY_DAYS}日推移`),
     svgNode(
       "desc",
       { id: "history-chart-description" },
-      days.map((day) => `${day.date}, stabilityDaysDelta ${day.stabilityDaysDelta === null ? "記録なし" : `${signed(day.stabilityDaysDelta)}日`}`).join(". ")
+      days.map((day) => `${day.date}, stabilityDaysDelta ${day.stabilityDaysDelta === null ? "記録なし" : `${signed(day.stabilityDaysDelta)}日`}, dailyCorrectRatePercent ${day.dailyCorrectRatePercent === null ? "記録なし" : `${formatted(day.dailyCorrectRatePercent)}%`}`).join(". ")
     )
   );
-  renderAxis(axis, top, bottom);
-  renderGrid(axis, right, top, bottom);
+  renderAxis(axis, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
+  renderCorrectRateAxis();
+  renderGrid(axis, right, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
+  renderCorrectRateGrid(right);
+  const correctRatePath = correctRateLinePath(days, left, bandWidth);
+  if (correctRatePath !== "") {
+    el.stabilityChart.append(
+      svgNode("path", { d: correctRatePath, class: "correct-rate-line" })
+    );
+  }
   const barWidth = Math.min(50, bandWidth * 0.56);
   days.forEach((day, index) => {
     const xx = left + bandWidth * (index + 0.5);
     const value = day.stabilityDaysDelta;
+    const correctRate = day.dailyCorrectRatePercent;
     const selected = day.date === state.selectedDate;
     const group = svgNode("g", {
       class: "chart-day",
@@ -173,12 +227,12 @@ function renderChart(days) {
       focusable: "true",
       "aria-controls": "daily-details",
       "aria-pressed": selected ? "true" : "false",
-      "aria-label": `${day.date}, stabilityDaysDelta ${value === null ? "記録なし" : `${signed(value)}日`}. 日別詳細を表示`,
+      "aria-label": `${day.date}, stabilityDaysDelta ${value === null ? "記録なし" : `${signed(value)}日`}, dailyCorrectRatePercent ${correctRate === null ? "記録なし" : `${formatted(correctRate)}%`}. 日別詳細を表示`,
       "data-chart-date": day.date,
     });
-    group.append(svgNode("rect", { x: left + bandWidth * index, y: top - 8, width: bandWidth, height: 244, class: "chart-hit-area" }));
+    group.append(svgNode("rect", { x: left + bandWidth * index, y: STABILITY_CHART_TOP - 8, width: bandWidth, height: CHART_DATE_Y - STABILITY_CHART_TOP + 18, class: "chart-hit-area" }));
     if (value !== null) {
-      const valueY = chartY(axis, value, top, bottom);
+      const valueY = chartY(axis, value, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
       let barY = Math.min(valueY, zeroY);
       let barHeight = Math.abs(valueY - zeroY);
       if (barHeight < 2) {
@@ -186,10 +240,20 @@ function renderChart(days) {
         barHeight = 2;
       }
       group.append(svgNode("rect", { x: xx - barWidth / 2, y: barY, width: barWidth, height: barHeight, rx: 5, class: `delta-bar ${value < 0 ? "negative" : value === 0 ? "zero" : "positive"}` }));
-      group.append(svgNode("text", { x: xx, y: value >= 0 ? Math.max(top + 12, barY - 8) : Math.min(bottom + 16, barY + barHeight + 16), class: "delta-value-label", "text-anchor": "middle" }, signed(value)));
+      group.append(svgNode("text", { x: xx, y: value >= 0 ? Math.max(STABILITY_CHART_TOP + 12, barY - 8) : Math.min(STABILITY_CHART_BOTTOM + 16, barY + barHeight + 16), class: "delta-value-label", "text-anchor": "middle" }, signed(value)));
+    }
+    if (correctRate === null) {
+      group.append(svgNode("text", { x: xx, y: (CORRECT_RATE_CHART_TOP + CORRECT_RATE_CHART_BOTTOM) / 2 + 4, class: "correct-rate-value-label missing", "text-anchor": "middle" }, "--"));
+    } else {
+      const pointY = correctRateY(correctRate);
+      const labelY = correctRate >= 90 ? pointY + 18 : pointY - 10;
+      group.append(
+        svgNode("circle", { cx: xx, cy: pointY, r: 5, class: "correct-rate-point" }),
+        svgNode("text", { x: xx, y: labelY, class: "correct-rate-value-label", "text-anchor": "middle" }, `${formatted(correctRate)}%`)
+      );
     }
     const [, month, date] = day.date.split("-");
-    group.append(svgNode("text", { x: xx, y: 252, class: "date-label", "text-anchor": "middle" }, `${Number(month)}/${Number(date)}`));
+    group.append(svgNode("text", { x: xx, y: CHART_DATE_Y, class: "date-label", "text-anchor": "middle" }, `${Number(month)}/${Number(date)}`));
     el.stabilityChart.append(group);
   });
   el.historyEmpty.hidden = values.some((value) => value !== 0);
@@ -313,6 +377,10 @@ function renderDashboard() {
   el.stabilityDaysElement.textContent = formatted(metrics.stabilityDays);
   el.attemptedQuestionCountElement.textContent = formatted(metrics.attemptedQuestionCount);
   el.todayAttemptedQuestionCountElement.textContent = formatted(metrics.todayAttemptedQuestionCount);
+  el.todayCorrectRatePercentElement.textContent = metrics.todayCorrectRatePercent === null
+    ? "--"
+    : formatted(metrics.todayCorrectRatePercent);
+  el.todayCorrectRatePercentUnit.hidden = metrics.todayCorrectRatePercent === null;
   renderChart(state.history.days);
   el.dashboard.hidden = false;
   el.authPanel.hidden = true;

@@ -10,6 +10,8 @@ const AZURE_SPEECH_TOKEN = "test-azure-speech-token";
 function installSyncMockInWindow({
   initialStabilityDays,
   initialAttemptCount,
+  initialTodayAttemptCount,
+  initialTodayCorrectAttemptCount,
   initialAttemptedQuestionCount,
   initialTodayAttemptedQuestionCount,
   initialTodayStabilityDaysDelta,
@@ -63,6 +65,8 @@ function installSyncMockInWindow({
   const mock = {
     stabilityDays: initialStabilityDays,
     attemptCount: initialAttemptCount,
+    todayAttemptCount: initialTodayAttemptCount,
+    todayCorrectAttemptCount: initialTodayCorrectAttemptCount,
     attemptedQuestionCount: initialAttemptedQuestionCount,
     todayAttemptedQuestionCount: initialTodayAttemptedQuestionCount,
     todayStabilityDaysDelta: initialTodayStabilityDaysDelta,
@@ -102,6 +106,12 @@ function installSyncMockInWindow({
       todayStabilityDaysDelta: mock.todayStabilityDaysDelta,
       attemptedQuestionCount: mock.attemptedQuestionCount,
       todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
+      todayCorrectRatePercent:
+        mock.todayAttemptCount === 0
+          ? null
+          : Math.round(
+              (mock.todayCorrectAttemptCount * 100) / mock.todayAttemptCount
+            ),
     },
     catalog:
       mock.catalogQuestionCount === null
@@ -329,6 +339,10 @@ function installSyncMockInWindow({
           }
           if (item === undefined) {
             mock.attemptCount += 1;
+            mock.todayAttemptCount += 1;
+            if (answerResult === "correct") {
+              mock.todayCorrectAttemptCount += 1;
+            }
             if (!attemptedQuestionIds.has(questionId)) {
               attemptedQuestionIds.add(questionId);
               mock.attemptedQuestionCount += 1;
@@ -394,6 +408,13 @@ function installSyncMockInWindow({
               todayStabilityDaysDelta: mock.todayStabilityDaysDelta,
               attemptedQuestionCount: mock.attemptedQuestionCount,
               todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
+              todayCorrectRatePercent:
+                mock.todayAttemptCount === 0
+                  ? null
+                  : Math.round(
+                      (mock.todayCorrectAttemptCount * 100) /
+                        mock.todayAttemptCount
+                    ),
             },
             nextQuestion:
               mock.nextQuestionId === null
@@ -437,6 +458,8 @@ function installSyncMockInWindow({
 function createSyncMockConfiguration({
   stabilityDays = 0,
   attemptCount = 0,
+  todayAttemptCount = attemptCount,
+  todayCorrectAttemptCount = todayAttemptCount,
   attemptedQuestionCount = attemptCount,
   todayAttemptedQuestionCount = attemptedQuestionCount,
   todayStabilityDaysDelta = 0,
@@ -458,6 +481,8 @@ function createSyncMockConfiguration({
   return {
     initialStabilityDays: stabilityDays,
     initialAttemptCount: attemptCount,
+    initialTodayAttemptCount: todayAttemptCount,
+    initialTodayCorrectAttemptCount: todayCorrectAttemptCount,
     initialAttemptedQuestionCount: attemptedQuestionCount,
     initialTodayAttemptedQuestionCount: todayAttemptedQuestionCount,
     initialTodayStabilityDaysDelta: todayStabilityDaysDelta,

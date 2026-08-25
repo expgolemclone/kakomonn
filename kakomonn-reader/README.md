@@ -13,7 +13,7 @@
 - iPhone Safariでは`https://kakomonn-sync.kakomonn.workers.dev/open`を開くと, 保存済みの同期tokenでFSRSに基づく次の問題を取得して移動します. token未設定または認証失敗時は, 同じoriginの同期設定画面へ移動してtokenを保存できます. tokenはURLへ含めません.
 - 期限を迎えた最後のcardを解答して`dueCardsCompleted`が`true`になると, その日のprimary KPI達成を祝う専用pageへ移動します. 同じ日の祝福はsiteごとに1回だけです.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
-- 現在の問題catalogに含まれる全問題のstabilityを合計して切り捨てた定着日数stabilityDaysと解答履歴. 値は`kakomonn-sync`へ保存され,Windows 11 ChromeとiPhone Safariで共有されます. 問題画面では`dueCardsRemaining`を常時表示し, クリックすると`dueCardsCompleted`, `todayStabilityDaysDelta`, `todayAttemptedQuestionCount`も確認できます. 同期Workerのrootでは`dueCardsCompleted`, `dueCardsRemaining`, `stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`, 直近31日間のhistoryを確認できます. 解いた問題数は問題IDの種類数で,同じ問題を同じ日に繰り返しても1問として数えます.
+- 現在の問題catalogに含まれる全問題のstabilityを合計して切り捨てた定着日数stabilityDaysと解答履歴. 値は`kakomonn-sync`へ保存され,Windows 11 ChromeとiPhone Safariで共有されます. 問題画面では`dueCardsRemaining`を常時表示し, クリックすると`dueCardsCompleted`, `todayStabilityDaysDelta`, `todayAttemptedQuestionCount`, `todayCorrectRatePercent`も確認できます. 同期Workerのrootでは`dueCardsCompleted`, `dueCardsRemaining`, `stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`, `todayCorrectRatePercent`, 直近31日間の`dailyCorrectRatePercent`を確認できます. 解いた問題数は問題IDの種類数で,同じ問題を同じ日に繰り返しても1問として数えます. 正答率は同じ日の全attemptを分母にするため, 同じ問題の繰り返しも個別に数えます.
 - 問題catalogは固定の`question/no`範囲を持ちません. 24時間ごとに`/createques`と`/list`から年度listを再発見し, 各listの全paginationにある実在の問題IDを同期します. サイトが同じ構造で新年度を追加する限り, コード変更は不要です.
 - 解答後に, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でクリップボードへコピー. `yy`でもコピーできます.
 

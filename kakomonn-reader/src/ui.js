@@ -140,10 +140,32 @@
     todayAttemptedQuestionCountLabel,
     todayAttemptedQuestionCountValue
   );
+
+  const todayCorrectRatePercentMetric = document.createElement("div");
+  todayCorrectRatePercentMetric.className = "kakomonn-reader-detail-metric";
+  const todayCorrectRatePercentLabel = document.createElement("dt");
+  todayCorrectRatePercentLabel.textContent = "todayCorrectRatePercent";
+  const todayCorrectRatePercentValue = document.createElement("dd");
+  const todayCorrectRatePercentNumber = document.createElement("strong");
+  todayCorrectRatePercentNumber.id =
+    "kakomonn-reader-today-correct-rate-percent";
+  const todayCorrectRatePercentUnit = document.createElement("span");
+  todayCorrectRatePercentUnit.id =
+    "kakomonn-reader-today-correct-rate-percent-unit";
+  todayCorrectRatePercentUnit.textContent = "%";
+  todayCorrectRatePercentValue.append(
+    todayCorrectRatePercentNumber,
+    todayCorrectRatePercentUnit
+  );
+  todayCorrectRatePercentMetric.append(
+    todayCorrectRatePercentLabel,
+    todayCorrectRatePercentValue
+  );
   learningMetricsDetails.append(
     dueCardsCompletedMetric,
     todayStabilityDaysDeltaMetric,
-    todayAttemptedQuestionCountMetric
+    todayAttemptedQuestionCountMetric,
+    todayCorrectRatePercentMetric
   );
 
   const syncSettingsButton = document.createElement("button");
@@ -270,6 +292,11 @@
       learningMetrics === null
         ? "--"
         : learningMetrics.todayAttemptedQuestionCount.toLocaleString("ja-JP");
+    const todayCorrectRatePercentText =
+      learningMetrics?.todayCorrectRatePercent === null ||
+      learningMetrics === null
+        ? "--"
+        : learningMetrics.todayCorrectRatePercent.toLocaleString("ja-JP");
     dueCardsCompletedValue.textContent = dueCardsCompletedText;
     if (learningMetrics === null) {
       delete dueCardsCompletedValue.dataset.completed;
@@ -282,6 +309,10 @@
     todayStabilityDaysDeltaNumber.textContent = todayStabilityDaysDeltaText;
     todayAttemptedQuestionCountNumber.textContent =
       todayAttemptedQuestionCountText;
+    todayCorrectRatePercentNumber.textContent = todayCorrectRatePercentText;
+    todayCorrectRatePercentUnit.hidden =
+      learningMetrics?.todayCorrectRatePercent === null ||
+      learningMetrics === null;
     const dueCardsRemainingAccessibleText =
       learningMetrics === null ? "--" : `あと${dueCardsRemainingText}問`;
     const detailsAction =

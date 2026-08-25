@@ -1,6 +1,6 @@
 import { getTokyoDate, tokyoDateRangeMs } from "../dates.js";
 
-const CURRENT_SCHEMA_VERSION = 7;
+const CURRENT_SCHEMA_VERSION = 8;
 
 function tableDefinition(storage, tableName) {
   return storage.sql
@@ -61,8 +61,11 @@ function createCurrentTables(storage) {
       site TEXT PRIMARY KEY,
       stability_days REAL NOT NULL CHECK (stability_days >= 0),
       attempted_question_count INTEGER NOT NULL CHECK (attempted_question_count >= 0),
-      attempted_question_count_date TEXT NOT NULL,
-      today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0)
+      daily_metrics_date TEXT NOT NULL,
+      today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0),
+      today_attempt_count INTEGER NOT NULL CHECK (today_attempt_count >= 0),
+      today_correct_attempt_count INTEGER NOT NULL CHECK (today_correct_attempt_count >= 0),
+      CHECK (today_correct_attempt_count <= today_attempt_count)
     ) WITHOUT ROWID;
 
     CREATE TABLE daily_due_card_achievements (
@@ -212,6 +215,65 @@ function migrateSchemaV6ToV7(storage) {
   `);
 }
 
+function migrateSchemaV7ToV8(storage, today, startMs, endMs) {
+  storage.sql.exec(`
+    ALTER TABLE learning_metrics RENAME TO learning_metrics_v7;
+
+    CREATE TABLE learning_metrics (
+      site TEXT PRIMARY KEY,
+      stability_days REAL NOT NULL CHECK (stability_days >= 0),
+      attempted_question_count INTEGER NOT NULL CHECK (attempted_question_count >= 0),
+      daily_metrics_date TEXT NOT NULL,
+      today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0),
+      today_attempt_count INTEGER NOT NULL CHECK (today_attempt_count >= 0),
+      today_correct_attempt_count INTEGER NOT NULL CHECK (today_correct_attempt_count >= 0),
+      CHECK (today_correct_attempt_count <= today_attempt_count)
+    ) WITHOUT ROWID;
+  `);
+  storage.sql.exec(
+    `
+    INSERT INTO learning_metrics (
+      site, stability_days, attempted_question_count, daily_metrics_date,
+      today_attempted_question_count, today_attempt_count,
+      today_correct_attempt_count
+    )
+    SELECT metrics.site,
+           metrics.stability_days,
+           metrics.attempted_question_count,
+           ?,
+           CASE WHEN metrics.attempted_question_count_date = ?
+                THEN metrics.today_attempted_question_count
+                ELSE 0 END,
+           (
+             SELECT COUNT(*)
+             FROM attempts
+             WHERE attempts.site = metrics.site
+               AND attempts.attempted_at_ms >= ?
+               AND attempts.attempted_at_ms < ?
+           ),
+           (
+             SELECT COUNT(*)
+             FROM attempts
+             WHERE attempts.site = metrics.site
+               AND attempts.attempted_at_ms >= ?
+               AND attempts.attempted_at_ms < ?
+               AND attempts.answer_result = 'correct'
+           )
+    FROM learning_metrics_v7 metrics;
+    `,
+    today,
+    today,
+    startMs,
+    endMs,
+    startMs,
+    endMs
+  );
+  storage.sql.exec(`
+    DROP TABLE learning_metrics_v7;
+    UPDATE schema_metadata SET version = 8 WHERE singleton = 1;
+  `);
+}
+
 function migrateLegacySchema(storage, today) {
   const { startMs, endMs } = tokyoDateRangeMs(today);
   storage.sql.exec(`
@@ -255,8 +317,11 @@ function migrateLegacySchema(storage, today) {
       site TEXT PRIMARY KEY,
       stability_days REAL NOT NULL CHECK (stability_days >= 0),
       attempted_question_count INTEGER NOT NULL CHECK (attempted_question_count >= 0),
-      attempted_question_count_date TEXT NOT NULL,
-      today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0)
+      daily_metrics_date TEXT NOT NULL,
+      today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0),
+      today_attempt_count INTEGER NOT NULL CHECK (today_attempt_count >= 0),
+      today_correct_attempt_count INTEGER NOT NULL CHECK (today_correct_attempt_count >= 0),
+      CHECK (today_correct_attempt_count <= today_attempt_count)
     ) WITHOUT ROWID;
 
     CREATE TABLE daily_due_card_achievements (
@@ -294,12 +359,29 @@ function migrateLegacySchema(storage, today) {
                   WHERE cards.site = ?
                 ) AS attempted_question_count,
                 (
+                  SELECT COUNT(DISTINCT question_id)
+                  FROM attempts
+                  WHERE site = ? AND attempted_at_ms >= ? AND attempted_at_ms < ?
+                ) AS today_attempted_question_count,
+                (
                   SELECT COUNT(*)
-                  FROM cards
-                  WHERE site = ? AND last_review_ms >= ? AND last_review_ms < ?
-                ) AS today_attempted_question_count`,
+                  FROM attempts
+                  WHERE site = ? AND attempted_at_ms >= ? AND attempted_at_ms < ?
+                ) AS today_attempt_count,
+                (
+                  SELECT COUNT(*)
+                  FROM attempts
+                  WHERE site = ? AND attempted_at_ms >= ? AND attempted_at_ms < ?
+                    AND answer_result = 'correct'
+                ) AS today_correct_attempt_count`,
         site,
         site,
+        site,
+        startMs,
+        endMs,
+        site,
+        startMs,
+        endMs,
         site,
         startMs,
         endMs
@@ -308,13 +390,16 @@ function migrateLegacySchema(storage, today) {
     storage.sql.exec(
       `INSERT INTO learning_metrics (
          site, stability_days, attempted_question_count,
-         attempted_question_count_date, today_attempted_question_count
-       ) VALUES (?, ?, ?, ?, ?)`,
+         daily_metrics_date, today_attempted_question_count,
+         today_attempt_count, today_correct_attempt_count
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       site,
       learningMetrics.stability_days,
       learningMetrics.attempted_question_count,
       today,
-      learningMetrics.today_attempted_question_count
+      learningMetrics.today_attempted_question_count,
+      learningMetrics.today_attempt_count,
+      learningMetrics.today_correct_attempt_count
     );
     const stabilityDays = Math.trunc(learningMetrics.stability_days);
     storage.sql.exec(
@@ -425,6 +510,10 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     if (version === 6) {
       migrateSchemaV6ToV7(storage);
       version = 7;
+    }
+    if (version === 7) {
+      migrateSchemaV7ToV8(storage, today, startMs, endMs);
+      version = 8;
     }
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error("unsupported LearningState schema version");

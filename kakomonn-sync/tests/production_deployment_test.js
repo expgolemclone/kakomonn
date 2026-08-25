@@ -141,6 +141,7 @@ test("production serves only the authenticated v8 API backed by LearningState", 
     "dueCardsRemaining",
     "stabilityDays",
     "todayAttemptedQuestionCount",
+    "todayCorrectRatePercent",
     "todayStabilityDaysDelta",
   ]);
   assert.equal(Number.isSafeInteger(metrics.stabilityDays), true);
@@ -154,6 +155,13 @@ test("production serves only the authenticated v8 API backed by LearningState", 
   assert.equal(metrics.attemptedQuestionCount >= 0, true);
   assert.equal(Number.isSafeInteger(metrics.todayAttemptedQuestionCount), true);
   assert.equal(metrics.todayAttemptedQuestionCount >= 0, true);
+  assert.equal(
+    metrics.todayCorrectRatePercent === null ||
+      (Number.isSafeInteger(metrics.todayCorrectRatePercent) &&
+        metrics.todayCorrectRatePercent >= 0 &&
+        metrics.todayCorrectRatePercent <= 100),
+    true,
+  );
   assert.equal(
     stateBody.catalog === null ||
       (Number.isSafeInteger(stateBody.catalog.questionCount) &&
@@ -178,7 +186,11 @@ test("production serves only the authenticated v8 API backed by LearningState", 
         (day.stabilityDaysDelta === null ||
           Number.isSafeInteger(day.stabilityDaysDelta)) &&
         Number.isSafeInteger(day.dailyAttemptedQuestionCount) &&
-        day.dailyAttemptedQuestionCount >= 0,
+        day.dailyAttemptedQuestionCount >= 0 &&
+        (day.dailyCorrectRatePercent === null ||
+          (Number.isSafeInteger(day.dailyCorrectRatePercent) &&
+            day.dailyCorrectRatePercent >= 0 &&
+            day.dailyCorrectRatePercent <= 100)),
     ),
     true,
   );

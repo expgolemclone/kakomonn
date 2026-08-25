@@ -78,6 +78,10 @@
                 <dt>todayAttemptedQuestionCount</dt>
                 <dd><strong id="today-attempted-question-count">--</strong><span>問</span></dd>
               </div>
+              <div class="metric-item">
+                <dt>todayCorrectRatePercent</dt>
+                <dd><strong id="today-correct-rate-percent">--</strong><span id="today-correct-rate-percent-unit" hidden>%</span></dd>
+              </div>
             </dl>
           </section>
 
@@ -85,12 +89,16 @@
             <figcaption class="chart-heading">
               <div>
                 <p class="eyebrow">31 DAY LEARNING</p>
-                <h2 id="history-title">stabilityDaysDeltaの31日推移</h2>
+                <h2 id="history-title">stabilityDaysDeltaとdailyCorrectRatePercentの31日推移</h2>
+              </div>
+              <div class="chart-legend" aria-label="graph series">
+                <span class="stability-series">stabilityDaysDelta</span>
+                <span class="correct-rate-series">dailyCorrectRatePercent</span>
               </div>
             </figcaption>
             <div class="chart-layout">
-              <svg id="stability-chart-axis" class="chart-axis" viewBox="0 0 62 270" aria-hidden="true"></svg>
-              <div id="history-scroll" class="chart-scroll" tabindex="0" aria-label="stabilityDaysDeltaの31日履歴. 左右にスワイプまたはスクロールして過去の日付を表示できます.">
+              <svg id="stability-chart-axis" class="chart-axis" viewBox="0 0 62 456" aria-hidden="true"></svg>
+              <div id="history-scroll" class="chart-scroll" tabindex="0" aria-label="stabilityDaysDeltaとdailyCorrectRatePercentの31日履歴. 左右にスワイプまたはスクロールして過去の日付を表示できます.">
                 <svg id="stability-chart" role="group" aria-labelledby="history-chart-title history-chart-description"></svg>
               </div>
             </div>

@@ -51,7 +51,7 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .primary-kpi-remaining strong { display: flex; align-items: baseline; gap: 5px; color: var(--accent-2); font-size: clamp(2rem, 5vw, 3.35rem); font-variant-numeric: tabular-nums; line-height: 1; }
 .primary-kpi-remaining small { color: var(--muted); font-size: .9rem; }
 .metrics-card { margin-top: 18px; padding: 24px 28px; }
-.metric-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+.metric-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; }
 .metric-item { min-width: 0; padding: 0 20px; border-left: 1px solid var(--border); }
 .metric-item:first-child { padding-left: 0; border-left: 0; }
 .metric-item:last-child { padding-right: 0; }
@@ -61,7 +61,11 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .metric-item dd span { color: var(--muted); }
 .history-card { margin: 18px 0 0; padding: 24px 28px 18px; }
 .history-card figcaption h2 { margin-bottom: 0; }
-.chart-heading { margin-bottom: 16px; }
+.chart-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.chart-legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px 16px; color: var(--muted); font-size: .76rem; font-weight: 750; }
+.chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend span::before { width: 18px; height: 3px; border-radius: 999px; background: var(--accent); content: ""; }
+.chart-legend .correct-rate-series::before { background: var(--accent-2); }
 .chart-layout { display: grid; grid-template-columns: 62px minmax(0, 1fr); }
 .chart-axis { display: block; width: 62px; }
 .chart-scroll { min-width: 0; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; overscroll-behavior-inline: contain; scrollbar-color: var(--border) transparent; }
@@ -69,6 +73,7 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 #stability-chart { max-width: none; display: block; }
 .chart-hint { margin: 6px 0 0; color: var(--muted); font-size: .78rem; text-align: right; }
 .grid-line { stroke: #2a3444; stroke-width: 1; }
+.correct-rate-grid-line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 5; }
 .zero-line { stroke: color-mix(in srgb, var(--muted) 72%, transparent); stroke-width: 2; }
 .chart-day { cursor: pointer; }
 .chart-hit-area { fill: transparent; stroke: transparent; stroke-width: 2; }
@@ -81,6 +86,11 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .delta-value-label { fill: var(--accent-2); font-size: 12px; font-weight: 850; }
 .axis-label { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .delta-axis-label { fill: var(--accent); }
+.correct-rate-axis-label { fill: var(--accent-2); }
+.correct-rate-line { fill: none; stroke: var(--accent-2); stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; }
+.correct-rate-point { fill: var(--surface); stroke: var(--accent-2); stroke-width: 3; }
+.correct-rate-value-label { fill: var(--accent-2); font-size: 12px; font-weight: 850; }
+.correct-rate-value-label.missing { fill: var(--muted); }
 .date-label { fill: #99a5b6; font-size: 12px; }
 .daily-details { margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--border); }
 .daily-details-heading h3 { margin: 0; }
@@ -116,4 +126,6 @@ dialog::backdrop { background: rgba(0,0,0,.68); }
   .metric-item:first-child { padding-top: 0; border-top: 0; }
   .metric-item:last-child { padding-bottom: 0; }
   .history-card { padding-inline: 16px; }
+  .chart-heading { align-items: start; flex-direction: column; }
+  .chart-legend { justify-content: flex-start; }
 }

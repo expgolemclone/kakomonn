@@ -10,6 +10,7 @@ const otherSite = "shindans.kakomonn.com";
 const attemptedQuestionCountHistory = [18, 22, 19, 26, 31, 24, 28];
 const deltaHistory = [null, 112, -14, 0, 138, 106, 104];
 const closingStabilityDaysHistory = [null, 9307, 9412, 9550, 9688, 9794, 9912];
+const correctRateHistory = [null, 100, 33, null, 75, 50, 67];
 const history = Array.from({ length: 31 }, (_, index) => {
   const currentWeekIndex = index - 24;
   return {
@@ -17,6 +18,7 @@ const history = Array.from({ length: 31 }, (_, index) => {
     closingStabilityDays: currentWeekIndex < 0 ? null : closingStabilityDaysHistory[currentWeekIndex],
     stabilityDaysDelta: currentWeekIndex < 0 ? null : deltaHistory[currentWeekIndex],
     dailyAttemptedQuestionCount: currentWeekIndex < 0 ? 0 : attemptedQuestionCountHistory[currentWeekIndex],
+    dailyCorrectRatePercent: currentWeekIndex < 0 ? null : correctRateHistory[currentWeekIndex],
   };
 });
 const dailyDetails = {
@@ -130,6 +132,7 @@ async function installApiMock(page) {
                 todayStabilityDaysDelta: requestedSite === siteValue ? 104 : 21,
                 attemptedQuestionCount: requestedSite === siteValue ? 640 : 100,
                 todayAttemptedQuestionCount: requestedSite === siteValue ? 28 : 4,
+                todayCorrectRatePercent: requestedSite === siteValue ? 67 : null,
               },
               catalog: { questionCount: 999, updatedAtMs: Date.now() },
             },
@@ -183,12 +186,14 @@ async function assertDashboard(page) {
   assert.equal(await page.locator("#today-stability-days-delta").innerText(), "+104");
   assert.equal(await page.locator("#stability-days").innerText(), "9,912");
   assert.equal(await page.locator(".goal-card").count(), 0);
-  assert.deepEqual(await page.locator(".metric-list dt").allInnerTexts(), ["todayStabilityDaysDelta", "stabilityDays", "attemptedQuestionCount", "todayAttemptedQuestionCount"]);
+  assert.deepEqual(await page.locator(".metric-list dt").allInnerTexts(), ["todayStabilityDaysDelta", "stabilityDays", "attemptedQuestionCount", "todayAttemptedQuestionCount", "todayCorrectRatePercent"]);
   assert.equal(await page.locator("#attempted-question-count").innerText(), "640");
   assert.equal(await page.locator("#today-attempted-question-count").innerText(), "28");
+  assert.equal(await page.locator("#today-correct-rate-percent").innerText(), "67");
+  assert.equal(await page.locator("#today-correct-rate-percent-unit").innerText(), "%");
   assert.equal(await page.locator("#goal-label, #goal-progress, .stability-card, .stability-meta").count(), 0);
   assert.equal(await page.locator("#dashboard *").evaluateAll((elements) => elements.filter((element) => element.childElementCount === 0 && element.textContent.trim() === "+104" && element.getClientRects().length > 0).length), 2);
-  assert.equal(await page.locator("#history-title").innerText(), "stabilityDaysDeltaの31日推移");
+  assert.equal(await page.locator("#history-title").innerText(), "stabilityDaysDeltaとdailyCorrectRatePercentの31日推移");
   assert.equal(await page.locator("#stability-chart .chart-day").count(), 31);
   assert.equal(await page.locator("#stability-chart rect.delta-bar").count(), 6);
   assert.equal(await page.locator("#stability-chart rect.delta-bar.negative").count(), 1);
@@ -196,10 +201,16 @@ async function assertDashboard(page) {
   assert.equal(await page.locator("#stability-chart .delta-value-label").count(), 6);
   assert.equal(await page.locator('[data-chart-date="2026-08-10"] .delta-value-label').textContent(), "+104");
   assert.equal(await page.locator('[data-chart-date="2026-08-09"] .delta-value-label').textContent(), "+106");
-  assert.match(await page.locator('[data-chart-date="2026-08-10"]').getAttribute("aria-label"), /stabilityDaysDelta \+104日/);
+  assert.equal(await page.locator("#stability-chart .correct-rate-line").count(), 1);
+  assert.equal(await page.locator("#stability-chart .correct-rate-point").count(), 5);
+  assert.match(await page.locator("#stability-chart .correct-rate-line").getAttribute("d"), /^M[^M]+M/);
+  assert.equal(await page.locator('[data-chart-date="2026-08-10"] .correct-rate-value-label').textContent(), "67%");
+  assert.equal(await page.locator('[data-chart-date="2026-08-04"] .correct-rate-value-label').textContent(), "--");
+  assert.match(await page.locator('[data-chart-date="2026-08-10"]').getAttribute("aria-label"), /stabilityDaysDelta \+104日, dailyCorrectRatePercent 67%/);
   assert.equal((await page.locator("#stability-chart-axis .delta-axis-label").count()) >= 2, true);
   assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-04, stabilityDaysDelta 記録なし/);
   assert.match(await page.locator("#history-chart-description").textContent(), /2026-08-10, stabilityDaysDelta \+104日/);
+  assert.match(await page.locator("#history-chart-description").textContent(), /dailyCorrectRatePercent 67%/);
   await page.waitForFunction(() => {
     const scroller = document.querySelector("#history-scroll");
     return scroller !== null && scroller.scrollWidth > scroller.clientWidth && Math.abs(scroller.scrollLeft - (scroller.scrollWidth - scroller.clientWidth)) <= 1;
@@ -265,6 +276,8 @@ async function assertDashboard(page) {
   await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+21");
   assert.equal(await page.locator("#due-cards-completed").innerText(), "未達成");
   assert.equal(await page.locator("#due-cards-remaining").innerText(), "12");
+  assert.equal(await page.locator("#today-correct-rate-percent").innerText(), "--");
+  assert.equal(await page.locator("#today-correct-rate-percent-unit").isHidden(), true);
   await page.locator("#site-select").selectOption(site);
   await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+104");
 

@@ -447,24 +447,22 @@ async function speechTokenCallCount(page) {
   );
 }
 
-async function assertIncorrectSkip(context, script, inputMethod) {
+async function assertIncorrectSkip(context, script) {
   const page = await context.newPage();
   const errors = await preparePage(page, "none");
   const frame = await loadMockQuestion(page, script);
   try {
     await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-skip")?.disabled === false,
+      () =>
+        document.querySelector("#kakomonn-reader-due-cards-remaining")
+          ?.textContent === "12",
     );
     await frame.evaluate(() => {
       document.querySelector("#next")?.remove();
       document.querySelector("#scroll-next")?.remove();
     });
-    if (inputMethod === "keyboard") {
-      await frame.locator("input[name='answer']").first().focus();
-      await page.keyboard.press("n");
-    } else {
-      await page.locator("#kakomonn-reader-skip").click();
-    }
+    await frame.locator("input[name='answer']").first().focus();
+    await page.keyboard.press("n");
     await page.waitForFunction(
       () => window.__syncMock.attemptCount === 1,
     );
@@ -569,72 +567,102 @@ async function main() {
       await page.locator("#kakomonn-reader-copy").getAttribute("title"),
       "ショートカット: yy",
     );
-    assert.equal(
-      await page.locator("#kakomonn-reader-skip").innerText(),
-      "スキップ",
-    );
-    assert.equal(
-      await page
-        .locator("#kakomonn-reader-skip")
-        .getAttribute("aria-keyshortcuts"),
-      "N",
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-skip").getAttribute("title"),
-      "ショートカット: n",
-    );
-    const readerLayout = await page.evaluate(() => {
-      const controls = document
-        .querySelector("#kakomonn-reader-controls")
-        .getBoundingClientRect();
-      const statusElement = document.querySelector("#kakomonn-reader-status");
-      const status = statusElement.getBoundingClientRect();
-      const statusStyle = getComputedStyle(statusElement);
-      const metricsElement = document.querySelector(
-        "#kakomonn-reader-learning-metrics",
+    assert.equal(await page.locator("#kakomonn-reader-skip").count(), 0);
+    for (const viewport of [
+      { width: 320, height: 568 },
+      { width: 1280, height: 720 },
+      { width: 2560, height: 1440 },
+    ]) {
+      await page.setViewportSize(viewport);
+      const readerLayout = await page.evaluate(() => {
+        const controlsElement = document.querySelector(
+          "#kakomonn-reader-controls",
+        );
+        const statusElement = document.querySelector(
+          "#kakomonn-reader-status",
+        );
+        const metricsElement = document.querySelector(
+          "#kakomonn-reader-learning-metrics",
+        );
+        const detailsElement = document.querySelector(
+          "#kakomonn-reader-learning-metrics-details",
+        );
+        const syncElement = document.querySelector(
+          "#kakomonn-reader-sync-settings-button",
+        );
+        const frameElement = document.querySelector(
+          "#kakomonn-reader-frame",
+        );
+        const actionsElement = document.querySelector(
+          "#kakomonn-reader-actions",
+        );
+        const copyElement = document.querySelector("#kakomonn-reader-copy");
+        const nextElement = document.querySelector("#kakomonn-reader-next");
+        const controls = controlsElement.getBoundingClientRect();
+        const status = statusElement.getBoundingClientRect();
+        const metrics = metricsElement.getBoundingClientRect();
+        const sync = syncElement.getBoundingClientRect();
+        const frame = frameElement.getBoundingClientRect();
+        const actions = actionsElement.getBoundingClientRect();
+        const copy = copyElement.getBoundingClientRect();
+        const next = nextElement.getBoundingClientRect();
+        const statusStyle = getComputedStyle(statusElement);
+        const metricsStyle = getComputedStyle(metricsElement);
+        const nextStyle = getComputedStyle(nextElement);
+        const approximatelyEqual = (left, right) =>
+          Math.abs(left - right) <= 1;
+        return {
+          actionsFullWidth:
+            approximatelyEqual(actions.left, 0) &&
+            approximatelyEqual(actions.right, innerWidth),
+          bottomButtonsEqual: approximatelyEqual(copy.width, next.width),
+          bottomButtonsFill:
+            approximatelyEqual(copy.left, actions.left + 8) &&
+            approximatelyEqual(next.right, actions.right - 8),
+          controlsFullWidth:
+            approximatelyEqual(controls.left, 0) &&
+            approximatelyEqual(controls.right, innerWidth),
+          detailsHidden: detailsElement.hidden,
+          frameFillsMiddle:
+            approximatelyEqual(frame.top, controls.bottom) &&
+            approximatelyEqual(frame.bottom, actions.top) &&
+            frame.height > 0,
+          noHorizontalOverflow:
+            controlsElement.scrollWidth <= controlsElement.clientWidth &&
+            actionsElement.scrollWidth <= actionsElement.clientWidth,
+          sharedBorderlessSurface:
+            statusStyle.borderTopWidth === "0px" &&
+            metricsStyle.borderTopWidth === "0px" &&
+            statusStyle.borderRadius === nextStyle.borderRadius &&
+            metricsStyle.borderRadius === nextStyle.borderRadius &&
+            statusStyle.boxShadow === nextStyle.boxShadow &&
+            metricsStyle.boxShadow === nextStyle.boxShadow,
+          topFillsWidth:
+            approximatelyEqual(status.left, controls.left + 8) &&
+            approximatelyEqual(sync.right, controls.right - 8),
+          topItemsShareRow:
+            approximatelyEqual(status.top, metrics.top) &&
+            approximatelyEqual(metrics.top, sync.top),
+        };
+      });
+      assert.deepEqual(
+        readerLayout,
+        {
+          actionsFullWidth: true,
+          bottomButtonsEqual: true,
+          bottomButtonsFill: true,
+          controlsFullWidth: true,
+          detailsHidden: true,
+          frameFillsMiddle: true,
+          noHorizontalOverflow: true,
+          sharedBorderlessSurface: true,
+          topFillsWidth: true,
+          topItemsShareRow: true,
+        },
+        `${JSON.stringify(viewport)} ${JSON.stringify(readerLayout)}`,
       );
-      const metrics = metricsElement.getBoundingClientRect();
-      const metricsStyle = getComputedStyle(metricsElement);
-      const frame = document
-        .querySelector("#kakomonn-reader-frame")
-        .getBoundingClientRect();
-      const actions = document
-        .querySelector("#kakomonn-reader-actions")
-        .getBoundingClientRect();
-      return {
-        actionsTop: actions.top,
-        controlsBottom: controls.bottom,
-        frameBottom: frame.bottom,
-        frameTop: frame.top,
-        metricsFlexShrink: metricsStyle.flexShrink,
-        metricsWidth: metrics.width,
-        statusFlexGrow: statusStyle.flexGrow,
-        statusMaxWidth: Number.parseFloat(statusStyle.maxWidth),
-        statusWidth: status.width,
-      };
-    });
-    assert.equal(
-      readerLayout.frameTop >= readerLayout.controlsBottom,
-      true,
-      JSON.stringify(readerLayout),
-    );
-    assert.equal(
-      readerLayout.frameBottom <= readerLayout.actionsTop,
-      true,
-      JSON.stringify(readerLayout),
-    );
-    assert.equal(readerLayout.statusFlexGrow, "0");
-    assert.equal(readerLayout.metricsFlexShrink, "0");
-    assert.equal(
-      readerLayout.statusWidth <= readerLayout.statusMaxWidth,
-      true,
-      JSON.stringify(readerLayout),
-    );
-    assert.equal(
-      readerLayout.statusWidth < readerLayout.metricsWidth,
-      true,
-      JSON.stringify(readerLayout),
-    );
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.evaluate(() => {
       const frame = document.querySelector("#kakomonn-reader-frame");
       frame.setAttribute("height", "90");
@@ -1304,8 +1332,7 @@ async function main() {
 
     assert.deepEqual(errors, []);
 
-    await assertIncorrectSkip(context, script, "keyboard");
-    await assertIncorrectSkip(context, script, "button");
+    await assertIncorrectSkip(context, script);
 
     const speechShortcutPage = await context.newPage();
     const speechShortcutErrors = await preparePage(
@@ -1353,8 +1380,8 @@ async function main() {
       pauseCallsBeforeInput + 1,
     );
     assert.equal(
-      await speechShortcutPage.locator("#kakomonn-reader-skip").isVisible(),
-      true,
+      await speechShortcutPage.locator("#kakomonn-reader-skip").count(),
+      0,
     );
 
     await speechShortcutPage.keyboard.press("Space");

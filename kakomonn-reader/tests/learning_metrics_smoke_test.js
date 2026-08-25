@@ -132,12 +132,52 @@ async function runQuestionIdCase(browser, startPath) {
       false,
     );
     assert.equal(
-      await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
-      "未達成"
-    );
-    assert.equal(
       await page.locator("#kakomonn-reader-due-cards-remaining").innerText(),
       "11"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-due-cards-remaining").isVisible(),
+      true
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics-details").isHidden(),
+      true
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-label"),
+      "dueCardsRemaining あと11問. 詳細を表示"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-expanded"),
+      "false"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics-live-status").getAttribute("role"),
+      "status"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics-live-status").textContent(),
+      "dueCardsRemaining あと11問"
+    );
+    const collapsedControlsHeight = await page.locator(
+      "#kakomonn-reader-controls"
+    ).evaluate((element) => element.getBoundingClientRect().height);
+    await page.locator("#kakomonn-reader-learning-metrics").click();
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-expanded"),
+      "true"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-label"),
+      "dueCardsRemaining あと11問. 詳細を非表示"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics-details").isVisible(),
+      true
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
+      "未達成"
     );
     assert.equal(
       await page.locator("#kakomonn-reader-today-stability-days-delta").innerText(),
@@ -147,13 +187,30 @@ async function runQuestionIdCase(browser, startPath) {
       await page.locator("#kakomonn-reader-today-attempted-question-count").innerText(),
       "29"
     );
-    assert.equal(
-      await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-label"),
-      "dueCardsCompleted 未達成. dueCardsRemaining あと11問. todayStabilityDaysDelta +135日. todayAttemptedQuestionCount 29問"
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-learning-metrics").getAttribute("role"),
-      "status"
+    assert.deepEqual(
+      await page.evaluate((collapsedHeight) => {
+        const controls = document
+          .querySelector("#kakomonn-reader-controls")
+          .getBoundingClientRect();
+        const shell = document
+          .querySelector("#kakomonn-reader-shell")
+          .getBoundingClientRect();
+        const actions = document
+          .querySelector("#kakomonn-reader-actions")
+          .getBoundingClientRect();
+        return {
+          controlsExpanded: controls.height > collapsedHeight,
+          frameHasSpace: shell.height > 0,
+          rowsTouch:
+            Math.abs(shell.top - controls.bottom) <= 1 &&
+            Math.abs(shell.bottom - actions.top) <= 1,
+        };
+      }, collapsedControlsHeight),
+      {
+        controlsExpanded: true,
+        frameHasSpace: true,
+        rowsTouch: true,
+      }
     );
     assert.equal(
       await page.evaluate(() => {
@@ -169,6 +226,15 @@ async function runQuestionIdCase(browser, startPath) {
         );
         return remaining > today;
       }),
+      true
+    );
+    await page.locator("#kakomonn-reader-learning-metrics").press("Space");
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-expanded"),
+      "false"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-learning-metrics-details").isHidden(),
       true
     );
     assert.deepEqual(errors, []);

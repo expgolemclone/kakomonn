@@ -233,8 +233,8 @@
         handled = handleEnterShortcut();
       } else if (event.key === " ") {
         handled = toggleSpeechPause();
-      } else if (key === "n" && !skipButton.hidden && !skipButton.disabled) {
-        skipButton.click();
+      } else if (key === "n" && canSkipCurrentQuestion()) {
+        void handleSkipQuestion();
         handled = true;
       } else {
         const answerChoiceIndex = ANSWER_CHOICE_SHORTCUT_KEYS.indexOf(key);
@@ -374,9 +374,6 @@
   });
 
   copyButton.addEventListener("click", copyReadableSections);
-  skipButton.addEventListener("click", () => {
-    void handleSkipQuestion();
-  });
   syncSettingsButton.addEventListener("click", () => {
     openSyncSettings(!syncToken);
   });

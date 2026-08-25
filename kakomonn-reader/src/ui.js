@@ -48,25 +48,37 @@
   statusText.textContent = "読込中";
   statusBadge.appendChild(statusText);
 
-  const learningMetricsBadge = document.createElement("div");
-  learningMetricsBadge.id = "kakomonn-reader-learning-metrics";
-  learningMetricsBadge.setAttribute("role", "status");
-  learningMetricsBadge.setAttribute("aria-live", "polite");
-  learningMetricsBadge.setAttribute("aria-atomic", "true");
+  const learningMetricsButton = document.createElement("button");
+  learningMetricsButton.id = "kakomonn-reader-learning-metrics";
+  learningMetricsButton.type = "button";
+  learningMetricsButton.setAttribute("aria-expanded", "false");
+  learningMetricsButton.setAttribute(
+    "aria-controls",
+    "kakomonn-reader-learning-metrics-details"
+  );
 
-  const dueCardProgress = document.createElement("div");
-  dueCardProgress.id = "kakomonn-reader-due-card-progress";
+  const learningMetricsLiveStatus = document.createElement("span");
+  learningMetricsLiveStatus.id = "kakomonn-reader-learning-metrics-live-status";
+  learningMetricsLiveStatus.className = "kakomonn-reader-visually-hidden";
+  learningMetricsLiveStatus.setAttribute("role", "status");
+  learningMetricsLiveStatus.setAttribute("aria-live", "polite");
+  learningMetricsLiveStatus.setAttribute("aria-atomic", "true");
+
+  const learningMetricsDetails = document.createElement("dl");
+  learningMetricsDetails.id = "kakomonn-reader-learning-metrics-details";
+  learningMetricsDetails.hidden = true;
 
   const dueCardsCompletedMetric = document.createElement("div");
-  dueCardsCompletedMetric.className = "kakomonn-reader-metric";
-  const dueCardsCompletedLabel = document.createElement("span");
-  dueCardsCompletedLabel.className = "kakomonn-reader-metric-label";
+  dueCardsCompletedMetric.className = "kakomonn-reader-detail-metric";
+  const dueCardsCompletedLabel = document.createElement("dt");
   dueCardsCompletedLabel.textContent = "dueCardsCompleted";
+  const dueCardsCompletedDefinition = document.createElement("dd");
   const dueCardsCompletedValue = document.createElement("strong");
   dueCardsCompletedValue.id = "kakomonn-reader-due-cards-completed";
+  dueCardsCompletedDefinition.appendChild(dueCardsCompletedValue);
   dueCardsCompletedMetric.append(
     dueCardsCompletedLabel,
-    dueCardsCompletedValue
+    dueCardsCompletedDefinition
   );
 
   const dueCardsRemainingMetric = document.createElement("div");
@@ -91,11 +103,10 @@
     dueCardsRemainingLabel,
     dueCardsRemainingValue
   );
-  dueCardProgress.append(dueCardsCompletedMetric, dueCardsRemainingMetric);
+  learningMetricsButton.appendChild(dueCardsRemainingMetric);
 
-  const todayMetrics = document.createElement("dl");
-  todayMetrics.id = "kakomonn-reader-today-metrics";
   const todayStabilityDaysDeltaMetric = document.createElement("div");
+  todayStabilityDaysDeltaMetric.className = "kakomonn-reader-detail-metric";
   const todayStabilityDaysDeltaLabel = document.createElement("dt");
   todayStabilityDaysDeltaLabel.textContent = "todayStabilityDaysDelta";
   const todayStabilityDaysDeltaValue = document.createElement("dd");
@@ -114,6 +125,7 @@
   );
 
   const todayAttemptedQuestionCountMetric = document.createElement("div");
+  todayAttemptedQuestionCountMetric.className = "kakomonn-reader-detail-metric";
   const todayAttemptedQuestionCountLabel = document.createElement("dt");
   todayAttemptedQuestionCountLabel.textContent = "todayAttemptedQuestionCount";
   const todayAttemptedQuestionCountValue = document.createElement("dd");
@@ -130,23 +142,11 @@
     todayAttemptedQuestionCountLabel,
     todayAttemptedQuestionCountValue
   );
-  todayMetrics.append(
+  learningMetricsDetails.append(
+    dueCardsCompletedMetric,
     todayStabilityDaysDeltaMetric,
     todayAttemptedQuestionCountMetric
   );
-  learningMetricsBadge.append(dueCardProgress, todayMetrics);
-
-  const skipButton = document.createElement("button");
-  skipButton.id = "kakomonn-reader-skip";
-  skipButton.type = "button";
-  skipButton.textContent = "スキップ";
-  skipButton.setAttribute(
-    "aria-label",
-    "現在の問題を誤答としてスキップ, ショートカットはn"
-  );
-  skipButton.setAttribute("aria-keyshortcuts", "N");
-  skipButton.title = "ショートカット: n";
-  skipButton.hidden = true;
 
   const syncSettingsButton = document.createElement("button");
   syncSettingsButton.id = "kakomonn-reader-sync-settings-button";
@@ -163,9 +163,10 @@
 
   controls.append(
     statusBadge,
-    learningMetricsBadge,
-    skipButton,
+    learningMetricsButton,
     syncSettingsButton,
+    learningMetricsDetails,
+    learningMetricsLiveStatus,
     timeLimitProgress
   );
 
@@ -251,12 +252,8 @@
   );
   syncSettings.appendChild(syncSettingsPanel);
 
-  document.body.replaceChildren(
-    shell,
-    controls,
-    actions,
-    syncSettings
-  );
+  document.body.dataset.kakomonnReaderUi = "true";
+  document.body.replaceChildren(controls, shell, actions, syncSettings);
 
   function renderLearningMetrics() {
     const dueCardsCompletedText =
@@ -287,16 +284,31 @@
     todayStabilityDaysDeltaNumber.textContent = todayStabilityDaysDeltaText;
     todayAttemptedQuestionCountNumber.textContent =
       todayAttemptedQuestionCountText;
-    learningMetricsBadge.setAttribute(
+    const dueCardsRemainingAccessibleText =
+      learningMetrics === null ? "--" : `あと${dueCardsRemainingText}問`;
+    const detailsAction =
+      learningMetricsButton.getAttribute("aria-expanded") === "true"
+        ? "詳細を非表示"
+        : "詳細を表示";
+    learningMetricsButton.setAttribute(
       "aria-label",
-      [
-        `dueCardsCompleted ${dueCardsCompletedText}`,
-        `dueCardsRemaining ${learningMetrics === null ? "--" : `あと${dueCardsRemainingText}問`}`,
-        `todayStabilityDaysDelta ${learningMetrics === null ? "--" : `${todayStabilityDaysDeltaText}日`}`,
-        `todayAttemptedQuestionCount ${learningMetrics === null ? "--" : `${todayAttemptedQuestionCountText}問`}`,
-      ].join(". ")
+      `dueCardsRemaining ${dueCardsRemainingAccessibleText}. ${detailsAction}`
     );
+    learningMetricsLiveStatus.textContent =
+      `dueCardsRemaining ${dueCardsRemainingAccessibleText}`;
   }
+
+  function setLearningMetricsExpanded(expanded) {
+    learningMetricsButton.setAttribute("aria-expanded", String(expanded));
+    learningMetricsDetails.hidden = !expanded;
+    renderLearningMetrics();
+  }
+
+  learningMetricsButton.addEventListener("click", () => {
+    setLearningMetricsExpanded(
+      learningMetricsButton.getAttribute("aria-expanded") !== "true"
+    );
+  });
 
   function setStatus(message, accessibleMessage = message) {
     statusText.textContent = message;

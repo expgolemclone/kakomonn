@@ -16,25 +16,25 @@
     return getCurrentAnswerResult() !== "unknown" && currentQuestionId() !== null;
   }
 
-  function updateSkipButton() {
+  function canSkipCurrentQuestion() {
     const unansweredQuestionReady =
       frameDocument?.body !== undefined &&
       currentQuestionControls() !== null &&
       currentQuestionId() !== null &&
       getCurrentAnswerResult() === "unknown";
-    skipButton.hidden = !unansweredQuestionReady;
-    skipButton.disabled =
-      !syncReady ||
-      syncInProgress ||
-      nextQuestionOperationInProgress ||
-      navigationInProgress ||
-      pendingAttempt !== null ||
-      pendingCelebration !== null ||
-      !syncSettings.hidden;
+    return (
+      unansweredQuestionReady &&
+      syncReady &&
+      !syncInProgress &&
+      !nextQuestionOperationInProgress &&
+      !navigationInProgress &&
+      pendingAttempt === null &&
+      pendingCelebration === null &&
+      syncSettings.hidden
+    );
   }
 
   function updateNextQuestionButton() {
-    updateSkipButton();
     if (syncInProgress) {
       nextQuestionButton.textContent = "学習記録を同期中";
       nextQuestionButton.disabled = true;

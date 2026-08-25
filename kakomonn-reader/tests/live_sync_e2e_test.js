@@ -172,13 +172,7 @@ function assertSyncState(state) {
 
 function expectedLearningMetricsLabel(metrics) {
   const formatted = (value) => value.toLocaleString("ja-JP");
-  const signed = (value) => `${value >= 0 ? "+" : ""}${formatted(value)}`;
-  return [
-    `dueCardsCompleted ${metrics.dueCardsCompleted ? "達成" : "未達成"}`,
-    `dueCardsRemaining あと${formatted(metrics.dueCardsRemaining)}問`,
-    `todayStabilityDaysDelta ${signed(metrics.todayStabilityDaysDelta)}日`,
-    `todayAttemptedQuestionCount ${formatted(metrics.todayAttemptedQuestionCount)}問`,
-  ].join(". ");
+  return `dueCardsRemaining あと${formatted(metrics.dueCardsRemaining)}問. 詳細を表示`;
 }
 
 async function requestSyncState(token) {
@@ -543,7 +537,7 @@ async function clickNextQuestion(page) {
       !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
         state.outerURL,
       ) ||
-      !/^dueCardsCompleted (?:達成|未達成)\. dueCardsRemaining あと[\d,]+問\. todayStabilityDaysDelta [+-][\d,]+日\. todayAttemptedQuestionCount [\d,]+問$/.test(
+      !/^dueCardsRemaining あと[\d,]+問\. 詳細を表示$/.test(
         state.learningMetricsLabel ?? "",
       )
     ) {

@@ -11,8 +11,7 @@ export function validateManifest(manifest) {
   if (
     manifest === null ||
     typeof manifest !== "object" ||
-    !Array.isArray(manifest.experiences) ||
-    manifest.experiences.length !== 13
+    !Array.isArray(manifest.experiences)
   ) {
     throw new TypeError("Celebration manifest is invalid.");
   }

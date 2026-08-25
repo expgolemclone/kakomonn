@@ -1,8 +1,8 @@
 # congratulations
 
-`kakomonn-reader`で最後のdue cardを解答し, `dueCardsCompleted`がtrueになった時に表示する静的な祝福site集です.
+`kakomonn-reader`で最後のdue cardを解答し, `dueCardsCompleted`がtrueになった時に表示する静的な祝福siteです.
 
-13作品は共通のdesign token, responsive layout, reduced motion, replay, ready通知contractを使用します. root shellは全作品から均等確率で1つを選び, 全画面iframeで表示します. 読み込み失敗時に別作品へfallbackしません.
+既存designは削除済みで, 新designは未実装です. 調査用にcloneしたupstream repositoryは`upstreams/`に配置し, 親repositoryの追跡対象には含めません.
 
 query parameterには`site`, `date`, `dueCardsCompleted`の3項目が必要です. `dueCardsCompleted`はtrueだけを受け付けます.
 
@@ -19,5 +19,3 @@ production URLは`https://kakomonn-congratulations.kakomonn.workers.dev/`です.
 ```bash
 npm run deploy:congratulations
 ```
-
-琴葉茜, 琴葉葵 © AI Inc. 該当作品は非公式のfan-made作品です.

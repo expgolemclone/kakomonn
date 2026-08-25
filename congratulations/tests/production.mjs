@@ -18,10 +18,10 @@ try {
   page.on("pageerror", (error) => errors.push(String(error)));
   const response = await page.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
   assert.equal(response?.status(), 200);
-  await page.waitForSelector('html[data-state="ready"]');
-  assert.equal(await page.locator("#achievement-label").innerText(), "dueCardsCompleted 達成");
-  const frame = page.locator("#celebration-frame").contentFrame();
-  await frame.locator('[data-celebration-root][data-ready="true"]').waitFor();
+  await page.waitForSelector('html[data-state="error"]');
+  assert.equal(await page.locator("#error-panel").isVisible(), true);
+  assert.equal(await page.locator("#error-panel p").innerText(), "祝福designは未実装です.");
+  assert.equal(await page.locator("#celebration-frame").isVisible(), false);
   assert.deepEqual(errors, []);
 } finally {
   await browser.close();

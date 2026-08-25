@@ -26,6 +26,7 @@ function sameCelebration(left, right) {
 
 function renderError(error) {
   document.documentElement.dataset.state = "error";
+  loading.hidden = true;
   errorPanel.hidden = false;
   errorPanel.querySelector("p").textContent =
     error instanceof Error ? error.message : "祝福pageを開けません.";
@@ -33,7 +34,11 @@ function renderError(error) {
 
 try {
   const celebration = parseCelebration(window.location.search);
-  const selected = chooseCelebration(validateManifest(manifest));
+  const validatedManifest = validateManifest(manifest);
+  if (validatedManifest.experiences.length === 0) {
+    throw new Error("祝福designは未実装です.");
+  }
+  const selected = chooseCelebration(validatedManifest);
   const entryUrl = new URL(selected.entry, window.location.href);
   entryUrl.search = window.location.search;
 

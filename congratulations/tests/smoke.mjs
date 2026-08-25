@@ -14,22 +14,7 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = validateManifest(
   JSON.parse(await readFile(resolve(projectRoot, "celebrations.json"), "utf8")),
 );
-const expectedIds = [
-  "hikakin",
-  "void-conductor",
-  "midnight-emcee",
-  "midnight-orbit",
-  "clearance-officer",
-  "night-archivist",
-  "gouten-stomp",
-  "imura-rally",
-  "taiko-oni",
-  "night-examiner",
-  "kotonoha",
-  "forge-fury",
-  "study-complete",
-];
-assert.deepEqual(manifest.experiences.map((item) => item.id), expectedIds);
+assert.deepEqual(manifest.experiences, []);
 
 const celebration = {
   site: "chushoks.kakomonn.com",
@@ -48,21 +33,12 @@ for (const invalidSearch of [
   assert.throws(() => parseCelebration(invalidSearch), /invalid/i);
 }
 
-for (let index = 0; index < manifest.experiences.length; index += 1) {
-  const cryptoSource = {
-    getRandomValues(values) {
-      values[0] = index;
-      return values;
-    },
-  };
-  assert.equal(randomIndex(manifest.experiences.length, cryptoSource), index);
-  assert.equal(chooseCelebration(manifest, cryptoSource).id, expectedIds[index]);
-}
+assert.throws(() => randomIndex(0), /positive safe integer/);
+assert.throws(() => chooseCelebration(manifest), /positive safe integer/);
 
 const sourceFiles = [
   resolve(projectRoot, "index.html"),
   resolve(projectRoot, "router.js"),
-  resolve(projectRoot, "shared", "celebration.js"),
 ];
 for (const sourcePath of sourceFiles) {
   const source = await readFile(sourcePath, "utf8");
@@ -71,11 +47,5 @@ for (const sourcePath of sourceFiles) {
 }
 
 await access(resolve(projectRoot, "dist", "index.html"));
-for (const experience of manifest.experiences) {
-  await Promise.all([
-    access(resolve(projectRoot, experience.entry)),
-    access(resolve(projectRoot, "dist", experience.entry)),
-  ]);
-}
 
-console.log(`Congratulations smoke assertions passed for ${expectedIds.length} experiences`);
+console.log("Congratulations smoke assertions passed with no installed design");

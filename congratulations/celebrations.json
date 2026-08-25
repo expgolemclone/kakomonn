@@ -1,17 +1,3 @@
 {
-  "experiences": [
-    { "id": "hikakin", "label": "HIKAKIN STYLE PRAISE", "entry": "experiences/hikakin/index.html" },
-    { "id": "void-conductor", "label": "THE NIGHT APPLAUDS", "entry": "experiences/void-conductor/index.html" },
-    { "id": "midnight-emcee", "label": "MIDNIGHT EMCEE", "entry": "experiences/midnight-emcee/index.html" },
-    { "id": "midnight-orbit", "label": "MIDNIGHT ORBIT", "entry": "experiences/midnight-orbit/index.html" },
-    { "id": "clearance-officer", "label": "CELEBRATION BUREAU", "entry": "experiences/clearance-officer/index.html" },
-    { "id": "night-archivist", "label": "MIDNIGHT STUDY ARCHIVE", "entry": "experiences/night-archivist/index.html" },
-    { "id": "gouten-stomp", "label": "GOUTEN VICTORY STOMP", "entry": "experiences/gouten-stomp/index.html" },
-    { "id": "imura-rally", "label": "IMURA RALLY LIVE", "entry": "experiences/imura-rally/index.html" },
-    { "id": "taiko-oni", "label": "UNDERGROUND TAIKO", "entry": "experiences/taiko-oni/index.html" },
-    { "id": "night-examiner", "label": "NIGHT EXAMINER", "entry": "experiences/night-examiner/index.html" },
-    { "id": "kotonoha", "label": "KOTONOHA TWIN LIVE", "entry": "experiences/kotonoha/index.html" },
-    { "id": "forge-fury", "label": "GARA'S NIGHT FORGE", "entry": "experiences/forge-fury/index.html" },
-    { "id": "study-complete", "label": "STUDY COMPLETE", "entry": "experiences/study-complete/index.html" }
-  ]
+  "experiences": []
 }

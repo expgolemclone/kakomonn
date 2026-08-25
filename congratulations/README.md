@@ -1,20 +1,27 @@
-# congratulations
+# Congratulations
 
-`kakomonn-reader`で最後のdue cardを解答し, `dueCardsCompleted`がtrueになった時に表示する静的な祝福siteです.
+This static site celebrates a learner when `kakomonn-reader` reports that
+`dueCardsCompleted` is `true`. Each visit selects one installed experience with
+cryptographically unbiased randomness.
 
-既存designは削除済みで, 新designは未実装です. 調査用にcloneしたupstream repositoryは`upstreams/`に配置し, 親repositoryの追跡対象には含めません.
+The query string must contain exactly `site`, `date`, and
+`dueCardsCompleted=true`. Invalid or incomplete celebration data is rejected.
 
-query parameterには`site`, `date`, `dueCardsCompleted`の3項目が必要です. `dueCardsCompleted`はtrueだけを受け付けます.
+Deployable experience snapshots live in `experiences/` and are listed in
+`celebrations.json`. The locally cloned design references in `upstreams/` are
+ignored by the parent repository and are not part of the production build.
 
-## 開発とtest
+## Development and testing
 
-repository rootで実行します.
+Run the complete local build and browser suite from the repository root.
 
 ```bash
 npm run test:congratulations
 ```
 
-production URLは`https://kakomonn-congratulations.kakomonn.workers.dev/`です. deployとproduction検証は次のcommandへ閉じ込めます.
+The production URL is
+`https://kakomonn-congratulations.kakomonn.workers.dev/`. Deployment and the
+production browser checks are contained in one command.
 
 ```bash
 npm run deploy:congratulations

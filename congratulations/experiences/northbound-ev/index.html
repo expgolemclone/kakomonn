@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>document.documentElement.classList.add('js')</script>
+<title>Northbound - dueCardsCompleted achieved</title>
+<meta name="description" content="Northbound celebrates dueCardsCompleted: every due card is behind you, the route is complete, and the open horizon belongs to you." />
+<meta name="theme-color" content="#12180f" />
+<meta name="color-scheme" content="dark" />
+<meta property="og:title" content="Northbound - dueCardsCompleted achieved" />
+<meta property="og:description" content="The due queue is clear. Follow the route you made to dueCardsCompleted and take in the open horizon." />
+<meta property="og:type" content="website" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<!-- ===== fixed terrain: three.js mounts a canvas here; SVG is the guaranteed fallback ===== -->
+<div class="terrain" id="terrain" aria-hidden="true">
+  <svg class="terrain-fallback" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Topographic map with a glowing route reaching dueCardsCompleted beyond two ridges.">
+    <defs>
+      <linearGradient id="route" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#3fb84a"/><stop offset="1" stop-color="#6cff6a"/>
+      </linearGradient>
+      <radialGradient id="node" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="#6cff6a" stop-opacity="1"/>
+        <stop offset="55%" stop-color="#6cff6a" stop-opacity=".35"/>
+        <stop offset="100%" stop-color="#6cff6a" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <!-- contour rings, ridge one -->
+    <g fill="none" stroke="#69735c" stroke-opacity=".5">
+      <ellipse cx="330" cy="300" rx="360" ry="210"/>
+      <ellipse cx="330" cy="300" rx="300" ry="172" stroke="#7f8a6b"/>
+      <ellipse cx="330" cy="300" rx="240" ry="136" stroke="#8f9a78"/>
+      <ellipse cx="330" cy="300" rx="182" ry="102" stroke="#a08f5f"/>
+      <ellipse cx="330" cy="300" rx="126" ry="70" stroke="#c98a4b"/>
+      <ellipse cx="330" cy="300" rx="72" ry="40" stroke="#d89a58"/>
+      <ellipse cx="330" cy="300" rx="30" ry="16" stroke="#e6a962"/>
+    </g>
+    <!-- contour rings, ridge two -->
+    <g fill="none" stroke="#69735c" stroke-opacity=".5">
+      <ellipse cx="900" cy="560" rx="330" ry="220"/>
+      <ellipse cx="900" cy="560" rx="270" ry="180" stroke="#7f8a6b"/>
+      <ellipse cx="900" cy="560" rx="210" ry="140" stroke="#8f9a78"/>
+      <ellipse cx="900" cy="560" rx="150" ry="100" stroke="#a08f5f"/>
+      <ellipse cx="900" cy="560" rx="94" ry="62" stroke="#c98a4b"/>
+      <ellipse cx="900" cy="560" rx="44" ry="28" stroke="#d89a58"/>
+    </g>
+    <!-- the route -->
+    <path d="M70 700 C 240 620, 250 430, 360 380 S 560 360, 640 300 S 760 150, 900 210 S 1120 320, 1160 180"
+          fill="none" stroke="url(#route)" stroke-width="4" stroke-linecap="round" opacity=".95"/>
+    <path d="M70 700 C 240 620, 250 430, 360 380 S 560 360, 640 300 S 760 150, 900 210 S 1120 320, 1160 180"
+          fill="none" stroke="#6cff6a" stroke-width="12" stroke-linecap="round" opacity=".14"/>
+    <!-- charging nodes -->
+    <g>
+      <circle cx="360" cy="380" r="34" fill="url(#node)"/><circle cx="360" cy="380" r="6" fill="#6cff6a"/>
+      <circle cx="900" cy="210" r="34" fill="url(#node)"/><circle cx="900" cy="210" r="6" fill="#6cff6a"/>
+    </g>
+    <!-- start / end -->
+    <circle cx="70" cy="700" r="7" fill="#a7b199"/>
+    <circle cx="1160" cy="180" r="8" fill="#6cff6a" stroke="#12180f" stroke-width="2"/>
+  </svg>
+</div>
+<div class="scrim" aria-hidden="true"></div>
+
+<!-- ===== nav ===== -->
+<header class="nav">
+  <a class="brand" href="./" aria-label="Northbound celebration home">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 2 L15 13 L12 11 L9 13 Z" fill="currentColor"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.4"/></svg>
+    </span>
+    <span>Northbound</span>
+  </a>
+  <nav class="nav-links" aria-label="Primary">
+    <a href="#plan">Route</a>
+    <a href="#network">Signal</a>
+    <a href="#stops">Markers</a>
+    <a href="./guide/">Reflection</a>
+    <a class="nav-cta" href="#start">Take it in</a>
+  </nav>
+</header>
+
+<main>
+  <!-- ===== hero: topo terrain + route + headline ===== -->
+  <section class="hero" id="top">
+    <div class="hero-copy">
+      <p class="eyebrow reveal">Completion route · dueCardsCompleted achieved</p>
+      <h1 class="hero-title">
+        <span class="line"><span>The due queue ends</span></span>
+        <span class="line"><span>in <em>open sky.</em></span></span>
+      </h1>
+      <p class="hero-sub reveal">You kept moving through every due card, including the steep returns and
+        uncertain stretches. Now the line reaches the far ridge: dueCardsCompleted is true. This clear
+        horizon was made by your attention.</p>
+      <div class="hero-actions reveal">
+        <a class="btn btn-primary" href="#plan">Trace your route</a>
+        <a class="btn btn-ghost" href="#network">See the clear signal →</a>
+      </div>
+    </div>
+
+    <div class="route-chip reveal" role="group" aria-label="dueCardsCompleted achievement summary">
+      <span class="rc-lead"><b>TRUE</b> <span>· due queue clear · reached now</span></span>
+      <span class="rc-div" aria-hidden="true"></span>
+      <span class="rc-stat"><b>1</b><span>milestone</span></span>
+      <span class="rc-stat"><b>0</b><span>due</span></span>
+      <span class="rc-stat"><b>100%</b><span>yours</span></span>
+    </div>
+
+    <div class="scroll-hint reveal" aria-hidden="true">
+      <span class="sh-rail"></span><span>Scroll · follow the line you finished</span>
+    </div>
+  </section>
+
+  <!-- ===== trip planner band ===== -->
+  <section class="band" id="plan">
+    <div class="section-head">
+      <p class="kicker reveal">[ The route crossed ]</p>
+      <h2 class="reveal">From the first return to the last clear ridge.</h2>
+      <p class="lede reveal">Choose a trail through the work you just finished. Each route reads the same
+        hard-earned signal at the summit: <strong>dueCardsCompleted is achieved.</strong></p>
+    </div>
+
+    <div class="planner reveal" id="planner">
+      <!-- origin -> destination + route presets -->
+      <div class="planner-top">
+        <div class="od" id="od">
+          <div class="od-row from">
+            <span class="od-pin" aria-hidden="true"></span>
+            <span class="od-label">From</span>
+            <span class="od-place" id="odFrom">Due queue opened</span>
+            <span class="od-coord mono" id="odFromCoord">WORK · IN MOTION</span>
+          </div>
+          <span class="od-line" aria-hidden="true"></span>
+          <div class="od-row to">
+            <span class="od-pin" aria-hidden="true"></span>
+            <span class="od-label">To</span>
+            <span class="od-place" id="odTo">dueCardsCompleted</span>
+            <span class="od-coord mono" id="odToCoord">STATUS · ACHIEVED</span>
+          </div>
+        </div>
+        <div class="routes">
+          <span class="routes-lbl">Trail</span>
+          <div class="route-tabs" id="routeTabs" role="tablist" aria-label="Choose a reflection trail">
+            <button class="route-tab" role="tab" data-route="coastal" aria-selected="false">Focus Trail</button>
+            <button class="route-tab" role="tab" data-route="alpine" aria-selected="true">Recall Ridge</button>
+            <button class="route-tab" role="tab" data-route="desert" aria-selected="false">Resolve Pass</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- route summary header (the nav pattern) -->
+      <div class="summary" id="summary">
+        <div class="summary-lead">
+          <span class="sl-km mono" id="sumKm">TRUE</span>
+          <span class="sl-dot">·</span>
+          <span class="sl-stops" id="sumStops">due queue clear</span>
+          <span class="sl-dot">·</span>
+          <span class="sl-arrive" id="sumArrive">reached now</span>
+        </div>
+        <div class="summary-stats" id="sumStats">
+          <div class="ss"><b>dueCardsCompleted</b><span>milestone</span></div>
+          <div class="ss"><b>achieved</b><span>status</span></div>
+          <div class="ss"><b>0</b><span>dueCardsRemaining</span></div>
+          <div class="ss"><b>100%</b><span>credit yours</span></div>
+        </div>
+      </div>
+
+      <!-- charge-stop timeline (default: Alpine Pass; JS swaps on corridor change) -->
+      <div class="timeline">
+        <div class="tl" id="timeline">
+          <div class="tl-node">
+            <span class="tl-dot" aria-hidden="true"></span>
+            <div class="tl-place"><b>Due queue opened</b><span class="tl-coord mono">THE ROUTE · BEGAN</span><span class="tl-time">THEN</span></div>
+          </div>
+          <div class="tl-node">
+            <div class="tl-drive"><svg viewBox="0 0 24 24" fill="none"><path d="M4 16h16M6 16l1.5-5A2 2 0 0 1 9.4 9.6h5.2a2 2 0 0 1 1.9 1.4L18 16M7.5 19a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6Zm9 0a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6Z" stroke="currentColor" stroke-width="1.4"/></svg>Kept moving · one card at a time</div>
+            <span class="tl-dot charge" aria-hidden="true"></span>
+            <div class="tl-place"><b>Attention Pass</b><span class="tl-coord mono">FOCUS · HELD</span><span class="tl-time">MIDWAY</span></div>
+            <div class="stopcard">
+              <div class="stopcard-top">
+                <span class="stopcard-net">Focus held through the climb</span>
+                <span class="stopcard-badge grade">YES</span>
+                <span class="stopcard-dwell mono"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg>STAYED</span>
+              </div>
+              <div class="stopcard-meta mono">
+                <span>PRESENT</span><span>STEADY</span><span class="avail">NO SHORTCUTS</span><span>YOUR EFFORT</span>
+              </div>
+              <div class="stopcard-tags">
+                <span class="tag"><svg viewBox="0 0 24 24" fill="none"><path d="M4 9h12v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V9Zm12 1h2a2 2 0 0 1 0 4h-2M6 3v2M9 3v2M12 3v2" stroke="currentColor" stroke-width="1.4"/></svg>Met the moment</span>
+                <span class="tag"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 4 20h16L12 3Zm0 6-3 7m3-7 3 7" stroke="currentColor" stroke-width="1.4"/></svg>Kept the line</span>
+              </div>
+            </div>
+          </div>
+          <div class="tl-node">
+            <div class="tl-drive"><svg viewBox="0 0 24 24" fill="none"><path d="M4 16h16M6 16l1.5-5A2 2 0 0 1 9.4 9.6h5.2a2 2 0 0 1 1.9 1.4L18 16M7.5 19a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6Zm9 0a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6Z" stroke="currentColor" stroke-width="1.4"/></svg>Returned after uncertainty</div>
+            <span class="tl-dot charge" aria-hidden="true"></span>
+            <div class="tl-place"><b>Recall Ridge</b><span class="tl-coord mono">MEMORY · RETRIEVED</span><span class="tl-time">HIGH GROUND</span></div>
+            <div class="stopcard">
+              <div class="stopcard-top">
+                <span class="stopcard-net">Memory brought back into reach</span>
+                <span class="stopcard-badge grade">YES</span>
+                <span class="stopcard-badge adapter">TURN MET</span>
+                <span class="stopcard-dwell mono"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg>RETURNED</span>
+              </div>
+              <div class="stopcard-meta mono">
+                <span>RECALLED</span><span>RETRIED</span><span class="avail">KEPT GOING</span><span>YOUR WORK</span>
+              </div>
+              <div class="stopcard-tags">
+                <span class="tag"><svg viewBox="0 0 24 24" fill="none"><path d="M4 9h12v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V9Zm12 1h2a2 2 0 0 1 0 4h-2M6 3v2M9 3v2M12 3v2" stroke="currentColor" stroke-width="1.4"/></svg>Found the memory</span>
+                <span class="tag fast"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg>Turn completed</span>
+              </div>
+            </div>
+          </div>
+          <div class="tl-node">
+            <div class="tl-drive"><svg viewBox="0 0 24 24" fill="none"><path d="M4 16h16M6 16l1.5-5A2 2 0 0 1 9.4 9.6h5.2a2 2 0 0 1 1.9 1.4L18 16M7.5 19a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6Zm9 0a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6Z" stroke="currentColor" stroke-width="1.4"/></svg>Carried the route to its end</div>
+            <span class="tl-dot end" aria-hidden="true"></span>
+            <div class="tl-place"><b>dueCardsCompleted</b><span class="tl-coord mono">STATUS · ACHIEVED</span><span class="tl-time">NOW</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== network stats band ===== -->
+  <section class="band" id="network">
+    <div class="section-head">
+      <p class="kicker reveal">[ The clear signal ]</p>
+      <h2 class="reveal">One exact milestone. A whole route behind it.</h2>
+      <p class="lede reveal">dueCardsCompleted is a small signal with real terrain underneath it: attention
+        held, memory retrieved, and the choice to return until every due card was behind you.</p>
+    </div>
+
+    <div class="stats reveal stagger" aria-label="dueCardsCompleted achievement statistics">
+      <div class="stat"><span class="s-num" data-to="1" data-dec="0">0</span><span class="s-suf">milestone</span><span class="s-lbl">dueCardsCompleted achieved</span></div>
+      <div class="stat"><span class="s-num" data-to="0" data-dec="0">0</span><span class="s-suf">due</span><span class="s-lbl">dueCardsRemaining</span></div>
+      <div class="stat"><span class="s-num" data-to="1" data-dec="0">0</span><span class="s-suf">route</span><span class="s-lbl">carried all the way through</span></div>
+      <div class="stat"><span class="s-num" data-to="100" data-dec="0">0</span><span class="s-suf">% yours</span><span class="s-lbl">credit for this finish</span></div>
+    </div>
+
+    <!-- range ring feature tile -->
+    <div class="ring-band reveal">
+      <div class="ring" role="img" aria-label="Completion state: 100 percent.">
+        <svg viewBox="0 0 172 172" width="172" height="172">
+          <circle class="ring-track" cx="86" cy="86" r="74"></circle>
+          <circle class="ring-fill" id="ringFill" cx="86" cy="86" r="74"
+            stroke-dasharray="464.9" stroke-dashoffset="464.9"></circle>
+        </svg>
+        <div class="ring-center"><b id="ringPct">100%</b><span>complete</span></div>
+      </div>
+      <div class="ring-copy">
+        <h3>The signal that clears the horizon.</h3>
+        <p>No estimate, almost, or someday. dueCardsCompleted names what you made true today. The due queue
+          is clear, and the full credit stays with the person who crossed the terrain: you.</p>
+        <div class="ring-row">
+          <div class="rr"><b id="rrSoc">100%</b><span>milestone reached</span></div>
+          <div class="rr"><b>0</b><span>dueCardsRemaining</span></div>
+          <div class="rr"><b>NOW</b><span>finish is real</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== charge better: curated stops ===== -->
+  <section class="band" id="stops">
+    <div class="section-head">
+      <p class="kicker reveal">[ Trail markers ]</p>
+      <h2 class="reveal">What the finished route leaves visible.</h2>
+      <p class="lede reveal">The map holds more than an endpoint. It holds the quiet strengths that moved
+        you from one due card to the next and made dueCardsCompleted true.</p>
+    </div>
+
+    <div class="stopgrid reveal stagger">
+      <article class="curated">
+        <div class="curated-top">
+          <div><h3>Attention</h3><div class="curated-region mono">THE FIRST RIDGE</div></div>
+          <span class="curated-grade">1</span>
+        </div>
+        <p>You met each due card where it was, giving the present moment enough room to become progress.</p>
+        <div class="curated-foot">
+          <span class="curated-kw mono">YOUR FOCUS · PRESENT</span>
+          <div class="curated-tags">
+            <span class="tag"><svg viewBox="0 0 24 24" fill="none"><path d="M4 9h12v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V9Zm12 1h2a2 2 0 0 1 0 4h-2M6 3v2M9 3v2M12 3v2" stroke="currentColor" stroke-width="1.4"/></svg>Stayed</span>
+            <span class="tag"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 4 20h16L12 3Zm0 6-3 7m3-7 3 7" stroke="currentColor" stroke-width="1.4"/></svg>Engaged</span>
+          </div>
+        </div>
+      </article>
+      <article class="curated">
+        <div class="curated-top">
+          <div><h3>Recall</h3><div class="curated-region mono">THE HIGH PASS</div></div>
+          <span class="curated-grade">2</span>
+        </div>
+        <p>You reached for what you knew, worked through uncertainty, and brought the path back into view.</p>
+        <div class="curated-foot">
+          <span class="curated-kw mono">YOUR MEMORY · RETRIEVED</span>
+          <div class="curated-tags">
+            <span class="tag"><svg viewBox="0 0 24 24" fill="none"><path d="M4 9h12v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V9Zm12 1h2a2 2 0 0 1 0 4h-2M6 3v2M9 3v2M12 3v2" stroke="currentColor" stroke-width="1.4"/></svg>Retrieved</span>
+            <span class="tag fast"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg>Returned</span>
+          </div>
+        </div>
+      </article>
+      <article class="curated">
+        <div class="curated-top">
+          <div><h3>Persistence</h3><div class="curated-region mono">THE OPEN HORIZON</div></div>
+          <span class="curated-grade">3</span>
+        </div>
+        <p>You returned once more, then once more again, until the route had no unfinished edge.</p>
+        <div class="curated-foot">
+          <span class="curated-kw mono">YOUR RESOLVE · COMPLETE</span>
+          <div class="curated-tags">
+            <span class="tag"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 4 20h16L12 3Zm0 6-3 7m3-7 3 7" stroke="currentColor" stroke-width="1.4"/></svg>Endured</span>
+            <span class="tag"><svg viewBox="0 0 24 24" fill="none"><path d="M4 9h12v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V9Zm12 1h2a2 2 0 0 1 0 4h-2M6 3v2M9 3v2M12 3v2" stroke="currentColor" stroke-width="1.4"/></svg>Finished</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===== start a trip CTA (terrain shows through) ===== -->
+  <section class="start" id="start">
+    <p class="start-line reveal">Let the horizon stay <em>clear.</em></p>
+    <p class="reveal">dueCardsCompleted is true. Take one unhurried breath at the end of the route and
+      let the work you finished be enough for today.</p>
+    <div class="start-actions reveal">
+      <a class="btn btn-primary" href="#top">Take in the win</a>
+      <a class="btn btn-ghost" href="./guide/">Read the reflection →</a>
+    </div>
+  </section>
+</main>
+
+<!-- ===== footer ===== -->
+<footer class="footer">
+  <div class="foot-top">
+    <span class="foot-brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 2 L15 13 L12 11 L9 13 Z" fill="currentColor"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.4"/></svg>
+      </span>
+      Northbound
+    </span>
+    <div class="foot-links">
+      <a href="#plan">Route</a><a href="#network">Signal</a><a href="#stops">Markers</a><a href="./guide/">Reflection</a>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span>© 2026 Northbound · A clear horizon for dueCardsCompleted.</span>
+    <span>Made for the route you finished · <a href="./guide/">Read the reflection →</a></span>
+  </div>
+</footer>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script src="./main.js" type="module"></script>
+<script type="module" data-celebration-runtime>
+  import { announceCelebration } from "/shared/experience-runtime.js";
+  announceCelebration("northbound-ev");
+</script>
+</body>
+</html>

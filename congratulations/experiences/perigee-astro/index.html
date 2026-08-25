@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>document.documentElement.classList.add('js')</script>
+<title>Afterglow — every due card, complete</title>
+<meta name="description" content="A cosmic celebration for the moment dueCardsCompleted reaches the finish line. Every due card is done, and the rest of the day is yours." />
+<meta name="theme-color" content="#05060a" />
+<meta name="color-scheme" content="dark" />
+<meta property="og:title" content="Afterglow — every due card, complete" />
+<meta property="og:description" content="dueCardsCompleted has reached today&apos;s finish line. Step into the afterglow and celebrate what you finished." />
+<meta property="og:type" content="website" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<!-- decorative deep-space layers (below content) -->
+<canvas class="sky" aria-hidden="true"></canvas>
+<div class="sky-fallback" aria-hidden="true"></div>
+<div class="nebula nebula-teal" aria-hidden="true"></div>
+<div class="nebula nebula-violet" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+
+<header class="nav">
+  <a class="brand" href="./" aria-label="Afterglow home">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.4">
+        <circle cx="12" cy="12" r="9.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3"/>
+        <path d="M12 12 L15.4 6.4" stroke-width="1.8"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+      </svg>
+    </span>
+    <span class="brand-word">Afterglow</span>
+  </a>
+  <nav class="nav-links" aria-label="Primary">
+    <a href="#console">The moment</a>
+    <a href="#network">Echoes</a>
+    <a href="#observations">Highlights</a>
+    <a href="./guide/">Story</a>
+    <a class="nav-cta" href="#join">Keep the feeling</a>
+  </nav>
+</header>
+
+<main>
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <p class="eyebrow reveal">Daily review complete · signal received</p>
+    <h1 class="hero-title">
+      <span class="line"><span>Every due card, cleared.</span></span>
+      <span class="line"><span><em>The rest is yours.</em> Take it in.</span></span>
+    </h1>
+    <p class="hero-sub reveal">dueCardsCompleted has reached today&apos;s finish line. Every return, every
+      hesitation and every return became part of the work you finished. Nothing else is asking for your
+      attention here. This sky is simply holding the moment open long enough for you to feel it.</p>
+    <div class="hero-actions reveal">
+      <a class="btn btn-primary" href="#console">Trace the afterglow ↴</a>
+      <a class="btn btn-ghost" href="#network">Hear the echoes</a>
+    </div>
+
+    <!-- persistent "tonight" status band (Moonlitt pattern) -->
+    <div class="tonight reveal" role="status" aria-live="off" aria-label="The celebration in motion">
+      <span class="t-dot" aria-hidden="true"></span>
+      <span class="t-item"><span class="t-k">Cheers in orbit</span><span class="t-v" id="tObs">—</span></span>
+      <span class="t-item"><span class="t-k">Glow</span><span class="t-v" id="tMoon">rising · 34%</span></span>
+      <span class="t-item"><span class="t-k">Afterglow</span><span class="t-v" id="tSeeing">1.8″</span></span>
+      <span class="t-item"><span class="t-k">This moment</span><span class="t-v" id="tLst">—</span></span>
+      <span class="t-item t-transit"><span class="t-k">Now shining</span><span class="t-v" id="tTransit">M13 · Steady Core</span></span>
+    </div>
+  </section>
+
+  <!-- ============ CONSOLE — point-your-scope interactive (Pattern C + A) ============ -->
+  <section id="console" class="console">
+    <div class="section-head">
+      <p class="kicker reveal">[ The moment · trace the glow ]</p>
+      <h2 class="reveal">Sweep the stars. Find the moments that carried you here.</h2>
+      <p class="lede reveal">The field turns today&apos;s effort into a sky worth exploring. Move your pointer
+        across it — or use the arrow keys — and a bright moment comes into focus. There is nothing left to
+        solve. Each lock is simply a different way to say: you showed up, and you finished.</p>
+    </div>
+
+    <div class="console-grid reveal">
+      <figure class="viewport" aria-label="Interactive celebration sky. Move the pointer or use arrow keys to sweep the reticle across bright moments.">
+        <canvas id="scope" width="900" height="640"></canvas>
+        <div class="vp-hud" aria-hidden="true">
+          <span class="vp-corner tl"></span><span class="vp-corner tr"></span>
+          <span class="vp-corner bl"></span><span class="vp-corner br"></span>
+          <span class="vp-status" id="vpStatus">SEEKING</span>
+          <span class="vp-fov">FOV 1.4° × 1.0°</span>
+        </div>
+        <button class="vp-reticle-hit" id="scopeHit" type="button"
+          aria-label="Celebration sky — sweep to find a bright moment. Arrow keys nudge the reticle."></button>
+      </figure>
+
+      <aside class="detail" id="detail" aria-live="polite">
+        <div class="detail-top">
+          <span class="detail-cat" id="dCat">— · —</span>
+          <span class="detail-lock" id="dLock">NO SPARK</span>
+        </div>
+        <h3 class="detail-name" id="dName">Sweep to revisit a bright moment</h3>
+        <p class="detail-type" id="dType">Move the reticle through the field and let one part of today come into focus.</p>
+        <dl class="coords">
+          <div><dt>R.A.</dt><dd id="dRa">—</dd></div>
+          <div><dt>Dec</dt><dd id="dDec">—</dd></div>
+          <div><dt>Alt</dt><dd id="dAlt">—</dd></div>
+          <div><dt>Az</dt><dd id="dAz">—</dd></div>
+          <div><dt>Mag</dt><dd id="dMag">—</dd></div>
+          <div><dt>Size</dt><dd id="dSize">—</dd></div>
+        </dl>
+        <div class="detail-foot">
+          <span class="detail-node" id="dNode">Waiting for your signal</span>
+          <span class="detail-alt" id="dHint">↔ explore · ↕ nudge</span>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ NETWORK — telescope nodes (Pattern A/B object cards) ============ -->
+  <section id="network" class="network">
+    <div class="section-head">
+      <p class="kicker reveal">[ The echoes ]</p>
+      <h2 class="reveal">One finish, celebrated from every horizon.</h2>
+      <p class="lede reveal">Imagine your completion signal crossing oceans and mountain air, picking up
+        another quiet cheer wherever it lands. These observatories are the chorus: six distant reminders
+        that work finished in one small place can still feel wonderfully enormous.</p>
+    </div>
+    <div class="node-grid reveal" id="nodeGrid" role="list" aria-label="Celebration echoes">
+      <noscript><p class="lede">Celebration cards load with JavaScript enabled. The signal reaches Chile,
+        Hawaiʻi, the Canary Islands, South Africa, Australia and Scotland.</p></noscript>
+    </div>
+  </section>
+
+  <!-- ============ OBSERVATIONS — deep-sky gallery (Pattern A) ============ -->
+  <section id="observations" class="observations">
+    <div class="section-head">
+      <p class="kicker reveal">[ Today&apos;s highlights ]</p>
+      <h2 class="reveal">Your completed work, written across the sky.</h2>
+      <p class="lede reveal">No single moment had to look dramatic while it was happening. Together, they
+        became this: a field of starts, returns, steady stretches and one final clear finish. Hover a card
+        and give each part of the journey a little light.</p>
+    </div>
+    <div class="obs-grid reveal" id="obsGrid" role="list" aria-label="Today&apos;s bright moments">
+      <noscript><p class="lede">Today&apos;s highlight cards load with JavaScript enabled. For now, let the
+        whole field stand for the focus, patience and momentum that brought dueCardsCompleted home.</p></noscript>
+    </div>
+  </section>
+
+  <!-- ============ SPECS band — animated counters ============ -->
+  <section class="specs">
+    <div class="specs-inner reveal" aria-label="Celebration at a glance">
+      <div class="spec"><span class="s-num" data-to="1284" data-dec="0">0</span><span class="s-lbl">points of light in the salute</span></div>
+      <div class="spec"><span class="s-num" data-to="12908" data-dec="0">0</span><span class="s-lbl">waves of imaginary applause</span></div>
+      <div class="spec"><span class="s-num" data-to="2.53" data-dec="2">0</span><span class="s-suf">M km</span><span class="s-lbl">above the noise</span></div>
+      <div class="spec"><span class="s-num" data-to="48300" data-dec="0">0</span><span class="s-lbl">cheers circling the globe</span></div>
+    </div>
+  </section>
+
+  <!-- ============ JOIN — point → focus → share (Pattern C) ============ -->
+  <section id="join" class="join">
+    <div class="section-head">
+      <p class="kicker reveal">[ Keep the feeling ]</p>
+      <h2 class="reveal">Three small ways to let completion land.</h2>
+    </div>
+    <ol class="steps reveal" aria-label="Ways to hold the moment">
+      <li class="step">
+        <span class="step-n">01</span>
+        <h3>Pause</h3>
+        <p>Before the next tab, task or thought arrives, stay here for one breath. The work is complete, and
+          you are allowed to notice.</p>
+      </li>
+      <li class="step">
+        <span class="step-n">02</span>
+        <h3>Notice</h3>
+        <p>Remember one card that took effort, one prompt that clicked or one moment when you returned after
+          drifting away. That is what progress looked like today.</p>
+      </li>
+      <li class="step">
+        <span class="step-n">03</span>
+        <h3>Carry it</h3>
+        <p>Take the afterglow with you. Tomorrow can wait for tomorrow. Today already has a clean ending,
+          and you made it.</p>
+      </li>
+    </ol>
+
+    <form class="invite reveal" id="inviteForm" novalidate>
+      <label class="invite-label" for="inviteEmail">Send a small keepsake to your future self</label>
+      <div class="invite-row">
+        <input class="invite-input" id="inviteEmail" name="email" type="email" inputmode="email"
+          autocomplete="email" placeholder="you@afterglow.today" aria-describedby="inviteNote" />
+        <button class="btn btn-primary" type="submit">Hold the moment</button>
+      </div>
+      <p class="invite-note" id="inviteNote">Demo only — nothing is sent or stored. The moment stays with you.</p>
+    </form>
+  </section>
+
+  <section class="closer">
+    <p class="closer-line reveal">Today asked for your attention. <em>You gave it.</em> Now, rest.</p>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="foot-top">
+    <span class="foot-brand">Afterglow</span>
+    <div class="foot-links">
+      <a href="#console">The moment</a><a href="#network">Echoes</a><a href="#observations">Highlights</a><a href="./guide/">Story</a>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span>dueCardsCompleted · today&apos;s due cards complete.</span>
+    <span>A quiet celebration in deep space · <a href="./guide/">How the moment was shaped →</a></span>
+  </div>
+</footer>
+
+<script type="module" src="./main.js"></script>
+<script type="module" data-celebration-runtime>
+  import { announceCelebration } from "/shared/experience-runtime.js";
+  announceCelebration("perigee-astro");
+</script>
+</body>
+</html>

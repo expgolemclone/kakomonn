@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>document.documentElement.classList.add('js')</script>
+<title>Stillpoint | dueCardsCompleted achieved</title>
+<meta name="description" content="Stillpoint celebrates dueCardsCompleted with a quiet halo for every due card you met, remembered, repaired, and completed." />
+<meta name="theme-color" content="#141026" />
+<meta property="og:title" content="Stillpoint | dueCardsCompleted achieved" />
+<meta property="og:description" content="Every due card is complete. Step into the quiet halo and let your finished work shine." />
+<meta name="color-scheme" content="dark" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<canvas id="dusk" class="dusk" aria-hidden="true"></canvas>
+<canvas id="stars" class="stars" aria-hidden="true"></canvas>
+<div class="veil" aria-hidden="true"></div>
+
+<header class="nav">
+  <a class="brand" href="./" aria-label="Stillpoint celebration home">
+    <span class="brand-ring" aria-hidden="true"></span>
+    <span class="brand-word">Stillpoint</span>
+  </a>
+  <nav class="nav-links" aria-label="Primary">
+    <a href="#score">The finish</a>
+    <a href="#ring">Your work</a>
+    <a href="#science">What remains</a>
+    <a href="./guide/">Reflection</a>
+    <a class="nav-cta" href="#preorder">Take it in</a>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ============ HERO ============ -->
+  <section class="hero" id="top">
+    <div class="hero-copy">
+      <p class="eyebrow reveal">Today&apos;s due cards &middot; complete</p>
+      <h1 class="hero-title">
+        <span class="line"><span>The work is quiet.</span></span>
+        <span class="line"><span>Your light <em>remains.</em></span></span>
+      </h1>
+      <p class="hero-sub reveal">Every due card asked for a little attention. You answered with
+        memory, correction, and one more return until none were left. dueCardsCompleted is true.
+        Breathe with the halo for a moment. You carried the day all the way here.</p>
+      <div class="hero-actions reveal">
+        <a class="btn btn-primary" href="#preorder">Rest at the finish</a>
+        <a class="btn btn-ghost" href="#score">See what you completed &rarr;</a>
+      </div>
+    </div>
+
+    <div class="hero-breath reveal">
+      <div class="breath" id="breath">
+        <div class="breath-halo" id="breathHalo" aria-hidden="true"></div>
+        <div class="breath-scale" id="breathScale" aria-hidden="true">
+          <div class="breath-ring"></div>
+          <div class="breath-sheen"></div>
+          <div class="breath-inner"></div>
+        </div>
+        <div class="breath-text" aria-hidden="true">
+          <span class="breath-phase" id="breathPhase">breathe in</span>
+          <span class="breath-count" id="breathCount">4</span>
+        </div>
+        <p class="sr-only">The completion halo doubles as a breath guide: it expands while you
+          inhale for four seconds, holds for seven, and eases back while you exhale for eight.</p>
+      </div>
+      <button class="breath-toggle" id="breathToggle" type="button" aria-pressed="false" hidden>Pause the breath</button>
+    </div>
+  </section>
+
+  <!-- ============ SLEEP SCORE ============ -->
+  <section id="score" class="score">
+    <div class="section-head">
+      <p class="kicker reveal">[ The finish ]</p>
+      <h2 class="reveal">One clear state, honestly earned.</h2>
+      <p class="lede reveal">Completion is not a mood or a promise. It is the point where every card
+        that was due has been met. dueCardsCompleted names the state. Your effort made it true.</p>
+    </div>
+
+    <div class="score-grid">
+      <!-- score dial + contributors -->
+      <article class="panel score-panel reveal">
+        <p class="panel-kicker">Today&apos;s due queue &middot; complete</p>
+        <figure class="dial" role="img" aria-label="dueCardsCompleted achieved. Every due card is complete.">
+          <svg viewBox="0 0 220 220" aria-hidden="true">
+            <defs>
+              <linearGradient id="dialGrad" x1="0" y1="1" x2="1" y2="0">
+                <stop offset="0" stop-color="#6d6ae0"/>
+                <stop offset=".6" stop-color="#e5a9b0"/>
+                <stop offset="1" stop-color="#e8c68a"/>
+              </linearGradient>
+            </defs>
+            <circle class="dial-track" cx="110" cy="110" r="90"
+              stroke-dasharray="424.1 565.5" transform="rotate(135 110 110)"/>
+            <circle class="dial-value" id="dialValue" cx="110" cy="110" r="90"
+              stroke="url(#dialGrad)" stroke-dasharray="369 565.5" transform="rotate(135 110 110)"/>
+          </svg>
+          <div class="dial-read" aria-hidden="true">
+            <span class="dial-num" id="dialNum" data-score="100">100</span>
+            <span class="dial-word">Complete</span>
+          </div>
+        </figure>
+
+        <ul class="contrib" id="contrib">
+          <li class="c-row" style="--w:.91;--i:0"><span class="c-name">Began</span><span class="c-bar" aria-hidden="true"><i></i></span><span class="c-val">You showed up</span></li>
+          <li class="c-row" style="--w:.93;--i:1"><span class="c-name">Focused</span><span class="c-bar" aria-hidden="true"><i></i></span><span class="c-val">You stayed</span></li>
+          <li class="c-row" style="--w:.88;--i:2"><span class="c-name">Recalled</span><span class="c-bar" aria-hidden="true"><i></i></span><span class="c-val">You reached</span></li>
+          <li class="c-row" style="--w:.96;--i:3"><span class="c-name">Corrected</span><span class="c-bar" aria-hidden="true"><i></i></span><span class="c-val">You rebuilt</span></li>
+          <li class="c-row" style="--w:.84;--i:4"><span class="c-name">Returned</span><span class="c-bar" aria-hidden="true"><i></i></span><span class="c-val">You continued</span></li>
+          <li class="c-row" style="--w:.90;--i:5"><span class="c-name">Finished</span><span class="c-bar" aria-hidden="true"><i></i></span><span class="c-val">It is done</span></li>
+        </ul>
+      </article>
+
+      <!-- hypnogram + coach -->
+      <div class="score-right">
+        <article class="panel hypno-panel reveal">
+          <p class="panel-kicker">The shape of a finished review</p>
+          <figure class="hypno" id="hypno" role="img"
+            aria-label="A symbolic path through today&apos;s review, moving among beginning, recall, repair, and persistence until every due card is complete.">
+            <svg viewBox="0 0 760 248" aria-hidden="true">
+              <!-- row guides -->
+              <line class="row-line" x1="78" y1="46" x2="752" y2="46"/>
+              <line class="row-line" x1="78" y1="98" x2="752" y2="98"/>
+              <line class="row-line" x1="78" y1="150" x2="752" y2="150"/>
+              <line class="row-line" x1="78" y1="202" x2="752" y2="202"/>
+              <!-- row labels -->
+              <text class="row-label" x="8" y="50">BEGIN</text>
+              <text class="row-label" x="8" y="102">RECALL</text>
+              <text class="row-label" x="8" y="154">REPAIR</text>
+              <text class="row-label" x="8" y="206">RETURN</text>
+              <!-- stage bands (chronological, staggered on reveal) -->
+              <rect class="seg sg-awake" style="--i:0" x="78.0" y="36" width="17.1" height="20" rx="6"/>
+              <rect class="seg sg-light" style="--i:1" x="95.1" y="140" width="34.2" height="20" rx="6"/>
+              <rect class="seg sg-deep" style="--i:2" x="129.3" y="192" width="54.1" height="20" rx="6"/>
+              <rect class="seg sg-light" style="--i:3" x="183.4" y="140" width="25.6" height="20" rx="6"/>
+              <rect class="seg sg-rem" style="--i:4" x="209.1" y="88" width="25.6" height="20" rx="6"/>
+              <rect class="seg sg-light" style="--i:5" x="234.7" y="140" width="57.0" height="20" rx="6"/>
+              <rect class="seg sg-deep" style="--i:6" x="291.7" y="192" width="51.3" height="20" rx="6"/>
+              <rect class="seg sg-light" style="--i:7" x="343.0" y="140" width="19.9" height="20" rx="6"/>
+              <rect class="seg sg-rem" style="--i:8" x="363.0" y="88" width="37.0" height="20" rx="6"/>
+              <rect class="seg sg-awake" style="--i:9" x="400.0" y="36" width="8.5" height="20" rx="6"/>
+              <rect class="seg sg-light" style="--i:10" x="408.6" y="140" width="42.7" height="20" rx="6"/>
+              <rect class="seg sg-deep" style="--i:11" x="451.3" y="192" width="37.0" height="20" rx="6"/>
+              <rect class="seg sg-light" style="--i:12" x="488.4" y="140" width="19.9" height="20" rx="6"/>
+              <rect class="seg sg-rem" style="--i:13" x="508.3" y="88" width="45.6" height="20" rx="6"/>
+              <rect class="seg sg-light" style="--i:14" x="553.9" y="140" width="45.6" height="20" rx="6"/>
+              <rect class="seg sg-awake" style="--i:15" x="599.5" y="36" width="8.5" height="20" rx="6"/>
+              <rect class="seg sg-light" style="--i:16" x="608.1" y="140" width="37.0" height="20" rx="6"/>
+              <rect class="seg sg-rem" style="--i:17" x="645.1" y="88" width="54.1" height="20" rx="6"/>
+              <rect class="seg sg-light" style="--i:18" x="699.3" y="140" width="37.0" height="20" rx="6"/>
+              <rect class="seg sg-awake" style="--i:19" x="736.3" y="36" width="15.7" height="20" rx="6"/>
+              <!-- time axis -->
+              <text class="tick" x="78" y="238">FIRST</text>
+              <text class="tick" x="172" y="238" text-anchor="middle">NEXT</text>
+              <text class="tick" x="343" y="238" text-anchor="middle">STAY</text>
+              <text class="tick" x="514" y="238" text-anchor="middle">AGAIN</text>
+              <text class="tick" x="685" y="238" text-anchor="middle">LAST</text>
+              <text class="tick" x="752" y="238" text-anchor="end">CLEAR</text>
+            </svg>
+          </figure>
+          <ul class="hypno-legend">
+            <li><i class="chip chip-awake" aria-hidden="true"></i>Begin <span>intention became action</span></li>
+            <li><i class="chip chip-rem" aria-hidden="true"></i>Recall <span>memory met the question</span></li>
+            <li><i class="chip chip-light" aria-hidden="true"></i>Repair <span>correction became learning</span></li>
+            <li><i class="chip chip-deep" aria-hidden="true"></i>Return <span>effort reached the finish</span></li>
+          </ul>
+        </article>
+
+        <article class="panel coach reveal">
+          <p class="panel-kicker">A note for right now</p>
+          <h3 class="coach-title">Nothing is asking for one more answer.</h3>
+          <p class="coach-body">The useful work happened in the uneven moments: when recall came
+            slowly, when a correction asked you to begin again, when the next card still received
+            your attention. Let completion be complete. The quiet is part of the reward.</p>
+          <p class="coach-meta">queue clear &middot; dueCardsCompleted true &middot; credit entirely yours</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ THE RING ============ -->
+  <section id="ring" class="ring">
+    <div class="section-head">
+      <p class="kicker reveal">[ Your work ]</p>
+      <h2 class="reveal">Many small returns, held in one halo.</h2>
+      <p class="lede reveal">The circle is simple because the work was not. It holds every beginning,
+        every effortful retrieval, every honest correction, and the final card that closed the line.</p>
+    </div>
+
+    <div class="ring-grid">
+      <figure class="ring-visual reveal" role="img" aria-label="A luminous completion halo with three inner lights representing attention, recall, and return.">
+        <svg viewBox="0 0 480 400" aria-hidden="true">
+          <defs>
+            <linearGradient id="ti" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#f2f0f9"/>
+              <stop offset=".38" stop-color="#b9b6ca"/>
+              <stop offset=".62" stop-color="#6a677f"/>
+              <stop offset=".85" stop-color="#4a475e"/>
+              <stop offset="1" stop-color="#8b88a0"/>
+            </linearGradient>
+            <linearGradient id="tiInner" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0" stop-color="#dddae8" stop-opacity=".9"/>
+              <stop offset="1" stop-color="#33304a"/>
+            </linearGradient>
+            <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="10"/>
+            </filter>
+          </defs>
+          <!-- floor glow + shadow -->
+          <ellipse cx="240" cy="352" rx="165" ry="24" fill="#0a0718" opacity=".55" filter="url(#soft)"/>
+          <ellipse cx="240" cy="348" rx="110" ry="14" fill="#e5a9b0" opacity=".14" filter="url(#soft)"/>
+          <g class="ring-float">
+            <!-- torus: outer minus inner (front view, slight tilt) -->
+            <path fill="url(#ti)" fill-rule="evenodd" d="
+              M 240 22
+              a 168 156 0 1 0 0.01 0 Z
+              M 240 70
+              a 121 110 0 1 1 -0.01 0 Z"/>
+            <!-- inner wall shading -->
+            <ellipse cx="240" cy="180" rx="121" ry="110" fill="none" stroke="url(#tiInner)" stroke-width="7" opacity=".85"/>
+            <!-- top highlight -->
+            <path d="M 118 108 A 158 140 0 0 1 366 112" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity=".5" filter="url(#soft)"/>
+            <!-- lower rose reflection -->
+            <path d="M 132 268 A 150 138 0 0 0 352 264" fill="none" stroke="#e5a9b0" stroke-width="8" stroke-linecap="round" opacity=".28" filter="url(#soft)"/>
+            <!-- sensor windows on the inner rim -->
+            <circle cx="196" cy="283" r="5.5" fill="#e8c68a" opacity=".95"/>
+            <circle cx="240" cy="289" r="5.5" fill="#e5a9b0" opacity=".95"/>
+            <circle cx="284" cy="283" r="5.5" fill="#8f8cec" opacity=".95"/>
+          </g>
+          <!-- callouts -->
+          <g class="callout">
+            <line x1="196" y1="283" x2="92" y2="330"/><circle cx="196" cy="283" r="9"/>
+            <text x="88" y="348" text-anchor="middle">ATTENTION</text>
+          </g>
+          <g class="callout">
+            <line x1="240" y1="289" x2="240" y2="330"/><circle cx="240" cy="289" r="9"/>
+            <text x="240" y="382" text-anchor="middle">RECALL</text>
+          </g>
+          <g class="callout">
+            <line x1="284" y1="283" x2="388" y2="330"/><circle cx="284" cy="283" r="9"/>
+            <text x="392" y="348" text-anchor="middle">RETURN</text>
+          </g>
+        </svg>
+      </figure>
+
+      <div class="spec-grid">
+        <article class="spec reveal" style="--i:0">
+          <span class="spec-val">The first card</span>
+          <h3>You made the start real</h3>
+          <p>There is always a small distance between meaning to study and beginning. You crossed
+            it. The whole finish rests on that first ordinary, decisive act.</p>
+        </article>
+        <article class="spec reveal" style="--i:1">
+          <span class="spec-val">The hard card</span>
+          <h3>You stayed with uncertainty</h3>
+          <p>Recall did not need to feel effortless to count. You searched, answered, and let
+            difficulty show you exactly where learning was still alive.</p>
+        </article>
+        <article class="spec reveal" style="--i:2">
+          <span class="spec-val">The correction</span>
+          <h3>You turned friction into memory</h3>
+          <p>A missed answer was not a break in the work. It was the work becoming more precise.
+            You repaired what needed repair and moved forward honestly.</p>
+        </article>
+        <article class="spec reveal" style="--i:3">
+          <span class="spec-val">The final card</span>
+          <h3>You closed the circle</h3>
+          <p>The last answer did more than end a queue. It gathered every earlier return into one
+            exact state: dueCardsCompleted, achieved because you stayed.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCIENCE ============ -->
+  <section id="science" class="science">
+    <div class="section-head">
+      <p class="kicker reveal">[ What remains ]</p>
+      <h2 class="reveal">The queue disappears. The work does not.</h2>
+      <p class="lede reveal">A finished review leaves no pile to admire. It leaves strengthened paths,
+        clearer distinctions, and the earned knowledge that you can return even when recall resists.</p>
+    </div>
+
+    <div class="stats reveal" aria-label="dueCardsCompleted achievement summary">
+      <div class="stat"><span class="s-top"><span class="s-num" data-to="1" data-dec="0">1</span><span class="s-suf">state</span></span><span class="s-lbl">dueCardsCompleted achieved</span></div>
+      <div class="stat"><span class="s-top"><span class="s-num" data-to="1" data-dec="0">1</span><span class="s-suf">queue</span></span><span class="s-lbl">carried all the way through</span></div>
+      <div class="stat"><span class="s-top"><span class="s-num" data-to="1" data-dec="0">1</span><span class="s-suf">halo</span></span><span class="s-lbl">lit by your persistence</span></div>
+      <div class="stat"><span class="s-top"><span class="s-num" data-to="1" data-dec="0">1</span><span class="s-suf">pause</span></span><span class="s-lbl">with nothing left to prove</span></div>
+    </div>
+
+    <blockquote class="quote reveal">
+      <p>&ldquo;The halo did not finish the cards. It only makes visible what your attention already did.&rdquo;</p>
+      <cite>Stillpoint &middot; a quiet record of completion</cite>
+    </blockquote>
+  </section>
+
+  <!-- ============ PRE-ORDER ============ -->
+  <section id="preorder" class="closer">
+    <p class="closer-line reveal">Every due card is behind you.<br/><em>Let the quiet shine.</em></p>
+    <a class="btn btn-primary btn-big reveal" href="#top">Breathe in the finish</a>
+    <p class="closer-meta reveal">dueCardsCompleted &middot; achieved &middot; this moment belongs to you</p>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="foot-top">
+    <span class="foot-brand">Stillpoint</span>
+    <div class="foot-links">
+      <a href="#score">The finish</a><a href="#ring">Your work</a><a href="#science">What remains</a><a href="./guide/">Reflection</a>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span>&copy; 2026 Stillpoint &middot; a Kakomonn celebration for dueCardsCompleted.</span>
+    <span>Lit by your persistence &middot; <a href="./guide/">Reflect on the work &rarr;</a></span>
+  </div>
+</footer>
+
+<script src="./main.js" defer></script>
+<script type="module" data-celebration-runtime>
+  import { announceCelebration } from "/shared/experience-runtime.js";
+  announceCelebration("halcyon-ring");
+</script>
+</body>
+</html>

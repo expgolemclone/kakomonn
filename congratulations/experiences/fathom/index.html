@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>
+  document.documentElement.classList.add('js');
+  try { var t = localStorage.getItem('fathom-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<title>Upwell | dueCardsCompleted achieved</title>
+<meta name="description" content="Upwell celebrates the moment dueCardsCompleted becomes true: every due card carried through the deep and brought back to light." />
+<meta name="theme-color" content="#05141c" />
+<meta name="color-scheme" content="dark light" />
+<meta property="og:title" content="Upwell | dueCardsCompleted achieved" />
+<meta property="og:description" content="The due queue is clear. Follow the work beneath the finish, then rise into a celebration that is entirely yours." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,400;0,500;1,400&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div class="tide" aria-hidden="true"></div>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <a class="brand" href="./" aria-label="Upwell home">
+    <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true" focusable="false">
+      <path d="M14 3 L14 20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M10 8 L14 8 M10 12 L14 12 M10 16 L14 16" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity=".55"/>
+      <path d="M14 20 Q9 21 11 25 Q14 27 17 25 Q19 21 14 20 Z" fill="currentColor"/>
+    </svg>
+    <span class="brand-word">Upwell</span>
+  </a>
+  <nav class="nav-links" aria-label="Primary">
+    <a href="#depths">The descent</a>
+    <a href="#exhibits">What carried you</a>
+    <a href="#conservation">The proof</a>
+    <a href="./guide/">Reflection</a>
+    <a class="nav-cta" href="#tickets">Mark it</a>
+    <button id="themeBtn" class="theme-btn" type="button" aria-pressed="true" aria-label="Switch to light mode" title="Toggle light / dark">
+      <svg class="ico-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><g stroke-linecap="round"><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></g></svg>
+      <svg class="ico-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg>
+    </button>
+  </nav>
+</header>
+
+<main id="main">
+
+  <!-- ============ hero — caustics light shader ============ -->
+  <section class="hero" aria-labelledby="hero-title">
+    <canvas id="caustics" class="caustics" aria-hidden="true"></canvas>
+    <div class="hero-veil" aria-hidden="true"></div>
+    <div class="hero-inner wrap">
+      <p class="eyebrow mono">[ dueCardsCompleted · achieved · all due cards met ]</p>
+      <h1 id="hero-title" class="hero-title">
+        <span class="line"><span>Every due card,</span></span>
+        <span class="line"><span>carried through the deep,</span></span>
+        <span class="line"><span>and brought <em>back to light.</em></span></span>
+      </h1>
+      <p class="hero-sub">The queue that asked for your attention is clear. You recalled, hesitated,
+        tried again, and kept going until dueCardsCompleted became true. Stay here for a moment.
+        This bright water is the finish you made.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#tickets">Mark the moment</a>
+        <a class="btn btn-ghost" href="#depths">Trace the work downward ↓</a>
+      </div>
+      <dl class="hero-facts">
+        <div><dt class="mono">dueCardsCompleted</dt><dd><span class="c-num" data-to="1">0</span></dd></div>
+        <div><dt class="mono">dueCardsRemaining</dt><dd><span class="c-num" data-to="0">0</span></dd></div>
+        <div><dt class="mono">Currents crossed</dt><dd><span class="c-num" data-to="4">0</span></dd></div>
+      </dl>
+    </div>
+    <p class="hero-scroll mono" aria-hidden="true">scroll — see what holds up a finish</p>
+  </section>
+
+  <!-- ============ the depths — zone column navigator ============ -->
+  <section id="depths" class="depths">
+    <div class="wrap sec-head">
+      <p class="kicker mono reveal">[ Beneath the finish ]</p>
+      <h2 class="reveal">Four layers of effort<br>under one clear surface.</h2>
+      <p class="lede reveal">Completion looks simple from above. Underneath it are the first card,
+        the returning rhythm, the uncertain answers, and the choice to continue. Follow the gauge
+        down through everything you carried to make this moment true.</p>
+    </div>
+
+    <div class="wrap depths-body">
+      <aside class="gauge" id="gauge" aria-hidden="true">
+        <div class="gauge-read">
+          <div class="g-row"><span class="mono g-lbl">Depth</span><span class="mono g-val" id="gDepth">0 m</span></div>
+          <div class="g-row"><span class="mono g-lbl">Pressure</span><span class="mono g-val" id="gPress">1.0 atm</span></div>
+          <div class="g-row"><span class="mono g-lbl">Temp</span><span class="mono g-val" id="gTemp">19 °C</span></div>
+          <div class="g-row"><span class="mono g-lbl">Sunlight</span><span class="mono g-val" id="gLight">100 %</span></div>
+        </div>
+        <div class="gauge-rail">
+          <i class="gauge-fill" id="gFill"></i>
+          <span class="gauge-dot" id="gDot">
+            <svg viewBox="0 0 22 14" aria-hidden="true"><ellipse cx="11" cy="7" rx="10" ry="5"/><circle cx="14" cy="7" r="2.1" class="port"/><path d="M1 7 L-2 4 M1 7 L-2 10" stroke="currentColor" stroke-width="1" fill="none"/></svg>
+          </span>
+          <span class="gauge-now mono" id="gNow">First light</span>
+        </div>
+      </aside>
+
+      <div class="zones">
+        <!-- SUNLIGHT -->
+        <article class="zone zone--sun" data-zone="sunlight" data-top="0" data-bot="200">
+          <div class="zone-shaft" aria-hidden="true"></div>
+          <header class="zone-head">
+            <span class="zone-depth mono">0 – 200 m</span>
+            <h3>First Light</h3>
+            <span class="zone-sci mono">Begin</span>
+          </header>
+          <p class="zone-lede">The moment before momentum, when the whole queue was still ahead of you.
+            You did the smallest decisive thing: you began. Everything below grew from that choice.</p>
+          <ul class="species">
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <ellipse cx="52" cy="40" rx="30" ry="19"/>
+                  <path d="M79 33 q11 -3 17 4 q-7 7 -17 3 z"/>
+                  <path d="M40 22 q-20 -13 -33 -6 q7 13 29 12 z"/>
+                  <path d="M44 57 q-18 13 -32 8 q5 -13 28 -12 z"/>
+                  <path d="M72 24 q11 -9 22 -4 q-7 11 -22 8 z"/>
+                  <path d="M22 52 q-14 8 -22 4 q4 -10 20 -8 z" opacity=".9"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>Arrival</h4>
+                <p class="species-fact">You opened the session and gave the work a place in your day.</p>
+              </div>
+            </li>
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <path d="M22 40 Q26 12 60 10 Q94 12 98 40 Q84 44 60 44 Q36 44 22 40 Z"/>
+                  <circle cx="46" cy="30" r="6" class="glow"/><circle cx="60" cy="26" r="6" class="glow"/><circle cx="74" cy="30" r="6" class="glow"/>
+                  <path d="M32 42 q-3 20 2 26 M44 44 q-2 22 3 24 M60 45 q0 22 0 26 M76 44 q2 22 -3 24 M88 42 q3 20 -2 26" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>Attention</h4>
+                <p class="species-fact">You let one prompt become the only thing that needed an answer.</p>
+              </div>
+            </li>
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <path d="M14 36 Q40 20 78 30 Q92 33 104 30 L96 40 L104 50 Q92 47 78 50 Q40 60 14 44 Q10 40 14 36 Z"/>
+                  <path d="M14 40 L4 30 Q2 40 4 50 Z"/>
+                  <circle cx="86" cy="37" r="2.6" class="port"/>
+                  <path d="M46 28 q4 12 0 24 M60 27 q4 13 0 26" stroke="var(--bg)" stroke-width="1.6" fill="none" opacity=".5"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>The first answer</h4>
+                <p class="species-fact">One card moved. Then another. The current started with you.</p>
+              </div>
+            </li>
+          </ul>
+        </article>
+
+        <!-- TWILIGHT -->
+        <article class="zone zone--twi" data-zone="twilight" data-top="200" data-bot="1000">
+          <header class="zone-head">
+            <span class="zone-depth mono">200 – 1000 m</span>
+            <h3>The Current</h3>
+            <span class="zone-sci mono">Continue</span>
+          </header>
+          <p class="zone-lede">Novelty faded and rhythm took over. Each prompt asked you to reach inward,
+            bring something back, and move again. You kept the current going when it stopped feeling new.</p>
+          <ul class="species">
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <path d="M16 40 Q44 24 80 32 Q94 35 106 30 L98 40 L106 50 Q94 45 80 48 Q44 56 16 44 Q12 42 16 40 Z"/>
+                  <path d="M16 42 L4 32 Q2 42 4 50 Z"/>
+                  <circle cx="88" cy="37" r="2.4" class="port"/>
+                  <circle cx="34" cy="47" r="1.9" class="glow"/><circle cx="46" cy="49" r="1.9" class="glow"/><circle cx="58" cy="50" r="1.9" class="glow"/><circle cx="70" cy="49" r="1.9" class="glow"/><circle cx="82" cy="47" r="1.9" class="glow"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>Return</h4>
+                <p class="species-fact">You came back to the next card before the last one could pull you away.</p>
+              </div>
+            </li>
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <path d="M40 12 Q70 14 78 34 L92 30 L86 40 L94 50 L78 46 Q72 62 44 62 Q30 62 30 46 L18 50 L24 40 L18 30 L30 36 Q30 14 40 12 Z"/>
+                  <circle cx="44" cy="30" r="3.4" class="port"/>
+                  <circle cx="40" cy="60" r="1.8" class="glow"/><circle cx="52" cy="62" r="1.8" class="glow"/><circle cx="64" cy="60" r="1.8" class="glow"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>Recall</h4>
+                <p class="species-fact">You searched memory before looking outward, strengthening the path by using it.</p>
+              </div>
+            </li>
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <path d="M60 6 Q78 10 78 32 Q78 44 68 48 L72 48 Q66 60 60 66 Q54 60 48 48 L52 48 Q42 44 42 32 Q42 10 60 6 Z"/>
+                  <path d="M44 48 q-6 14 -12 20 M52 50 q-3 15 -6 22 M60 50 q0 16 0 22 M68 50 q3 15 6 22 M76 48 q6 14 12 20" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+                  <path d="M40 30 q-16 -6 -22 -18 M80 30 q16 -6 22 -18" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+                  <circle cx="53" cy="24" r="2.6" class="port"/><circle cx="67" cy="24" r="2.6" class="port"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>Correction</h4>
+                <p class="species-fact">When an answer missed, you turned the miss into a clearer route back.</p>
+              </div>
+            </li>
+          </ul>
+        </article>
+
+        <!-- MIDNIGHT -->
+        <article class="zone zone--mid" data-zone="midnight" data-top="1000" data-bot="4000">
+          <header class="zone-head">
+            <span class="zone-depth mono">1000 – 4000 m</span>
+            <h3>Deep Work</h3>
+            <span class="zone-sci mono">Persist</span>
+          </header>
+          <p class="zone-lede">Here were the slow cards, the uncertain reaches, and the temptation to stop.
+            There was no easy light to follow. You supplied your own by staying with the work.</p>
+          <ul class="species">
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <path d="M30 40 Q30 18 58 18 Q86 18 92 38 Q94 48 86 54 L92 54 Q88 60 82 58 Q78 62 70 58 L70 54 Q54 60 40 54 Q30 50 30 40 Z"/>
+                  <path d="M34 46 L26 44 L33 50 L24 52 L34 54 L27 60 L38 56 Z"/>
+                  <path d="M40 43 l4 6 l4 -6 l4 6 l4 -6 l4 6 l4 -6" stroke="var(--bg)" stroke-width="1.4" fill="none"/>
+                  <path d="M56 20 Q54 6 66 3" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+                  <circle cx="67" cy="3" r="4.4" class="glow lure"/>
+                  <circle cx="50" cy="34" r="3" class="port"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>Uncertainty</h4>
+                <p class="species-fact">You answered without needing certainty first. That is how recall becomes durable.</p>
+              </div>
+            </li>
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <path d="M18 30 Q30 18 40 30 Q42 44 30 52 Q40 58 44 46 L100 40 Q112 39 108 44 L54 54 Q40 66 26 56 Q14 46 18 30 Z"/>
+                  <path d="M22 32 Q28 26 34 32 Q34 40 26 44 Q18 40 22 32 Z" fill="var(--bg)" opacity=".55"/>
+                  <circle cx="100" cy="41" r="2.4" class="glow"/>
+                  <circle cx="30" cy="34" r="2.4" class="port"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>Patience</h4>
+                <p class="species-fact">You gave difficult material another pass instead of calling the struggle failure.</p>
+              </div>
+            </li>
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <path d="M60 20 Q84 20 84 44 Q84 60 60 60 Q36 60 36 44 Q36 20 60 20 Z"/>
+                  <path d="M36 34 Q16 26 12 36 Q20 44 36 42 Z"/>
+                  <path d="M84 34 Q104 26 108 36 Q100 44 84 42 Z"/>
+                  <path d="M48 60 q-3 8 1 12 M60 61 q0 8 0 12 M72 60 q3 8 -1 12" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+                  <circle cx="52" cy="38" r="2.6" class="port"/><circle cx="68" cy="38" r="2.6" class="port"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>Trust</h4>
+                <p class="species-fact">You trusted that one honest attempt at a time would eventually reach the end.</p>
+              </div>
+            </li>
+          </ul>
+        </article>
+
+        <!-- ABYSS -->
+        <article class="zone zone--abyss" data-zone="abyss" data-top="4000" data-bot="6000">
+          <div class="zone-snow" aria-hidden="true"></div>
+          <header class="zone-head">
+            <span class="zone-depth mono">4000 m +</span>
+            <h3>The Finish</h3>
+            <span class="zone-sci mono">Complete</span>
+          </header>
+          <p class="zone-lede">The final cards did not announce themselves until you reached them. Then
+            the queue gave way to clear water: dueCardsCompleted, achieved through every answer above.</p>
+          <ul class="species">
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <path d="M28 26 Q60 16 92 26 Q100 40 92 52 Q60 62 28 52 Q20 40 28 26 Z"/>
+                  <path d="M40 22 L40 56 M52 20 L52 58 M64 20 L64 58 M76 22 L76 56" stroke="var(--bg)" stroke-width="2.2" opacity=".5"/>
+                  <path d="M24 30 q-8 -8 -14 -6 M24 46 q-8 8 -14 6 M96 30 q8 -8 14 -6 M96 46 q8 8 14 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+                  <circle cx="34" cy="34" r="2.2" class="port"/><circle cx="34" cy="44" r="2.2" class="port"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>The last card</h4>
+                <p class="species-fact">It received the same care as the first, even with the surface close.</p>
+              </div>
+            </li>
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <path d="M40 20 Q60 16 72 24 Q80 30 74 36 Q60 40 46 36 Q38 30 40 20 Z"/>
+                  <path d="M42 24 q-10 -4 -16 -14 M50 22 q-2 -12 4 -18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+                  <path d="M44 36 L30 66 M58 38 L60 68 M70 34 L88 64" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+                  <circle cx="52" cy="26" r="2.4" class="port"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>Clear queue</h4>
+                <p class="species-fact">Nothing due is asking for you now. The work has reached its edge.</p>
+              </div>
+            </li>
+            <li class="species-card reveal">
+              <span class="creature">
+                <svg viewBox="0 0 120 72" aria-hidden="true" focusable="false">
+                  <path d="M22 44 Q28 24 54 24 Q86 24 98 42 Q100 50 92 52 Q60 58 34 54 Q22 52 22 44 Z"/>
+                  <path d="M40 24 q0 -10 6 -12 M56 24 q2 -10 8 -10" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+                  <path d="M36 54 q-2 8 2 12 M50 55 q0 8 0 12 M64 54 q2 8 -2 12 M78 52 q3 8 -1 12" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+                  <circle cx="44" cy="40" r="2.6" class="port"/>
+                </svg>
+              </span>
+              <div class="species-txt">
+                <h4>The surface</h4>
+                <p class="species-fact">Come back up slowly. You earned the calm waiting above this depth.</p>
+              </div>
+            </li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ exhibits ============ -->
+  <section id="exhibits" class="exhibits">
+    <span class="wm" aria-hidden="true">UPWELL</span>
+    <div class="wrap sec-head">
+      <p class="kicker mono reveal">[ What carried you ]</p>
+      <h2 class="reveal">Four currents, one finish.</h2>
+      <p class="lede reveal">A completed queue is not one heroic instant. It is a chain of ordinary,
+        repeatable choices. These are the currents you made, and the finish they carried you toward.</p>
+    </div>
+
+    <div class="wrap exhibit-grid">
+      <article class="exhibit reveal">
+        <div class="exhibit-art">
+          <svg viewBox="0 0 200 150" aria-hidden="true" focusable="false" class="ex-svg">
+            <rect width="200" height="150" fill="var(--ex-bg)"/>
+            <g class="kelp"><path d="M30 150 Q22 90 34 40 Q40 20 34 6" /><path d="M60 150 Q54 100 62 54 Q68 28 60 12"/><path d="M96 150 Q90 96 98 44 Q104 22 96 8"/><path d="M132 150 Q126 104 134 58 Q140 30 132 14"/><path d="M168 150 Q162 92 170 46 Q176 24 168 10"/></g>
+            <ellipse cx="118" cy="86" rx="14" ry="7" class="ex-fish"/><ellipse cx="150" cy="60" rx="10" ry="5" class="ex-fish"/>
+          </svg>
+        </div>
+        <div class="exhibit-info">
+          <div class="exhibit-top"><h3>You Showed Up</h3><span class="ex-badge mono">Begin</span></div>
+          <p>Before the first answer, you made room for the session. That quiet act mattered. The queue
+            could only become clear because you chose to meet it.</p>
+          <dl class="ex-specs mono">
+            <div><dt>Signal</dt><dd>session opened</dd></div>
+            <div><dt>Choice</dt><dd>begin</dd></div>
+            <div><dt>Result</dt><dd>the first current moved</dd></div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="exhibit reveal">
+        <div class="exhibit-art">
+          <svg viewBox="0 0 200 150" aria-hidden="true" focusable="false" class="ex-svg">
+            <rect width="200" height="150" fill="var(--ex-bg2)"/>
+            <g class="drift-jelly"><path d="M60 46 Q66 30 84 30 Q102 30 108 46 Q94 50 84 50 Q74 50 60 46 Z"/><path d="M66 48 q-2 26 2 34 M76 50 q-1 28 1 36 M84 50 q0 28 0 36 M92 50 q1 28 -1 36 M102 48 q2 26 -2 34" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></g>
+            <g class="drift-jelly j2"><path d="M120 78 Q124 66 138 66 Q152 66 156 78 Q145 81 138 81 Q131 81 120 78 Z"/><path d="M125 80 q-1 18 2 24 M138 81 q0 18 0 24 M151 80 q1 18 -2 24" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></g>
+          </svg>
+        </div>
+        <div class="exhibit-info">
+          <div class="exhibit-top"><h3>You Pulled from Memory</h3><span class="ex-badge mono">Recall</span></div>
+          <p>You reached for answers before they were visible. Each retrieval strengthened the route,
+            including the ones that arrived slowly or needed correction.</p>
+          <dl class="ex-specs mono">
+            <div><dt>Signal</dt><dd>memory searched</dd></div>
+            <div><dt>Choice</dt><dd>retrieve</dd></div>
+            <div><dt>Result</dt><dd>the route grew clearer</dd></div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="exhibit reveal">
+        <div class="exhibit-art">
+          <svg viewBox="0 0 200 150" aria-hidden="true" focusable="false" class="ex-svg">
+            <rect width="200" height="150" fill="var(--ex-bg3)"/>
+            <circle cx="60" cy="60" r="2" class="glow"/><circle cx="120" cy="42" r="2" class="glow"/><circle cx="150" cy="96" r="2" class="glow"/><circle cx="88" cy="110" r="2" class="glow"/><circle cx="40" cy="104" r="1.6" class="glow"/>
+            <path d="M96 70 Q118 70 118 92 Q118 108 96 108 Q74 108 74 92 Q74 70 96 70 Z" class="ex-fish"/>
+            <path d="M92 60 Q90 48 100 44" stroke="currentColor" stroke-width="2" fill="none" class="ex-line"/><circle cx="101" cy="44" r="3.4" class="glow lure"/>
+          </svg>
+        </div>
+        <div class="exhibit-info">
+          <div class="exhibit-top"><h3>You Stayed with the Hard Card</h3><span class="ex-badge mono">Persist</span></div>
+          <p>Difficulty did not disqualify the session. You let effort take the time it needed, and
+            turned uncertainty into one more completed return.</p>
+          <dl class="ex-specs mono">
+            <div><dt>Signal</dt><dd>effort deepened</dd></div>
+            <div><dt>Choice</dt><dd>continue</dd></div>
+            <div><dt>Result</dt><dd>the hard card moved</dd></div>
+          </dl>
+        </div>
+      </article>
+
+      <article class="exhibit reveal">
+        <div class="exhibit-art">
+          <svg viewBox="0 0 200 150" aria-hidden="true" focusable="false" class="ex-svg">
+            <rect width="200" height="150" fill="var(--ex-bg)"/>
+            <path d="M0 150 Q50 118 100 132 Q150 146 200 120 L200 150 Z" class="ex-pool"/>
+            <path d="M46 118 l6 -10 l6 10 l6 -10 l6 10 M120 128 l6 -9 l6 9 l6 -9 l6 9" class="ex-star"/>
+            <ellipse cx="150" cy="112" rx="12" ry="7" class="ex-fish"/>
+          </svg>
+        </div>
+        <div class="exhibit-info">
+          <div class="exhibit-top"><h3>You Closed the Loop</h3><span class="ex-badge mono">Complete</span></div>
+          <p>The final card joined every card before it. The queue is quiet because you carried the
+            session all the way to its real ending.</p>
+          <dl class="ex-specs mono">
+            <div><dt>Signal</dt><dd>nothing due</dd></div>
+            <div><dt>Choice</dt><dd>finish</dd></div>
+            <div><dt>Result</dt><dd>dueCardsCompleted</dd></div>
+          </dl>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============ conservation ============ -->
+  <section id="conservation" class="conservation">
+    <div class="wrap con-grid">
+      <div class="con-copy">
+        <p class="kicker kicker--sand mono reveal">[ What the finish keeps ]</p>
+        <h2 class="reveal">The queue is clear.<br>The learning stays with you.</h2>
+        <p class="reveal">Completion is not the disappearance of the work. It is evidence that you met
+          every due card with an attempt, a correction, or a remembered answer. Those returns leave
+          routes behind, ready to become easier to find next time.</p>
+        <p class="reveal">So let the finish be more than an empty queue. It is a record of attention,
+          patience, and follow-through. dueCardsCompleted names the milestone. You supplied the work.</p>
+        <p class="con-sign">— The work you just completed</p>
+      </div>
+      <div class="con-stats reveal">
+        <div class="stat">
+          <span class="stat-num"><span class="c-num" data-to="1">0</span></span>
+          <span class="stat-lbl mono">dueCardsCompleted</span>
+        </div>
+        <div class="stat">
+          <span class="stat-num"><span class="c-num" data-to="0">0</span></span>
+          <span class="stat-lbl mono">dueCardsRemaining</span>
+        </div>
+        <div class="stat">
+          <span class="stat-num"><span class="c-num" data-to="4">0</span></span>
+          <span class="stat-lbl mono">Currents carried through</span>
+        </div>
+        <div class="stat">
+          <span class="stat-num"><span class="c-num" data-to="1">0</span></span>
+          <span class="stat-lbl mono">Finish entirely yours</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ tickets ============ -->
+  <section id="tickets" class="tickets">
+    <div class="wrap sec-head sec-head--center">
+      <p class="kicker mono reveal">[ Mark the surface ]</p>
+      <h2 class="reveal">Give the finish a little room.</h2>
+      <p class="lede reveal">Choose a small pause for the moment you reached dueCardsCompleted. Nothing
+        needs to be earned now. This is simply time to notice what you already did.</p>
+    </div>
+
+    <div class="wrap tickets-body">
+      <div class="tiers" role="group" aria-label="Celebration pause">
+        <button class="tier is-sel" type="button" data-tier="Surface breath" data-price="32" aria-pressed="true">
+          <span class="tier-name">Surface breath</span>
+          <span class="tier-price mono"><span class="cur"></span>32s</span>
+          <span class="tier-note">Look away · breathe slowly</span>
+        </button>
+        <button class="tier" type="button" data-tier="Victory note" data-price="22" aria-pressed="false">
+          <span class="tier-name">Victory note</span>
+          <span class="tier-price mono"><span class="cur"></span>22s</span>
+          <span class="tier-note">Write one honest sentence</span>
+        </button>
+        <button class="tier" type="button" data-tier="Deep reflection" data-price="65" aria-pressed="false">
+          <span class="tier-badge mono">Restorative</span>
+          <span class="tier-name">Deep reflection</span>
+          <span class="tier-price mono"><span class="cur"></span>65s</span>
+          <span class="tier-note">Replay the session · keep the pride</span>
+        </button>
+        <button class="tier" type="button" data-tier="Full reset" data-price="120" aria-pressed="false">
+          <span class="tier-name">Full reset</span>
+          <span class="tier-price mono"><span class="cur"></span>120<span class="per">s</span></span>
+          <span class="tier-note">Stand · stretch · return refreshed</span>
+        </button>
+      </div>
+
+      <form class="ticket-form" id="ticketForm" aria-live="polite" novalidate>
+        <div class="tf-summary mono" id="tfSummary">
+          <span id="tfLabel">Surface breath</span><span id="tfTotal">64 sec</span>
+        </div>
+        <div class="field">
+          <label class="mono" for="tName">Name this finish</label>
+          <input id="tName" name="name" type="text" required autocomplete="off" placeholder="A title for this moment" />
+        </div>
+        <div class="field">
+          <label class="mono" for="tEmail">Email for a private reminder</label>
+          <input id="tEmail" name="email" type="email" required autocomplete="email" placeholder="you@example.com" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="mono" for="tDate">Next return</label>
+            <input id="tDate" name="date" type="date" required />
+          </div>
+          <div class="field">
+            <label class="mono" for="tQty">Rounds</label>
+            <input id="tQty" name="qty" type="number" min="1" max="12" value="2" required inputmode="numeric" />
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">Mark this moment — <span id="tfBtnTotal">64 sec</span></button>
+        <p class="ticket-fine mono" id="ticketFine">A private ritual only. Nothing is charged, sent, booked, or stored.</p>
+      </form>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap foot-top">
+    <span class="foot-brand">Upwell</span>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="#depths">The descent</a><a href="#exhibits">What carried you</a><a href="#conservation">The proof</a><a href="#tickets">Mark it</a><a href="./guide/">Reflection</a>
+    </nav>
+  </div>
+  <div class="wrap foot-bottom mono">
+    <span>© 2026 Upwell — a kakomonn celebration for dueCardsCompleted.</span>
+    <span>You carried every due card home · <a href="./guide/">Read the reflection →</a></span>
+  </div>
+</footer>
+
+<script src="./main.js" defer></script>
+<script type="module" data-celebration-runtime>
+  import { announceCelebration } from "/shared/experience-runtime.js";
+  announceCelebration("fathom");
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>document.documentElement.classList.add('js')</script>
+<title>ISOMETRIA | dueCardsCompleted achieved</title>
+<meta name="description" content="An island-sized celebration for achieving dueCardsCompleted, built from every steady return you made today." />
+<meta name="theme-color" content="#bfe9ff" />
+<meta property="og:title" content="ISOMETRIA | dueCardsCompleted achieved" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="world" aria-hidden="true"></canvas>
+
+<header class="nav">
+  <a class="brand" href="./">◆ ISOMETRIA</a>
+  <nav class="nav-links">
+    <a href="#games">Journey</a>
+    <a href="#studio">Proof</a>
+    <a href="./guide/">Reflection</a>
+    <button id="daynight" class="daynight" aria-label="Toggle day and night">☀ Day</button>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="hero-card">
+      <p class="eyebrow reveal">Today's due cards · Landed and complete</p>
+      <h1 class="hero-title reveal">You raised<br>a whole island.</h1>
+      <p class="hero-sub reveal">Every return laid another stone above the water. Now the beacon is lit,
+        the horizon is clear, and dueCardsCompleted is achieved. Drag your island. Let it glow at night.</p>
+      <div class="hero-actions reveal">
+        <a class="btn" href="#games">▶ Tour your win</a>
+        <span class="hint">drag your island · lift a tile</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="games" class="games">
+    <div class="section-head"><p class="kicker">[ The crossing ]</p><h2 class="reveal">Built card by card</h2></div>
+    <div class="game-grid">
+      <article class="game reveal" style="--c:#7ec850" tabindex="0"><div class="g-tile"></div><h3>First Footing</h3><p>You met the first due card and gave the day solid ground.</p><span class="g-tag">Begin · Grounded</span></article>
+      <article class="game reveal" style="--c:#4db6e8" tabindex="0"><div class="g-tile"></div><h3>Steady Tide</h3><p>Each return brought another piece of the island into view.</p><span class="g-tag">Recall · Growing</span></article>
+      <article class="game reveal" style="--c:#ef8d5a" tabindex="0"><div class="g-tile"></div><h3>High Ground</h3><p>The stubborn moments became steps instead of walls.</p><span class="g-tag">Resolve · Rising</span></article>
+      <article class="game reveal" style="--c:#b9a2ff" tabindex="0"><div class="g-tile"></div><h3>Beacon Lit</h3><p>The final due card turned steady work into a clear horizon.</p><span class="g-tag">Complete · Yours</span></article>
+    </div>
+  </section>
+
+  <section id="studio" class="studio">
+    <div class="studio-inner">
+      <p class="kicker reveal">[ What stands ]</p>
+      <p class="studio-text reveal">No borrowed magic raised this place. You returned, remembered, and kept
+        building until the last due card became <em>light at the top of the hill.</em></p>
+      <div class="studio-facts">
+        <div class="reveal"><span class="f-num">1</span><span class="f-lbl">Milestone</span></div>
+        <div class="reveal"><span class="f-num">1</span><span class="f-lbl">Clear horizon</span></div>
+        <div class="reveal"><span class="f-num">1</span><span class="f-lbl">Island raised</span></div>
+        <div class="reveal"><span class="f-num">∞</span><span class="f-lbl">Credit yours</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <p class="foot-brand">ISOMETRIA</p>
+  <div class="foot-bottom">
+    <span>© 2026 ISOMETRIA · dueCardsCompleted</span>
+    <span>Raised by your steady work · <a href="./guide/">Read the reflection →</a></span>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script type="module" src="./main.js"></script>
+<script type="module" data-celebration-runtime>
+  import { announceCelebration } from "/shared/experience-runtime.js";
+  announceCelebration("formwork-isometria");
+</script>
+</body>
+</html>

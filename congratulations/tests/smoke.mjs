@@ -3,7 +3,10 @@ import { access, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { celebrationSearch, parseCelebration } from "../celebration-contract.js";
+import {
+  celebrationSearch,
+  parseCelebration,
+} from "../shared/celebration-contract.js";
 import {
   chooseCelebration,
   randomIndex,
@@ -11,10 +14,28 @@ import {
 } from "../celebration-selection.js";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const expectedIds = [
+  "aperture-lab",
+  "conche",
+  "driftline-ocean",
+  "fathom",
+  "formwork-chroma",
+  "formwork-contour",
+  "formwork-heliodon",
+  "formwork-isometria",
+  "formwork-meridian",
+  "formwork-nebula",
+  "formwork-neon",
+  "glyphica",
+  "halcyon-ring",
+  "halfstep",
+  "northbound-ev",
+  "perigee-astro",
+];
 const manifest = validateManifest(
   JSON.parse(await readFile(resolve(projectRoot, "celebrations.json"), "utf8")),
 );
-assert.deepEqual(manifest.experiences, []);
+assert.deepEqual(manifest.experiences.map(({ id }) => id), expectedIds);
 
 const celebration = {
   site: "chushoks.kakomonn.com",
@@ -34,18 +55,31 @@ for (const invalidSearch of [
 }
 
 assert.throws(() => randomIndex(0), /positive safe integer/);
-assert.throws(() => chooseCelebration(manifest), /positive safe integer/);
-
-const sourceFiles = [
-  resolve(projectRoot, "index.html"),
-  resolve(projectRoot, "router.js"),
-];
-for (const sourcePath of sourceFiles) {
-  const source = await readFile(sourcePath, "utf8");
-  assert.equal(source.includes("data-milestone"), false);
-  assert.equal(source.includes("問達成"), false);
+for (const [index, expectedId] of expectedIds.entries()) {
+  const cryptoSource = {
+    getRandomValues(values) {
+      values[0] = index;
+      return values;
+    },
+  };
+  assert.equal(chooseCelebration(manifest, cryptoSource).id, expectedId);
 }
 
+for (const experience of manifest.experiences) {
+  await access(resolve(projectRoot, experience.entry));
+  await access(resolve(projectRoot, "dist", experience.entry));
+}
 await access(resolve(projectRoot, "dist", "index.html"));
+await access(resolve(projectRoot, "dist", "shared", "celebration-contract.js"));
+await access(resolve(projectRoot, "dist", "shared", "experience-runtime.js"));
 
-console.log("Congratulations smoke assertions passed with no installed design");
+for (const sourcePath of [
+  resolve(projectRoot, "index.html"),
+  resolve(projectRoot, "router.js"),
+]) {
+  const source = await readFile(sourcePath, "utf8");
+  assert.equal(source.includes("data-milestone"), false);
+  assert.equal(/[\u3040-\u30ff\u3400-\u9fff]/u.test(source), false);
+}
+
+console.log("Congratulations smoke assertions passed for all experiences");

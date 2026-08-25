@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PRESSURE ZERO | dueCardsCompleted</title>
+<meta name="description" content="PRESSURE ZERO marks the instant dueCardsCompleted becomes true: the due queue is clear, the work is finished, and the moment belongs to you." />
+<meta name="theme-color" content="#0B0908" />
+<meta property="og:title" content="PRESSURE ZERO | dueCardsCompleted" />
+<meta property="og:description" content="Every due card is behind you. Watch the needle fall, and enjoy the clear space you made." />
+<meta property="og:type" content="website" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<a class="skip" href="#hero">Skip to content</a>
+
+<!-- SIGNATURE: extraction line — scroll-linked copper fill down the left edge -->
+<div class="extraction" aria-hidden="true">
+  <span class="extraction-fill" id="extractionFill"></span>
+  <span class="extraction-pct" id="extractionPct">0%</span>
+</div>
+
+<header class="nav" id="nav">
+  <a class="brand" href="./" aria-label="PRESSURE ZERO home">
+    <span class="brand-word">PRESSURE ZERO</span>
+  </a>
+  <span class="nav-badge" aria-hidden="true">TODAY &middot; QUEUE CLEAR</span>
+  <nav class="nav-links" aria-label="Primary">
+    <a href="#method">Readout</a>
+    <a href="#process">Run</a>
+    <a href="#machines">Takeaways</a>
+    <a href="#care">Release</a>
+    <a href="./guide/">Field notes</a>
+  </nav>
+</header>
+
+<main>
+  <!-- ==================== HERO ==================== -->
+  <section class="hero" id="hero">
+    <img class="hero-img" src="./assets/hero.jpg" width="1920" height="1080" alt="A matte-black espresso machine photographed close, with the portafilter locked into the group head." />
+    <div class="hero-scrim" aria-hidden="true"></div>
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <p class="eyebrow">Completion confirmed &middot; dueCardsCompleted</p>
+        <h1 class="hero-title">The needle drops. <em>You made it through.</em></h1>
+        <p class="hero-sub">Every due card has been met. dueCardsCompleted is true, the pressure is off,
+          and the clean space on the other side is entirely yours.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#machines">Claim the moment</a>
+          <a class="btn btn-ghost" href="#process">Replay the run <span aria-hidden="true">&darr;</span></a>
+        </div>
+      </div>
+
+      <!-- SIGNATURE: live pressure gauge + machine-display readout -->
+      <figure class="gauge-panel" role="img" aria-label="A ceremonial completion gauge: pressure rises, holds, and drops as the completion readout reaches one hundred percent.">
+        <div class="gauge-frame">
+          <canvas id="gauge" width="360" height="360" aria-hidden="true"></canvas>
+          <span class="gauge-cap" aria-hidden="true">HOLD</span>
+        </div>
+        <div class="readout" aria-hidden="true">
+          <div class="readout-cell">
+            <span class="readout-label">TIME</span>
+            <span class="readout-val" id="rTimer">0.0<span class="readout-unit">s</span></span>
+          </div>
+          <div class="readout-cell">
+            <span class="readout-label">PRESSURE</span>
+            <span class="readout-val" id="rPressure">0.0<span class="readout-unit">/9</span></span>
+          </div>
+          <div class="readout-cell">
+            <span class="readout-label">COMPLETE</span>
+            <span class="readout-val" id="rYield">0<span class="readout-unit">%</span></span>
+          </div>
+        </div>
+      </figure>
+    </div>
+
+    <!-- stat strip: odometer readouts -->
+    <ul class="stats" aria-label="dueCardsCompleted achievement summary">
+      <li class="stat">
+        <span class="stat-val odo" data-odo="1" data-roll="1">1</span>
+        <span class="stat-unit">true</span>
+        <span class="stat-label">dueCardsCompleted</span>
+      </li>
+      <li class="stat">
+        <span class="stat-val odo" data-odo="100" data-roll="1">100</span>
+        <span class="stat-unit">%</span>
+        <span class="stat-label">Every due card met</span>
+      </li>
+      <li class="stat">
+        <span class="stat-val odo" data-odo="1" data-roll="1">1</span>
+        <span class="stat-unit">moment</span>
+        <span class="stat-label">Clear moment, fully yours</span>
+      </li>
+      <li class="stat">
+        <span class="stat-val odo" data-odo="0" data-roll="1">0</span>
+        <span class="stat-unit">pressure</span>
+        <span class="stat-label">Left to carry</span>
+      </li>
+    </ul>
+  </section>
+
+  <div class="ruler" role="separator" aria-hidden="true"></div>
+
+  <!-- ==================== METHOD ==================== -->
+  <section id="method" class="method">
+    <div class="section-head">
+      <p class="eyebrow">Completion readout</p>
+      <h2>One clear signal. <em>Three things it says.</em></h2>
+      <p class="section-lead">dueCardsCompleted is a compact result with real work behind it. Turn the dial
+        through focus, recall, and persistence, and give each part of that finish its due.</p>
+    </div>
+
+    <div class="segmented" role="tablist" aria-label="Three parts of the achievement">
+      <span class="seg-thumb" id="segThumb" aria-hidden="true"></span>
+      <button class="seg" role="tab" id="tab-espresso" aria-selected="true" aria-controls="brewPanel" tabindex="0" data-method="espresso">Focus</button>
+      <button class="seg" role="tab" id="tab-pourover" aria-selected="false" aria-controls="brewPanel" tabindex="-1" data-method="pourover">Recall</button>
+      <button class="seg" role="tab" id="tab-coldbrew" aria-selected="false" aria-controls="brewPanel" tabindex="-1" data-method="coldbrew">Persistence</button>
+    </div>
+
+    <div class="brew" id="brewPanel" role="tabpanel" tabindex="0" aria-labelledby="tab-espresso">
+      <!-- left: brew card / machine printout -->
+      <div class="brew-card">
+        <div class="brew-card-head">
+          <span class="brew-card-title" id="brewTitle">FOCUS</span>
+          <span class="brew-card-code" id="brewCode">READ&nbsp;01</span>
+        </div>
+        <dl class="spec">
+          <div class="spec-row"><dt>Reading</dt><dd class="odo" data-key="dose" data-odo="01">01</dd></div>
+          <div class="spec-row"><dt>Signal</dt><dd class="spec-text" data-key="grind">steady</dd></div>
+          <div class="spec-row"><dt>Effort</dt><dd class="odo" data-key="water" data-odo="given">given</dd></div>
+          <div class="spec-row"><dt>Credit</dt><dd class="odo" data-key="temp" data-odo="yours">yours</dd></div>
+          <div class="spec-row"><dt>Time</dt><dd class="odo" data-key="time" data-odo="today">today</dd></div>
+          <div class="spec-row"><dt>Result</dt><dd class="odo" data-key="yield" data-odo="clear">clear</dd></div>
+        </dl>
+        <ol class="recipe" id="recipe">
+          <li>You placed your attention on the card that was here.</li>
+          <li>You repeated that small act without needing a perfect rhythm.</li>
+          <li>Enough focused moments joined together to clear the due queue.</li>
+        </ol>
+      </div>
+      <!-- right: crossfading method image -->
+      <div class="brew-art">
+        <img class="brew-img is-active" data-method="espresso" src="./assets/method-espresso.jpg" width="1200" height="800" loading="lazy" alt="A double espresso pulling into a glass, tiger-striped crema forming." />
+        <img class="brew-img" data-method="pourover" src="./assets/method-pourover.jpg" width="1200" height="800" loading="lazy" alt="A gooseneck kettle pouring a slow spiral over a paper-filtered pour-over cone." />
+        <img class="brew-img" data-method="coldbrew" src="./assets/method-coldbrew.jpg" width="1200" height="800" loading="lazy" alt="A tall glass carafe of cold brew steeping, coarse grounds suspended in cold water." />
+      </div>
+    </div>
+  </section>
+
+  <div class="ruler" role="separator" aria-hidden="true"></div>
+
+  <!-- ==================== PROCESS ==================== -->
+  <section id="process" class="process">
+    <div class="section-head">
+      <p class="eyebrow">The run to zero</p>
+      <h2>Six small moves. <em>One complete session.</em></h2>
+      <p class="section-lead">No two study sessions feel the same. This one ended with a fact worth marking:
+        you stayed in the run until every due card was behind you.</p>
+    </div>
+
+    <div class="walk">
+      <!-- left: numbered stepper -->
+      <ol class="stepper" id="stepper" aria-label="Path to dueCardsCompleted">
+        <li>
+          <button class="step is-active" type="button" data-step="0" aria-current="step">
+            <span class="step-num">01</span>
+            <span class="step-body"><span class="step-name">Start</span>
+              <span class="step-detail">You gave the first due card your attention.</span></span>
+          </button>
+        </li>
+        <li>
+          <button class="step" type="button" data-step="1">
+            <span class="step-num">02</span>
+            <span class="step-body"><span class="step-name">Reach</span>
+              <span class="step-detail">You asked memory to meet you halfway.</span></span>
+          </button>
+        </li>
+        <li>
+          <button class="step" type="button" data-step="2">
+            <span class="step-num">03</span>
+            <span class="step-body"><span class="step-name">Check</span>
+              <span class="step-detail">You noticed what came back and what did not.</span></span>
+          </button>
+        </li>
+        <li>
+          <button class="step" type="button" data-step="3">
+            <span class="step-num">04</span>
+            <span class="step-body"><span class="step-name">Reset</span>
+              <span class="step-detail">You met the next card with a fresh attempt.</span></span>
+          </button>
+        </li>
+        <li>
+          <button class="step" type="button" data-step="4">
+            <span class="step-num">05</span>
+            <span class="step-body"><span class="step-name">Persist</span>
+              <span class="step-detail">You kept going while a due card remained.</span></span>
+          </button>
+        </li>
+        <li>
+          <button class="step" type="button" data-step="5">
+            <span class="step-num">06</span>
+            <span class="step-body"><span class="step-name">Clear</span>
+              <span class="step-detail">The final due card released the pressure.</span></span>
+          </button>
+        </li>
+      </ol>
+
+      <!-- right: sticky image panel -->
+      <div class="walk-panel">
+        <div class="walk-figure">
+          <img class="walk-img is-active" data-step="0" src="./assets/step-bean.jpg" width="1200" height="900" loading="lazy" alt="Green and roasted coffee beans sorted on a steel tray." />
+          <img class="walk-img" data-step="1" src="./assets/step-roast.jpg" width="1200" height="900" loading="lazy" alt="Beans tumbling in the glass door of a drum roaster, mid-roast." />
+          <img class="walk-img" data-step="2" src="./assets/step-grind.jpg" width="1200" height="900" loading="lazy" alt="Ground coffee falling from stepless conical burrs." />
+          <img class="walk-img" data-step="3" src="./assets/step-dose.jpg" width="1200" height="900" loading="lazy" alt="A leveled dose of coffee in a portafilter on a scale reading 18.0 grams." />
+          <img class="walk-img" data-step="4" src="./assets/step-extract.jpg" width="1200" height="900" loading="lazy" alt="Espresso extracting from a bottomless portafilter in a steady stream." />
+          <img class="walk-img" data-step="5" src="./assets/step-serve.jpg" width="1200" height="900" loading="lazy" alt="A finished espresso poured into a warm ceramic cup." />
+          <span class="walk-progress" id="walkProgress" aria-hidden="true"></span>
+        </div>
+        <p class="walk-caption" id="walkCaption" aria-live="polite">Step 01 &mdash; Start &middot; you gave the first due card your attention.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="ruler" role="separator" aria-hidden="true"></div>
+
+  <!-- ==================== MACHINES ==================== -->
+  <section id="machines" class="machines">
+    <div class="section-head">
+      <p class="eyebrow">Takeaways from the finish</p>
+      <h2>Leave with all three. <em>You earned the full set.</em></h2>
+      <p class="section-lead">The page will move on, but this finish is not temporary. Take the record,
+        the quiet, and the confidence made visible by dueCardsCompleted.</p>
+    </div>
+
+    <div class="tiers">
+      <article class="tier">
+        <div class="tier-art">
+          <img src="./assets/tier-home.jpg" width="900" height="1200" loading="lazy" alt="A compact matte-black espresso machine on a quiet counter." />
+        </div>
+        <p class="tier-model">TAKE 01</p>
+        <h3 class="tier-name">The record</h3>
+        <p class="tier-desc">This is not potential or intention. It is a completed fact from today:
+          you met what was due, and dueCardsCompleted became true.</p>
+        <dl class="tier-spec">
+          <div><dt>Status</dt><dd>complete</dd></div>
+          <div><dt>Made by</dt><dd>your work</dd></div>
+          <div><dt>Signal</dt><dd>dueCardsCompleted</dd></div>
+          <div><dt>Belongs to</dt><dd>you</dd></div>
+        </dl>
+        <p class="tier-price"><span class="odo" data-odo="01" data-roll="1">01</span></p>
+        <a class="btn btn-primary tier-cta" href="#care">Keep the record <span aria-hidden="true">&rarr;</span></a>
+      </article>
+
+      <article class="tier tier-featured">
+        <span class="tier-flag">AVAILABLE NOW</span>
+        <div class="tier-art">
+          <img src="./assets/tier-pro.jpg" width="900" height="1200" loading="lazy" alt="A polished dual-boiler espresso machine with a saturated group." />
+        </div>
+        <p class="tier-model">TAKE 02</p>
+        <h3 class="tier-name">The quiet</h3>
+        <p class="tier-desc">The gauge can return to zero. You do not need to prove this finish again.
+          Let the silence after the last due card be part of the reward.</p>
+        <dl class="tier-spec">
+          <div><dt>Queue</dt><dd>clear</dd></div>
+          <div><dt>Pressure</dt><dd>zero</dd></div>
+          <div><dt>Room</dt><dd>open</dd></div>
+          <div><dt>Pause</dt><dd>earned</dd></div>
+        </dl>
+        <p class="tier-price"><span class="odo" data-odo="00" data-roll="1">00</span></p>
+        <a class="btn btn-primary tier-cta" href="#care">Enjoy the quiet <span aria-hidden="true">&rarr;</span></a>
+      </article>
+
+      <article class="tier">
+        <div class="tier-art">
+          <img src="./assets/tier-commercial.jpg" width="900" height="1200" loading="lazy" alt="A three-group espresso machine built for a busy service bar." />
+        </div>
+        <p class="tier-model">TAKE 03</p>
+        <h3 class="tier-name">The confidence</h3>
+        <p class="tier-desc">Today left useful evidence: you can begin, reset, and see a session through.
+          That knowledge is yours to carry into whatever comes next.</p>
+        <dl class="tier-spec">
+          <div><dt>Evidence</dt><dd>today</dd></div>
+          <div><dt>Direction</dt><dd>forward</dd></div>
+          <div><dt>Weight</dt><dd>light</dd></div>
+          <div><dt>Credit</dt><dd>all yours</dd></div>
+        </dl>
+        <p class="tier-price"><span class="odo" data-odo="100%" data-roll="1">100%</span></p>
+        <a class="btn btn-primary tier-cta" href="#care">Take it with you <span aria-hidden="true">&rarr;</span></a>
+      </article>
+    </div>
+  </section>
+
+  <div class="ruler" role="separator" aria-hidden="true"></div>
+
+  <!-- ==================== CARE ==================== -->
+  <section id="care" class="care">
+    <div class="section-head">
+      <p class="eyebrow">Pressure released</p>
+      <h2>The queue is clear. <em>Choose the after.</em></h2>
+    </div>
+    <div class="plans">
+      <div class="plan">
+        <p class="plan-price">First</p>
+        <h3 class="plan-name">Exhale</h3>
+        <p class="plan-line">Let the needle fall and your shoulders follow. Nothing due needs you now.</p>
+      </div>
+      <div class="plan">
+        <p class="plan-price"><span class="odo" data-odo="YOURS" data-roll="1">YOURS</span></p>
+        <h3 class="plan-name">Celebrate</h3>
+        <p class="plan-line">Make the moment as large or quiet as you like. The finish is still real.</p>
+      </div>
+      <div class="plan">
+        <p class="plan-price"><span class="odo" data-odo="LATER" data-roll="1">LATER</span></p>
+        <h3 class="plan-name">Go freely</h3>
+        <p class="plan-line">Step into the rest of your day with dueCardsCompleted behind you.</p>
+      </div>
+    </div>
+    <div class="care-cta">
+      <a class="btn btn-primary" href="mailto:?subject=Pressure%20zero%3A%20dueCardsCompleted&amp;body=Every%20due%20card%20is%20done.%20dueCardsCompleted%20is%20true%2C%20and%20I%20made%20it%20through.">Share pressure zero</a>
+    </div>
+  </section>
+</main>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <a class="brand" href="./" aria-label="PRESSURE ZERO home"><span class="brand-word">PRESSURE ZERO</span></a>
+      <p class="footer-blurb">A copper-lit ceremony for the instant every due card is behind you.</p>
+    </div>
+    <nav class="footer-cols" aria-label="Footer">
+      <div class="footer-col">
+        <p class="fc-h">Revisit</p>
+        <a href="#method">Readout</a>
+        <a href="#process">Run</a>
+        <a href="#machines">Takeaways</a>
+        <a href="#care">Release</a>
+        <a href="./guide/">Field notes</a>
+      </div>
+      <div class="footer-col footer-col-badges">
+        <p class="fc-h">Final readout</p>
+        <div class="badges">
+          <span class="badge badge-outline">QUEUE CLEAR</span>
+          <span class="badge">STATE <span class="odo" data-odo="TRUE" data-roll="1">TRUE</span></span>
+          <span class="badge">YOURS</span>
+        </div>
+      </div>
+    </nav>
+  </div>
+  <div class="footer-bottom">
+    <span>PRESSURE ZERO is a kakomonn celebration for dueCardsCompleted</span>
+    <span><a href="./guide/">read the field notes &rarr;</a></span>
+  </div>
+</footer>
+
+<script src="./main.js"></script>
+<script type="module" data-celebration-runtime>
+  import { announceCelebration } from "/shared/experience-runtime.js";
+  announceCelebration("formwork-meridian");
+</script>
+</body>
+</html>

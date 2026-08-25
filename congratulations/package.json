@@ -7,8 +7,9 @@
     "start": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "sync:experience-runtime": "node scripts/inject-experience-runtime.mjs",
     "test": "npm run check && npm run build && node tests/smoke.mjs && node tests/browser.mjs",
-    "check": "node --check celebration-contract.js && node --check celebration-selection.js && node --check router.js && node --check vite.config.js && node --check server.mjs && node --check tests/smoke.mjs && node --check tests/browser.mjs && node --check tests/production.mjs"
+    "check": "node --check shared/celebration-contract.js && node --check shared/experience-runtime.js && node --check celebration-selection.js && node --check router.js && node --check vite.config.js && node --check server.mjs && node --check scripts/inject-experience-runtime.mjs && node --check tests/smoke.mjs && node --check tests/browser.mjs && node --check tests/production.mjs"
   },
   "devDependencies": {
     "playwright": "1.61.1",

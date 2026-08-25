@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>document.documentElement.classList.add('js')</script>
+<title>NEON CLEAR | dueCardsCompleted achieved</title>
+<meta name="description" content="NEON CLEAR celebrates the moment dueCardsCompleted becomes true: the due queue is quiet, the horizon is open, and the glow belongs to you." />
+<meta name="theme-color" content="#0c0420" />
+<meta property="og:title" content="NEON CLEAR | dueCardsCompleted achieved" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Grotesk:wght@300;400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div class="sky" aria-hidden="true"><div class="sun"></div></div>
+<canvas id="grid" aria-hidden="true"></canvas>
+<div class="scanlines" aria-hidden="true"></div>
+
+<header class="nav">
+  <a class="brand" href="./">NEON&nbsp;CLEAR</a>
+  <nav class="nav-links">
+    <a href="#releases">The Signals</a>
+    <a href="#label">The Finish</a>
+    <a href="./guide/">Reflection</a>
+    <a class="nav-cta" href="#tune">Celebrate</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <p class="eyebrow reveal">Completion signal · dueCardsCompleted achieved</p>
+    <h1 class="hero-title">
+      <span class="line"><span>QUEUE</span></span>
+      <span class="line"><span>CLEAR</span></span>
+    </h1>
+    <p class="hero-sub reveal">You stayed with every due card until the horizon opened.
+      dueCardsCompleted is true, and tonight's neon is yours.</p>
+    <div class="hero-actions reveal">
+      <a class="btn" id="tune" href="#releases"><span>▶ Light the win</span></a>
+      <span class="meta">NOW BROADCASTING - "QUEUE CLEAR" · YOUR MOMENT</span>
+    </div>
+  </section>
+
+  <section id="releases" class="releases">
+    <div class="section-head">
+      <p class="kicker">[ Completion transmissions ]</p>
+      <h2 class="reveal">What carried you here</h2>
+    </div>
+    <ul class="rel-list">
+      <li class="rel reveal" tabindex="0"><span class="r-n">01</span><span class="r-art">ATTENTION</span><span class="r-title">You met the card in front of you</span><span class="r-len">HELD</span></li>
+      <li class="rel reveal" tabindex="0"><span class="r-n">02</span><span class="r-art">RECALL</span><span class="r-title">You reached for what mattered</span><span class="r-len">FOUND</span></li>
+      <li class="rel reveal" tabindex="0"><span class="r-n">03</span><span class="r-art">PATIENCE</span><span class="r-title">You made room for uncertainty</span><span class="r-len">KEPT</span></li>
+      <li class="rel reveal" tabindex="0"><span class="r-n">04</span><span class="r-art">RETURN</span><span class="r-title">You came back for another pass</span><span class="r-len">STEADY</span></li>
+      <li class="rel reveal" tabindex="0"><span class="r-n">05</span><span class="r-art">FINISH</span><span class="r-title">You stayed for the final due card</span><span class="r-len">CLEAR</span></li>
+    </ul>
+  </section>
+
+  <section id="label" class="label">
+    <div class="label-inner">
+      <p class="kicker reveal">[ The clear horizon ]</p>
+      <p class="label-text reveal">The due queue is quiet because <em>you carried the whole signal through</em> -
+        attention held, memory retrieved, and every return made until dueCardsCompleted became true.</p>
+      <div class="stats">
+        <div class="reveal"><span class="s-num" data-to="1">0</span><span class="s-lbl">Milestone lit</span></div>
+        <div class="reveal"><span class="s-num" data-to="1">0</span><span class="s-lbl">Due queue cleared</span></div>
+        <div class="reveal"><span class="s-num" data-to="1">0</span><span class="s-lbl">Finish owned</span></div>
+        <div class="reveal"><span class="s-num" data-to="2026">0</span><span class="s-lbl">Night broadcast</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="statement">
+    <p class="reveal">Own the <em>glow.</em></p>
+  </section>
+</main>
+
+<footer class="footer">
+  <p class="foot-brand">NEON CLEAR</p>
+  <div class="foot-bottom">
+    <span>© 2026 NEON CLEAR · dueCardsCompleted achieved.</span>
+    <span>Made for your finished queue · <a href="./guide/">Read the reflection →</a></span>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script type="module" src="./main.js"></script>
+<script type="module" data-celebration-runtime>
+  import { announceCelebration } from "/shared/experience-runtime.js";
+  announceCelebration("formwork-neon");
+</script>
+</body>
+</html>

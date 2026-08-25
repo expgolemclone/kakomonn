@@ -1,0 +1,55 @@
+:root {
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  background: #080a0f;
+  color: #f4f6fb;
+}
+
+html,
+body,
+main {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+main {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100svh;
+  place-items: center;
+}
+
+#celebration-frame {
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+  border: 0;
+}
+
+#loading,
+#error-panel {
+  max-width: 34rem;
+  margin: 0;
+  padding: 2rem;
+  text-align: center;
+}
+
+#error-panel h1 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.75rem, 6vw, 3.5rem);
+}
+
+#error-panel p {
+  margin: 0;
+  color: #b9c0ce;
+}
+
+[hidden] {
+  display: none !important;
+}

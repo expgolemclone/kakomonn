@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script>
+  document.documentElement.classList.add('js');
+  try { var t = localStorage.getItem('halfstep-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<title>FULL CIRCUIT reflection — dueCardsCompleted</title>
+<meta name="description" content="A victory-lap reflection on the attention, recall, patience and resolve behind achieving dueCardsCompleted." />
+<meta name="robots" content="index,follow" />
+<meta name="color-scheme" content="light dark" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2317181a'/%3E%3Cpath d='M7 24 H15 V15 H24 V7' fill='none' stroke='%23c7f04a' stroke-width='3.4'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800;900&family=Manrope:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ease-cadence: cubic-bezier(.21, .86, .26, .99);
+    --font-d: "Archivo", system-ui, sans-serif;
+    --font-b: "Manrope", system-ui, sans-serif;
+    --font-m: "Space Mono", ui-monospace, monospace;
+    --bg: #ece7dd; --bg-2: #e3ded1; --panel: #f4f0e6;
+    --ink: #17181a; --dim: #46484b; --faint: #77786f;
+    --line: rgba(23, 24, 26, .16); --line-2: rgba(23, 24, 26, .08);
+    --accent: #c7f04a; --accent-ink: #17181a; --acc-text: #4c5c28;
+  }
+  :root[data-theme="dark"] {
+    --bg: #17181a; --bg-2: #1c1e21; --panel: #202226;
+    --ink: #ece7dd; --dim: #b7b3a7; --faint: #82807a;
+    --line: rgba(236, 231, 221, .14); --line-2: rgba(236, 231, 221, .07);
+    --acc-text: #c7f04a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--font-b); font-size: clamp(15px, 1vw + 13px, 17px); line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(110% 70% at 85% -10%, color-mix(in oklab, var(--accent) 10%, transparent), transparent 55%); }
+  .doc { position: relative; z-index: 1; width: min(100% - 2.4rem, 820px); margin: 2.2rem auto 5rem; }
+  .doc-back { display: inline-flex; align-items: center; gap: .4rem; color: var(--dim); text-decoration: none; font-size: .86rem; margin-bottom: 1.6rem; }
+  .doc-back:hover { color: var(--ink); }
+  .mono { font-family: var(--font-m); }
+  .eyebrow { color: var(--acc-text); font-size: .72rem; letter-spacing: .2em; text-transform: uppercase; margin: 0 0 .8rem; }
+  h1 { font-family: var(--font-d); font-weight: 900; font-size: clamp(2.1rem, 5vw, 3.2rem); line-height: 1.02; letter-spacing: -.02em; text-transform: uppercase; margin: .2rem 0 .4rem; }
+  h2 { font-family: var(--font-d); font-weight: 800; font-size: clamp(1.35rem, 3vw, 1.8rem); letter-spacing: -.01em; margin: 2.6rem 0 .6rem; }
+  .lede { color: var(--dim); font-size: 1.06rem; margin: 0 0 2rem; }
+  p { color: var(--dim); margin: .7rem 0; }
+  p strong, li strong { color: var(--ink); font-weight: 700; }
+  ul { color: var(--dim); padding-left: 1.1rem; margin: .7rem 0; }
+  li { margin: .4rem 0; }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; overflow-x: auto; margin: 1rem 0; }
+  code { font-family: var(--font-m); font-size: .8rem; }
+  pre code { color: var(--ink); line-height: 1.6; }
+  .tag-row { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.2rem 0 0; }
+  .tag-row span { font-family: var(--font-m); font-size: .7rem; padding: .3rem .6rem; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); }
+  .callout { border-left: 3px solid var(--accent); background: color-mix(in oklab, var(--accent) 8%, transparent); padding: .9rem 1.1rem; border-radius: 0 10px 10px 0; margin: 1.4rem 0; }
+  .callout p { margin: 0; color: var(--ink); }
+  a { color: var(--acc-text); }
+  :where(a):focus-visible { outline: 2px solid var(--acc-text); outline-offset: 3px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"></div>
+<main class="doc">
+  <a class="doc-back" href="../">← Back to Full Circuit</a>
+  <p class="eyebrow mono">[ Completion reflection · dueCardsCompleted ]</p>
+  <h1>The road inside the finish</h1>
+  <p class="lede">A clear queue can look like empty space. It is anything but empty. Take the finish
+    apart and you find attention, recall, patience, return, and resolve — the quiet moving pieces
+    that made <strong>dueCardsCompleted</strong> true.</p>
+
+  <div class="tag-row">
+    <span>dueCardsCompleted</span><span>queue clear</span><span>attention held</span><span>recall practiced</span><span>finish owned</span>
+  </div>
+
+  <h2>The road to here</h2>
+  <p>The session did not become complete in one dramatic leap. It moved by small turns: meeting the
+    next due card, searching memory honestly, making room for correction, and returning after each
+    moment of friction. The finish feels clean because the work beneath it was real.</p>
+
+  <h2>What you carried</h2>
+  <p><strong>Attention</strong> kept the present card in view. <strong>Recall</strong> reached into
+    memory without pretending. <strong>Patience</strong> let difficult moments take their proper
+    time. <strong>Return</strong> restarted the wheel whenever momentum thinned. <strong>Resolve</strong>
+    carried all of it across the exact line named dueCardsCompleted.</p>
+
+  <h2>The finish, unfolded</h2>
+  <p>On the celebration page, the bicycle opens as you scroll. Its pieces travel apart so each force
+    behind the session can be seen on its own. Then the parts return, because completion is not a
+    pile of isolated efforts. It is every small effort working together.</p>
+  <pre><code>const milestone = "dueCardsCompleted";
+const dueCardsRemaining = 0;
+const forces = [
+  "attention", "recall", "patience",
+  "return", "resolve"
+];
+
+for (const force of forces) {
+  finish.carries(force);
+}
+
+finish.seal(milestone);
+road.open();</code></pre>
+  <p>The bicycle is only a metaphor. You supplied the motion. Each turn was small enough to make,
+    and together those turns carried the full queue behind you. The final assembled shape is the
+    simplest possible statement: <strong>dueCardsCompleted is true.</strong></p>
+
+  <h2>What matters now</h2>
+  <ul>
+    <li><strong>The milestone is exact.</strong> dueCardsCompleted names what you achieved. The
+      celebration does not invent a larger claim.</li>
+    <li><strong>The queue is allowed to be quiet.</strong> dueCardsRemaining is zero. You do not need
+      to manufacture one more obligation to justify stopping.</li>
+    <li><strong>Difficulty still counts.</strong> A hard retrieval was not a detour from the work. It
+      was the place where the work became visible.</li>
+    <li><strong>Returning was momentum.</strong> Progress did not require a perfect rhythm, only the
+      willingness to begin the next turn.</li>
+    <li><strong>Rest belongs inside the cycle.</strong> The open road after completion can be a coast,
+      not another climb.</li>
+    <li><strong>The credit stays with you.</strong> The page can glow, unfold, and cheer. You are the
+      one who made dueCardsCompleted true.</li>
+  </ul>
+
+  <div class="callout"><p>No new task is hidden inside the finish-note form. It sends nothing. The
+    moment was already sealed when dueCardsCompleted became true.</p></div>
+
+  <h2>Take the finish with you</h2>
+  <p>You do not have to hold the whole session in memory. Keep only the clean outline:</p>
+  <pre><code>dueCardsCompleted: true
+dueCardsRemaining: 0
+credit: entirely yours
+next move: coast</code></pre>
+  <p>The wheel can stop without losing what it carried. When another session comes, you will meet it
+    then. This one is complete now.</p>
+
+  <a class="doc-back" href="../" style="margin-top:2.6rem">← Back to Full Circuit</a>
+</main>
+</body>
+</html>

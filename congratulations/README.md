@@ -39,6 +39,21 @@ you for sharing this work and making these celebrations possible.
 The snapshots are adapted under the MIT License. Copyright and license notices
 are preserved in each experience's `LICENSE` file.
 
+### Third-party software
+
+The deployed experiences and their snapshot builds also use the following
+open-source projects and resources.
+
+| Purpose | Source repository |
+| --- | --- |
+| Animation runtime | [greensock/GSAP](https://github.com/greensock/GSAP) |
+| 3D rendering runtime | [mrdoob/three.js](https://github.com/mrdoob/three.js) |
+| Glyphica snapshot framework | [vercel/next.js](https://github.com/vercel/next.js) |
+| Glyphica UI runtime | [react/react](https://github.com/react/react) |
+| Conche snapshot framework | [withastro/astro](https://github.com/withastro/astro) |
+| Halfstep snapshot and Congratulations build tooling | [vitejs/vite](https://github.com/vitejs/vite) |
+| Web fonts | [google/fonts](https://github.com/google/fonts) |
+
 ## Development and testing
 
 Run the complete local build and browser suite from the repository root.

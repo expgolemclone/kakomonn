@@ -14,7 +14,7 @@
 
 - [`kakomonn-reader`](kakomonn-reader/README.md): 中小企業診断士試験の過去問ページ向け読み上げとFSRS定着日数管理スクリプト.
 - [`kakomonn-sync`](kakomonn-sync/README.md): kakomonn-readerの定着状態と解答履歴を端末間で共有し, その日に解くべきcardの完了状況と学習logを表示するCloudflare Worker.
-- [`congratulations`](congratulations/README.md): その日に解くべきcardをすべて完了したときに表示する13種類の祝福体験.
+- [`congratulations`](congratulations/README.md): その日に解くべきcardをすべて完了したときに表示する16種類の祝福体験.
 
 ## 普段使いのChrome
 
@@ -79,6 +79,15 @@ npm run test:kakomonn-ios-safari
 ```
 
 このE2Eはactual Mobile Safariのuserscript動作, layout, 回答, Markdown copy, 次問遷移を対象とします. actual Tampermonkey extension, iPhone実機, production同期, actual音声再生は対象外です.
+
+## Acknowledgements
+
+Repository共通の開発, test, deploymentに次のopen-source projectを使用しています.
+
+| Purpose | Source repository |
+| --- | --- |
+| Cloudflare Workers development and deployment | [cloudflare/workers-sdk](https://github.com/cloudflare/workers-sdk) |
+| Browser automation and E2E testing | [microsoft/playwright](https://github.com/microsoft/playwright) |
 
 ## License
 

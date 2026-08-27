@@ -95,3 +95,13 @@ npm test
 GitHub Actionsでは, `macos-26`, Xcode 26.6, iPhone 17, iOS 26.5 Simulator上のactual Mobile Safari E2Eも実行します. Appium XCUITestによるnative tapで回答, Markdown copy, 次問遷移を操作し, copy結果はSimulatorのactual pasteboardから取得します. 同期とTampermonkeyの`GM` APIだけをtest doubleへ置換し, `navigator.clipboard`はactual Safari implementationを使用します.
 
 同じMac環境では`npm run test:kakomonn-ios-safari`で再実行できます. actual Tampermonkey extension, iPhone実機, production同期, actual音声再生はこのtestの対象外です.
+
+## Acknowledgements
+
+`kakomonn-reader`のbuild検証とMobile Safari E2Eに次のopen-source projectを使用しています.
+
+| Purpose | Source repository |
+| --- | --- |
+| Appium automation server | [appium/appium](https://github.com/appium/appium) |
+| Appium XCUITest driver | [appium/appium-xcuitest-driver](https://github.com/appium/appium-xcuitest-driver) |
+| Generated userscript syntax validation | [yowainwright/es-check](https://github.com/yowainwright/es-check) |

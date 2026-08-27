@@ -93,6 +93,15 @@ APIは`/v8`だけを提供し, LearningState Durable Objectを唯一のsource of
 
 解いた問題数はsite内の問題IDの種類数です.同じ問題を複数回解いても累計では1問として数え,日別では同じ日に繰り返しても1問として数えます.別の日に同じ問題を解いた場合は,各日の解いた問題数へ1問ずつ数えます.正答,誤答,スキップはいずれも解答履歴へ含めます.過去に解いた問題は,現在の問題catalogから外れても累計へ含めます.
 
+## Acknowledgements
+
+`kakomonn-sync`のschedulingとWorker testに次のopen-source projectを使用しています.
+
+| Purpose | Source repository |
+| --- | --- |
+| FSRS scheduling | [open-spaced-repetition/ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) |
+| Worker unit testing | [vitest-dev/vitest](https://github.com/vitest-dev/vitest) |
+
 ## 互換性方針
 
 v1からv7のAPIは提供しません. legacy v4 schemaのcard, attempt, catalog, 解答履歴はschema v8へ明示的に移行し, 30日判定の履歴, stability純増目標, 旧祝福履歴は破棄します. schema v2からv7のdataはschema v8へ移行します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.

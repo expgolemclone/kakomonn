@@ -97,6 +97,9 @@
       --kakomonn-frame-muted: #a8b0bb;
       --kakomonn-frame-border: #343b45;
       --kakomonn-frame-link: #8ab4f8;
+      --kakomonn-frame-success-surface: oklch(0.29 0.075 151);
+      --kakomonn-frame-success-border: oklch(0.72 0.14 151);
+      --kakomonn-frame-success-text: oklch(0.97 0.02 151);
     }
 
     header.l-header {
@@ -200,13 +203,71 @@
     #js-commentary-wrap > .item .text img {
       filter: invert(100%) hue-rotate(180deg) !important;
     }
+
+    .kakomonn-reader-correct-feedback {
+      display: flex;
+      width: min(100%, 34rem);
+      min-height: 72px;
+      margin: 16px auto;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      border: 2px solid var(--kakomonn-frame-success-border);
+      border-radius: 18px;
+      padding: 14px 20px;
+      background: var(--kakomonn-frame-success-surface);
+      color: var(--kakomonn-frame-success-text);
+      box-shadow: 0 12px 36px oklch(0.08 0.025 151 / 0.42);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: clamp(24px, 7vw, 48px);
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -0.035em;
+      text-align: center;
+      pointer-events: none;
+      animation: kakomonn-correct-feedback-enter 180ms cubic-bezier(.2, .8, .2, 1) both;
+    }
+
+    .kakomonn-reader-correct-feedback[data-state="leaving"] {
+      animation: kakomonn-correct-feedback-leave 180ms ease-in both;
+    }
+
+    @keyframes kakomonn-correct-feedback-enter {
+      from {
+        opacity: 0;
+        transform: translateY(8px) scale(.94);
+      }
+    }
+
+    @keyframes kakomonn-correct-feedback-leave {
+      to {
+        opacity: 0;
+        transform: translateY(-10px) scale(.98);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .kakomonn-reader-correct-feedback,
+      .kakomonn-reader-correct-feedback[data-state="leaving"] {
+        animation: none;
+      }
+    }
   `;
   const QUESTION_SPEECH_RATE = 2.0;
   const ANSWER_RESULT_SPEECH_RATE = 1.7;
+  const CORRECT_FEEDBACK_SPEECH_RATE = 1.1;
+  const CORRECT_FEEDBACK_TEXT = "That's Right!!";
+  const CORRECT_FEEDBACK_SPEECH_TEXT = "That's right!";
+  const CORRECT_FEEDBACK_LEAVE_DURATION_MS = 180;
+  const CORRECT_FEEDBACK_MINIMUM_DURATION_MS = 1200;
+  const CORRECT_CHIME_SAMPLE_RATE = 22050;
   const SPEECH_TOKEN_RENEWAL_SKEW_MS = 60000;
   const AZURE_SPEECH_URL =
     "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
-  const AZURE_SPEECH_VOICE_NAME = "ja-JP-NanamiNeural";
+  const JAPANESE_SPEECH_LOCALE = "ja-JP";
+  const JAPANESE_SPEECH_VOICE_NAME = "ja-JP-NanamiNeural";
+  const ENGLISH_SPEECH_LOCALE = "en-US";
+  const ENGLISH_SPEECH_VOICE_NAME = "en-US-JennyNeural";
   const AZURE_SPEECH_OUTPUT_FORMAT =
     "audio-24khz-48kbitrate-mono-mp3";
   const SILENT_AUDIO_DATA_URL =
@@ -225,9 +286,12 @@
   let speechEnabled = false;
   let speechPaused = false;
   let speechInitializationInProgress = false;
+  let speechInitializationPromise = null;
+  let speechInitializationResolve = null;
   let speechRunId = 0;
   let activeSpeechRequest = null;
   let activeSpeechAudioURL = "";
+  let activeSpeechPlaybackCancel = null;
   let azureSpeechToken = "";
   let azureSpeechTokenExpiresAt = 0;
   let azureSpeechTokenPromise = null;
@@ -248,6 +312,9 @@
   let copyFeedbackTimer = null;
   let frameMutationObserver = null;
   let awaitingAnswerResultSpeech = false;
+  const correctFeedbackDocuments = new WeakSet();
+  let correctFeedbackPromise = null;
+  let correctFeedbackRemovalTimer = null;
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
   let learningMetrics = null;

@@ -1,13 +1,15 @@
   function checkForNewAnswerResult() {
-    if (
-      !speechEnabled ||
-      !awaitingAnswerResultSpeech
-    ) {
+    const answerResult = getCurrentAnswerResult();
+    if (answerResult === "unknown") {
       return;
     }
 
-    const answerResult = getCurrentAnswerResult();
-    if (answerResult === "unknown") {
+    if (answerResult === "correct") {
+      beginCorrectAnswerFeedback();
+      return;
+    }
+
+    if (!speechEnabled || !awaitingAnswerResultSpeech) {
       return;
     }
 
@@ -33,6 +35,9 @@
     frameMutationObserver?.disconnect();
     frameMutationObserver = new MutationObserver(() => {
       synchronizeAnswerPresentation();
+      if (getCurrentAnswerResult() === "correct") {
+        beginCorrectAnswerFeedback();
+      }
       scheduleFrameChangeCheck();
     });
     frameMutationObserver.observe(frameDocument.body, {

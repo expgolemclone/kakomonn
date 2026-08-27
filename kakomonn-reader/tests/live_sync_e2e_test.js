@@ -167,8 +167,15 @@ async function readReaderState(page) {
       const settings = document.querySelector("#kakomonn-reader-sync-settings");
       const settingsButton = document.querySelector("#kakomonn-reader-sync-settings-button");
       const frameStyle = frame ? getComputedStyle(frame) : null;
+      const resultBox = frame?.contentDocument?.querySelector("#js-answer-result-box");
+      const answerResult = resultBox?.classList.contains("is-correct")
+        ? "correct"
+        : resultBox?.classList.contains("is-wrong")
+          ? "incorrect"
+          : "unknown";
       return {
         actionsPresent: Boolean(document.querySelector("#kakomonn-reader-actions")),
+        answerResult,
         buildFingerprint: shell?.dataset.buildFingerprint ?? null,
         learningMetricsLabel: document.querySelector("#kakomonn-reader-learning-metrics")?.getAttribute("aria-label") ?? null,
         frameURL: frame?.contentWindow?.location?.href ?? null,
@@ -394,6 +401,7 @@ async function waitForAutomaticTransition(page) {
     if (
       state.outerURL !== state.frameURL ||
       state.outerURL === currentQuestionUrl ||
+      state.answerResult !== "unknown" ||
       !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
         state.outerURL,
       ) ||
@@ -405,6 +413,35 @@ async function waitForAutomaticTransition(page) {
     }
     return { kind: "question", state };
   });
+}
+
+async function waitForSynchronizedQuestionState(page, token, frameURL) {
+  let lastReaderState = null;
+  let lastRemoteState = null;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    [lastReaderState, lastRemoteState] = await Promise.all([
+      readReaderState(page),
+      requestSyncState(token),
+    ]);
+    if (
+      lastReaderState.frameURL === frameURL &&
+      lastReaderState.answerResult === "unknown" &&
+      lastReaderState.learningMetricsLabel ===
+        expectedLearningMetricsLabel(lastRemoteState.learningMetrics)
+    ) {
+      return {
+        readerState: lastReaderState,
+        remoteState: lastRemoteState,
+      };
+    }
+    await delay(1_000);
+  }
+  throw new Error(
+    `Reader and production state did not converge: ${JSON.stringify({
+      lastReaderState,
+      lastRemoteState,
+    })}`,
+  );
 }
 
 async function writeFailureDiagnostics(page) {
@@ -475,13 +512,25 @@ async function main() {
     );
     await submitCorrectAnswer(page);
     const navigationResult = await waitForAutomaticTransition(page);
-    const finalState = await requestSyncState(token);
+    let finalState;
+    let synchronizedReaderState = null;
+    if (navigationResult.kind === "question") {
+      const synchronized = await waitForSynchronizedQuestionState(
+        page,
+        token,
+        navigationResult.state.frameURL,
+      );
+      finalState = synchronized.remoteState;
+      synchronizedReaderState = synchronized.readerState;
+    } else {
+      finalState = await requestSyncState(token);
+    }
     assert.equal(finalState.today, baseline.today);
     let frameUrl = null;
     if (navigationResult.kind === "question") {
       frameUrl = navigationResult.state.frameURL;
       assert.equal(
-        navigationResult.state.learningMetricsLabel,
+        synchronizedReaderState.learningMetricsLabel,
         expectedLearningMetricsLabel(finalState.learningMetrics),
       );
     } else {

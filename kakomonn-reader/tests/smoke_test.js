@@ -37,11 +37,25 @@ const azureSpeechUrl =
 const azureSpeechVoiceName = "ja-JP-NanamiNeural";
 const azureSpeechOutputFormat = "audio-24khz-48kbitrate-mono-mp3";
 
-function expectedSpeechSSML(text, rate) {
+function expectedSpeechSSML(
+  text,
+  rate,
+  {
+    locale = "ja-JP",
+    voiceName = azureSpeechVoiceName,
+  } = {},
+) {
+  const escapedText = text.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&apos;",
+  })[character]);
   return (
-    '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ja-JP">' +
-    `<voice name="${azureSpeechVoiceName}">` +
-    `<prosody rate="${rate}">${text}</prosody>` +
+    `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${locale}">` +
+    `<voice name="${voiceName}">` +
+    `<prosody rate="${rate}">${escapedText}</prosody>` +
     "</voice></speak>"
   );
 }
@@ -265,6 +279,12 @@ async function preparePage(page, speechMode, syncOptions = {}) {
     const manualPlayback = mode === "audio-manual";
     window.__audioPauseCalls = 0;
     window.__audioPlayCalls = 0;
+    window.__audioBlobs = [];
+    const createObjectURL = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (blob) => {
+      window.__audioBlobs.push({ size: blob.size, type: blob.type });
+      return createObjectURL(blob);
+    };
 
     class FakeAudio {
       constructor() {
@@ -273,6 +293,7 @@ async function preparePage(page, speechMode, syncOptions = {}) {
         this.onended = null;
         this.onerror = null;
         this.paused = true;
+        window.__audioInstance = this;
       }
 
       canPlayType(type) {
@@ -446,6 +467,224 @@ async function speechTokenCallCount(page) {
         (call) => new URL(call.url).pathname === "/v8/speech-token",
       ).length,
   );
+}
+
+async function finishManualAudio(page) {
+  await page.evaluate(() => {
+    const audio = window.__audioInstance;
+    if (typeof audio?.onended !== "function") {
+      throw new Error("manual audio does not have an active completion handler");
+    }
+    audio.onended();
+  });
+}
+
+async function runCorrectFeedbackCase(context, script) {
+  const page = await context.newPage();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const errors = await preparePage(page, "audio-manual");
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "問題文 1/1",
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "問題文完了",
+    );
+
+    await markAnswerResult(childFrame, "correct");
+    await childFrame.waitForSelector(".kakomonn-reader-correct-feedback");
+    assert.deepEqual(
+      await childFrame.locator(".kakomonn-reader-correct-feedback").evaluate(
+        (element) => {
+          const rect = element.getBoundingClientRect();
+          const style = getComputedStyle(element);
+          return {
+            animationName: style.animationName,
+            display: style.display,
+            pointerEvents: style.pointerEvents,
+            text: element.textContent,
+            withinViewport:
+              rect.left >= 0 &&
+              rect.right <= innerWidth &&
+              rect.width > 0 &&
+              rect.height > 0,
+          };
+        },
+      ),
+      {
+        animationName: "none",
+        display: "flex",
+        pointerEvents: "none",
+        text: "That's Right!!",
+        withinViewport: true,
+      },
+    );
+
+    await childFrame.locator("#js-answer-result-box").evaluate((element) => {
+      element.style.setProperty("outline", "1px solid transparent");
+      element.dataset.duplicateMutationProbe = "true";
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href ===
+        "https://chushoks.kakomonn.com/questions/45125",
+    );
+    const carriedFeedback = page.locator(
+      "#kakomonn-reader-carried-correct-feedback",
+    );
+    await carriedFeedback.waitFor({ state: "visible" });
+    assert.deepEqual(
+      await carriedFeedback.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const shell = document
+          .querySelector("#kakomonn-reader-shell")
+          .getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          animationName: style.animationName,
+          pointerEvents: style.pointerEvents,
+          text: element.textContent,
+          withinShell:
+            rect.left >= shell.left &&
+            rect.top >= shell.top &&
+            rect.right <= shell.right &&
+            rect.bottom <= shell.bottom,
+        };
+      }),
+      {
+        animationName: "none",
+        pointerEvents: "none",
+        text: "That's Right!!",
+        withinShell: true,
+      },
+    );
+
+    await childFrame.evaluate((html) => {
+      document.body.innerHTML = html;
+    }, mockBody);
+    await page.waitForTimeout(1_000);
+    assert.equal((await azureSpeechCalls(page)).length, 2);
+    assert.equal(
+      (await azureSpeechCalls(page))[1].body,
+      expectedSpeechSSML("That's right!", "+10%", {
+        locale: "en-US",
+        voiceName: "en-US-JennyNeural",
+      }),
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "That's right!",
+    );
+    assert.equal(await carriedFeedback.isVisible(), true);
+    await finishManualAudio(page);
+    await carriedFeedback.waitFor({ state: "hidden" });
+    await page.waitForFunction(
+      (url) =>
+        window.__syncMock.calls.filter((call) => call.url === url).length === 3,
+      azureSpeechUrl,
+    );
+    assert.equal(
+      (await azureSpeechCalls(page))[2].body,
+      expectedSpeechSSML(
+        "問題文。これは動作確認用の問題文です.。これは改行後の問題文です.",
+        "+100%",
+      ),
+    );
+    assert.equal(
+      (await azureSpeechCalls(page)).filter((call) =>
+        call.body.includes("en-US-JennyNeural"),
+      ).length,
+      1,
+    );
+    assert.deepEqual(
+      await page.evaluate(() => window.__audioBlobs),
+      [
+        { size: 4, type: "audio/mpeg" },
+        { size: 31_796, type: "audio/wav" },
+        { size: 4, type: "audio/mpeg" },
+        { size: 4, type: "audio/mpeg" },
+      ],
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
+async function runCorrectCelebrationFeedbackCase(context, script) {
+  const page = await context.newPage();
+  await page.route(
+    "https://kakomonn-congratulations.kakomonn.workers.dev/**",
+    (route) =>
+      route.fulfill({
+        contentType: "text/html; charset=utf-8",
+        body: "<!doctype html><html><body><h1>dueCardsCompleted達成</h1></body></html>",
+      }),
+  );
+  const errors = await preparePage(page, "audio-manual", {
+    nextQuestionId: null,
+  });
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "問題文 1/1",
+    );
+    await finishManualAudio(page);
+    await page.evaluate(() => {
+      window.__syncMock.nextCelebration = {
+        site: "chushoks.kakomonn.com",
+        date: "2026-08-10",
+        dueCardsCompleted: true,
+      };
+    });
+    await markAnswerResult(childFrame, "correct");
+    await page.waitForFunction(
+      () =>
+        window.__syncMock.attemptCount === 1 &&
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href ===
+          "https://chushoks.kakomonn.com/questions/45124",
+    );
+    await page.waitForTimeout(200);
+    assert.equal(
+      page.url(),
+      "https://chushoks.kakomonn.com/questions/45124",
+    );
+    assert.equal(
+      await childFrame.locator(".kakomonn-reader-correct-feedback").innerText(),
+      "That's Right!!",
+    );
+
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "That's right!",
+    );
+    assert.equal(
+      page.url(),
+      "https://chushoks.kakomonn.com/questions/45124",
+    );
+    await finishManualAudio(page);
+    await page.waitForURL((url) =>
+      url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
+    );
+    assert.equal(new URL(page.url()).searchParams.get("dueCardsCompleted"), "true");
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
 }
 
 async function assertIncorrectSkip(context, script) {
@@ -1294,6 +1533,8 @@ async function main() {
     assert.deepEqual(errors, []);
 
     await assertIncorrectSkip(context, script);
+    await runCorrectFeedbackCase(context, script);
+    await runCorrectCelebrationFeedbackCase(context, script);
 
     const speechShortcutPage = await context.newPage();
     const speechShortcutErrors = await preparePage(

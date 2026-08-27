@@ -253,6 +253,7 @@
       return;
     }
 
+    activateSpeechFromGesture();
     event.preventDefault();
     event.stopImmediatePropagation();
   }
@@ -339,6 +340,9 @@
     frameDocument = nextDocument;
     synchronizeAnswerPresentation(frameDocument);
     applyFrameDarkMode(frameDocument);
+    if (getCurrentAnswerResult() === "correct") {
+      beginCorrectAnswerFeedback(frameDocument);
+    }
     scheduleFrameProblemScroll(frameDocument);
     frame.contentWindow.addEventListener("click", onFrameClick, true);
     frame.contentWindow.addEventListener(

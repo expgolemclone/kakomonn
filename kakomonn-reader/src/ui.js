@@ -32,7 +32,16 @@
     attributes: true,
     attributeFilter: ["height", "style", "width"],
   });
-  shell.appendChild(frame);
+
+  const carriedCorrectFeedback = document.createElement("div");
+  carriedCorrectFeedback.id = "kakomonn-reader-carried-correct-feedback";
+  carriedCorrectFeedback.className = "kakomonn-reader-correct-feedback";
+  carriedCorrectFeedback.textContent = CORRECT_FEEDBACK_TEXT;
+  carriedCorrectFeedback.hidden = true;
+  carriedCorrectFeedback.setAttribute("aria-hidden", "true");
+
+  shell.append(frame, carriedCorrectFeedback);
+  let activeCorrectFeedbackElement = null;
 
   const controls = document.createElement("div");
   controls.id = "kakomonn-reader-controls";
@@ -346,4 +355,102 @@
     } else {
       statusBadge.setAttribute("aria-label", accessibleMessage);
     }
+  }
+
+  function clearCorrectFeedbackRemovalTimer() {
+    if (correctFeedbackRemovalTimer === null) {
+      return;
+    }
+    window.clearTimeout(correctFeedbackRemovalTimer);
+    correctFeedbackRemovalTimer = null;
+  }
+
+  function showCorrectFeedbackVisual(sourceDocument = frameDocument) {
+    if (
+      sourceDocument?.body === undefined ||
+      sourceDocument !== frameDocument
+    ) {
+      return false;
+    }
+
+    const resultBox = sourceDocument.querySelector("#js-answer-result-box");
+    if (resultBox === null) {
+      return false;
+    }
+
+    clearCorrectFeedbackRemovalTimer();
+    carriedCorrectFeedback.hidden = true;
+    carriedCorrectFeedback.dataset.state = "entering";
+    carriedCorrectFeedback.removeAttribute("style");
+
+    let feedback = resultBox.querySelector(
+      ":scope > .kakomonn-reader-correct-feedback"
+    );
+    if (feedback === null) {
+      feedback = sourceDocument.createElement("div");
+      feedback.className = "kakomonn-reader-correct-feedback";
+      feedback.textContent = CORRECT_FEEDBACK_TEXT;
+      feedback.setAttribute("aria-hidden", "true");
+      resultBox.appendChild(feedback);
+    }
+    feedback.dataset.state = "entering";
+    activeCorrectFeedbackElement = feedback;
+    return true;
+  }
+
+  function handoffCorrectFeedbackVisual(sourceDocument = frameDocument) {
+    if (
+      correctFeedbackPromise === null ||
+      activeCorrectFeedbackElement === null ||
+      activeCorrectFeedbackElement.ownerDocument !== sourceDocument
+    ) {
+      return false;
+    }
+
+    const rect = activeCorrectFeedbackElement.getBoundingClientRect();
+    const inset = 16;
+    const availableWidth = Math.max(0, shell.clientWidth - inset * 2);
+    const width = Math.min(
+      availableWidth,
+      Math.max(220, rect.width)
+    );
+    const left = Math.min(
+      Math.max(inset, rect.left + (rect.width - width) / 2),
+      Math.max(inset, shell.clientWidth - width - inset)
+    );
+    const top = Math.min(
+      Math.max(inset, rect.top),
+      Math.max(inset, shell.clientHeight - 96)
+    );
+
+    activeCorrectFeedbackElement.remove();
+    carriedCorrectFeedback.style.left = `${left}px`;
+    carriedCorrectFeedback.style.top = `${top}px`;
+    carriedCorrectFeedback.style.width = `${width}px`;
+    carriedCorrectFeedback.dataset.state = "carried";
+    carriedCorrectFeedback.hidden = false;
+    activeCorrectFeedbackElement = carriedCorrectFeedback;
+    return true;
+  }
+
+  function completeCorrectFeedbackVisual() {
+    const feedback = activeCorrectFeedbackElement;
+    if (feedback === null) {
+      return;
+    }
+
+    clearCorrectFeedbackRemovalTimer();
+    feedback.dataset.state = "leaving";
+    correctFeedbackRemovalTimer = window.setTimeout(() => {
+      correctFeedbackRemovalTimer = null;
+      if (feedback === carriedCorrectFeedback) {
+        feedback.hidden = true;
+        feedback.removeAttribute("style");
+      } else {
+        feedback.remove();
+      }
+      if (activeCorrectFeedbackElement === feedback) {
+        activeCorrectFeedbackElement = null;
+      }
+    }, CORRECT_FEEDBACK_LEAVE_DURATION_MS);
   }

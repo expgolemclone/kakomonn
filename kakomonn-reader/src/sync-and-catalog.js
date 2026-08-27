@@ -883,6 +883,7 @@
     if (speechInitializationInProgress) {
       speechInitializationInProgress = false;
       speechEnabled = false;
+      finishSpeechInitialization();
     }
     speechRunId += 1;
     cancelActiveSpeech();

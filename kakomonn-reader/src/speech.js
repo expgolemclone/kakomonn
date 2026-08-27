@@ -28,6 +28,13 @@
       });
   }
 
+  function finishSpeechInitialization() {
+    const resolve = speechInitializationResolve;
+    speechInitializationResolve = null;
+    speechInitializationPromise = null;
+    resolve?.();
+  }
+
   function escapeSpeechText(text) {
     return text.replace(/[&<>"']/g, (character) => {
       const entities = {
@@ -41,18 +48,24 @@
     });
   }
 
-  function buildSpeechSSML(text, rate) {
+  function buildSpeechSSML({ locale, rate, text, voiceName }) {
     const ratePercentage = Math.round((rate - 1) * 100);
     const signedRate = `${ratePercentage >= 0 ? "+" : ""}${ratePercentage}%`;
     return (
-      '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ja-JP">' +
-      `<voice name="${AZURE_SPEECH_VOICE_NAME}">` +
+      `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${locale}">` +
+      `<voice name="${voiceName}">` +
       `<prosody rate="${signedRate}">${escapeSpeechText(text)}</prosody>` +
       "</voice></speak>"
     );
   }
 
-  function requestAzureSpeechAudio(token, text, rate) {
+  function requestAzureSpeechAudio(
+    token,
+    text,
+    rate,
+    locale = JAPANESE_SPEECH_LOCALE,
+    voiceName = JAPANESE_SPEECH_VOICE_NAME
+  ) {
     const request = gmXMLHttpRequest({
       method: "POST",
       url: AZURE_SPEECH_URL,
@@ -63,7 +76,7 @@
         "Content-Type": "application/ssml+xml",
         "X-Microsoft-OutputFormat": AZURE_SPEECH_OUTPUT_FORMAT,
       },
-      data: buildSpeechSSML(text, rate),
+      data: buildSpeechSSML({ locale, rate, text, voiceName }),
     });
     const result = request.then((response) => {
       if (
@@ -106,6 +119,8 @@
   }
 
   function clearActiveSpeechAudio() {
+    const cancelPlayback = activeSpeechPlaybackCancel;
+    activeSpeechPlaybackCancel = null;
     speechPaused = false;
     speechAudio?.pause();
     if (speechAudio) {
@@ -119,6 +134,7 @@
       URL.revokeObjectURL(activeSpeechAudioURL);
       activeSpeechAudioURL = "";
     }
+    cancelPlayback?.();
   }
 
   function cancelActiveSpeech() {
@@ -172,7 +188,9 @@
     runId,
     label,
     rate,
-    index = 0
+    index = 0,
+    locale = JAPANESE_SPEECH_LOCALE,
+    voiceName = JAPANESE_SPEECH_VOICE_NAME
   ) {
     if (runId !== speechRunId) {
       return;
@@ -189,7 +207,13 @@
       if (runId !== speechRunId) {
         return;
       }
-      const request = requestAzureSpeechAudio(token, chunks[index], rate);
+      const request = requestAzureSpeechAudio(
+        token,
+        chunks[index],
+        rate,
+        locale,
+        voiceName
+      );
       activeSpeechRequest = request;
       audioData = await request;
       if (activeSpeechRequest === request) {
@@ -222,7 +246,15 @@
     speechAudio.onended = () => {
       if (runId === speechRunId) {
         clearActiveSpeechAudio();
-        void speakAzureSpeechChunks(chunks, runId, label, rate, index + 1);
+        void speakAzureSpeechChunks(
+          chunks,
+          runId,
+          label,
+          rate,
+          index + 1,
+          locale,
+          voiceName
+        );
       }
     };
 
@@ -238,7 +270,13 @@
     await playActiveSpeechAudio(runId);
   }
 
-  function speakText(text, label, rate) {
+  function speakText(
+    text,
+    label,
+    rate,
+    locale = JAPANESE_SPEECH_LOCALE,
+    voiceName = JAPANESE_SPEECH_VOICE_NAME
+  ) {
     if (!speechEnabled) {
       return;
     }
@@ -253,11 +291,260 @@
     const runId = speechRunId;
     cancelActiveSpeech();
     setStatus("準備中", `${label}準備中`);
-    void speakAzureSpeechChunks(chunks, runId, label, rate);
+    void speakAzureSpeechChunks(
+      chunks,
+      runId,
+      label,
+      rate,
+      0,
+      locale,
+      voiceName
+    );
+  }
+
+  function writeWaveText(view, offset, value) {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.charCodeAt(index));
+    }
+  }
+
+  function createCorrectChimeWave() {
+    const tones = [
+      { duration: 0.18, frequency: 880, start: 0 },
+      { duration: 0.5, frequency: 659.25, start: 0.22 },
+    ];
+    const duration = 0.72;
+    const sampleCount = Math.ceil(CORRECT_CHIME_SAMPLE_RATE * duration);
+    const buffer = new ArrayBuffer(44 + sampleCount * 2);
+    const view = new DataView(buffer);
+
+    writeWaveText(view, 0, "RIFF");
+    view.setUint32(4, 36 + sampleCount * 2, true);
+    writeWaveText(view, 8, "WAVE");
+    writeWaveText(view, 12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, CORRECT_CHIME_SAMPLE_RATE, true);
+    view.setUint32(28, CORRECT_CHIME_SAMPLE_RATE * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeWaveText(view, 36, "data");
+    view.setUint32(40, sampleCount * 2, true);
+
+    for (let index = 0; index < sampleCount; index += 1) {
+      const time = index / CORRECT_CHIME_SAMPLE_RATE;
+      let sample = 0;
+      for (const tone of tones) {
+        const toneTime = time - tone.start;
+        if (toneTime < 0 || toneTime >= tone.duration) {
+          continue;
+        }
+        const progress = toneTime / tone.duration;
+        const attack = Math.min(1, toneTime / 0.008);
+        const release = (1 - progress) ** 2;
+        sample +=
+          Math.sin(2 * Math.PI * tone.frequency * toneTime) *
+          attack *
+          release *
+          0.34;
+      }
+      const clampedSample = Math.max(-1, Math.min(1, sample));
+      view.setInt16(44 + index * 2, clampedSample * 0x7fff, true);
+    }
+
+    return buffer;
+  }
+
+  function playCorrectFeedbackAudioBlob(blob, runId, label) {
+    if (speechAudio === null || runId !== speechRunId) {
+      return Promise.resolve(false);
+    }
+
+    clearActiveSpeechAudio();
+    activeSpeechAudioURL = URL.createObjectURL(blob);
+    speechAudio.src = activeSpeechAudioURL;
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (completed) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        resolve(completed);
+      };
+      const cancelPlayback = () => settle(false);
+      activeSpeechPlaybackCancel = cancelPlayback;
+
+      speechAudio.onplay = () => {
+        if (runId === speechRunId) {
+          speechPaused = false;
+          setStatus(label);
+        }
+      };
+      speechAudio.onended = () => {
+        if (runId !== speechRunId) {
+          return;
+        }
+        if (activeSpeechPlaybackCancel === cancelPlayback) {
+          activeSpeechPlaybackCancel = null;
+        }
+        clearActiveSpeechAudio();
+        settle(true);
+      };
+      speechAudio.onerror = () => {
+        if (runId !== speechRunId) {
+          return;
+        }
+        if (activeSpeechPlaybackCancel === cancelPlayback) {
+          activeSpeechPlaybackCancel = null;
+        }
+        clearActiveSpeechAudio();
+        setStatus("音声を再生できません");
+        settle(false);
+      };
+
+      let playPromise;
+      try {
+        playPromise = speechAudio.play();
+      } catch {
+        if (activeSpeechPlaybackCancel === cancelPlayback) {
+          activeSpeechPlaybackCancel = null;
+        }
+        clearActiveSpeechAudio();
+        setStatus(SPEECH_GESTURE_STATUS);
+        settle(false);
+        return;
+      }
+      Promise.resolve(playPromise).catch(() => {
+        if (runId !== speechRunId) {
+          return;
+        }
+        if (activeSpeechPlaybackCancel === cancelPlayback) {
+          activeSpeechPlaybackCancel = null;
+        }
+        clearActiveSpeechAudio();
+        setStatus(SPEECH_GESTURE_STATUS);
+        settle(false);
+      });
+    });
+  }
+
+  async function requestCorrectFeedbackVoice(runId) {
+    const token = await getAzureSpeechToken();
+    if (runId !== speechRunId) {
+      throw new SyncRequestError("request_aborted");
+    }
+    const request = requestAzureSpeechAudio(
+      token,
+      CORRECT_FEEDBACK_SPEECH_TEXT,
+      CORRECT_FEEDBACK_SPEECH_RATE,
+      ENGLISH_SPEECH_LOCALE,
+      ENGLISH_SPEECH_VOICE_NAME
+    );
+    activeSpeechRequest = request;
+    try {
+      return await request;
+    } finally {
+      if (activeSpeechRequest === request) {
+        activeSpeechRequest = null;
+      }
+    }
+  }
+
+  async function playCorrectFeedbackSequence() {
+    if (speechInitializationPromise !== null) {
+      await speechInitializationPromise;
+    }
+    if (!speechEnabled || speechAudio === null) {
+      setStatus(SPEECH_GESTURE_STATUS);
+      return;
+    }
+
+    speechRunId += 1;
+    const runId = speechRunId;
+    cancelActiveSpeech();
+    const voiceResultPromise = requestCorrectFeedbackVoice(runId).then(
+      (audioData) => ({ audioData, error: null }),
+      (error) => ({ audioData: null, error })
+    );
+    const chimeCompleted = await playCorrectFeedbackAudioBlob(
+      new Blob([createCorrectChimeWave()], { type: "audio/wav" }),
+      runId,
+      "正解音"
+    );
+    if (!chimeCompleted || runId !== speechRunId) {
+      activeSpeechRequest?.abort();
+      await voiceResultPromise;
+      return;
+    }
+
+    const voiceResult = await voiceResultPromise;
+    if (runId !== speechRunId) {
+      return;
+    }
+    if (voiceResult.error !== null) {
+      if (voiceResult.error?.code !== "request_aborted") {
+        setStatus(speechErrorMessage(voiceResult.error));
+      }
+      return;
+    }
+
+    const voiceCompleted = await playCorrectFeedbackAudioBlob(
+      new Blob([voiceResult.audioData], { type: "audio/mpeg" }),
+      runId,
+      "That's right!"
+    );
+    if (voiceCompleted && runId === speechRunId) {
+      setStatus("正解完了");
+    }
+  }
+
+  function beginCorrectAnswerFeedback(sourceDocument = frameDocument) {
+    if (
+      sourceDocument?.body === undefined ||
+      sourceDocument !== frameDocument ||
+      correctFeedbackDocuments.has(sourceDocument)
+    ) {
+      return false;
+    }
+
+    correctFeedbackDocuments.add(sourceDocument);
+    awaitingAnswerResultSpeech = false;
+    showCorrectFeedbackVisual(sourceDocument);
+
+    const previousFeedback = correctFeedbackPromise ?? Promise.resolve();
+    const scheduledFeedback = previousFeedback.then(async () => {
+      const minimumDuration = new Promise((resolve) => {
+        window.setTimeout(resolve, CORRECT_FEEDBACK_MINIMUM_DURATION_MS);
+      });
+      try {
+        await Promise.all([playCorrectFeedbackSequence(), minimumDuration]);
+      } catch {
+        setStatus("正解feedbackを再生できません");
+      }
+    });
+    correctFeedbackPromise = scheduledFeedback;
+    void scheduledFeedback.then(() => {
+      if (correctFeedbackPromise !== scheduledFeedback) {
+        return;
+      }
+      correctFeedbackPromise = null;
+      completeCorrectFeedbackVisual();
+      processCurrentPageSpeech();
+      void maybeContinuePendingCelebration();
+    });
+    return true;
   }
 
   function speakAnswerResult(answerResult) {
-    const label = answerResult === "correct" ? "正解" : "不正解";
+    if (answerResult === "correct") {
+      beginCorrectAnswerFeedback();
+      return;
+    }
+
+    const label = "不正解";
     awaitingAnswerResultSpeech = false;
     speakText(`${label}.`, label, ANSWER_RESULT_SPEECH_RATE);
   }

@@ -136,7 +136,10 @@
       return false;
     }
     navigationInProgress = true;
-    stopSpeech();
+    handoffCorrectFeedbackVisual();
+    if (correctFeedbackPromise === null) {
+      stopSpeech();
+    }
     setStatus("次の問題を反映中");
     updateSyncDependentControls();
     try {
@@ -256,10 +259,13 @@
     const celebration = pendingCelebration;
     celebrationTransitionPromise = (async () => {
       navigationInProgress = true;
-      stopSpeech();
-      setStatus("dueCardsCompleted達成");
       updateSyncDependentControls();
       try {
+        while (correctFeedbackPromise !== null) {
+          await correctFeedbackPromise;
+        }
+        stopSpeech();
+        setStatus("dueCardsCompleted達成");
         await clearPendingCelebration();
         location.assign(congratulationsURL(celebration));
         return true;
@@ -495,6 +501,7 @@
       !currentPageReadPending ||
       !syncReady ||
       syncInProgress ||
+      correctFeedbackPromise !== null ||
       pendingCelebration !== null
     ) {
       return;
@@ -512,12 +519,16 @@
       !currentPageReadPending ||
       !syncReady ||
       syncInProgress ||
+      correctFeedbackPromise !== null ||
       pendingCelebration !== null
     ) {
       return false;
     }
 
     speechInitializationInProgress = true;
+    speechInitializationPromise = new Promise((resolve) => {
+      speechInitializationResolve = resolve;
+    });
     speechRunId += 1;
     const runId = speechRunId;
     cancelActiveSpeech();
@@ -529,12 +540,14 @@
         }
         speechInitializationInProgress = false;
         speechEnabled = true;
+        finishSpeechInitialization();
         readPendingCurrentPage();
       },
       () => {
         if (runId === speechRunId) {
           speechInitializationInProgress = false;
           speechEnabled = false;
+          finishSpeechInitialization();
           setStatus(SPEECH_GESTURE_STATUS);
         }
       }
@@ -547,6 +560,7 @@
       !currentPageReadPending ||
       !syncReady ||
       syncInProgress ||
+      correctFeedbackPromise !== null ||
       pendingCelebration !== null
     ) {
       return;
@@ -569,6 +583,16 @@
 
   function activateSpeechFromGesture() {
     // 自動再生が拒否された場合は,ユーザー操作内で同じ読み上げ経路を再試行します.
+    if (
+      !speechEnabled &&
+      !speechInitializationInProgress &&
+      !currentPageReadPending &&
+      loadTimer !== null
+    ) {
+      window.clearTimeout(loadTimer);
+      loadTimer = null;
+      currentPageReadPending = true;
+    }
     if (!speechEnabled && currentPageReadPending) {
       startSpeechForCurrentPage();
     }

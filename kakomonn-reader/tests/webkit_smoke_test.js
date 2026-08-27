@@ -860,6 +860,86 @@ async function main() {
       1,
     );
     assert.deepEqual(pageErrors, []);
+
+    const correctPage = await context.newPage();
+    const correctPageErrors = [];
+    correctPage.on("pageerror", (error) =>
+      correctPageErrors.push(String(error)),
+    );
+    await correctPage.goto(currentQuestionURL);
+    await correctPage.evaluate(() => {
+      Object.defineProperty(window, "Audio", {
+        configurable: true,
+        value: undefined,
+      });
+    });
+    await installSyncMock(correctPage, { nextQuestionId: "86957" });
+    await correctPage.addScriptTag({ content: script });
+    await correctPage.waitForFunction(
+      (expectedURL) =>
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href === expectedURL,
+      currentQuestionURL,
+    );
+    const correctFrame = correctPage
+      .frames()
+      .find(
+        (candidate) =>
+          candidate !== correctPage.mainFrame() &&
+          candidate.url() === currentQuestionURL,
+      );
+    assert.notEqual(correctFrame, undefined);
+    await correctFrame.evaluate((html) => {
+      document.body.innerHTML = html;
+    }, fixtureBody);
+    await correctPage.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-due-cards-completed")
+          ?.textContent === "未達成",
+    );
+    await correctPage.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+    });
+    await correctFrame.evaluate(() => {
+      document
+        .querySelector("#js-answer-result-box")
+        .classList.add("is-correct");
+    });
+    await correctFrame.waitForSelector(".kakomonn-reader-correct-feedback");
+    assert.deepEqual(
+      await correctFrame.locator(".kakomonn-reader-correct-feedback").evaluate(
+        (element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            pointerEvents: getComputedStyle(element).pointerEvents,
+            text: element.textContent,
+            withinViewport:
+              rect.left >= 0 &&
+              rect.right <= innerWidth &&
+              rect.width > 0 &&
+              rect.height > 0,
+          };
+        },
+      ),
+      {
+        pointerEvents: "none",
+        text: "That's Right!!",
+        withinViewport: true,
+      },
+    );
+    await correctPage.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+    await correctPage.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await correctFrame.waitForURL(nextQuestionURL);
+    const carriedCorrectFeedback = correctPage.locator(
+      "#kakomonn-reader-carried-correct-feedback",
+    );
+    await carriedCorrectFeedback.waitFor({ state: "visible" });
+    assert.equal(await carriedCorrectFeedback.innerText(), "That's Right!!");
+    await carriedCorrectFeedback.waitFor({ state: "hidden" });
+    assert.deepEqual(correctPageErrors, []);
+    await correctPage.close();
     await context.close();
   } finally {
     await browser.close();

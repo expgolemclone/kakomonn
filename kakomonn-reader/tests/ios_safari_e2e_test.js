@@ -11,8 +11,9 @@ const {
 } = require("./sync_mock");
 const {
   assertMarkdownCopy,
-  MARKDOWN_ANSWER_TEXT,
   MARKDOWN_CHOICES,
+  MARKDOWN_INCORRECT_ANSWER_SUMMARY,
+  MARKDOWN_INCORRECT_ANSWER_TEXT,
   MARKDOWN_EXPLANATION_IMAGE_URLS,
   MARKDOWN_EXPLANATION_PREFIXES,
   MARKDOWN_QUESTION_HEADING,
@@ -728,7 +729,7 @@ async function submitAnswer(driver, answerText) {
 }
 
 async function readExplanationContents(driver) {
-  await waitForElement(driver, "#js-answer-result-box.is-correct", 30_000);
+  await waitForElement(driver, "#js-answer-result-box.is-wrong", 30_000);
   const explanationElements = await driver.$$(
     "#js-commentary-wrap > .item > .text",
   );
@@ -932,7 +933,7 @@ async function runTest() {
     assert.deepEqual(choices, MARKDOWN_CHOICES);
     assert.deepEqual(questionImageURLs, MARKDOWN_QUESTION_IMAGE_URLS);
 
-    await submitAnswer(driver, MARKDOWN_ANSWER_TEXT);
+    await submitAnswer(driver, MARKDOWN_INCORRECT_ANSWER_TEXT);
     const { explanationContents, explanationImageURLs } =
       await readExplanationContents(driver);
     for (
@@ -984,6 +985,7 @@ async function runTest() {
     );
     assert.notEqual(copiedMarkdown, clipboardNonce);
     assertMarkdownCopy({
+      answerSummary: MARKDOWN_INCORRECT_ANSWER_SUMMARY,
       choices,
       copiedMarkdown,
       explanationContents,

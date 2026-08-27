@@ -650,7 +650,7 @@ async function main() {
     await childFrame.evaluate(() => {
       document
         .querySelector("#js-answer-result-box")
-        .classList.add("is-correct");
+        .classList.add("is-wrong");
       for (const lock of document.querySelectorAll(
         "#js-commentary-wrap > .item > .none_text"
       )) {

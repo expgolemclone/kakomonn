@@ -133,18 +133,12 @@ async function runQuestionIdCase(browser, startPath) {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].body.questionId, "123");
     assert.deepEqual(Object.keys(calls[0].body).sort(), ["answerResult", "operationId", "questionId", "site"]);
-    assert.equal(await frame.locator("body").evaluate(() => location.pathname), startPath);
-    await frame.locator("#js-answer-result-box").evaluate((element) => {
-      element.style.display = "block";
-    });
-    await page.waitForTimeout(100);
-    assert.equal((await attemptCalls(page)).length, 1);
-    await page.waitForFunction(() =>
-      document.querySelector("#kakomonn-reader-next")?.textContent === "次の問題へ",
-    );
-    await frame.locator("#native-next").click();
     await frame.waitForURL(`https://${site}/questions/456`);
     assert.equal((await attemptCalls(page)).length, 1);
+    assert.equal(
+      await page.evaluate((key) => window.__getGMValue(key), PENDING_ATTEMPT_KEY),
+      null,
+    );
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.some(
@@ -329,11 +323,6 @@ async function runRetryCase(browser) {
     const calls = await attemptCalls(page);
     assert.equal(calls[0].body.operationId, calls[1].body.operationId);
     assert.equal(await page.evaluate(() => window.__syncMock.stabilityDays), 31);
-    assert.equal(await frame.locator("body").evaluate(() => location.pathname), "/questions/123");
-    await page.waitForFunction(() =>
-      document.querySelector("#kakomonn-reader-next")?.textContent === "次の問題へ",
-    );
-    await page.locator("#kakomonn-reader-next").click();
     await frame.waitForURL(`https://${site}/questions/456`);
     assert.equal(
       await page.evaluate(() =>
@@ -825,12 +814,6 @@ async function runCelebrationCase(browser) {
       };
     });
     await revealAnswerResult(frame, "correct");
-    await page.waitForFunction(() =>
-      window.__syncMock.attemptCount === 1 &&
-      document.querySelector("#kakomonn-reader-next")?.disabled === false,
-    );
-    assert.equal(page.url(), `https://${site}/questions/123`);
-    await frame.locator("#native-next").click();
     await page.waitForURL((url) =>
       url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
@@ -888,15 +871,36 @@ async function runRecordedAttemptRecoveryCase(browser) {
     };
     const errors = await prepare(page, "/questions/123", { pendingAttempt });
     const frame = await readerFrame(page);
-    await page.waitForFunction(() => {
-      const button = document.querySelector("#kakomonn-reader-next");
-      return button?.textContent === "次の問題へ" && button.disabled === false;
-    });
-    assert.equal((await attemptCalls(page)).length, 0);
-    assert.equal(await frame.locator("body").evaluate(() => location.pathname), "/questions/123");
-    await page.locator("#kakomonn-reader-next").click();
     await frame.waitForURL(`https://${site}/questions/456`);
     assert.equal((await attemptCalls(page)).length, 0);
+    assert.equal(
+      await page.evaluate((key) => window.__getGMValue(key), PENDING_ATTEMPT_KEY),
+      null,
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
+async function runQueuedAttemptRecoveryCase(browser) {
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
+  try {
+    const page = await context.newPage();
+    const pendingAttempt = {
+      operationId: "fedcba9876543210fedcba9876543210",
+      questionId: "123",
+      phase: "queued",
+      pageURL: `https://${site}/questions/123`,
+      answerResult: "correct",
+      site,
+    };
+    const errors = await prepare(page, "/questions/123", { pendingAttempt });
+    const frame = await readerFrame(page);
+    await frame.waitForURL(`https://${site}/questions/456`);
+    const calls = await attemptCalls(page);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].body.operationId, pendingAttempt.operationId);
     assert.equal(
       await page.evaluate((key) => window.__getGMValue(key), PENDING_ATTEMPT_KEY),
       null,
@@ -933,6 +937,7 @@ async function main() {
     await runCelebrationCase(browser);
     await runPendingCelebrationRecoveryCase(browser);
     await runRecordedAttemptRecoveryCase(browser);
+    await runQueuedAttemptRecoveryCase(browser);
   } finally {
     await browser.close();
   }

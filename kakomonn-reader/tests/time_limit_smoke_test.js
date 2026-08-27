@@ -125,7 +125,7 @@ async function explanationExpiryRecordsAndAdvances(browser, script) {
     await frame.evaluate(() => {
       const result = document.createElement("div");
       result.id = "js-answer-result-box";
-      result.className = "is-correct";
+      result.className = "is-wrong";
       document.body.append(result);
     });
     await page.clock.fastForward(1_000);
@@ -147,7 +147,7 @@ async function explanationExpiryRecordsAndAdvances(browser, script) {
       ).body,
     }));
     assert.equal(recorded.answered, 1);
-    assert.equal(recorded.body.answerResult, "correct");
+    assert.equal(recorded.body.answerResult, "incorrect");
     assert.equal(recorded.body.site, "chushoks.kakomonn.com");
     await page.clock.fastForward(300_100);
     await page.waitForFunction(

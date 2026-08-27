@@ -1092,7 +1092,7 @@ async function main() {
     );
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 0);
 
-    await markAnswerResult(childFrame, "correct");
+    await markAnswerResult(childFrame, "incorrect");
     assert.deepEqual(
       await childFrame.locator("#js-answer-result-box").evaluate((element) => {
         const style = getComputedStyle(element);
@@ -1102,7 +1102,7 @@ async function main() {
         };
       }),
       {
-        background: "rgb(24, 121, 78)",
+        background: "rgb(139, 47, 47)",
         color: "rgb(255, 255, 255)",
       },
     );
@@ -1127,13 +1127,13 @@ async function main() {
     );
     await page.waitForFunction(
       () =>
-        window.__readerStatusHistory.includes("正解 1/1") &&
+        window.__readerStatusHistory.includes("不正解 1/1") &&
         document.querySelector("#kakomonn-reader-status").textContent ===
-          "正解完了",
+          "不正解完了",
     );
     assert.equal(
       (await azureSpeechCalls(page))[1].body,
-      expectedSpeechSSML("正解.", "+70%"),
+      expectedSpeechSSML("不正解.", "+70%"),
     );
     assert.equal(await speechTokenCallCount(page), 1);
 

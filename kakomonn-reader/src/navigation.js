@@ -211,8 +211,25 @@
     return false;
   }
 
+  async function continueCorrectPendingAttempt() {
+    if (pendingAttempt?.answerResult !== "correct") {
+      return false;
+    }
+    if (pendingAttempt.phase === "queued") {
+      const recorded = await submitPendingAttempt();
+      if (!recorded) {
+        return false;
+      }
+    }
+    if (pendingAttempt?.phase !== "recorded") {
+      return false;
+    }
+    return advancePendingAttempt();
+  }
+
   async function resumePendingLearningFlow() {
     await completePendingAttemptNavigation();
+    await continueCorrectPendingAttempt();
     await maybeContinuePendingCelebration();
     recordCurrentAnswerIfAvailable();
   }
@@ -371,7 +388,11 @@
     if (answerResult === "unknown" || currentQuestionId() === null) {
       return false;
     }
-    void recordCurrentAnswer(answerResult);
+    if (answerResult === "correct") {
+      void recordCurrentQuestionAndAdvance(answerResult, "正解を記録中");
+    } else {
+      void recordCurrentAnswer(answerResult);
+    }
     return true;
   }
 
@@ -442,7 +463,11 @@
     }
     if (pendingAttempt !== null) {
       if (pendingAttempt.phase === "queued") {
-        await submitPendingAttempt();
+        if (pendingAttempt.answerResult === "correct") {
+          await continueCorrectPendingAttempt();
+        } else {
+          await submitPendingAttempt();
+        }
       } else {
         await advancePendingAttempt();
       }

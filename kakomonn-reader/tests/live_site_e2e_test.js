@@ -5,8 +5,9 @@ const { chromium } = require("playwright");
 const { installSyncMock } = require("./sync_mock");
 const {
   assertMarkdownCopy,
-  MARKDOWN_ANSWER_TEXT,
   MARKDOWN_CHOICES,
+  MARKDOWN_INCORRECT_ANSWER_SUMMARY,
+  MARKDOWN_INCORRECT_ANSWER_TEXT,
   MARKDOWN_EXPLANATION_IMAGE_URLS: markdownExplanationImageURLs,
   MARKDOWN_EXPLANATION_PREFIXES: markdownExplanationPrefixes,
   MARKDOWN_QUESTION_HEADING: markdownQuestionHeading,
@@ -568,13 +569,6 @@ async function runCase(
     const resultClasses =
       (await frame.locator("#js-answer-result-box").getAttribute("class")) ?? "";
     assert.equal(resultClasses.split(/\s+/).includes(expectedResultClass), true);
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase ===
-        "explanation",
-      null,
-      { timeout: 15_000 }
-    );
     const semanticResultColor = await frame
       .locator("#js-answer-result-box")
       .evaluate((element, resultClass) => {
@@ -590,17 +584,33 @@ async function runCase(
         : "rgb(232, 146, 146)",
     );
 
-    await page.waitForFunction(
-      () =>
-        window.__syncMock.attemptCount === 1 &&
-        document.querySelector("#kakomonn-reader-next")?.disabled === false,
-      null,
-      { timeout: 15_000 },
-    );
-
-    assert.equal(await frame.locator("body").evaluate(() => location.href), fixedQuestionUrl);
-    await clickNextQuestion(page, frame, fixedNextQuestionUrl);
-    console.log(JSON.stringify({ phase: "next-clicked", answerText }));
+    if (expectedResultClass === "is-correct") {
+      await page.waitForFunction(
+        (expectedUrl) =>
+          location.href === expectedUrl &&
+          document.querySelector("#kakomonn-reader-frame")?.contentWindow
+            .location.href === expectedUrl,
+        fixedNextQuestionUrl,
+        { timeout: 15_000 },
+      );
+      console.log(JSON.stringify({ phase: "next-automatic", answerText }));
+    } else {
+      await page.waitForFunction(
+        () =>
+          window.__syncMock.attemptCount === 1 &&
+          document.querySelector("#kakomonn-reader-next")?.disabled === false &&
+          document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase ===
+            "explanation",
+        null,
+        { timeout: 15_000 },
+      );
+      assert.equal(
+        await frame.locator("body").evaluate(() => location.href),
+        fixedQuestionUrl,
+      );
+      await clickNextQuestion(page, frame, fixedNextQuestionUrl);
+      console.log(JSON.stringify({ phase: "next-clicked", answerText }));
+    }
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.filter(
@@ -736,6 +746,7 @@ async function runRandomNavigationCase(browser, script) {
     const initialQuestion = (
       await frame.locator(".problem_detail .when").innerText()
     ).replace(/\s+/g, " ").trim();
+    const initialFrameUrl = await frame.locator("body").evaluate(() => location.href);
     const firstAnswer = await frame
       .locator(".problem_detail ul.list > li")
       .first()
@@ -753,35 +764,35 @@ async function runRandomNavigationCase(browser, script) {
     const isCorrect = resultClasses.includes("is-correct");
     assert.notEqual(isCorrect, resultClasses.includes("is-wrong"));
 
-    const nextQuestionUrls = await frame.locator("a[href]").evaluateAll(
-      (links) =>
-        links
-          .filter(
-            (link) =>
-              (link.innerText || link.textContent || "")
-                .replace(/\s+/g, "")
-                .trim() === "次の問題へ",
-          )
-          .map((link) => link.href),
-    );
-    assert.equal(nextQuestionUrls.length, 1);
-    const [nextQuestionUrl] = nextQuestionUrls;
-    assert.match(
-      new URL(nextQuestionUrl).pathname,
-      /^\/questions\/next\/\d+$/,
-    );
-
-    await page.waitForFunction(
-      () => {
-        const button = document.querySelector("#kakomonn-reader-next");
-        return button?.disabled === false && button.textContent === "次の問題へ";
-      },
-      null,
-      { timeout: 15_000 },
-    );
-    await page.waitForTimeout(500);
-    const initialFrameUrl = await frame.locator("body").evaluate(() => location.href);
-    await frame.getByRole("link", { name: "次の問題へ", exact: true }).click();
+    let nextQuestionUrl = null;
+    if (!isCorrect) {
+      const nextQuestionUrls = await frame.locator("a[href]").evaluateAll(
+        (links) =>
+          links
+            .filter(
+              (link) =>
+                (link.innerText || link.textContent || "")
+                  .replace(/\s+/g, "")
+                  .trim() === "次の問題へ",
+            )
+            .map((link) => link.href),
+      );
+      assert.equal(nextQuestionUrls.length, 1);
+      [nextQuestionUrl] = nextQuestionUrls;
+      assert.match(
+        new URL(nextQuestionUrl).pathname,
+        /^\/questions\/next\/\d+$/,
+      );
+      await page.waitForFunction(
+        () => {
+          const button = document.querySelector("#kakomonn-reader-next");
+          return button?.disabled === false && button.textContent === "次の問題へ";
+        },
+        null,
+        { timeout: 15_000 },
+      );
+      await frame.getByRole("link", { name: "次の問題へ", exact: true }).click();
+    }
     await page.waitForFunction(
       (expectedUrl) =>
         location.href === expectedUrl &&
@@ -828,6 +839,7 @@ async function runRandomNavigationCase(browser, script) {
         initialQuestion,
         nextQuestion,
         nextQuestionUrl,
+        navigation: isCorrect ? "automatic" : "manual",
         isCorrect,
         status: "passed",
       }),
@@ -946,8 +958,8 @@ async function runMarkdownCopyCase(browser, script) {
       markdownQuestionImageURLs.map(() => darkModeImageFilter),
     );
 
-    await submitAnswer(page, frame, MARKDOWN_ANSWER_TEXT);
-    await frame.getByText("正解！素晴らしいです", { exact: true }).waitFor({
+    await submitAnswer(page, frame, MARKDOWN_INCORRECT_ANSWER_TEXT);
+    await frame.getByText("残念...", { exact: true }).waitFor({
       state: "visible",
       timeout: 15_000,
     });
@@ -1022,6 +1034,7 @@ async function runMarkdownCopyCase(browser, script) {
     assert.notEqual(copiedMarkdown, clipboardNonce);
 
     assertMarkdownCopy({
+      answerSummary: MARKDOWN_INCORRECT_ANSWER_SUMMARY,
       choices,
       copiedMarkdown,
       explanationContents,
@@ -1092,12 +1105,16 @@ async function runReportedCopyCase(browser, script) {
 
     const frame = await getQuestionFrame(page);
     await waitForSyncReady(page);
+    const incorrectAnswerText = await frame
+      .locator(".problem_detail ul.list > li")
+      .nth(1)
+      .innerText();
     await submitAnswer(
       page,
       frame,
-      "再生債務者に対して売買契約に基づき継続的給付の義務を負う双務契約の相手方は、再生手続開始決定の申立て前の給付に係る再生債権について、弁済がないことを理由として、再生手続開始後は、その義務の履行を拒むことができない。",
+      incorrectAnswerText,
     );
-    await frame.getByText("正解！素晴らしいです", { exact: true }).waitFor({
+    await frame.getByText("残念...", { exact: true }).waitFor({
       state: "visible",
       timeout: 15_000,
     });

@@ -75,6 +75,7 @@ const mockBody = `
       ></div>
     </div>
   </div>
+  <header class="l-header">元サイトヘッダー</header>
   <div id="mock-page-header" style="height: 360px">ページ上部</div>
   <div class="sect_problem">
     <div class="ttl_box03"><h2 class="main">問題</h2></div>
@@ -746,6 +747,9 @@ async function main() {
           problemBackground: getComputedStyle(
             document.querySelector(".problem_detail")
           ).backgroundColor,
+          siteHeaderDisplay: getComputedStyle(
+            document.querySelector("header.l-header")
+          ).display,
           styleCount: document.querySelectorAll(
             "#kakomonn-reader-dark-mode"
           ).length,
@@ -767,6 +771,7 @@ async function main() {
         linkColor: "rgb(138, 180, 248)",
         nonContentFilter: "none",
         problemBackground: "rgb(21, 25, 30)",
+        siteHeaderDisplay: "none",
         styleCount: 1,
         toggleCount: 0,
       },

@@ -490,6 +490,9 @@ async function runCase(
           problemBackground: getComputedStyle(
             documentNode.querySelector(".problem_detail")
           ).backgroundColor,
+          siteHeaderDisplay: getComputedStyle(
+            documentNode.querySelector("header.l-header")
+          ).display,
           styleCount: documentNode.querySelectorAll(
             "#kakomonn-reader-dark-mode"
           ).length,
@@ -502,6 +505,7 @@ async function runCase(
         bodyBackground: "rgb(11, 13, 16)",
         bodyColor: "rgb(243, 244, 246)",
         problemBackground: "rgb(21, 25, 30)",
+        siteHeaderDisplay: "none",
         styleCount: 1,
         toggleCount: 0,
       },

@@ -23,6 +23,7 @@ const iosUserAgent =
   "Mobile/15E148 Safari/604.1";
 
 const fixtureBody = `
+  <header class="l-header">元サイトヘッダー</header>
   <div class="problem_detail">
     <p class="when">
       中小企業診断士試験 令和2年度（2020年） 問19（経済学・経済政策 問19）
@@ -608,6 +609,9 @@ async function main() {
           problemBackground: getComputedStyle(
             document.querySelector(".problem_detail")
           ).backgroundColor,
+          siteHeaderDisplay: getComputedStyle(
+            document.querySelector("header.l-header")
+          ).display,
           styleCount: document.querySelectorAll(
             "#kakomonn-reader-dark-mode"
           ).length,
@@ -624,6 +628,7 @@ async function main() {
         colorScheme: "dark",
         imageFilters: Array(3).fill("invert(1) hue-rotate(180deg)"),
         problemBackground: "rgb(21, 25, 30)",
+        siteHeaderDisplay: "none",
         styleCount: 1,
         toggleCount: 0,
       },

@@ -99,6 +99,10 @@
       --kakomonn-frame-link: #8ab4f8;
     }
 
+    header.l-header {
+      display: none !important;
+    }
+
     html,
     body,
     .l-header,

@@ -25,6 +25,7 @@
       updateCopyButton();
       synchronizeTimeLimitPhase();
       checkForNewAnswerResult();
+      recordCurrentAnswerIfAvailable();
     }, FRAME_CHANGE_DELAY_MS);
   }
 

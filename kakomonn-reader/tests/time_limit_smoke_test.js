@@ -134,7 +134,6 @@ async function explanationExpiryRecordsAndAdvances(browser, script) {
         document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase ===
         "explanation"
     );
-    await page.clock.fastForward(300_100);
     await page.waitForFunction(
       () =>
         window.__syncMock.calls.filter(
@@ -150,6 +149,7 @@ async function explanationExpiryRecordsAndAdvances(browser, script) {
     assert.equal(recorded.answered, 1);
     assert.equal(recorded.body.answerResult, "correct");
     assert.equal(recorded.body.site, "chushoks.kakomonn.com");
+    await page.clock.fastForward(300_100);
     await page.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-frame")?.contentWindow

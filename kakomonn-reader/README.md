@@ -10,6 +10,7 @@
 - `a,s,d,f,g`で表示選択肢1から5の取り消し線を切り替えます.
 - 問題pageを開くたびに, `問題`見出しがpage topへ来る位置まで自動でscrollします. `z`で100px下へ,`x`で100px上へscrollし,`gg`でpage topへ戻ります. 検索欄や計算欄などへ入力中はkeyboard shortcutを無効にします.
 - `Enter`は未解答なら解答を実行し,解答後は次問へ進みます. 下部の`次の問題へ`をクリックまたはタップして進むこともできます.
+- 正解または不正解が表示された時点で, 解答記録を`kakomonn-sync`へ保存します. 保存responseに含まれる次問を端末へ保持するため, `次の問題へ`の操作では追加のWorker通信を行いません.
 - iPhone Safariでは`https://kakomonn-sync.kakomonn.workers.dev/open`を開くと, 保存済みの同期tokenでFSRSに基づく次の問題を取得して移動します. token未設定または認証失敗時は, 同じoriginの同期設定画面へ移動してtokenを保存できます. tokenはURLへ含めません.
 - 期限を迎えた最後のcardを解答して`dueCardsCompleted`が`true`になると, その日のprimary KPI達成を祝う専用pageへ移動します. 同じ日の祝福はsiteごとに1回だけです.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
@@ -55,7 +56,7 @@ Windows 11 Chrome + TampermonkeyとiPhone Safari + Tampermonkeyだけに対応�
 
 iPhoneの固定URLは同じユーザースクリプト専用storageからtokenを読みます. token未設定時は過去問pageで同期設定を完了してから, 固定URLを再度開きます.
 
-正解と不正解のどちらでも,解答記録の同期に失敗した場合は次問へ進まず,同じ操作IDで再試行します.通信が復旧した後に`同期を再試行`を押してください.同じ操作の再送は二重加算されません.
+正解と不正解のどちらでも,正誤表示時に解答記録を同期します.同期に失敗した場合は次問へ進まず,同じ操作IDで再試行します.通信が復旧した後に`同期を再試行`を押してください.同じ操作の再送は二重加算されません.保存成功後は解説pageへ留まり,`次の問題へ`を押した時だけ保存responseで取得済みの次問へ移動します.
 
 同期Workerが解答responseで`celebration`を返した場合は, readerがそのeventをユーザースクリプトの専用storageへ保存してから祝福pageへ移動します. 移動前にpageを閉じても, 次回起動時に同じeventから再開します.
 

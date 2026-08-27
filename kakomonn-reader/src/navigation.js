@@ -51,9 +51,19 @@
       return;
     }
     if (pendingAttempt !== null) {
+      if (pendingAttempt.phase === "queued") {
+        nextQuestionButton.textContent = "同期を再試行";
+        nextQuestionButton.disabled = navigationInProgress;
+        return;
+      }
+      if (pendingAttempt.nextURL !== null) {
+        nextQuestionButton.textContent = "次の問題へ";
+        nextQuestionButton.disabled = navigationInProgress;
+        return;
+      }
       nextQuestionButton.textContent =
-        pendingAttempt.phase === "queued" ? "同期を再試行" : "次の問題を準備中";
-      nextQuestionButton.disabled = navigationInProgress;
+        pendingCelebration === null ? "出題できる問題はありません" : "祝福を表示";
+      nextQuestionButton.disabled = pendingCelebration === null;
       return;
     }
     if (pendingCelebration !== null) {
@@ -140,10 +150,11 @@
     }
   }
 
-  async function maybeContinuePendingAttemptNavigation() {
+  async function completePendingAttemptNavigation() {
     if (
       pendingAttempt === null ||
-      pendingAttempt.phase !== "awaiting_navigation" ||
+      pendingAttempt.phase !== "recorded" ||
+      pendingAttempt.nextURL === null ||
       !syncReady ||
       syncInProgress ||
       nextQuestionOperationInProgress
@@ -164,10 +175,7 @@
         );
         return true;
       }
-      if (frameDocument === null || navigationInProgress) {
-        return false;
-      }
-      return navigateToScheduledQuestion(operation.nextURL);
+      return false;
     })();
     try {
       return await pendingAttemptTransitionPromise;
@@ -179,6 +187,34 @@
       updateSyncDependentControls();
       void maybeContinuePendingCelebration();
     }
+  }
+
+  async function advancePendingAttempt() {
+    if (
+      pendingAttempt === null ||
+      pendingAttempt.phase !== "recorded" ||
+      navigationInProgress ||
+      nextQuestionOperationInProgress
+    ) {
+      return false;
+    }
+    if (pendingAttempt.nextURL !== null) {
+      return navigateToScheduledQuestion(pendingAttempt.nextURL);
+    }
+    if (pendingCelebration !== null) {
+      await clearPendingAttempt();
+      updateSyncDependentControls();
+      return maybeContinuePendingCelebration();
+    }
+    setStatus("出題できる問題はありません");
+    updateSyncDependentControls();
+    return false;
+  }
+
+  async function resumePendingLearningFlow() {
+    await completePendingAttemptNavigation();
+    await maybeContinuePendingCelebration();
+    recordCurrentAnswerIfAvailable();
   }
 
   function congratulationsURL(celebration) {
@@ -247,13 +283,12 @@
     if (pendingAttempt === null || syncPromise !== null) {
       return false;
     }
-    if (pendingAttempt.phase === "awaiting_navigation") {
-      return maybeContinuePendingAttemptNavigation();
+    if (pendingAttempt.phase === "recorded") {
+      return true;
     }
 
     nextQuestionOperationInProgress = true;
     const operation = pendingAttempt;
-    navigationInProgress = true;
     syncInProgress = true;
     setStatus("学習記録を同期中");
     updateSyncDependentControls();
@@ -275,22 +310,10 @@
 
         const nextQuestion = result.nextQuestion;
         syncReady = true;
-        navigationInProgress = false;
         setStatus("解答記録を同期しました");
-
-        if (nextQuestion === null) {
-          await clearPendingAttempt();
-          setStatus(
-            pendingCelebration === null
-              ? "出題できる問題はありません"
-              : "dueCardsCompleted達成.祝福を準備中"
-          );
-          return true;
-        }
-        await markPendingAttemptAwaitingNavigation(operation, nextQuestion.url);
+        await markPendingAttemptRecorded(operation, nextQuestion?.url ?? null);
         return true;
       } catch (error) {
-        navigationInProgress = false;
         if (error?.code === "unauthorized") {
           syncReady = false;
         }
@@ -305,38 +328,59 @@
         syncInProgress = false;
         syncPromise = null;
         updateSyncDependentControls();
-        void maybeContinuePendingAttemptNavigation();
-        void maybeContinuePendingCelebration();
       }
     })();
     return syncPromise;
   }
 
-  async function recordCurrentQuestionAndAdvance(answerResult, status) {
+  async function recordCurrentAnswer(answerResult, status = "解答記録を保存中") {
     const questionId = currentQuestionId();
     if (questionId === null) {
-      setStatus("問題IDを取得できないため解答記録と次問移動を停止しました");
+      setStatus("問題IDを取得できないため解答を記録できません");
       updateSyncDependentControls();
       return false;
     }
     nextQuestionOperationInProgress = true;
-    navigationInProgress = true;
-    stopSpeech();
     setStatus(status);
     updateSyncDependentControls();
     try {
       await createPendingAttempt(answerResult);
     } catch {
       nextQuestionOperationInProgress = false;
-      navigationInProgress = false;
       setStatus("解答記録を準備できません");
       updateSyncDependentControls();
       return false;
     }
     nextQuestionOperationInProgress = false;
-    navigationInProgress = false;
-    await submitPendingAttempt();
+    return submitPendingAttempt();
+  }
+
+  function recordCurrentAnswerIfAvailable() {
+    if (
+      !syncReady ||
+      syncInProgress ||
+      nextQuestionOperationInProgress ||
+      navigationInProgress ||
+      pendingAttempt !== null ||
+      pendingCelebration !== null ||
+      !syncSettings.hidden
+    ) {
+      return false;
+    }
+    const answerResult = getCurrentAnswerResult();
+    if (answerResult === "unknown" || currentQuestionId() === null) {
+      return false;
+    }
+    void recordCurrentAnswer(answerResult);
     return true;
+  }
+
+  async function recordCurrentQuestionAndAdvance(answerResult, status) {
+    const recorded = await recordCurrentAnswer(answerResult, status);
+    if (!recorded || pendingAttempt?.phase !== "recorded") {
+      return false;
+    }
+    return advancePendingAttempt();
   }
 
   async function handleSkipQuestion() {
@@ -361,7 +405,11 @@
       return false;
     }
     if (pendingAttempt !== null) {
-      await submitPendingAttempt();
+      if (pendingAttempt.phase === "queued") {
+        await submitPendingAttempt();
+      } else {
+        await advancePendingAttempt();
+      }
       return false;
     }
     if (pendingCelebration !== null) {
@@ -393,7 +441,11 @@
       return;
     }
     if (pendingAttempt !== null) {
-      await submitPendingAttempt();
+      if (pendingAttempt.phase === "queued") {
+        await submitPendingAttempt();
+      } else {
+        await advancePendingAttempt();
+      }
       return;
     }
     if (pendingCelebration !== null) {
@@ -406,7 +458,10 @@
       updateNextQuestionButton();
       return;
     }
-    await recordCurrentQuestionAndAdvance(answerResult, "解答記録を保存中");
+    const recorded = await recordCurrentAnswer(answerResult);
+    if (recorded && pendingAttempt?.phase === "recorded") {
+      await advancePendingAttempt();
+    }
   }
 
   function readPendingCurrentPage() {

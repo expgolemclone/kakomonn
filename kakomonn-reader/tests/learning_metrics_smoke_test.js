@@ -15,7 +15,7 @@ const chromeUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
 
-function questionHTML(answerResult = "correct", nativeNextId = "999") {
+function questionHTML(answerResult = "unknown", nativeNextId = "999") {
   const resultClass =
     answerResult === "correct"
       ? "is-correct"
@@ -76,6 +76,7 @@ async function prepare(page, startPath, options = {}) {
     dueCardsCompleted: options.dueCardsCompleted ?? false,
     dueCardsRemaining: options.dueCardsRemaining ?? 12,
     nextQuestionId: options.nextQuestionId === undefined ? "456" : options.nextQuestionId,
+    pendingAttempt: options.pendingAttempt ?? null,
     pendingCelebration: options.pendingCelebration ?? null,
   });
   await page.addScriptTag({ content: fs.readFileSync(scriptPath, "utf8") });
@@ -92,6 +93,12 @@ async function readerFrame(page) {
   await frame.waitForLoadState("load");
   await page.waitForTimeout(100);
   return frame;
+}
+
+async function revealAnswerResult(frame, answerResult) {
+  await frame.locator("#js-answer-result-box").evaluate((element, result) => {
+    element.classList.add(result === "correct" ? "is-correct" : "is-wrong");
+  }, answerResult);
 }
 
 function attemptCalls(page) {
@@ -113,12 +120,12 @@ async function runQuestionIdCase(browser, startPath) {
       todayStabilityDaysDelta: 104,
     });
     const frame = await readerFrame(page);
-    await page.waitForFunction(() => document.querySelector("#kakomonn-reader-next")?.disabled === false);
+    assert.equal(await page.locator("#kakomonn-reader-next").isDisabled(), true);
     await page.evaluate(() => {
       window.__syncMock.nextAttemptStabilityDaysDelta = 31;
       window.__syncMock.nextAttemptDueCardsRemaining = 11;
     });
-    await frame.locator("#native-next").click();
+    await revealAnswerResult(frame, "correct");
     await page.waitForFunction(() =>
       window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v8/attempts"),
     );
@@ -126,7 +133,18 @@ async function runQuestionIdCase(browser, startPath) {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].body.questionId, "123");
     assert.deepEqual(Object.keys(calls[0].body).sort(), ["answerResult", "operationId", "questionId", "site"]);
+    assert.equal(await frame.locator("body").evaluate(() => location.pathname), startPath);
+    await frame.locator("#js-answer-result-box").evaluate((element) => {
+      element.style.display = "block";
+    });
+    await page.waitForTimeout(100);
+    assert.equal((await attemptCalls(page)).length, 1);
+    await page.waitForFunction(() =>
+      document.querySelector("#kakomonn-reader-next")?.textContent === "次の問題へ",
+    );
+    await frame.locator("#native-next").click();
     await frame.waitForURL(`https://${site}/questions/456`);
+    assert.equal((await attemptCalls(page)).length, 1);
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.some(
@@ -259,7 +277,7 @@ async function runUnknownURLCase(browser) {
   const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
     const page = await context.newPage();
-    const errors = await prepare(page, "/questions/current");
+    const errors = await prepare(page, "/questions/current", { answerResult: "correct" });
     await readerFrame(page);
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics-details").isHidden(),
@@ -293,12 +311,11 @@ async function runRetryCase(browser) {
     const page = await context.newPage();
     const errors = await prepare(page, "/questions/123", { nextQuestionId: "456" });
     const frame = await readerFrame(page);
-    await page.waitForFunction(() => document.querySelector("#kakomonn-reader-next")?.disabled === false);
     await page.evaluate(() => {
       window.__syncMock.nextAttemptStabilityDaysDelta = 31;
       window.__syncMock.commitThenFailNextAttempt = true;
     });
-    await frame.locator("#native-next").click();
+    await revealAnswerResult(frame, "correct");
     await page.waitForFunction(() => document.querySelector("#kakomonn-reader-status")?.textContent?.includes("再試行してください"));
     const firstPending = await page.evaluate((key) => window.__getGMValue(key), PENDING_ATTEMPT_KEY);
     assert.match(firstPending.operationId, /^[0-9a-f]{32}$/);
@@ -312,6 +329,11 @@ async function runRetryCase(browser) {
     const calls = await attemptCalls(page);
     assert.equal(calls[0].body.operationId, calls[1].body.operationId);
     assert.equal(await page.evaluate(() => window.__syncMock.stabilityDays), 31);
+    assert.equal(await frame.locator("body").evaluate(() => location.pathname), "/questions/123");
+    await page.waitForFunction(() =>
+      document.querySelector("#kakomonn-reader-next")?.textContent === "次の問題へ",
+    );
+    await page.locator("#kakomonn-reader-next").click();
     await frame.waitForURL(`https://${site}/questions/456`);
     assert.equal(
       await page.evaluate(() =>
@@ -745,12 +767,12 @@ async function runStabilityDaysDecreaseCase(browser) {
     const page = await context.newPage();
     const errors = await prepare(page, "/questions/123", {
       stabilityDays: 35,
-      answerResult: "incorrect",
       nextQuestionId: null,
     });
     const frame = await readerFrame(page);
-    await page.waitForFunction(() => document.querySelector("#kakomonn-reader-next")?.disabled === false);
     await page.evaluate(() => { window.__syncMock.nextAttemptStabilityDaysDelta = -30; });
+    await revealAnswerResult(frame, "incorrect");
+    await page.waitForFunction(() => window.__syncMock.attemptCount === 1);
     await frame.locator("#native-next").click();
     await page.waitForFunction(() =>
       document.querySelector("#kakomonn-reader-status")?.textContent ===
@@ -794,7 +816,6 @@ async function runCelebrationCase(browser) {
     );
     const errors = await prepare(page, "/questions/123", { nextQuestionId: "456" });
     const frame = await readerFrame(page);
-    await page.waitForFunction(() => document.querySelector("#kakomonn-reader-next")?.disabled === false);
     await page.evaluate(() => {
       window.__syncMock.nextAttemptStabilityDaysDelta = 31;
       window.__syncMock.nextCelebration = {
@@ -803,6 +824,12 @@ async function runCelebrationCase(browser) {
         dueCardsCompleted: true,
       };
     });
+    await revealAnswerResult(frame, "correct");
+    await page.waitForFunction(() =>
+      window.__syncMock.attemptCount === 1 &&
+      document.querySelector("#kakomonn-reader-next")?.disabled === false,
+    );
+    assert.equal(page.url(), `https://${site}/questions/123`);
     await frame.locator("#native-next").click();
     await page.waitForURL((url) =>
       url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
@@ -846,6 +873,40 @@ async function runPendingCelebrationRecoveryCase(browser) {
   }
 }
 
+async function runRecordedAttemptRecoveryCase(browser) {
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
+  try {
+    const page = await context.newPage();
+    const pendingAttempt = {
+      operationId: "0123456789abcdef0123456789abcdef",
+      questionId: "123",
+      phase: "recorded",
+      pageURL: `https://${site}/questions/123`,
+      answerResult: "correct",
+      site,
+      nextURL: `https://${site}/questions/456`,
+    };
+    const errors = await prepare(page, "/questions/123", { pendingAttempt });
+    const frame = await readerFrame(page);
+    await page.waitForFunction(() => {
+      const button = document.querySelector("#kakomonn-reader-next");
+      return button?.textContent === "次の問題へ" && button.disabled === false;
+    });
+    assert.equal((await attemptCalls(page)).length, 0);
+    assert.equal(await frame.locator("body").evaluate(() => location.pathname), "/questions/123");
+    await page.locator("#kakomonn-reader-next").click();
+    await frame.waitForURL(`https://${site}/questions/456`);
+    assert.equal((await attemptCalls(page)).length, 0);
+    assert.equal(
+      await page.evaluate((key) => window.__getGMValue(key), PENDING_ATTEMPT_KEY),
+      null,
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
 async function main() {
   execFileSync("python3", ["build.py"], { cwd: projectRoot, stdio: "inherit" });
   const script = fs.readFileSync(scriptPath, "utf8");
@@ -871,6 +932,7 @@ async function main() {
     await runStabilityDaysDecreaseCase(browser);
     await runCelebrationCase(browser);
     await runPendingCelebrationRecoveryCase(browser);
+    await runRecordedAttemptRecoveryCase(browser);
   } finally {
     await browser.close();
   }

@@ -361,7 +361,7 @@
     updateNextQuestionButton();
     updateCopyButton();
     synchronizeTimeLimitPhase();
-    void maybeContinuePendingAttemptNavigation();
+    void resumePendingLearningFlow();
 
     loadTimer = window.setTimeout(() => {
       loadTimer = null;

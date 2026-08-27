@@ -213,14 +213,17 @@
       (value.answerResult !== "correct" && value.answerResult !== "incorrect") ||
       !isSitePageURL(value.pageURL) ||
       extractQuestionIdFromURL(value.pageURL) !== value.questionId ||
-      (value.phase !== "queued" && value.phase !== "awaiting_navigation")
+      (value.phase !== "queued" && value.phase !== "recorded")
     ) {
       return false;
     }
     if (value.phase === "queued") {
       return value.nextURL === undefined;
     }
-    return typeof value.nextURL === "string" && isScheduledQuestionURL(value.nextURL);
+    return (
+      value.nextURL === null ||
+      (typeof value.nextURL === "string" && isScheduledQuestionURL(value.nextURL))
+    );
   }
 
   function isPendingCelebration(value) {
@@ -434,15 +437,15 @@
     pendingCelebration = null;
   }
 
-  async function markPendingAttemptAwaitingNavigation(operation, nextURL) {
+  async function markPendingAttemptRecorded(operation, nextURL) {
     if (
       pendingAttempt === null ||
       pendingAttempt.operationId !== operation.operationId ||
-      !isScheduledQuestionURL(nextURL)
+      (nextURL !== null && !isScheduledQuestionURL(nextURL))
     ) {
       throw new Error("pending attempt changed");
     }
-    const completed = { ...operation, phase: "awaiting_navigation", nextURL };
+    const completed = { ...operation, phase: "recorded", nextURL };
     if (!isPendingAttempt(completed)) {
       throw new Error("invalid completed attempt");
     }
@@ -729,8 +732,10 @@
         state = await ensureQuestionCatalog(syncToken, state);
         applyRemoteState(state);
         syncReady = true;
-        if (pendingAttempt !== null) {
+        if (pendingAttempt?.phase === "queued") {
           setStatus("未完了の解答同期があります");
+        } else if (pendingAttempt?.phase === "recorded") {
+          setStatus("解答記録を同期しました");
         } else {
           setStatus("待機中");
         }
@@ -743,8 +748,7 @@
         syncInProgress = false;
         syncPromise = null;
         updateSyncDependentControls();
-        void maybeContinuePendingAttemptNavigation();
-        void maybeContinuePendingCelebration();
+        void resumePendingLearningFlow();
         processCurrentPageSpeech();
       }
     })();
@@ -796,8 +800,7 @@
         syncSettingsCancelButton.disabled = false;
         syncTokenInput.disabled = false;
         updateSyncDependentControls();
-        void maybeContinuePendingAttemptNavigation();
-        void maybeContinuePendingCelebration();
+        void resumePendingLearningFlow();
         processCurrentPageSpeech();
       }
     })();
@@ -868,6 +871,10 @@
       !nextQuestionOperationInProgress &&
       syncSettings.hidden
     ) {
+      if (syncReady && getCurrentAnswerResult() !== "unknown") {
+        recordCurrentAnswerIfAvailable();
+        return;
+      }
       void refreshRemoteState();
     }
   }

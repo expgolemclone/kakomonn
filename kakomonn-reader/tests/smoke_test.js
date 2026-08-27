@@ -1107,7 +1107,9 @@ async function main() {
       },
     );
     await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-next").disabled === false,
+      () =>
+        window.__syncMock.attemptCount === 1 &&
+        document.querySelector("#kakomonn-reader-next").disabled === false,
     );
     assert.deepEqual(
       await childFrame.evaluate(() => ({
@@ -1135,53 +1137,20 @@ async function main() {
     );
     assert.equal(await speechTokenCallCount(page), 1);
 
-    await page.evaluate(() => {
-      window.__syncMock.timeoutNextRequest = true;
-      window.dispatchEvent(new Event("focus"));
-    });
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "学習記録の同期がタイムアウトしました.再試行してください",
-      null,
-      { timeout: 20_000 },
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-next").innerText(),
-      "同期を再試行",
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-next").isDisabled(),
-      false,
+    const stateCallsAfterAnswer = await page.evaluate(() =>
+      window.__syncMock.calls.filter(
+        (call) => new URL(call.url).pathname === "/v8/state",
+      ).length,
     );
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-next").textContent ===
-        "次の問題へ",
-    );
-
-    await page.evaluate(() => {
-      window.__syncMock.holdNextRequest = true;
-      window.__syncMock.failNextRequest = true;
-      window.dispatchEvent(new Event("focus"));
-    });
-    await page.waitForFunction(
-      () => window.__syncMock.releaseHeldRequest !== null,
-    );
+    await page.waitForTimeout(100);
     assert.equal(
-      await page.locator("#kakomonn-reader-copy").innerText(),
-      "Markdownをコピー",
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-copy").isDisabled(),
-      false,
-    );
-    await page.evaluate(() => window.__syncMock.releaseHeldRequest());
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "学習記録を同期できません.再試行してください",
+      await page.evaluate(() =>
+        window.__syncMock.calls.filter(
+          (call) => new URL(call.url).pathname === "/v8/state",
+        ).length,
+      ),
+      stateCallsAfterAnswer,
     );
     assert.equal(
       await page.locator("#kakomonn-reader-copy").innerText(),
@@ -1234,16 +1203,9 @@ async function main() {
         document.querySelector("#kakomonn-reader-copy").textContent ===
         "コピー対象を取得不可",
     );
-    await page.evaluate(() => {
-      window.__syncMock.holdNextRequest = true;
-      window.dispatchEvent(new Event("focus"));
-    });
     const nextQuestionButton = page.locator("#kakomonn-reader-next");
-    await page.waitForFunction(
-      () => window.__syncMock.releaseHeldRequest !== null,
-    );
-    assert.equal(await nextQuestionButton.innerText(), "学習記録を同期中");
-    assert.equal(await nextQuestionButton.isDisabled(), true);
+    assert.equal(await nextQuestionButton.innerText(), "次の問題へ");
+    assert.equal(await nextQuestionButton.isDisabled(), false);
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
     assert.equal(
@@ -1255,14 +1217,8 @@ async function main() {
               new URL(call.url).pathname === "/v8/attempts",
           ).length,
       ),
-      0,
+      1,
     );
-    await page.evaluate(() => window.__syncMock.releaseHeldRequest());
-    await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-next").disabled === false,
-    );
-    await childFrame.locator("input[name='answer']").first().focus();
-    await page.keyboard.press("Enter");
     try {
       await page.waitForFunction(
         () =>

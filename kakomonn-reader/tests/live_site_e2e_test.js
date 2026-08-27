@@ -556,6 +556,9 @@ async function runCase(
     );
     assert.equal(initialPresentation.scrollY > 0, true);
 
+    await page.evaluate((delta) => {
+      window.__syncMock.nextAttemptStabilityDaysDelta = delta;
+    }, attemptStabilityDaysDelta);
     await submitAnswer(page, frame, answerText, inputMethod);
     console.log(JSON.stringify({ phase: "answer-submitted", answerText }));
     await frame.getByText(expectedBanner, { exact: true }).waitFor({
@@ -589,14 +592,31 @@ async function runCase(
 
     await page.waitForFunction(
       () =>
+        window.__syncMock.attemptCount === 1 &&
         document.querySelector("#kakomonn-reader-next")?.disabled === false,
       null,
       { timeout: 15_000 },
     );
 
-    await page.evaluate((delta) => { window.__syncMock.nextAttemptStabilityDaysDelta = delta; }, attemptStabilityDaysDelta);
+    assert.equal(await frame.locator("body").evaluate(() => location.href), fixedQuestionUrl);
     await clickNextQuestion(page, frame, fixedNextQuestionUrl);
     console.log(JSON.stringify({ phase: "next-clicked", answerText }));
+    assert.equal(
+      await page.evaluate(() =>
+        window.__syncMock.calls.filter(
+          (call) => new URL(call.url).pathname === "/v8/attempts",
+        ).length,
+      ),
+      1,
+    );
+    assert.equal(
+      await page.evaluate(() =>
+        window.__syncMock.calls.some(
+          (call) => new URL(call.url).pathname === "/v8/next",
+        ),
+      ),
+      false,
+    );
 
     const expectedTodayStabilityDaysDelta = attemptStabilityDaysDelta;
     if (expectedTodayStabilityDaysDelta > 0) {

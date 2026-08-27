@@ -167,6 +167,26 @@ async function prepareLauncherPage(
   return { errors, page };
 }
 
+async function installCorrectFeedbackRandom(page, values) {
+  await page.evaluate((queuedValues) => {
+    const queue = [...queuedValues];
+    const nativeGetRandomValues = Crypto.prototype.getRandomValues;
+    Object.defineProperty(Crypto.prototype, "getRandomValues", {
+      configurable: true,
+      value(target) {
+        if (target instanceof Uint16Array && target.length === 1) {
+          if (queue.length === 0) {
+            throw new Error("correct feedback random queue was exhausted");
+          }
+          target[0] = queue.shift();
+          return target;
+        }
+        return nativeGetRandomValues.call(this, target);
+      },
+    });
+  }, values);
+}
+
 async function waitForLauncherState(page, errors, expectedState) {
   try {
     await page.waitForFunction(
@@ -874,6 +894,7 @@ async function main() {
       });
     });
     await installSyncMock(correctPage, { nextQuestionId: "86957" });
+    await installCorrectFeedbackRandom(correctPage, [111]);
     await correctPage.addScriptTag({ content: script });
     await correctPage.waitForFunction(
       (expectedURL) =>
@@ -911,8 +932,14 @@ async function main() {
         (element) => {
           const rect = element.getBoundingClientRect();
           return {
+            badge: element.querySelector(
+              ".kakomonn-reader-correct-feedback-badge",
+            )?.textContent,
+            message: element.querySelector(
+              ".kakomonn-reader-correct-feedback-message",
+            )?.textContent,
             pointerEvents: getComputedStyle(element).pointerEvents,
-            text: element.textContent,
+            rarity: element.dataset.rarity,
             withinViewport:
               rect.left >= 0 &&
               rect.right <= innerWidth &&
@@ -922,8 +949,10 @@ async function main() {
         },
       ),
       {
+        badge: "NORMAL",
+        message: "That's Right!!",
         pointerEvents: "none",
-        text: "That's Right!!",
+        rarity: "normal",
         withinViewport: true,
       },
     );
@@ -936,7 +965,12 @@ async function main() {
       "#kakomonn-reader-carried-correct-feedback",
     );
     await carriedCorrectFeedback.waitFor({ state: "visible" });
-    assert.equal(await carriedCorrectFeedback.innerText(), "That's Right!!");
+    assert.equal(
+      await carriedCorrectFeedback
+        .locator(".kakomonn-reader-correct-feedback-message")
+        .innerText(),
+      "That's Right!!",
+    );
     await carriedCorrectFeedback.waitFor({ state: "hidden" });
     assert.deepEqual(correctPageErrors, []);
     await correctPage.close();

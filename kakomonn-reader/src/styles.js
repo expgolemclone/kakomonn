@@ -26,8 +26,6 @@
       --kakomonn-reader-error: var(--kakomonn-reader-p-red-400);
       --kakomonn-reader-metric-accent: oklch(0.79 0.12 221);
       --kakomonn-reader-success: oklch(0.79 0.14 151);
-      --kakomonn-reader-success-surface: oklch(0.29 0.075 151);
-      --kakomonn-reader-success-text: oklch(0.97 0.02 151);
       --kakomonn-reader-time-track: oklch(0.32 0.02 255);
       --kakomonn-reader-time-question: oklch(0.72 0.16 245);
       --kakomonn-reader-time-explanation: oklch(0.74 0.16 150);
@@ -290,6 +288,8 @@
       }
     }
 
+    ${CORRECT_FEEDBACK_CSS}
+
     #kakomonn-reader-shell {
       position: relative;
       z-index: 2147483000;
@@ -310,47 +310,17 @@
     #kakomonn-reader-carried-correct-feedback {
       position: absolute;
       z-index: 2;
-      display: flex;
-      min-height: 72px;
-      align-items: center;
-      justify-content: center;
-      box-sizing: border-box;
-      border: 2px solid var(--kakomonn-reader-success);
-      border-radius: 18px;
-      padding: 14px 20px;
-      background: var(--kakomonn-reader-success-surface);
-      color: var(--kakomonn-reader-success-text);
-      box-shadow: 0 12px 36px oklch(0.08 0.025 151 / 0.42);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: clamp(24px, 7vw, 48px);
-      font-weight: 900;
-      line-height: 1;
-      letter-spacing: -0.035em;
-      text-align: center;
-      pointer-events: none;
-      animation: kakomonn-correct-feedback-enter 180ms cubic-bezier(.2, .8, .2, 1) both;
+      margin: 0;
     }
 
     #kakomonn-reader-carried-correct-feedback[hidden] {
       display: none;
     }
 
-    #kakomonn-reader-carried-correct-feedback[data-state="leaving"] {
-      animation: kakomonn-correct-feedback-leave 180ms ease-in both;
-    }
-
-    @keyframes kakomonn-correct-feedback-enter {
-      from {
-        opacity: 0;
-        transform: translateY(8px) scale(.94);
-      }
-    }
-
-    @keyframes kakomonn-correct-feedback-leave {
-      to {
-        opacity: 0;
-        transform: translateY(-10px) scale(.98);
-      }
+    #kakomonn-reader-carried-correct-feedback[data-rarity="ssr"] {
+      inset: 0;
+      width: 100%;
+      min-height: 100%;
     }
 
     #kakomonn-reader-controls {
@@ -750,8 +720,6 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      #kakomonn-reader-carried-correct-feedback,
-      #kakomonn-reader-carried-correct-feedback[data-state="leaving"],
       #kakomonn-reader-learning-metrics::after,
       [data-state="loading"] #kakomonn-next-question-indicator::before {
         transition: none;

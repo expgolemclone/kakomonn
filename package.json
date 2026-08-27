@@ -19,7 +19,7 @@
     "test:open-kakomonn": "node --test tests/open-kakomonn.test.mjs",
     "test:release-script": "node --test tests/release-kakomonn-reader.test.mjs",
     "test:live-sync-script": "node --test kakomonn-reader/tests/live_sync_e2e_unit_test.js",
-    "test:kakomonn-reader": "npm run build:kakomonn-reader && python3 kakomonn-reader/tests/build_test.py && es-check es2020 kakomonn-reader/kakomonn-reader.user.js && python3 kakomonn-reader/tests/userscript_metadata_test.py kakomonn-reader/kakomonn-reader.user.js",
+    "test:kakomonn-reader": "npm run build:kakomonn-reader && node --test kakomonn-reader/tests/correct_feedback_test.mjs && python3 kakomonn-reader/tests/build_test.py && es-check es2020 kakomonn-reader/kakomonn-reader.user.js && python3 kakomonn-reader/tests/userscript_metadata_test.py kakomonn-reader/kakomonn-reader.user.js",
     "test:kakomonn-sync": "vitest run --config kakomonn-sync/vitest.config.mjs",
     "test:kakomonn-sync-production": "node --use-system-ca --env-file-if-exists=.env --test kakomonn-sync/tests/production_deployment_test.js",
     "test:congratulations": "npm --workspace congratulations test",

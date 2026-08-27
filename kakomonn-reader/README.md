@@ -10,6 +10,7 @@
 - `a,s,d,f,g`で表示選択肢1から5の取り消し線を切り替えます.
 - 問題pageを開くたびに, `問題`見出しがpage topへ来る位置まで自動でscrollします. `z`で100px下へ,`x`で100px上へscrollし,`gg`でpage topへ戻ります. 検索欄や計算欄などへ入力中はkeyboard shortcutを無効にします.
 - `Enter`は未解答なら解答を実行し,解答後は次問へ進みます. 下部の`次の問題へ`をクリックまたはタップして進むこともできます.
+- 正解時は`NORMAL` 88.9%, `RARE` 10%, `SUPER RARE` 1%, `SSR` 0.1%からsecure randomで1種類を選び, tierごとの`That's Right`表示, chime, 英語音声を再生します.
 - 正解または不正解が表示された時点で, 解答記録を`kakomonn-sync`へ保存します. 保存responseに含まれる次問を端末へ保持するため, `次の問題へ`の操作では追加のWorker通信を行いません.
 - iPhone Safariでは`https://kakomonn-sync.kakomonn.workers.dev/open`を開くと, 保存済みの同期tokenでFSRSに基づく次の問題を取得して移動します. token未設定または認証失敗時は, 同じoriginの同期設定画面へ移動してtokenを保存できます. tokenはURLへ含めません.
 - 期限を迎えた最後のcardを解答して`dueCardsCompleted`が`true`になると, その日のprimary KPI達成を祝う専用pageへ移動します. 同じ日の祝福はsiteごとに1回だけです.
@@ -24,7 +25,7 @@
 python3 build.py
 ```
 
-`src/`にはmetadataとruntime,style,syncとcatalog,次問launcher,UI,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyへ生成されたファイルを登録してください.
+`src/`にはmetadataとruntime,correct feedback,style,syncとcatalog,次問launcher,UI,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyへ生成されたファイルを登録してください.
 
 ## Release
 

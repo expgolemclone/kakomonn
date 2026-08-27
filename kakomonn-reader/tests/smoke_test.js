@@ -391,6 +391,29 @@ async function loadMockQuestion(page, script) {
   return childFrame;
 }
 
+async function installCorrectFeedbackRandom(page, values) {
+  await page.evaluate((queuedValues) => {
+    const queue = [...queuedValues];
+    const nativeGetRandomValues = Crypto.prototype.getRandomValues;
+    window.__correctFeedbackRandomCalls = [];
+    Object.defineProperty(Crypto.prototype, "getRandomValues", {
+      configurable: true,
+      value(target) {
+        if (target instanceof Uint16Array && target.length === 1) {
+          if (queue.length === 0) {
+            throw new Error("correct feedback random queue was exhausted");
+          }
+          const value = queue.shift();
+          window.__correctFeedbackRandomCalls.push(value);
+          target[0] = value;
+          return target;
+        }
+        return nativeGetRandomValues.call(this, target);
+      },
+    });
+  }, values);
+}
+
 async function assertRuntimeRejected(
   browser,
   script,
@@ -483,6 +506,7 @@ async function runCorrectFeedbackCase(context, script) {
   const page = await context.newPage();
   await page.emulateMedia({ reducedMotion: "reduce" });
   const errors = await preparePage(page, "audio-manual");
+  await installCorrectFeedbackRandom(page, [111]);
   const childFrame = await loadMockQuestion(page, script);
   try {
     await page.waitForFunction(
@@ -506,9 +530,15 @@ async function runCorrectFeedbackCase(context, script) {
           const style = getComputedStyle(element);
           return {
             animationName: style.animationName,
+            badge: element.querySelector(
+              ".kakomonn-reader-correct-feedback-badge",
+            )?.textContent,
             display: style.display,
+            message: element.querySelector(
+              ".kakomonn-reader-correct-feedback-message",
+            )?.textContent,
             pointerEvents: style.pointerEvents,
-            text: element.textContent,
+            rarity: element.dataset.rarity,
             withinViewport:
               rect.left >= 0 &&
               rect.right <= innerWidth &&
@@ -519,9 +549,11 @@ async function runCorrectFeedbackCase(context, script) {
       ),
       {
         animationName: "none",
-        display: "flex",
+        badge: "NORMAL",
+        display: "grid",
+        message: "That's Right!!",
         pointerEvents: "none",
-        text: "That's Right!!",
+        rarity: "normal",
         withinViewport: true,
       },
     );
@@ -549,8 +581,14 @@ async function runCorrectFeedbackCase(context, script) {
         const style = getComputedStyle(element);
         return {
           animationName: style.animationName,
+          badge: element.querySelector(
+            ".kakomonn-reader-correct-feedback-badge",
+          )?.textContent,
+          message: element.querySelector(
+            ".kakomonn-reader-correct-feedback-message",
+          )?.textContent,
           pointerEvents: style.pointerEvents,
-          text: element.textContent,
+          rarity: element.dataset.rarity,
           withinShell:
             rect.left >= shell.left &&
             rect.top >= shell.top &&
@@ -560,8 +598,10 @@ async function runCorrectFeedbackCase(context, script) {
       }),
       {
         animationName: "none",
+        badge: "NORMAL",
+        message: "That's Right!!",
         pointerEvents: "none",
-        text: "That's Right!!",
+        rarity: "normal",
         withinShell: true,
       },
     );
@@ -620,6 +660,178 @@ async function runCorrectFeedbackCase(context, script) {
   }
 }
 
+async function runCorrectFeedbackVariantCase(context, script, expected) {
+  const page = await context.newPage();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const errors = await preparePage(page, "audio", {
+    nextQuestionId: null,
+  });
+  await installCorrectFeedbackRandom(page, expected.randomValues);
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "問題文完了",
+    );
+    await markAnswerResult(childFrame, "correct");
+    const feedback = childFrame.locator(".kakomonn-reader-correct-feedback");
+    await feedback.waitFor();
+    assert.deepEqual(
+      await feedback.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          animationName: style.animationName,
+          badge: element.querySelector(
+            ".kakomonn-reader-correct-feedback-badge",
+          )?.textContent,
+          coversViewport:
+            Math.abs(rect.left) <= 1 &&
+            Math.abs(rect.top) <= 1 &&
+            rect.right >= innerWidth - 1 &&
+            rect.bottom >= innerHeight - 1,
+          message: element.querySelector(
+            ".kakomonn-reader-correct-feedback-message",
+          )?.textContent,
+          pointerEvents: style.pointerEvents,
+          position: style.position,
+          rarity: element.dataset.rarity,
+          withinViewport:
+            rect.left >= -1 &&
+            rect.right <= innerWidth + 1 &&
+            rect.width > 0 &&
+            rect.height > 0,
+        };
+      }),
+      {
+        animationName: "none",
+        badge: expected.badge,
+        coversViewport: expected.rarity === "ssr",
+        message: expected.displayText,
+        pointerEvents: "none",
+        position: expected.rarity === "ssr" ? "fixed" : "relative",
+        rarity: expected.rarity,
+        withinViewport: true,
+      },
+    );
+
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "正解完了",
+    );
+    const speechCalls = await azureSpeechCalls(page);
+    assert.equal(
+      speechCalls.at(-1).body,
+      expectedSpeechSSML(expected.speechText, "+10%", {
+        locale: "en-US",
+        voiceName: "en-US-JennyNeural",
+      }),
+    );
+    assert.deepEqual(
+      await page.evaluate(() => window.__audioBlobs.slice(0, 3)),
+      [
+        { size: 4, type: "audio/mpeg" },
+        { size: expected.waveSize, type: "audio/wav" },
+        { size: 4, type: "audio/mpeg" },
+      ],
+    );
+    assert.deepEqual(
+      await page.evaluate(() => window.__correctFeedbackRandomCalls),
+      expected.randomValues,
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
+async function runQueuedCorrectFeedbackVariantCase(context, script) {
+  const page = await context.newPage();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const errors = await preparePage(page, "audio-manual");
+  await installCorrectFeedbackRandom(page, [11, 0]);
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "問題文 1/1",
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "問題文完了",
+    );
+
+    await markAnswerResult(childFrame, "correct");
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href ===
+        "https://chushoks.kakomonn.com/questions/45125",
+    );
+    const carriedFeedback = page.locator(
+      "#kakomonn-reader-carried-correct-feedback",
+    );
+    await carriedFeedback.waitFor({ state: "visible" });
+    assert.equal(await carriedFeedback.getAttribute("data-rarity"), "rare");
+
+    await childFrame.evaluate((html) => {
+      document.body.innerHTML = html;
+    }, mockBody);
+    await page.waitForTimeout(1_000);
+    await page.evaluate(() => {
+      window.__syncMock.nextQuestionId = null;
+    });
+    await markAnswerResult(childFrame, "correct");
+    await page.waitForFunction(
+      () => window.__correctFeedbackRandomCalls.length === 2,
+    );
+    assert.equal(await carriedFeedback.getAttribute("data-rarity"), "rare");
+
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "Nice! That's right!",
+    );
+    await finishManualAudio(page);
+
+    const queuedFeedback = childFrame.locator(
+      '.kakomonn-reader-correct-feedback[data-rarity="ssr"]',
+    );
+    await queuedFeedback.waitFor();
+    assert.equal(
+      await queuedFeedback
+        .locator(".kakomonn-reader-correct-feedback-message")
+        .innerText(),
+      "Legendary! That's Right!!",
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "Legendary! That's right!",
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "正解完了",
+    );
+    assert.deepEqual(
+      await page.evaluate(() => window.__correctFeedbackRandomCalls),
+      [11, 0],
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
 async function runCorrectCelebrationFeedbackCase(context, script) {
   const page = await context.newPage();
   await page.route(
@@ -633,6 +845,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
   const errors = await preparePage(page, "audio-manual", {
     nextQuestionId: null,
   });
+  await installCorrectFeedbackRandom(page, [111]);
   const childFrame = await loadMockQuestion(page, script);
   try {
     await page.waitForFunction(
@@ -662,7 +875,9 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
       "https://chushoks.kakomonn.com/questions/45124",
     );
     assert.equal(
-      await childFrame.locator(".kakomonn-reader-correct-feedback").innerText(),
+      await childFrame
+        .locator(".kakomonn-reader-correct-feedback-message")
+        .innerText(),
       "That's Right!!",
     );
 
@@ -1534,6 +1749,31 @@ async function main() {
 
     await assertIncorrectSkip(context, script);
     await runCorrectFeedbackCase(context, script);
+    await runCorrectFeedbackVariantCase(context, script, {
+      badge: "RARE",
+      displayText: "Nice! That's Right!!",
+      randomValues: [11],
+      rarity: "rare",
+      speechText: "Nice! That's right!",
+      waveSize: 32_678,
+    });
+    await runCorrectFeedbackVariantCase(context, script, {
+      badge: "SUPER RARE",
+      displayText: "Amazing! That's Right!!",
+      randomValues: [1],
+      rarity: "super-rare",
+      speechText: "Amazing! That's right!",
+      waveSize: 37_970,
+    });
+    await runCorrectFeedbackVariantCase(context, script, {
+      badge: "SSR",
+      displayText: "Legendary! That's Right!!",
+      randomValues: [65_000, 0],
+      rarity: "ssr",
+      speechText: "Legendary! That's right!",
+      waveSize: 45_026,
+    });
+    await runQueuedCorrectFeedbackVariantCase(context, script);
     await runCorrectCelebrationFeedbackCase(context, script);
 
     const speechShortcutPage = await context.newPage();

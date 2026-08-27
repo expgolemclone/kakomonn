@@ -36,7 +36,6 @@
   const carriedCorrectFeedback = document.createElement("div");
   carriedCorrectFeedback.id = "kakomonn-reader-carried-correct-feedback";
   carriedCorrectFeedback.className = "kakomonn-reader-correct-feedback";
-  carriedCorrectFeedback.textContent = CORRECT_FEEDBACK_TEXT;
   carriedCorrectFeedback.hidden = true;
   carriedCorrectFeedback.setAttribute("aria-hidden", "true");
 
@@ -365,20 +364,38 @@
     correctFeedbackRemovalTimer = null;
   }
 
-  function showCorrectFeedbackVisual(sourceDocument = frameDocument) {
+  function showCarriedCorrectFeedbackVisual(variant) {
+    clearCorrectFeedbackRemovalTimer();
+    renderCorrectFeedbackElement(carriedCorrectFeedback, variant);
+    carriedCorrectFeedback.dataset.state = "entering";
+    carriedCorrectFeedback.removeAttribute("style");
+    if (variant.id !== "ssr") {
+      const inset = 16;
+      const width = Math.min(Math.max(0, shell.clientWidth - inset * 2), 672);
+      carriedCorrectFeedback.style.left = `${Math.max(inset, (shell.clientWidth - width) / 2)}px`;
+      carriedCorrectFeedback.style.top = `${inset}px`;
+      carriedCorrectFeedback.style.width = `${width}px`;
+    }
+    carriedCorrectFeedback.hidden = false;
+    activeCorrectFeedbackElement = carriedCorrectFeedback;
+    return true;
+  }
+
+  function showCorrectFeedbackVisual(variant, sourceDocument = frameDocument) {
     if (
       sourceDocument?.body === undefined ||
       sourceDocument !== frameDocument
     ) {
-      return false;
+      return showCarriedCorrectFeedbackVisual(variant);
     }
 
     const resultBox = sourceDocument.querySelector("#js-answer-result-box");
     if (resultBox === null) {
-      return false;
+      return showCarriedCorrectFeedbackVisual(variant);
     }
 
     clearCorrectFeedbackRemovalTimer();
+    renderCorrectFeedbackElement(carriedCorrectFeedback, variant);
     carriedCorrectFeedback.hidden = true;
     carriedCorrectFeedback.dataset.state = "entering";
     carriedCorrectFeedback.removeAttribute("style");
@@ -389,10 +406,9 @@
     if (feedback === null) {
       feedback = sourceDocument.createElement("div");
       feedback.className = "kakomonn-reader-correct-feedback";
-      feedback.textContent = CORRECT_FEEDBACK_TEXT;
-      feedback.setAttribute("aria-hidden", "true");
       resultBox.appendChild(feedback);
     }
+    renderCorrectFeedbackElement(feedback, variant);
     feedback.dataset.state = "entering";
     activeCorrectFeedbackElement = feedback;
     return true;
@@ -407,26 +423,27 @@
       return false;
     }
 
+    const rarity = activeCorrectFeedbackElement.dataset.rarity;
     const rect = activeCorrectFeedbackElement.getBoundingClientRect();
-    const inset = 16;
-    const availableWidth = Math.max(0, shell.clientWidth - inset * 2);
-    const width = Math.min(
-      availableWidth,
-      Math.max(220, rect.width)
-    );
-    const left = Math.min(
-      Math.max(inset, rect.left + (rect.width - width) / 2),
-      Math.max(inset, shell.clientWidth - width - inset)
-    );
-    const top = Math.min(
-      Math.max(inset, rect.top),
-      Math.max(inset, shell.clientHeight - 96)
-    );
 
     activeCorrectFeedbackElement.remove();
-    carriedCorrectFeedback.style.left = `${left}px`;
-    carriedCorrectFeedback.style.top = `${top}px`;
-    carriedCorrectFeedback.style.width = `${width}px`;
+    carriedCorrectFeedback.removeAttribute("style");
+    if (rarity !== "ssr") {
+      const inset = 16;
+      const availableWidth = Math.max(0, shell.clientWidth - inset * 2);
+      const width = Math.min(availableWidth, Math.max(220, rect.width));
+      const left = Math.min(
+        Math.max(inset, rect.left + (rect.width - width) / 2),
+        Math.max(inset, shell.clientWidth - width - inset)
+      );
+      const top = Math.min(
+        Math.max(inset, rect.top),
+        Math.max(inset, shell.clientHeight - rect.height - inset)
+      );
+      carriedCorrectFeedback.style.left = `${left}px`;
+      carriedCorrectFeedback.style.top = `${top}px`;
+      carriedCorrectFeedback.style.width = `${width}px`;
+    }
     carriedCorrectFeedback.dataset.state = "carried";
     carriedCorrectFeedback.hidden = false;
     activeCorrectFeedbackElement = carriedCorrectFeedback;
@@ -436,21 +453,24 @@
   function completeCorrectFeedbackVisual() {
     const feedback = activeCorrectFeedbackElement;
     if (feedback === null) {
-      return;
+      return Promise.resolve();
     }
 
     clearCorrectFeedbackRemovalTimer();
     feedback.dataset.state = "leaving";
-    correctFeedbackRemovalTimer = window.setTimeout(() => {
-      correctFeedbackRemovalTimer = null;
-      if (feedback === carriedCorrectFeedback) {
-        feedback.hidden = true;
-        feedback.removeAttribute("style");
-      } else {
-        feedback.remove();
-      }
-      if (activeCorrectFeedbackElement === feedback) {
-        activeCorrectFeedbackElement = null;
-      }
-    }, CORRECT_FEEDBACK_LEAVE_DURATION_MS);
+    return new Promise((resolve) => {
+      correctFeedbackRemovalTimer = window.setTimeout(() => {
+        correctFeedbackRemovalTimer = null;
+        if (feedback === carriedCorrectFeedback) {
+          feedback.hidden = true;
+          feedback.removeAttribute("style");
+        } else {
+          feedback.remove();
+        }
+        if (activeCorrectFeedbackElement === feedback) {
+          activeCorrectFeedbackElement = null;
+        }
+        resolve();
+      }, CORRECT_FEEDBACK_LEAVE_DURATION_MS);
+    });
   }

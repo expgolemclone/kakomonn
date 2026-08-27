@@ -305,7 +305,7 @@
       darkModeStyle.id = FRAME_DARK_MODE_STYLE_ID;
       sourceDocument.head.appendChild(darkModeStyle);
     }
-    darkModeStyle.textContent = FRAME_DARK_MODE_CSS;
+    darkModeStyle.textContent = `${FRAME_DARK_MODE_CSS}\n${CORRECT_FEEDBACK_CSS}`;
   }
 
   function bindFrameDocument() {

@@ -308,12 +308,8 @@
     }
   }
 
-  function createCorrectChimeWave() {
-    const tones = [
-      { duration: 0.18, frequency: 880, start: 0 },
-      { duration: 0.5, frequency: 659.25, start: 0.22 },
-    ];
-    const duration = 0.72;
+  function createCorrectChimeWave(variant) {
+    const { duration, gain, tones } = variant.chime;
     const sampleCount = Math.ceil(CORRECT_CHIME_SAMPLE_RATE * duration);
     const buffer = new ArrayBuffer(44 + sampleCount * 2);
     const view = new DataView(buffer);
@@ -347,7 +343,7 @@
           Math.sin(2 * Math.PI * tone.frequency * toneTime) *
           attack *
           release *
-          0.34;
+          gain;
       }
       const clampedSample = Math.max(-1, Math.min(1, sample));
       view.setInt16(44 + index * 2, clampedSample * 0x7fff, true);
@@ -431,15 +427,15 @@
     });
   }
 
-  async function requestCorrectFeedbackVoice(runId) {
+  async function requestCorrectFeedbackVoice(runId, variant) {
     const token = await getAzureSpeechToken();
     if (runId !== speechRunId) {
       throw new SyncRequestError("request_aborted");
     }
     const request = requestAzureSpeechAudio(
       token,
-      CORRECT_FEEDBACK_SPEECH_TEXT,
-      CORRECT_FEEDBACK_SPEECH_RATE,
+      variant.speechText,
+      variant.speechRate,
       ENGLISH_SPEECH_LOCALE,
       ENGLISH_SPEECH_VOICE_NAME
     );
@@ -453,7 +449,7 @@
     }
   }
 
-  async function playCorrectFeedbackSequence() {
+  async function playCorrectFeedbackSequence(variant) {
     if (speechInitializationPromise !== null) {
       await speechInitializationPromise;
     }
@@ -465,12 +461,12 @@
     speechRunId += 1;
     const runId = speechRunId;
     cancelActiveSpeech();
-    const voiceResultPromise = requestCorrectFeedbackVoice(runId).then(
+    const voiceResultPromise = requestCorrectFeedbackVoice(runId, variant).then(
       (audioData) => ({ audioData, error: null }),
       (error) => ({ audioData: null, error })
     );
     const chimeCompleted = await playCorrectFeedbackAudioBlob(
-      new Blob([createCorrectChimeWave()], { type: "audio/wav" }),
+      new Blob([createCorrectChimeWave(variant)], { type: "audio/wav" }),
       runId,
       "正解音"
     );
@@ -494,7 +490,7 @@
     const voiceCompleted = await playCorrectFeedbackAudioBlob(
       new Blob([voiceResult.audioData], { type: "audio/mpeg" }),
       runId,
-      "That's right!"
+      variant.speechText
     );
     if (voiceCompleted && runId === speechRunId) {
       setStatus("正解完了");
@@ -512,18 +508,23 @@
 
     correctFeedbackDocuments.add(sourceDocument);
     awaitingAnswerResultSpeech = false;
-    showCorrectFeedbackVisual(sourceDocument);
+    const variant = chooseCorrectFeedbackVariant();
 
     const previousFeedback = correctFeedbackPromise ?? Promise.resolve();
     const scheduledFeedback = previousFeedback.then(async () => {
+      showCorrectFeedbackVisual(variant, sourceDocument);
       const minimumDuration = new Promise((resolve) => {
         window.setTimeout(resolve, CORRECT_FEEDBACK_MINIMUM_DURATION_MS);
       });
       try {
-        await Promise.all([playCorrectFeedbackSequence(), minimumDuration]);
+        await Promise.all([
+          playCorrectFeedbackSequence(variant),
+          minimumDuration,
+        ]);
       } catch {
         setStatus("正解feedbackを再生できません");
       }
+      await completeCorrectFeedbackVisual();
     });
     correctFeedbackPromise = scheduledFeedback;
     void scheduledFeedback.then(() => {
@@ -531,7 +532,6 @@
         return;
       }
       correctFeedbackPromise = null;
-      completeCorrectFeedbackVisual();
       processCurrentPageSpeech();
       void maybeContinuePendingCelebration();
     });

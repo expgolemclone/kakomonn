@@ -206,6 +206,7 @@
       const mono = `${11 * dpr}px "IBM Plex Mono", monospace`;
       const mL = 44 * dpr, mR = 8 * dpr, mT = 26 * dpr, mB = 30 * dpr;
       const pw = cw - mL - mR, ph = ch - mT - mB;
+      if (pw <= 0 || ph <= 0) return;
       // gridlines + y labels
       ctx.font = mono;
       ctx.textAlign = 'right';
@@ -277,11 +278,11 @@
       for (const e of entries) if (e.isIntersecting) { play(); chio.unobserve(chart); }
     }, { threshold: 0.35 });
     chio.observe(chart);
-    let cT;
-    addEventListener('resize', () => {
-      clearTimeout(cT);
-      cT = setTimeout(() => { size(); draw(DATA.map(() => played ? 1 : 0)); }, 150);
-    }, { passive: true });
+    const chartResizeObserver = new ResizeObserver(() => {
+      size();
+      draw(DATA.map(() => played ? 1 : 0));
+    });
+    chartResizeObserver.observe(chart);
   }
 
   /* ============================================================

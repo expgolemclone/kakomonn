@@ -40,14 +40,27 @@ function captureErrors(page, origin) {
   return errors;
 }
 
-async function verifyShell(browser, origin) {
+async function verifyShell(browser, origin, experience, selectedIndex) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = captureErrors(page, origin);
+  await page.addInitScript((index) => {
+    const nativeGetRandomValues = Crypto.prototype.getRandomValues;
+    Object.defineProperty(Crypto.prototype, "getRandomValues", {
+      configurable: true,
+      value(values) {
+        if (values instanceof Uint32Array && values.length === 1) {
+          values[0] = index;
+          return values;
+        }
+        return nativeGetRandomValues.call(this, values);
+      },
+    });
+  }, selectedIndex);
   try {
     await page.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector('html[data-state="ready"]');
     const selectedId = await page.locator("#celebration-frame").getAttribute("data-experience-id");
-    assert.ok(manifest.experiences.some(({ id }) => id === selectedId));
+    assert.equal(selectedId, experience.id);
     assert.equal(await page.locator("#celebration-frame").isVisible(), true);
     assert.equal(await page.locator("#loading").isVisible(), false);
     assert.equal(japaneseText.test(await page.locator("body").innerText()), false);
@@ -106,7 +119,9 @@ async function verifyExperience(browser, origin, experience, viewport) {
 const server = await startStaticServer();
 const browser = await chromium.launch({ headless: true });
 try {
-  await verifyShell(browser, server.origin);
+  for (const [index, experience] of manifest.experiences.entries()) {
+    await verifyShell(browser, server.origin, experience, index);
+  }
   await verifyInvalidParameters(browser, server.origin);
   for (const viewport of [
     { width: 390, height: 844 },

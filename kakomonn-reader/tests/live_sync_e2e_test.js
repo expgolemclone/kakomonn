@@ -429,6 +429,7 @@ async function waitForSynchronizedQuestionState(page, token, frameURL) {
     if (
       lastReaderState.frameURL === frameURL &&
       lastReaderState.answerResult === "unknown" &&
+      lastReaderState.nextDisabled === true &&
       lastReaderState.learningMetricsLabel ===
         expectedLearningMetricsLabel(lastRemoteState.learningMetrics)
     ) {

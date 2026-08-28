@@ -3,6 +3,10 @@ const { createHash } = require("node:crypto");
 const { readdir, readFile } = require("node:fs/promises");
 const { extname, resolve } = require("node:path");
 const test = require("node:test");
+const {
+  readKakomonnConfiguration,
+  requireKakomonnConfiguration,
+} = require("../../scripts/kakomonn-config.cjs");
 
 const productionOrigin = "https://kakomonn-sync.kakomonn.workers.dev";
 const nextQuestionLauncherURL =
@@ -11,15 +15,13 @@ const publicDirectory = resolve(__dirname, "..", "public");
 const assetControlFiles = new Set(["_headers", "_redirects"]);
 const textAssetExtensions = new Set([".css", ".html", ".js"]);
 const sitePattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/;
+const kakomonnConfiguration = readKakomonnConfiguration();
 
 function syncToken() {
-  const value = process.env.KAKOMONN_SYNC_TOKEN;
-  assert.equal(
-    typeof value === "string" && value.length > 0,
-    true,
-    "KAKOMONN_SYNC_TOKEN must be configured for production verification",
+  return requireKakomonnConfiguration(
+    kakomonnConfiguration,
+    "KAKOMONN_SYNC_TOKEN",
   );
-  return value;
 }
 
 async function authorizedGet(path) {

@@ -18,7 +18,7 @@
 
 ## 普段使いのChrome
 
-次のcommandは, production同期WorkerからFSRSに基づく次の問題を取得し, `%LOCALAPPDATA%\kakomonn-chrome-e2e` の専用profileでChromeを起動して, `https://chushoks.kakomonn.com/questions/<questionId>` を開きます. この専用Chrome processでは音声の自動再生を許可し, 画面をクリックせずに最初の問題文から読み上げます. `KAKOMONN_SYNC_TOKEN` はprocess環境変数またはrepository rootのignore済み`.env`へ設定します. token未設定, API error, 不正responseの場合はChromeを起動しません.
+次のcommandは, production同期WorkerからFSRSに基づく次の問題を取得し, `%LOCALAPPDATA%\kakomonn-chrome-e2e` の専用profileでChromeを起動して, `https://chushoks.kakomonn.com/questions/<questionId>` を開きます. この専用Chrome processでは音声の自動再生を許可し, 画面をクリックせずに最初の問題文から読み上げます. `KAKOMONN_SYNC_TOKEN`はrepository rootのignore済み`.env`だけから読みます. token未設定, API error, 不正responseの場合はChromeを起動しません.
 
 ```powershell
 npm run open:kakomonn
@@ -48,23 +48,24 @@ npm run build:kakomonn-reader
 通常利用するChrome profileはlive E2Eに使用しません. 初回だけ専用のuser data directoryでChromeを起動し, そのprofileへTampermonkeyをinstallして`Allow User Scripts`を有効にしてからChromeを閉じます. userscriptの更新とbrowser操作はtest scriptが行います.
 
 ```powershell
-$env:KAKOMONN_CHROME_USER_DATA_DIR = Join-Path $env:LOCALAPPDATA 'kakomonn-chrome-e2e'
+$profileDirectory = Join-Path $env:LOCALAPPDATA 'kakomonn-chrome-e2e'
 $chromeExecutable = Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'
-Start-Process -FilePath $chromeExecutable -ArgumentList "--user-data-dir=$env:KAKOMONN_CHROME_USER_DATA_DIR"
+Start-Process -FilePath $chromeExecutable -ArgumentList "--user-data-dir=$profileDirectory"
 ```
 
-専用profileのpathは, repository rootのignore済み`.env`へ`KAKOMONN_CHROME_USER_DATA_DIR`として保存できます. test scriptはこの値を読み, 指定されたprofileだけを起動します. process環境変数が設定されている場合は, 明示的な上書きとしてその値を優先します.
+`.env.example`を`.env`へcopyし, 専用profileのpathを`KAKOMONN_CHROME_USER_DATA_DIR`へ保存できます. test scriptは`.env`の値だけを読み, 指定されたprofileだけを起動します. process環境変数の`KAKOMONN_*`は参照しません.
 
-本番同期Workerのtokenをprocess環境変数へ設定するか, 同じ`.env`へ保存して完全testを実行します. process環境変数が設定されている場合は, その値を優先します. どちらも未設定の場合は, test scriptが専用Chrome profileと標準Chrome profileのTampermonkey storageから候補を読み取り, productionで認証できる1種類の値だけを`.env`へ保存します.
-
-```powershell
-$env:KAKOMONN_SYNC_TOKEN='<SYNC_TOKEN>'
-npm test
-```
+本番同期Workerのtokenを同じ`.env`へ保存して完全testを実行します. `.env`でtokenが未設定の場合だけ, test scriptが専用Chrome profileと標準Chrome profileのTampermonkey storageから候補を読み取り, productionで認証できる1種類の値を`.env`へ保存します. `.env`に不正なtokenがある場合は, 自動置換せず失敗します.
 
 ```dotenv
 KAKOMONN_SYNC_TOKEN=<SYNC_TOKEN>
 ```
+
+```powershell
+npm test
+```
+
+対応する`KAKOMONN_*`設定は`.env.example`に列挙されています. 未対応keyと重複keyは設定errorになります. 空の任意設定は未指定として扱います.
 
 `npm ci`でPlaywrightと対応するChromiumおよびWebKitもインストールします. `npm test`はlocal testとsmoke testに続けて, 実サイトE2Eと, 専用profileの最小化Chrome, 実Tampermonkey, 本番同期Workerを使用するlive E2Eを実行します. test scriptは専用profileのChromeを起動し, Tampermonkeyを`UserScripts API Dynamic`に固定して, 最新userscriptを更新します. その後, 実OS clipboardへのMarkdownコピーまでを検証します. 専用profile, Tampermonkey, 本番token, 最新buildのいずれかが欠けている場合は失敗し, live E2Eをskipするoptionはありません.
 

@@ -4,6 +4,10 @@ const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
+const {
+  kakomonnFreeEnvironment,
+  readKakomonnConfiguration,
+} = require("../../scripts/kakomonn-config.cjs");
 
 const {
   createSyncMockConfiguration,
@@ -49,12 +53,13 @@ const nextQuestionLauncherURL =
   "https://chushoks.kakomonn.com/createques#kakomonn-next";
 const syncSettingsEntryURL =
   "https://chushoks.kakomonn.com/createques#kakomonn-sync-settings";
+const kakomonnConfiguration = readKakomonnConfiguration();
 const expectedXcodeVersion =
-  process.env.KAKOMONN_XCODE_VERSION ?? "26.6";
+  kakomonnConfiguration.KAKOMONN_XCODE_VERSION ?? "26.6";
 const simulatorPlatformVersion =
-  process.env.KAKOMONN_IOS_VERSION ?? "26.5";
+  kakomonnConfiguration.KAKOMONN_IOS_VERSION ?? "26.5";
 const simulatorDeviceName =
-  process.env.KAKOMONN_IOS_DEVICE ?? "iPhone 17";
+  kakomonnConfiguration.KAKOMONN_IOS_DEVICE ?? "iPhone 17";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
 const testTimeout = 60_000;
 const webDriverElementKey = "element-6066-11e4-a52e-4f735466cecf";
@@ -373,6 +378,7 @@ function verifyHostEnvironment() {
 
   const xcodeVersion = execFileSync("xcodebuild", ["-version"], {
     encoding: "utf8",
+    env: kakomonnFreeEnvironment(),
   });
   assert.match(
     xcodeVersion,
@@ -383,6 +389,7 @@ function verifyHostEnvironment() {
   const simulatorList = JSON.parse(
     execFileSync("xcrun", ["simctl", "list", "devices", "available", "--json"], {
       encoding: "utf8",
+      env: kakomonnFreeEnvironment(),
     }),
   );
   const runtimeKey = `com.apple.CoreSimulator.SimRuntime.iOS-${simulatorPlatformVersion.replace(/\./g, "-")}`;
@@ -463,6 +470,7 @@ async function startAppium() {
     ],
     {
       cwd: repositoryRoot,
+      env: kakomonnFreeEnvironment(),
       stdio: "ignore",
       windowsHide: true,
     },
@@ -786,7 +794,11 @@ async function captureFailureArtifacts(driver, error) {
         "--style",
         "compact",
       ],
-      { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 },
+      {
+        encoding: "utf8",
+        env: kakomonnFreeEnvironment(),
+        maxBuffer: 10 * 1024 * 1024,
+      },
     );
     fs.writeFileSync(simulatorLogPath, simulatorLog, "utf8");
   } catch (simulatorLogError) {
@@ -803,6 +815,7 @@ async function runTest() {
   fs.mkdirSync(resultDirectory, { recursive: true });
   execFileSync("python3", ["build.py"], {
     cwd: projectRoot,
+    env: kakomonnFreeEnvironment(),
     stdio: "inherit",
   });
   const script = fs.readFileSync(scriptPath, "utf8");

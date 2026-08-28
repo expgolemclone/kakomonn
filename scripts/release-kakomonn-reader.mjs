@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import kakomonnConfig from "./kakomonn-config.cjs";
+
+const { kakomonnFreeEnvironment } = kakomonnConfig;
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -47,7 +50,7 @@ export function createCommandRunner({
   spawnSyncImpl = spawnSync,
 } = {}) {
   const childEnvironment = {
-    ...environment,
+    ...kakomonnFreeEnvironment(environment),
     NODE_OPTIONS: [environment.NODE_OPTIONS, "--use-system-ca"]
       .filter(Boolean)
       .join(" "),

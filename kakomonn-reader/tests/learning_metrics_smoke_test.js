@@ -4,6 +4,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
 const {
+  kakomonnFreeEnvironment,
+  readKakomonnConfiguration,
+} = require("../../scripts/kakomonn-config.cjs");
+const {
   installSyncMock,
   PENDING_ATTEMPT_KEY,
 } = require("./sync_mock");
@@ -14,6 +18,7 @@ const site = "chushoks.kakomonn.com";
 const chromeUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
+const kakomonnConfiguration = readKakomonnConfiguration();
 
 function questionHTML(answerResult = "unknown", nativeNextId = "999") {
   const resultClass =
@@ -46,8 +51,10 @@ function catalogListPage(links, currentPage, totalPages) {
 }
 
 async function launchBrowser() {
-  const executablePath = process.env.KAKOMONN_CHROMIUM_EXECUTABLE;
+  const executablePath =
+    kakomonnConfiguration.KAKOMONN_CHROMIUM_EXECUTABLE;
   return chromium.launch({
+    env: kakomonnFreeEnvironment(),
     headless: true,
     ...(executablePath ? { executablePath } : {}),
     args: executablePath ? ["--no-sandbox"] : [],
@@ -912,7 +919,11 @@ async function runQueuedAttemptRecoveryCase(browser) {
 }
 
 async function main() {
-  execFileSync("python3", ["build.py"], { cwd: projectRoot, stdio: "inherit" });
+  execFileSync("python3", ["build.py"], {
+    cwd: projectRoot,
+    env: kakomonnFreeEnvironment(),
+    stdio: "inherit",
+  });
   const script = fs.readFileSync(scriptPath, "utf8");
   assert.equal(script.includes("/v3/answers"), false);
   assert.equal(script.includes("/v8/attempts"), true);

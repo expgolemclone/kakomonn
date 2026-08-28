@@ -2,6 +2,9 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const {
+  readKakomonnConfiguration,
+} = require("../../scripts/kakomonn-config.cjs");
 
 const {
   installUserscript,
@@ -485,11 +488,20 @@ async function resizeToExactViewport(page) {
 }
 
 async function main() {
-  const token = await resolveSyncToken({ envFilePath: repositoryEnvPath });
-  const userDataDir = readChromeUserDataDir({ envFilePath: repositoryEnvPath });
+  const configuration = readKakomonnConfiguration({
+    envFilePath: repositoryEnvPath,
+  });
+  const token = await resolveSyncToken({
+    configuration,
+    envFilePath: repositoryEnvPath,
+  });
+  const userDataDir = readChromeUserDataDir({
+    configuration,
+    envFilePath: repositoryEnvPath,
+  });
   const expectedBuildFingerprint = readExpectedBuildFingerprint();
   const baseline = await requestSyncState(token);
-  const chrome = await launchDedicatedChrome({ userDataDir });
+  const chrome = await launchDedicatedChrome({ configuration, userDataDir });
   let page = null;
   try {
     await installUserscript(chrome.context, userscriptPath);

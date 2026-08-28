@@ -3,6 +3,9 @@ import { once } from "node:events";
 import { createServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import kakomonnConfig from "../../scripts/kakomonn-config.cjs";
+
+const { kakomonnFreeEnvironment } = kakomonnConfig;
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -31,7 +34,7 @@ export async function startStaticServer() {
   const port = await getAvailablePort();
   const child = spawn(process.execPath, ["server.mjs"], {
     cwd: projectRoot,
-    env: { ...process.env, PORT: String(port) },
+    env: { ...kakomonnFreeEnvironment(), PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"],
   });
   child.stderr.setEncoding("utf8");

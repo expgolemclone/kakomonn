@@ -12,11 +12,14 @@ import {
   resolveKakomonnLaunch,
 } from "../scripts/open-kakomonn.mjs";
 
-const ENVIRONMENT = {
+const SYSTEM_ENVIRONMENT = {
   LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local",
   ProgramFiles: "C:\\Program Files",
-  KAKOMONN_SYNC_TOKEN: "secret-token",
+  KAKOMONN_SYNC_TOKEN: "stale-process-token",
   SystemRoot: "C:\\Windows",
+};
+const CONFIGURATION = {
+  KAKOMONN_SYNC_TOKEN: "secret-token",
 };
 const CHROME_PATH =
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
@@ -55,7 +58,7 @@ function expectedStat(candidatePath) {
 test("requests the scheduled next question with the sync token", async () => {
   const calls = [];
   const result = await requestNextQuestionURL({
-    environment: ENVIRONMENT,
+    configuration: CONFIGURATION,
     async fetchImpl(...arguments_) {
       calls.push(arguments_);
       return nextQuestionResponse();
@@ -70,7 +73,7 @@ test("requests the scheduled next question with the sync token", async () => {
   );
   assert.deepEqual(calls[0][1], {
     headers: {
-      Authorization: `Bearer ${ENVIRONMENT.KAKOMONN_SYNC_TOKEN}`,
+      Authorization: `Bearer ${CONFIGURATION.KAKOMONN_SYNC_TOKEN}`,
       "cache-control": "no-cache",
     },
   });
@@ -78,10 +81,11 @@ test("requests the scheduled next question with the sync token", async () => {
 
 test("resolves the dedicated Chrome profile and scheduled URL", () => {
   const launch = resolveKakomonnLaunch({
+    configuration: CONFIGURATION,
     questionURL: QUESTION_URL,
-    environment: ENVIRONMENT,
     platform: "win32",
     stat: expectedStat,
+    systemEnvironment: SYSTEM_ENVIRONMENT,
   });
 
   assert.deepEqual(launch, {
@@ -109,11 +113,12 @@ test("opens the scheduled question detached without passing the sync token", asy
   };
 
   await openKakomonn({
-    environment: ENVIRONMENT,
+    configuration: CONFIGURATION,
     fetchImpl: async () => nextQuestionResponse(),
     platform: "win32",
     spawnProcess,
     stat: expectedStat,
+    systemEnvironment: SYSTEM_ENVIRONMENT,
   });
 
   assert.equal(calls.length, 1);
@@ -127,9 +132,9 @@ test("opens the scheduled question detached without passing the sync token", asy
   assert.deepEqual(calls[0][2], {
     detached: true,
     env: {
-      LOCALAPPDATA: ENVIRONMENT.LOCALAPPDATA,
-      ProgramFiles: ENVIRONMENT.ProgramFiles,
-      SystemRoot: ENVIRONMENT.SystemRoot,
+      LOCALAPPDATA: SYSTEM_ENVIRONMENT.LOCALAPPDATA,
+      ProgramFiles: SYSTEM_ENVIRONMENT.ProgramFiles,
+      SystemRoot: SYSTEM_ENVIRONMENT.SystemRoot,
     },
     stdio: "ignore",
   });
@@ -142,10 +147,7 @@ test("rejects missing authentication without requesting or opening", async () =>
   await assert.rejects(
     () =>
       openKakomonn({
-        environment: {
-          LOCALAPPDATA: ENVIRONMENT.LOCALAPPDATA,
-          ProgramFiles: ENVIRONMENT.ProgramFiles,
-        },
+        configuration: {},
         fetchImpl: async () => {
           fetchCalled = true;
           return nextQuestionResponse();
@@ -155,8 +157,9 @@ test("rejects missing authentication without requesting or opening", async () =>
           spawnCalled = true;
         },
         stat: expectedStat,
+        systemEnvironment: SYSTEM_ENVIRONMENT,
       }),
-    /KAKOMONN_SYNC_TOKEN is not set/,
+    /KAKOMONN_SYNC_TOKEN is not set in/,
   );
   assert.equal(fetchCalled, false);
   assert.equal(spawnCalled, false);
@@ -167,13 +170,14 @@ test("rejects request failures without opening Chrome", async () => {
   await assert.rejects(
     () =>
       openKakomonn({
-        environment: ENVIRONMENT,
+        configuration: CONFIGURATION,
         fetchImpl: async () => ({ ok: false, status: 401 }),
         platform: "win32",
         spawnProcess() {
           spawnCalled = true;
         },
         stat: expectedStat,
+        systemEnvironment: SYSTEM_ENVIRONMENT,
       }),
     /HTTP 401/,
   );
@@ -182,7 +186,7 @@ test("rejects request failures without opening Chrome", async () => {
   await assert.rejects(
     () =>
       requestNextQuestionURL({
-        environment: ENVIRONMENT,
+        configuration: CONFIGURATION,
         fetchImpl: async () => {
           throw new Error("network error");
         },
@@ -242,7 +246,7 @@ test("rejects invalid and unavailable next question responses", async () => {
     await assert.rejects(
       () =>
         requestNextQuestionURL({
-          environment: ENVIRONMENT,
+          configuration: CONFIGURATION,
           fetchImpl: async () => response,
         }),
       response.expected,
@@ -254,10 +258,11 @@ test("rejects unsupported platforms and missing required paths", () => {
   assert.throws(
     () =>
       resolveKakomonnLaunch({
+        configuration: CONFIGURATION,
         questionURL: QUESTION_URL,
-        environment: ENVIRONMENT,
         platform: "linux",
         stat: expectedStat,
+        systemEnvironment: SYSTEM_ENVIRONMENT,
       }),
     /requires Windows/,
   );
@@ -265,8 +270,8 @@ test("rejects unsupported platforms and missing required paths", () => {
   assert.throws(
     () =>
       resolveKakomonnLaunch({
+        configuration: CONFIGURATION,
         questionURL: QUESTION_URL,
-        environment: ENVIRONMENT,
         platform: "win32",
         stat(candidatePath) {
           if (candidatePath === CHROME_PATH) {
@@ -276,6 +281,7 @@ test("rejects unsupported platforms and missing required paths", () => {
           }
           return expectedStat(candidatePath);
         },
+        systemEnvironment: SYSTEM_ENVIRONMENT,
       }),
     /Chrome executable was not found/,
   );
@@ -283,8 +289,8 @@ test("rejects unsupported platforms and missing required paths", () => {
   assert.throws(
     () =>
       resolveKakomonnLaunch({
+        configuration: CONFIGURATION,
         questionURL: QUESTION_URL,
-        environment: ENVIRONMENT,
         platform: "win32",
         stat(candidatePath) {
           if (candidatePath === PROFILE_PATH) {
@@ -294,6 +300,7 @@ test("rejects unsupported platforms and missing required paths", () => {
           }
           return expectedStat(candidatePath);
         },
+        systemEnvironment: SYSTEM_ENVIRONMENT,
       }),
     /Dedicated Chrome profile was not found/,
   );
@@ -301,10 +308,11 @@ test("rejects unsupported platforms and missing required paths", () => {
   assert.throws(
     () =>
       resolveKakomonnLaunch({
+        configuration: CONFIGURATION,
         questionURL: `${KAKOMONN_ORIGIN}/questions/${QUESTION_ID}?unexpected=1`,
-        environment: ENVIRONMENT,
         platform: "win32",
         stat: expectedStat,
+        systemEnvironment: SYSTEM_ENVIRONMENT,
       }),
     /response is invalid/,
   );

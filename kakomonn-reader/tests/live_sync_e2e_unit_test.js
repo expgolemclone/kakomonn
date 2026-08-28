@@ -12,11 +12,12 @@ const {
   chromeLaunchArguments,
   discoverTampermonkeyStorageDirectories,
   extractSyncTokenCandidates,
+  kakomonnFreeEnvironment,
   locateTampermonkeyExtension,
   readConfiguredToken,
   readChromeUserDataDir,
   resolveSyncToken,
-  secretFreeEnvironment,
+  stopDedicatedChrome,
   stopDedicatedChromePowerShell,
   writeEnvToken,
 } = require("./support/chrome_tampermonkey");
@@ -97,21 +98,15 @@ test("extracts exactly one generated build fingerprint", () => {
   );
 });
 
-test("reads the process token before the ignored env file", () => {
-  const token = "b".repeat(64);
-  let envRead = false;
+test("reads only the token supplied by the repository env configuration", () => {
+  const envToken = "b".repeat(64);
   assert.deepEqual(
     readConfiguredToken({
-      environment: { KAKOMONN_SYNC_TOKEN: token },
+      configuration: { KAKOMONN_SYNC_TOKEN: envToken },
       envFilePath: "C:\\workspace\\kakomonn\\.env",
-      existsSync: () => {
-        envRead = true;
-        return true;
-      },
     }),
-    { source: "process environment", token },
+    { source: "C:\\workspace\\kakomonn\\.env", token: envToken },
   );
-  assert.equal(envRead, false);
 });
 
 test("reads quoted and unquoted tokens from the ignored env file", () => {
@@ -119,7 +114,7 @@ test("reads quoted and unquoted tokens from the ignored env file", () => {
   for (const value of [token, `"${token}"`, `'${token}'`]) {
     assert.deepEqual(
       readConfiguredToken({
-        environment: {},
+        configuration: undefined,
         envFilePath: "C:\\workspace\\kakomonn\\.env",
         existsSync: () => true,
         readFileSync: () => `OTHER=value\nKAKOMONN_SYNC_TOKEN=${value}\n`,
@@ -255,10 +250,12 @@ test("saves the one production-valid browser token", async () => {
   const validToken = "2".repeat(64);
   const invalidToken = "3".repeat(64);
   let saved = null;
-  const environment = {};
+  const systemEnvironment = {
+    KAKOMONN_SYNC_TOKEN: "stale-process-token",
+  };
   assert.equal(
     await resolveSyncToken({
-      environment,
+      systemEnvironment,
       envFilePath: "C:\\workspace\\kakomonn\\.env",
       readConfigured: () => null,
       readDedicatedUserDataDir: () => "dedicated-profile",
@@ -284,7 +281,7 @@ test("saves the one production-valid browser token", async () => {
     filePath: "C:\\workspace\\kakomonn\\.env",
     token: validToken,
   });
-  assert.equal(environment.KAKOMONN_SYNC_TOKEN, validToken);
+  assert.equal(systemEnvironment.KAKOMONN_SYNC_TOKEN, "stale-process-token");
 });
 
 test("rejects missing or conflicting production-valid browser tokens", async () => {
@@ -339,7 +336,8 @@ test("defaults to the dedicated Chrome E2E profile", () => {
   const localAppData = "C:\\Users\\tester\\AppData\\Local";
   assert.equal(
     readChromeUserDataDir({
-      environment: { LOCALAPPDATA: localAppData },
+      configuration: {},
+      systemEnvironment: { LOCALAPPDATA: localAppData },
       existsSync: () => true,
       platform: "win32",
     }),
@@ -362,19 +360,19 @@ test("reads the Chrome E2E profile from the ignored env file", () => {
   assert.equal(
     readChromeUserDataDir({
       ...readOptions,
-      environment: { LOCALAPPDATA: localAppData },
+      systemEnvironment: { LOCALAPPDATA: localAppData },
     }),
     envProfile,
   );
   assert.equal(
     readChromeUserDataDir({
       ...readOptions,
-      environment: {
+      systemEnvironment: {
         KAKOMONN_CHROME_USER_DATA_DIR: processProfile,
         LOCALAPPDATA: localAppData,
       },
     }),
-    processProfile,
+    envProfile,
   );
 });
 
@@ -389,10 +387,10 @@ test("rejects the standard Chrome profile and accepts an explicit dedicated prof
   assert.throws(
     () =>
       readChromeUserDataDir({
-        environment: {
+        configuration: {
           KAKOMONN_CHROME_USER_DATA_DIR: path.win32.join(standard, "Default"),
-          LOCALAPPDATA: localAppData,
         },
+        systemEnvironment: { LOCALAPPDATA: localAppData },
         existsSync: () => true,
         platform: "win32",
       }),
@@ -401,10 +399,8 @@ test("rejects the standard Chrome profile and accepts an explicit dedicated prof
   const dedicated = path.win32.join(localAppData, "kakomonn-chrome-e2e");
   assert.equal(
     readChromeUserDataDir({
-      environment: {
-        KAKOMONN_CHROME_USER_DATA_DIR: dedicated,
-        LOCALAPPDATA: localAppData,
-      },
+      configuration: { KAKOMONN_CHROME_USER_DATA_DIR: dedicated },
+      systemEnvironment: { LOCALAPPDATA: localAppData },
       existsSync: () => true,
       platform: "win32",
     }),
@@ -425,10 +421,34 @@ test("launches the dedicated Chrome profile minimized", () => {
   assert.doesNotMatch(stopDedicatedChromePowerShell, /UIAutomation|許可/);
 });
 
-test("does not pass the production token to browser subprocesses", () => {
+test("passes the dedicated Chrome profile as a PowerShell argument", () => {
+  const calls = [];
+  const userDataDir = "C:\\profiles\\kakomonn-chrome-e2e";
+  stopDedicatedChrome(userDataDir, {
+    systemEnvironment: {
+      KAKOMONN_SYNC_TOKEN: "must-not-reach-powershell",
+      SystemRoot: "C:\\Windows",
+    },
+    spawnSyncImpl: (executable, args, options) => {
+      calls.push({ args, executable, options });
+      return { status: 0, stderr: "" };
+    },
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(
+    calls[0].executable,
+    "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+  );
+  assert.match(calls[0].args[calls[0].args.indexOf("-Command") + 1], /^& \{/);
+  assert.deepEqual(calls[0].args.slice(-2), ["-UserDataDir", userDataDir]);
+  assert.deepEqual(calls[0].options.env, { SystemRoot: "C:\\Windows" });
+});
+
+test("does not pass any Kakomonn settings to browser subprocesses", () => {
   assert.deepEqual(
-    secretFreeEnvironment({
+    kakomonnFreeEnvironment({
       KEEP: "value",
+      KAKOMONN_CHROME_EXECUTABLE: "must-not-reach-browser",
       KAKOMONN_SYNC_TOKEN: "must-not-reach-browser",
     }),
     { KEEP: "value" },

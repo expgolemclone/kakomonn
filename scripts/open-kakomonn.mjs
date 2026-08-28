@@ -3,6 +3,14 @@ import { statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import kakomonnConfig from "./kakomonn-config.cjs";
+
+const {
+  kakomonnFreeEnvironment,
+  readKakomonnConfiguration,
+  requireKakomonnConfiguration,
+} = kakomonnConfig;
+
 export const KAKOMONN_SITE = "chushoks.kakomonn.com";
 export const KAKOMONN_ORIGIN = `https://${KAKOMONN_SITE}`;
 export const SYNC_API_ORIGIN = "https://kakomonn-sync.kakomonn.workers.dev";
@@ -57,13 +65,13 @@ function validatedNextQuestionURL(value) {
 }
 
 export async function requestNextQuestionURL({
-  environment = process.env,
+  configuration = readKakomonnConfiguration(),
   fetchImpl = fetch,
 } = {}) {
-  const token = environment.KAKOMONN_SYNC_TOKEN;
-  if (typeof token !== "string" || token.length === 0) {
-    throw new Error("KAKOMONN_SYNC_TOKEN is not set");
-  }
+  const token = requireKakomonnConfiguration(
+    configuration,
+    "KAKOMONN_SYNC_TOKEN",
+  );
 
   const endpoint = new URL("/v8/next", SYNC_API_ORIGIN);
   endpoint.searchParams.set("site", KAKOMONN_SITE);
@@ -112,32 +120,39 @@ function requirePathType(candidatePath, expectedType, stat = statSync) {
 }
 
 export function resolveKakomonnLaunch({
+  configuration = readKakomonnConfiguration(),
   questionURL,
-  environment = process.env,
   platform = process.platform,
   stat = statSync,
+  systemEnvironment = process.env,
 } = {}) {
   if (platform !== "win32") {
     throw new Error("open:kakomonn requires Windows");
   }
 
-  const programFiles = environment.ProgramFiles;
+  const programFiles = systemEnvironment.ProgramFiles;
   if (!programFiles) {
     throw new Error("ProgramFiles is not set");
   }
-  const localAppData = environment.LOCALAPPDATA;
+  const localAppData = systemEnvironment.LOCALAPPDATA;
   if (!localAppData) {
     throw new Error("LOCALAPPDATA is not set");
   }
 
-  const executablePath = path.win32.join(
-    programFiles,
-    "Google",
-    "Chrome",
-    "Application",
-    "chrome.exe",
+  const executablePath = path.win32.resolve(
+    configuration.KAKOMONN_CHROME_EXECUTABLE ??
+      path.win32.join(
+        programFiles,
+        "Google",
+        "Chrome",
+        "Application",
+        "chrome.exe",
+      ),
   );
-  const userDataDir = path.win32.join(localAppData, "kakomonn-chrome-e2e");
+  const userDataDir = path.win32.resolve(
+    configuration.KAKOMONN_CHROME_USER_DATA_DIR ??
+      path.win32.join(localAppData, "kakomonn-chrome-e2e"),
+  );
 
   requirePathType(executablePath, "Chrome executable", stat);
   requirePathType(userDataDir, "Dedicated Chrome profile", stat);
@@ -155,29 +170,28 @@ export function resolveKakomonnLaunch({
   };
 }
 
-export function secretFreeEnvironment(environment = process.env) {
-  const childEnvironment = { ...environment };
-  delete childEnvironment.KAKOMONN_SYNC_TOKEN;
-  return childEnvironment;
-}
-
 export async function openKakomonn({
-  environment = process.env,
+  configuration = readKakomonnConfiguration(),
   fetchImpl = fetch,
   platform = process.platform,
   spawnProcess = spawn,
   stat = statSync,
+  systemEnvironment = process.env,
 } = {}) {
-  const questionURL = await requestNextQuestionURL({ environment, fetchImpl });
+  const questionURL = await requestNextQuestionURL({
+    configuration,
+    fetchImpl,
+  });
   const launch = resolveKakomonnLaunch({
+    configuration,
     questionURL,
-    environment,
     platform,
     stat,
+    systemEnvironment,
   });
   const browserProcess = spawnProcess(launch.executablePath, launch.arguments, {
     detached: true,
-    env: secretFreeEnvironment(environment),
+    env: kakomonnFreeEnvironment(systemEnvironment),
     stdio: "ignore",
   });
   browserProcess.unref();

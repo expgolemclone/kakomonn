@@ -2,6 +2,10 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
+const {
+  kakomonnFreeEnvironment,
+  readKakomonnConfiguration,
+} = require("../../scripts/kakomonn-config.cjs");
 const { installSyncMock } = require("./sync_mock");
 const {
   assertMarkdownCopy,
@@ -23,6 +27,7 @@ const chromeUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) " +
   "Chrome/150.0.0.0 Safari/537.36";
+const kakomonnConfiguration = readKakomonnConfiguration();
 const fixedQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const fixedNextQuestionUrl = "https://chushoks.kakomonn.com/questions/86957";
 const randomScheduledQuestionUrl =
@@ -1256,8 +1261,10 @@ async function runCrossDomainActivationCase(browser, script) {
 
 async function main() {
   const script = fs.readFileSync(scriptPath, "utf8");
-  const executablePath = process.env.KAKOMONN_CHROMIUM_EXECUTABLE;
+  const executablePath =
+    kakomonnConfiguration.KAKOMONN_CHROMIUM_EXECUTABLE;
   const browser = await chromium.launch({
+    env: kakomonnFreeEnvironment(),
     headless: true,
     ...(executablePath ? { executablePath } : {}),
     args: executablePath ? ["--no-sandbox"] : [],

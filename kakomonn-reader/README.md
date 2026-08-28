@@ -39,7 +39,7 @@ npm run release:kakomonn-reader
 
 このcommandはlockfileどおりに依存関係をinstallし,local test,smoke test,live-site E2E,実Chromeと実Tampermonkeyと本番同期Workerを使うlive E2Eを含む`npm test`をWindowsで実行します. すべての検証後にmainが変わっていないことを再確認し,生成した`kakomonn-reader.user.js`を公開します.
 
-release前の初回準備では, 専用のuser data directoryでChromeを起動し, そのprofileだけにTampermonkeyをinstallして`Allow User Scripts`を有効にしてからChromeを閉じます. test scriptが専用profileのChromeを最小化して起動し, 最新の`kakomonn-reader.user.js`をTampermonkeyへ更新します. `KAKOMONN_SYNC_TOKEN`は本番Workerのtokenです. 値が未設定の場合は, 専用Chrome profileと標準Chrome profileのTampermonkey storageからproductionで認証できる値を自動取得します. 専用profile, Tampermonkey, token, 最新buildのいずれかが欠けている場合は, releaseを作成せず終了します. 通常利用するChrome user data directoryとその配下はlive E2Eに使用しません.
+release前の初回準備では, 専用のuser data directoryでChromeを起動し, そのprofileだけにTampermonkeyをinstallして`Allow User Scripts`を有効にしてからChromeを閉じます. test scriptが専用profileのChromeを最小化して起動し, 最新の`kakomonn-reader.user.js`をTampermonkeyへ更新します. 本番Workerの`KAKOMONN_SYNC_TOKEN`はrepository rootの`.env`だけから読みます. 値が未設定の場合は, 専用Chrome profileと標準Chrome profileのTampermonkey storageからproductionで認証できる値を自動取得して`.env`へ保存します. 専用profile, Tampermonkey, token, 最新buildのいずれかが欠けている場合は, releaseを作成せず終了します. 通常利用するChrome user data directoryとその配下はlive E2Eに使用しません.
 
 Releaseのtagは`kakomonn-reader-<commit SHA>`,titleは`kakomonn-reader <先頭12文字のSHA>`です.同期済みの`main`先端だけを`Latest`として公開し,生成fileはrepositoryの差分へ含めません. 作業内容とmainの不一致,localとoriginまたはGitHub上のmainの不一致,local検証の失敗,検証中のmain更新,同一tagの既存Releaseのいずれかを検出した場合は公開せず終了します. 原因を解消して同じcommandを最初から実行してください. skip,force,任意revisionを指定するoptionはありません.
 
@@ -77,19 +77,24 @@ npm run build:kakomonn-reader
 通常利用するChrome profileはlive E2Eに使用しません. 初回だけ次のcommandで専用のuser data directoryを指定してChromeを起動し, そのprofileへTampermonkeyをinstallして`Allow User Scripts`を有効にしてからChromeを閉じます. userscriptの保存と更新はtest scriptが行います.
 
 ```powershell
-$env:KAKOMONN_CHROME_USER_DATA_DIR = Join-Path $env:LOCALAPPDATA 'kakomonn-chrome-e2e'
+$profileDirectory = Join-Path $env:LOCALAPPDATA 'kakomonn-chrome-e2e'
 $chromeExecutable = Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'
-Start-Process -FilePath $chromeExecutable -ArgumentList "--user-data-dir=$env:KAKOMONN_CHROME_USER_DATA_DIR"
+Start-Process -FilePath $chromeExecutable -ArgumentList "--user-data-dir=$profileDirectory"
 ```
 
 `KAKOMONN_SYNC_TOKEN`はWorkerへ設定したtokenです. `npm test`はTampermonkeyメタデータ, ES2020構文, local smoke test, 実サイトE2Eに続けて, 専用profileの最小化Chrome, 実Tampermonkey, デプロイ済みの同期Workerを一続きで検証します. 最後のE2Eはtest scriptがChromeを起動し, Tampermonkeyを`UserScripts API Dynamic`に固定して, 最新userscriptを更新します. さらに, build fingerprintが生成fileと一致することを確認します. その後, 実Chrome上で解答記録を1件送信し, 問題番号を含むMarkdownが実OS clipboardへ書き込まれたことを確認します. さらに, 本番の解答履歴と定着状態を更新し, 外側URLとiframeが次の問題へ移動することを確認します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません.
 
+repository rootの`.env.example`を`.env`へcopyし, `KAKOMONN_SYNC_TOKEN`を設定してからtestします.
+
+```dotenv
+KAKOMONN_SYNC_TOKEN=<SYNC_TOKEN>
+```
+
 ```powershell
-$env:KAKOMONN_SYNC_TOKEN='<SYNC_TOKEN>'
 npm test
 ```
 
-`KAKOMONN_CHROME_USER_DATA_DIR`はprocess環境変数またはrepository rootのignore済み`.env`で指定できます. process環境変数がある場合はその値を優先し, 省略した場合は`%LOCALAPPDATA%\kakomonn-chrome-e2e`を使用します. 通常利用するChrome user data directoryとその配下は使用できません. `KAKOMONN_CHROME_EXECUTABLE`を省略した場合は`%ProgramFiles%\Google\Chrome\Application\chrome.exe`を使用します. test scriptが指定された専用profileの既存processを終了し, 最小化Chromeの起動から終了までを所有します.
+`KAKOMONN_CHROME_USER_DATA_DIR`はrepository rootのignore済み`.env`だけで指定できます. 省略した場合は`%LOCALAPPDATA%\kakomonn-chrome-e2e`を使用します. 通常利用するChrome user data directoryとその配下は使用できません. `KAKOMONN_CHROME_EXECUTABLE`を省略した場合は`%ProgramFiles%\Google\Chrome\Application\chrome.exe`を使用します. process環境変数の`KAKOMONN_*`は参照しません. test scriptが指定された専用profileの既存processを終了し, 最小化Chromeの起動から終了までを所有します.
 
 `npm run test:kakomonn-live-sync`で最後のlive E2Eだけを再実行できますが,build,local test,smoke test,live-site E2Eを含む完全な完了条件は`npm test`です. live-sync E2Eをskipまたはforce通過させるoptionはありません. `npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます.
 

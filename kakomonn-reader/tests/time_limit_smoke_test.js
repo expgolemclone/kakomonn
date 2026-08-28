@@ -4,6 +4,9 @@ const { resolve } = require("node:path");
 
 const { chromium } = require("playwright");
 const {
+  kakomonnFreeEnvironment,
+} = require("../../scripts/kakomonn-config.cjs");
+const {
   createSyncMockConfiguration,
   installSyncMockInWindow,
   PENDING_ATTEMPT_KEY,
@@ -183,7 +186,10 @@ async function explanationExpiryRecordsAndAdvances(browser, script) {
 
 async function main() {
   const script = await readFile(scriptPath, "utf8");
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    env: kakomonnFreeEnvironment(),
+    headless: true,
+  });
   try {
     await questionExpiryRecordsIncorrectAndSkips(browser, script);
     await explanationExpiryRecordsAndAdvances(browser, script);

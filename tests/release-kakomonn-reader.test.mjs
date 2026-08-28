@@ -109,7 +109,11 @@ test("uses Windows command wrappers without a shell", () => {
   const calls = [];
   const runner = createCommandRunner({
     cwd: "C:\\repo",
-    environment: { RELEASE_TEST: "1" },
+    environment: {
+      KAKOMONN_CHROME_EXECUTABLE: "C:\\stale\\chrome.exe",
+      KAKOMONN_SYNC_TOKEN: "stale-token",
+      RELEASE_TEST: "1",
+    },
     platform: "win32",
     commandShell: "C:\\Windows\\System32\\cmd.exe",
     spawnSyncImpl: (command, args, options) => {

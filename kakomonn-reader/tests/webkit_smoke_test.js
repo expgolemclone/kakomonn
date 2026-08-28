@@ -5,6 +5,10 @@ const path = require("node:path");
 
 const { webkit } = require("playwright");
 const {
+  kakomonnFreeEnvironment,
+  readKakomonnConfiguration,
+} = require("../../scripts/kakomonn-config.cjs");
+const {
   installSyncMock,
   SYNC_API_ORIGIN,
 } = require("./sync_mock");
@@ -21,6 +25,7 @@ const iosUserAgent =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 " +
   "Mobile/15E148 Safari/604.1";
+const kakomonnConfiguration = readKakomonnConfiguration();
 
 const fixtureBody = `
   <header class="l-header">元サイトヘッダー</header>
@@ -283,10 +288,12 @@ async function assertLauncherFailure(
 }
 
 async function main() {
-  const configuredScriptPath = process.env.KAKOMONN_READER_SCRIPT_PATH;
+  const configuredScriptPath =
+    kakomonnConfiguration.KAKOMONN_READER_SCRIPT_PATH;
   if (!configuredScriptPath) {
     execFileSync("python3", ["build.py"], {
       cwd: projectRoot,
+      env: kakomonnFreeEnvironment(),
       stdio: "inherit",
     });
   }
@@ -294,7 +301,10 @@ async function main() {
     ? path.resolve(configuredScriptPath)
     : defaultScriptPath;
   const script = fs.readFileSync(scriptPath, "utf8");
-  const browser = await webkit.launch({ headless: true });
+  const browser = await webkit.launch({
+    env: kakomonnFreeEnvironment(),
+    headless: true,
+  });
 
   try {
     const context = await browser.newContext({

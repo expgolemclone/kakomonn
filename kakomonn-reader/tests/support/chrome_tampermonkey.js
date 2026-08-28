@@ -3,6 +3,10 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
+const {
+  kakomonnFreeEnvironment,
+  readKakomonnConfiguration,
+} = require("../../../scripts/kakomonn-config.cjs");
 
 const { chromium } = require("playwright");
 
@@ -71,26 +75,23 @@ function isSameOrDescendantPath(parentPath, candidatePath, pathApi = path) {
 }
 
 function readChromeUserDataDir({
-  environment = process.env,
+  configuration,
+  systemEnvironment = process.env,
   envFilePath,
   existsSync = fs.existsSync,
   readFileSync = fs.readFileSync,
   platform = process.platform,
 } = {}) {
   const pathApi = platformPath(platform);
+  const kakomonnConfiguration =
+    configuration ??
+    readKakomonnConfiguration({ envFilePath, existsSync, readFileSync });
   const configuredPath =
-    environment.KAKOMONN_CHROME_USER_DATA_DIR ??
-    readEnvAssignment(envFilePath, "KAKOMONN_CHROME_USER_DATA_DIR", {
-      existsSync,
-      readFileSync,
-    }) ??
-    defaultChromeE2EUserDataDir(environment, platform);
-  if (configuredPath === "") {
-    throw new Error("KAKOMONN_CHROME_USER_DATA_DIR must not be empty");
-  }
+    kakomonnConfiguration.KAKOMONN_CHROME_USER_DATA_DIR ??
+    defaultChromeE2EUserDataDir(systemEnvironment, platform);
   const userDataDir = pathApi.resolve(configuredPath);
   const standardUserDataDir = pathApi.resolve(
-    defaultChromeUserDataDir(environment, platform),
+    defaultChromeUserDataDir(systemEnvironment, platform),
   );
   if (isSameOrDescendantPath(standardUserDataDir, userDataDir, pathApi)) {
     throw new Error(
@@ -105,51 +106,17 @@ function readChromeUserDataDir({
   return userDataDir;
 }
 
-function readEnvAssignment(
-  envFilePath,
-  key,
-  {
-    existsSync = fs.existsSync,
-    readFileSync = fs.readFileSync,
-  } = {},
-) {
-  if (!envFilePath || !existsSync(envFilePath)) {
-    return null;
-  }
-  const contents = readFileSync(envFilePath, "utf8");
-  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = contents.match(
-    new RegExp(`^${escapedKey}\\s*=\\s*(.*)$`, "m"),
-  );
-  if (!match) {
-    return null;
-  }
-  let value = match[1].trim();
-  if (
-    value.length >= 2 &&
-    ((value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'")))
-  ) {
-    value = value.slice(1, -1);
-  }
-  return value;
-}
-
 function readConfiguredToken({
-  environment = process.env,
+  configuration,
   envFilePath,
   existsSync = fs.existsSync,
   readFileSync = fs.readFileSync,
 } = {}) {
-  const processToken = environment.KAKOMONN_SYNC_TOKEN ?? "";
-  if (processToken !== "") {
-    return { source: "process environment", token: processToken };
-  }
-  const token = readEnvAssignment(envFilePath, "KAKOMONN_SYNC_TOKEN", {
-    existsSync,
-    readFileSync,
-  });
-  if (token === null) {
+  const kakomonnConfiguration =
+    configuration ??
+    readKakomonnConfiguration({ envFilePath, existsSync, readFileSync });
+  const token = kakomonnConfiguration.KAKOMONN_SYNC_TOKEN;
+  if (token === undefined) {
     return null;
   }
   return { source: envFilePath, token };
@@ -302,7 +269,8 @@ function writeEnvToken(
 }
 
 async function resolveSyncToken({
-  environment = process.env,
+  configuration,
+  systemEnvironment = process.env,
   envFilePath,
   readConfigured = readConfiguredToken,
   readDedicatedUserDataDir = readChromeUserDataDir,
@@ -312,7 +280,12 @@ async function resolveSyncToken({
   saveToken = writeEnvToken,
 } = {}) {
   assert.ok(envFilePath, "envFilePath is required");
-  const configured = readConfigured({ environment, envFilePath });
+  const kakomonnConfiguration =
+    configuration ?? readKakomonnConfiguration({ envFilePath });
+  const configured = readConfigured({
+    configuration: kakomonnConfiguration,
+    envFilePath,
+  });
   if (configured !== null) {
     assertTokenShape(configured.token, configured.source);
     if (!(await validateToken(configured.token))) {
@@ -324,11 +297,12 @@ async function resolveSyncToken({
   }
 
   const dedicatedUserDataDir = readDedicatedUserDataDir({
-    environment,
+    configuration: kakomonnConfiguration,
+    systemEnvironment,
     envFilePath,
   });
   const storageDirectories = discoverStorageDirectories({
-    environment,
+    environment: systemEnvironment,
     dedicatedUserDataDir,
   });
   const candidates = scanCandidates({ storageDirectories });
@@ -350,7 +324,6 @@ async function resolveSyncToken({
     );
   }
   saveToken(envFilePath, distinctValidTokens[0]);
-  environment.KAKOMONN_SYNC_TOKEN = distinctValidTokens[0];
   return distinctValidTokens[0];
 }
 
@@ -371,17 +344,10 @@ function windowsPowerShellExecutable(environment = process.env) {
   );
 }
 
-function secretFreeEnvironment(environment = process.env) {
-  const childEnvironment = { ...environment };
-  delete childEnvironment.KAKOMONN_SYNC_TOKEN;
-  return childEnvironment;
-}
-
 const stopDedicatedChromePowerShell = String.raw`
+param([Parameter(Mandatory=$true)][string]$UserDataDir)
 $ErrorActionPreference = "SilentlyContinue"
-$userDataDir = [System.IO.Path]::GetFullPath(
-  $env:KAKOMONN_E2E_CHROME_USER_DATA_DIR
-)
+$userDataDir = [System.IO.Path]::GetFullPath($UserDataDir)
 $plainArgument = "--user-data-dir=$userDataDir"
 $quotedArgument = '--user-data-dir="' + $userDataDir + '"'
 $processes = @(
@@ -410,23 +376,22 @@ exit 0
 
 function stopDedicatedChrome(userDataDir, {
   spawnSyncImpl = spawnSync,
-  environment = process.env,
+  systemEnvironment = process.env,
 } = {}) {
   const result = spawnSyncImpl(
-    windowsPowerShellExecutable(environment),
+    windowsPowerShellExecutable(systemEnvironment),
     [
       "-NoLogo",
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      stopDedicatedChromePowerShell,
+      `& {${stopDedicatedChromePowerShell}\n}`,
+      "-UserDataDir",
+      userDataDir,
     ],
     {
       encoding: "utf8",
-      env: secretFreeEnvironment({
-        ...environment,
-        KAKOMONN_E2E_CHROME_USER_DATA_DIR: userDataDir,
-      }),
+      env: kakomonnFreeEnvironment(systemEnvironment),
       maxBuffer: 2 * 1024 * 1024,
       windowsHide: true,
     },
@@ -439,12 +404,15 @@ function stopDedicatedChrome(userDataDir, {
   }
 }
 
-function chromeExecutablePath(environment = process.env) {
-  const configured = environment.KAKOMONN_CHROME_EXECUTABLE ?? "";
-  if (configured !== "") {
+function chromeExecutablePath(
+  configuration = readKakomonnConfiguration(),
+  systemEnvironment = process.env,
+) {
+  const configured = configuration.KAKOMONN_CHROME_EXECUTABLE;
+  if (configured !== undefined) {
     return path.resolve(configured);
   }
-  const programFiles = environment.ProgramFiles;
+  const programFiles = systemEnvironment.ProgramFiles;
   if (!programFiles) {
     throw new Error("ProgramFiles is not set");
   }
@@ -545,22 +513,26 @@ async function waitForActivePort(activePortPath, browserProcess, timeoutMs = 30_
 }
 
 async function launchDedicatedChrome({
-  environment = process.env,
-  userDataDir = readChromeUserDataDir({ environment }),
+  configuration = readKakomonnConfiguration(),
+  systemEnvironment = process.env,
+  userDataDir,
 } = {}) {
-  const executablePath = chromeExecutablePath(environment);
+  const resolvedUserDataDir =
+    userDataDir ??
+    readChromeUserDataDir({ configuration, systemEnvironment });
+  const executablePath = chromeExecutablePath(configuration, systemEnvironment);
   if (!fs.existsSync(executablePath)) {
     throw new Error(`Google Chrome was not found: ${executablePath}`);
   }
-  locateTampermonkeyExtension(userDataDir);
-  stopDedicatedChrome(userDataDir, { environment });
-  const activePortPath = path.join(userDataDir, "DevToolsActivePort");
+  locateTampermonkeyExtension(resolvedUserDataDir);
+  stopDedicatedChrome(resolvedUserDataDir, { systemEnvironment });
+  const activePortPath = path.join(resolvedUserDataDir, "DevToolsActivePort");
   fs.rmSync(activePortPath, { force: true });
   const browserProcess = spawn(
     executablePath,
-    chromeLaunchArguments(userDataDir),
+    chromeLaunchArguments(resolvedUserDataDir),
     {
-      env: secretFreeEnvironment(environment),
+      env: kakomonnFreeEnvironment(systemEnvironment),
       stdio: "ignore",
       windowsHide: true,
     },
@@ -595,7 +567,7 @@ async function launchDedicatedChrome({
         exited = await waitForProcessExit(browserProcess, 3_000);
       }
       if (!exited) {
-        stopDedicatedChrome(userDataDir, { environment });
+        stopDedicatedChrome(resolvedUserDataDir, { systemEnvironment });
       }
     },
   };
@@ -864,7 +836,8 @@ module.exports = {
   readChromeUserDataDir,
   resolveSyncToken,
   scanStoredSyncTokenCandidates,
-  secretFreeEnvironment,
+  kakomonnFreeEnvironment,
+  stopDedicatedChrome,
   stopDedicatedChromePowerShell,
   validateSyncToken,
   writeEnvToken,

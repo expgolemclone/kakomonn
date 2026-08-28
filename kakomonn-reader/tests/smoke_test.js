@@ -5,6 +5,9 @@ const path = require("node:path");
 
 const { chromium } = require("playwright");
 const {
+  kakomonnFreeEnvironment,
+} = require("../../scripts/kakomonn-config.cjs");
+const {
   installSyncMock,
   PENDING_ATTEMPT_KEY,
   SYNC_API_ORIGIN,
@@ -947,6 +950,7 @@ async function assertIncorrectSkip(context, script) {
 async function main() {
   execFileSync("python3", ["build.py"], {
     cwd: projectRoot,
+    env: kakomonnFreeEnvironment(),
     stdio: "inherit",
   });
 
@@ -961,7 +965,10 @@ async function main() {
   assert.equal(script.includes("SpeechSynthesisUtterance"), false);
   assert.equal(script.includes("Microsoft Ayumi"), false);
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    env: kakomonnFreeEnvironment(),
+    headless: true,
+  });
   try {
     const context = await browser.newContext({ userAgent: chromeUserAgent });
     const page = await context.newPage();

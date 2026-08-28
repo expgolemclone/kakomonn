@@ -80,6 +80,19 @@ const UNSUPPORTED_HANDLER_FIXTURES = new Set([
   "kakomonn-reader/tests/smoke_test.js",
 ]);
 
+const CONFIGURATION_RUNTIME_EXEMPT_FILES = new Set([
+  "kakomonn-reader/tests/live_sync_e2e_unit_test.js",
+  "tests/kakomonn-config.test.mjs",
+  "tests/repository_naming_test.mjs",
+]);
+
+const RETIRED_CONFIGURATION_PATTERNS = [
+  /(?:process\.env|environment|systemEnvironment)\.KAKOMONN_/,
+  /\$env:KAKOMONN_/,
+  /--env-file(?:-if-exists)?(?:=|\s)/,
+  /KAKOMONN_E2E_/,
+];
+
 async function* listFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
@@ -142,5 +155,28 @@ test("retired runtime names stay out of production code and support files", asyn
     violations,
     [],
     `retired runtime names were found:\n${violations.join("\n")}`,
+  );
+});
+
+test("Kakomonn settings are read only through the repository env loader", async () => {
+  const violations = [];
+  for await (const filePath of listFiles(repositoryRoot)) {
+    const relativePath = relative(repositoryRoot, filePath).replaceAll("\\", "/");
+    if (CONFIGURATION_RUNTIME_EXEMPT_FILES.has(relativePath)) continue;
+    const lines = (await readFile(filePath, "utf8")).split(/\r?\n/);
+    lines.forEach((line, index) => {
+      for (const pattern of RETIRED_CONFIGURATION_PATTERNS) {
+        if (pattern.test(line)) {
+          violations.push(
+            `${relativePath}:${index + 1}: ${pattern} => ${line.trim()}`,
+          );
+        }
+      }
+    });
+  }
+  assert.deepEqual(
+    violations,
+    [],
+    `retired Kakomonn configuration access was found:\n${violations.join("\n")}`,
   );
 });

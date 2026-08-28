@@ -2,11 +2,16 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
+const {
+  kakomonnFreeEnvironment,
+  readKakomonnConfiguration,
+} = require("../../scripts/kakomonn-config.cjs");
 
 const publicDir = path.resolve(__dirname, "..", "public");
 const token = "test-dashboard-token";
 const site = "chushoks.kakomonn.com";
 const otherSite = "shindans.kakomonn.com";
+const kakomonnConfiguration = readKakomonnConfiguration();
 const attemptedQuestionCountHistory = [18, 22, 19, 26, 31, 24, 28];
 const deltaHistory = [null, 112, -14, 0, 138, 106, 104];
 const closingStabilityDaysHistory = [null, 9307, 9412, 9550, 9688, 9794, 9912];
@@ -55,8 +60,10 @@ const appSource = fs.readFileSync(path.join(publicDir, "app.js"), "utf8");
 const stylesSource = fs.readFileSync(path.join(publicDir, "styles.css"), "utf8");
 
 async function launchBrowser() {
-  const executablePath = process.env.KAKOMONN_CHROMIUM_EXECUTABLE;
+  const executablePath =
+    kakomonnConfiguration.KAKOMONN_CHROMIUM_EXECUTABLE;
   return chromium.launch({
+    env: kakomonnFreeEnvironment(),
     headless: true,
     ...(executablePath ? { executablePath } : {}),
     args: executablePath ? ["--no-sandbox"] : [],

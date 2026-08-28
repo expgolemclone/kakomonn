@@ -65,6 +65,7 @@ test("production assets match the repository", async (context) => {
       });
 
       assert.equal(response.status, 200, `${assetUrl.pathname} must be published`);
+      assert.equal(response.headers.get("cache-control"), "no-cache");
       const actual = canonicalAsset(
         assetName,
         Buffer.from(await response.arrayBuffer())
@@ -74,6 +75,15 @@ test("production assets match the repository", async (context) => {
         sha256(expected),
         `${assetUrl.pathname} does not match the repository`
       );
+
+      if (assetName === "app.js") {
+        const etag = response.headers.get("etag");
+        assert.notEqual(etag, null, `${assetUrl.pathname} must publish an ETag`);
+        const revalidated = await fetch(assetUrl, {
+          headers: { "if-none-match": etag },
+        });
+        assert.equal(revalidated.status, 304);
+      }
     });
   }
 });
@@ -90,6 +100,7 @@ test("production redirects to the canonical next-question launcher", async () =>
 test("production serves only the authenticated v8 API backed by LearningState", async () => {
   const unauthorized = await fetch(new URL("/v8/sites", productionOrigin));
   assert.equal(unauthorized.status, 401);
+  assert.equal(unauthorized.headers.get("cache-control"), "no-store");
   assert.deepEqual(await unauthorized.json(), { error: "unauthorized" });
 
   for (const version of ["v3", "v4", "v5", "v6", "v7"]) {

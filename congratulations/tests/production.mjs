@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,14 +38,45 @@ function captureErrors(page) {
   return errors;
 }
 
+async function assertProductionCachePolicy() {
+  const stableURL = `${origin}/shared/experience-runtime.js`;
+  const stableResponse = await fetch(stableURL);
+  assert.equal(stableResponse.status, 200);
+  assert.equal(stableResponse.headers.get("cache-control"), "no-cache");
+  const etag = stableResponse.headers.get("etag");
+  assert.notEqual(etag, null);
+  const revalidated = await fetch(stableURL, {
+    headers: { "if-none-match": etag },
+  });
+  assert.equal(revalidated.status, 304);
+
+  const builtAssets = await readdir(resolve(projectRoot, "dist", "assets"));
+  assert.notEqual(builtAssets.length, 0);
+  const immutableResponse = await fetch(
+    `${origin}/assets/${builtAssets.sort()[0]}`,
+  );
+  assert.equal(immutableResponse.status, 200);
+  assert.equal(
+    immutableResponse.headers.get("cache-control"),
+    "public, max-age=31536000, immutable",
+  );
+}
+
+await assertProductionCachePolicy();
+
 const browser = await chromium.launch({ headless: true });
 try {
   const shell = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const shellErrors = captureErrors(shell);
   const response = await shell.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
   assert.equal(response?.status(), 200);
+  assert.equal(response?.headers()["cache-control"], "no-cache");
   await shell.waitForSelector('html[data-state="ready"]');
   assert.equal(await shell.locator("#celebration-frame").isVisible(), true);
+  assert.equal(
+    new URL(await shell.locator("#celebration-frame").getAttribute("src")).search,
+    "",
+  );
   assert.deepEqual(shellErrors, []);
   await shell.close();
 
@@ -66,6 +97,7 @@ try {
         { waitUntil: "domcontentloaded" },
       );
       assert.equal(experienceResponse?.status(), 200);
+      assert.equal(experienceResponse?.headers()["cache-control"], "no-cache");
       await page.waitForFunction(
         (id) => window.__celebrationMessages.some((message) => message.siteId === id),
         experience.id,

@@ -114,6 +114,48 @@ function attemptCalls(page) {
   );
 }
 
+function stateCalls(page) {
+  return page.evaluate(() =>
+    window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v8/state"),
+  );
+}
+
+async function runResumeWithoutRemoteRefreshCase(browser) {
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
+  try {
+    const page = await context.newPage();
+    const errors = await prepare(page, "/questions/123", {
+      nextQuestionId: "456",
+    });
+    const frame = await readerFrame(page);
+    assert.equal((await stateCalls(page)).length, 1);
+
+    await page.evaluate(async () => {
+      for (let index = 0; index < 3; index += 1) {
+        window.dispatchEvent(new Event("focus"));
+        window.dispatchEvent(new PageTransitionEvent("pageshow"));
+        document.dispatchEvent(new Event("visibilitychange"));
+        await new Promise((resolve) => window.setTimeout(resolve, 20));
+      }
+    });
+    await page.waitForTimeout(100);
+    assert.equal((await stateCalls(page)).length, 1);
+
+    await revealAnswerResult(frame, "correct");
+    await page.waitForFunction(() =>
+      window.__syncMock.calls.filter(
+        (call) => new URL(call.url).pathname === "/v8/attempts",
+      ).length === 1,
+    );
+    await frame.waitForURL(`https://${site}/questions/456`);
+    assert.equal((await stateCalls(page)).length, 1);
+    assert.equal((await attemptCalls(page)).length, 1);
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
 async function runQuestionIdCase(browser, startPath) {
   const context = await browser.newContext({ userAgent: chromeUserAgent });
   try {
@@ -430,6 +472,7 @@ async function runCatalogRefreshCase(browser) {
     );
     assert.deepEqual(catalogCall.body.questionIds, ["10", "11", "12", "13", "14", "20"]);
     assert.equal(catalogCall.body.expectedGeneration, 0);
+    assert.equal((await stateCalls(page)).length, 1);
     assert.deepEqual(
       catalogRequests.filter((url) => url.startsWith("/list1/100")),
       [
@@ -751,6 +794,7 @@ async function runCatalogCASConflictCase(browser) {
     assert.equal(catalogCalls.length, 1);
     assert.equal(catalogCalls[0].body.expectedGeneration, 0);
     assert.equal(await page.evaluate(() => window.__syncMock.catalogGeneration), 1);
+    assert.equal((await stateCalls(page)).length, 2);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
@@ -936,6 +980,7 @@ async function main() {
   try {
     await runQuestionIdCase(browser, "/questions/123");
     await runQuestionIdCase(browser, "/questions/next/123");
+    await runResumeWithoutRemoteRefreshCase(browser);
     await runUnknownURLCase(browser);
     await runRetryCase(browser);
     await runCatalogRefreshCase(browser);

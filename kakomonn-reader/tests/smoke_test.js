@@ -1720,6 +1720,11 @@ async function main() {
       },
     );
 
+    const stateCallsBeforeResume = await page.evaluate(() =>
+      window.__syncMock.calls.filter(
+        (call) => new URL(call.url).pathname === "/v8/state",
+      ).length,
+    );
     await page.evaluate(() => {
       window.__syncMock.stabilityDays = 7;
       window.__syncMock.attemptCount = 7;
@@ -1727,25 +1732,24 @@ async function main() {
       window.__syncMock.todayAttemptedQuestionCount = 7;
       window.__syncMock.dueCardsCompleted = true;
       window.__syncMock.dueCardsRemaining = 0;
-      window.__syncMock.holdNextRequest = true;
       window.dispatchEvent(new Event("focus"));
     });
-    await page.waitForFunction(
-      () => window.__syncMock.releaseHeldRequest !== null,
+    await page.waitForTimeout(100);
+    assert.equal(
+      await page.evaluate(() =>
+        window.__syncMock.calls.filter(
+          (call) => new URL(call.url).pathname === "/v8/state",
+        ).length,
+      ),
+      stateCallsBeforeResume,
     );
     assert.equal(
-      await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
-      true,
-    );
-    await page.evaluate(() => window.__syncMock.releaseHeldRequest());
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-due-cards-completed").textContent ===
-        "達成",
+      await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
+      "未達成",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-due-cards-remaining").innerText(),
-      "0",
+      "12",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
@@ -2120,6 +2124,11 @@ async function main() {
         document.querySelector("#kakomonn-reader-due-cards-completed").textContent ===
         "未達成",
     );
+    const iosStateCallsBeforeResume = await iosPage.evaluate(() =>
+      window.__syncMock.calls.filter(
+        (call) => new URL(call.url).pathname === "/v8/state",
+      ).length,
+    );
     await iosPage.evaluate(() => {
       window.__syncMock.stabilityDays = 6;
       window.__syncMock.attemptCount = 6;
@@ -2129,14 +2138,22 @@ async function main() {
       window.__syncMock.dueCardsRemaining = 0;
       window.dispatchEvent(new Event("focus"));
     });
-    await iosPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-due-cards-completed").textContent ===
-        "達成",
+    await iosPage.waitForTimeout(100);
+    assert.equal(
+      await iosPage.evaluate(() =>
+        window.__syncMock.calls.filter(
+          (call) => new URL(call.url).pathname === "/v8/state",
+        ).length,
+      ),
+      iosStateCallsBeforeResume,
+    );
+    assert.equal(
+      await iosPage.locator("#kakomonn-reader-due-cards-completed").innerText(),
+      "未達成",
     );
     assert.equal(
       await iosPage.locator("#kakomonn-reader-due-cards-remaining").innerText(),
-      "0",
+      "12",
     );
     assert.equal(
       await iosPage.evaluate(

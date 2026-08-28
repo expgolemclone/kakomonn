@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -57,10 +57,18 @@ async function verifyShell(browser, origin, experience, selectedIndex) {
     });
   }, selectedIndex);
   try {
-    await page.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
+    const response = await page.goto(`${origin}/?${search}`, {
+      waitUntil: "domcontentloaded",
+    });
+    assert.equal(response?.headers()["cache-control"], "no-cache");
     await page.waitForSelector('html[data-state="ready"]');
     const selectedId = await page.locator("#celebration-frame").getAttribute("data-experience-id");
     assert.equal(selectedId, experience.id);
+    const frameURL = new URL(
+      await page.locator("#celebration-frame").getAttribute("src"),
+      origin,
+    );
+    assert.equal(frameURL.search, "");
     assert.equal(await page.locator("#celebration-frame").isVisible(), true);
     assert.equal(await page.locator("#loading").isVisible(), false);
     assert.equal(japaneseText.test(await page.locator("body").innerText()), false);
@@ -101,6 +109,7 @@ async function verifyExperience(browser, origin, experience, viewport) {
       waitUntil: "domcontentloaded",
     });
     assert.equal(response?.status(), 200);
+    assert.equal(response?.headers()["cache-control"], "no-cache");
     await page.waitForFunction(
       (id) => window.__celebrationMessages.some((message) => message.siteId === id),
       experience.id,
@@ -116,9 +125,27 @@ async function verifyExperience(browser, origin, experience, viewport) {
   }
 }
 
+async function verifyLocalCachePolicy(origin) {
+  const stableResponse = await fetch(`${origin}/shared/experience-runtime.js`);
+  assert.equal(stableResponse.status, 200);
+  assert.equal(stableResponse.headers.get("cache-control"), "no-cache");
+
+  const builtAssets = await readdir(resolve(projectRoot, "dist", "assets"));
+  assert.notEqual(builtAssets.length, 0);
+  const immutableResponse = await fetch(
+    `${origin}/assets/${builtAssets.sort()[0]}`,
+  );
+  assert.equal(immutableResponse.status, 200);
+  assert.equal(
+    immutableResponse.headers.get("cache-control"),
+    "public, max-age=31536000, immutable",
+  );
+}
+
 const server = await startStaticServer();
 const browser = await chromium.launch({ headless: true });
 try {
+  await verifyLocalCachePolicy(server.origin);
   for (const [index, experience] of manifest.experiences.entries()) {
     await verifyShell(browser, server.origin, experience, index);
   }

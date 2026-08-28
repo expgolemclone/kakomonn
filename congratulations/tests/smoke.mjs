@@ -82,4 +82,7 @@ for (const sourcePath of [
   assert.equal(/[\u3040-\u30ff\u3400-\u9fff]/u.test(source), false);
 }
 
+const routerSource = await readFile(resolve(projectRoot, "router.js"), "utf8");
+assert.equal(routerSource.includes("entryUrl.search"), false);
+
 console.log("Congratulations smoke assertions passed for all experiences");

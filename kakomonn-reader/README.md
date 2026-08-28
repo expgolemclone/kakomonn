@@ -55,6 +55,8 @@ Windows 11 Chrome + TampermonkeyとiPhone Safari + Tampermonkeyだけに対応�
 
 初回起動時に同期トークンの入力画面が開きます.Win11とiPhoneへ,Worker Secretの`SYNC_TOKEN`と同じ値を入力してください.トークンは各ユーザースクリプトマネージャーの専用ストレージへ保存され,対象サイトの`localStorage`には保存されません.
 
+remote stateはreader sessionの開始時に取得します. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
+
 iPhoneの固定URLは同じユーザースクリプト専用storageからtokenを読みます. token未設定時は過去問pageで同期設定を完了してから, 固定URLを再度開きます.
 
 正解と不正解のどちらでも,正誤表示時に解答記録を同期します.同期に失敗した場合は次問へ進まず,同じ操作IDで再試行します.通信が復旧した後に`同期を再試行`を押してください.同じ操作の再送は二重加算されません.保存成功後は解説pageへ留まり,`次の問題へ`を押した時だけ保存responseで取得済みの次問へ移動します.

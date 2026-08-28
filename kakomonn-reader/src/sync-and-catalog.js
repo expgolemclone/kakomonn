@@ -692,7 +692,12 @@
     const questionIds = await loadCompleteQuestionCatalog();
     const expectedGeneration = state.catalog?.generation ?? 0;
     try {
-      await requestCatalogUpdate(token, questionIds, expectedGeneration);
+      const catalog = await requestCatalogUpdate(
+        token,
+        questionIds,
+        expectedGeneration
+      );
+      return { ...state, catalog };
     } catch (error) {
       if (error?.code !== "catalog_conflict") {
         throw error;
@@ -707,7 +712,6 @@
       }
       return currentState;
     }
-    return requestSyncState(token);
   }
 
   async function refreshRemoteState() {
@@ -866,16 +870,14 @@
     if (
       document.visibilityState === "visible" &&
       syncToken &&
+      syncReady &&
       pendingAttempt === null &&
       pendingCelebration === null &&
       !nextQuestionOperationInProgress &&
-      syncSettings.hidden
+      syncSettings.hidden &&
+      getCurrentAnswerResult() !== "unknown"
     ) {
-      if (syncReady && getCurrentAnswerResult() !== "unknown") {
-        recordCurrentAnswerIfAvailable();
-        return;
-      }
-      void refreshRemoteState();
+      recordCurrentAnswerIfAvailable();
     }
   }
 

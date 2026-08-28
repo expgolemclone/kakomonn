@@ -38,7 +38,6 @@ try {
   }
   const selected = chooseCelebration(validatedManifest);
   const entryUrl = new URL(selected.entry, window.location.href);
-  entryUrl.search = window.location.search;
 
   document.title = `dueCardsCompleted achieved | ${selected.label}`;
   frame.title = `dueCardsCompleted celebration - ${selected.label}`;

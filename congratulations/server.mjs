@@ -27,6 +27,19 @@ const mimeTypes = new Map([
   [".woff2", "font/woff2"],
 ]);
 
+const immutablePathPatterns = [
+  /^\/assets\//,
+  /^\/experiences\/conche\/_astro\//,
+  /^\/experiences\/glyphica\/_next\/static\//,
+  /^\/experiences\/halfstep\/assets\//,
+];
+
+function cacheControl(pathname) {
+  return immutablePathPatterns.some((pattern) => pattern.test(pathname))
+    ? "public, max-age=31536000, immutable"
+    : "no-cache";
+}
+
 const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
@@ -54,7 +67,7 @@ const server = createServer(async (request, response) => {
     const contentType = mimeTypes.get(extname(filePath)) ?? "application/octet-stream";
     response.writeHead(200, {
       "content-type": contentType,
-      "cache-control": "no-store",
+      "cache-control": cacheControl(decodedPath),
     });
     createReadStream(filePath).pipe(response);
   } catch (error) {

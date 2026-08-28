@@ -4,8 +4,11 @@ This static site celebrates a learner when `kakomonn-reader` reports that
 `dueCardsCompleted` is `true`. Each visit selects one installed experience with
 cryptographically unbiased randomness.
 
-The query string must contain exactly `site`, `date`, and
-`dueCardsCompleted=true`. Invalid or incomplete celebration data is rejected.
+The shell query string must contain exactly `site`, `date`, and
+`dueCardsCompleted=true`. The shell keeps the selected iframe URL free of
+achievement parameters so static experience documents share one browser cache
+entry. An experience opened directly accepts the same query string. Invalid or
+incomplete celebration data is rejected.
 
 Deployable experience snapshots live in `experiences/` and are listed in
 `celebrations.json`. The locally cloned design references in `upstreams/` are

@@ -31,6 +31,7 @@ test("congratulations caches stable and content-addressed assets", async () => {
       source,
       new RegExp(
         `${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n` +
+          "  ! Cache-Control\\n" +
           "  Cache-Control: public, max-age=31536000, immutable",
       ),
     );

@@ -24,7 +24,7 @@
 npm run open:kakomonn
 ```
 
-Chromeが同じprofileで起動済みの場合は, 既存windowへ新しいtabを追加します. 自動再生を許可せずに起動した古いprocessには新しい起動optionが反映されないため, この変更後の初回だけ同じprofileのChromeを終了してからcommandを実行してください. `npm test`のlive E2Eはこのprofileの既存Chrome processを終了するため, test前に普段使いの作業を保存してください.
+Chromeが同じ専用profileで起動済みの場合は, processの起動optionを確認します. 自動再生が許可済みなら既存windowへ新しいtabを追加し, 許可されていなければその専用profileのChromeだけを終了してから起動し直します. 通常利用するChrome profileまたはその配下は指定できません. `npm test`のlive E2Eもこの専用profileの既存Chrome processを終了するため, test前に専用profileでの作業を保存してください.
 
 ## iPhone Safari
 
@@ -35,6 +35,8 @@ https://kakomonn-sync.kakomonn.workers.dev/open
 ```
 
 token未設定または認証失敗の場合は, redirect先で同期設定画面を直接表示してtokenを保存できます. 通信失敗, 問題catalog未同期, 次問なしの場合は, 原因と再試行操作を表示します.
+
+iPhone Safariでも問題文の自動再生を最初に試します. Safariが音声付きmediaの初回再生を拒否した場合は, 画面上の最初のtapで読み上げを開始します.
 
 ## テスト
 

@@ -2,11 +2,16 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn, spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const {
   kakomonnFreeEnvironment,
   readKakomonnConfiguration,
 } = require("../../../scripts/kakomonn-config.cjs");
+const {
+  CHROME_AUTOPLAY_ARGUMENT,
+  stopDedicatedChrome,
+  stopDedicatedChromePowerShell,
+} = require("../../../scripts/windows-chrome-profile.cjs");
 
 const { chromium } = require("playwright");
 
@@ -327,83 +332,6 @@ async function resolveSyncToken({
   return distinctValidTokens[0];
 }
 
-function windowsPowerShellExecutable(environment = process.env) {
-  if (process.platform !== "win32") {
-    throw new Error("The Chrome Tampermonkey E2E requires Windows");
-  }
-  const systemRoot = environment.SystemRoot;
-  if (!systemRoot) {
-    throw new Error("SystemRoot is not set");
-  }
-  return path.join(
-    systemRoot,
-    "System32",
-    "WindowsPowerShell",
-    "v1.0",
-    "powershell.exe",
-  );
-}
-
-const stopDedicatedChromePowerShell = String.raw`
-param([Parameter(Mandatory=$true)][string]$UserDataDir)
-$ErrorActionPreference = "SilentlyContinue"
-$userDataDir = [System.IO.Path]::GetFullPath($UserDataDir)
-$plainArgument = "--user-data-dir=$userDataDir"
-$quotedArgument = '--user-data-dir="' + $userDataDir + '"'
-$processes = @(
-  Get-CimInstance Win32_Process -Filter "Name = 'chrome.exe'" |
-    Where-Object {
-      $_.CommandLine -and (
-        $_.CommandLine.Contains($plainArgument) -or
-        $_.CommandLine.Contains($quotedArgument)
-      )
-    }
-)
-$rootProcessIds = @(
-  $processes |
-    Where-Object { -not $_.CommandLine.Contains("--type=") } |
-    ForEach-Object { $_.ProcessId }
-)
-foreach ($processId in $rootProcessIds) {
-  Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-}
-Start-Sleep -Milliseconds 500
-foreach ($process in $processes) {
-  Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
-}
-exit 0
-`;
-
-function stopDedicatedChrome(userDataDir, {
-  spawnSyncImpl = spawnSync,
-  systemEnvironment = process.env,
-} = {}) {
-  const result = spawnSyncImpl(
-    windowsPowerShellExecutable(systemEnvironment),
-    [
-      "-NoLogo",
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      `& {${stopDedicatedChromePowerShell}\n}`,
-      "-UserDataDir",
-      userDataDir,
-    ],
-    {
-      encoding: "utf8",
-      env: kakomonnFreeEnvironment(systemEnvironment),
-      maxBuffer: 2 * 1024 * 1024,
-      windowsHide: true,
-    },
-  );
-  if (result.error) {
-    throw result.error;
-  }
-  if (result.status !== 0) {
-    throw new Error(`Failed to stop the dedicated Chrome profile: ${result.stderr.trim()}`);
-  }
-}
-
 function chromeExecutablePath(
   configuration = readKakomonnConfiguration(),
   systemEnvironment = process.env,
@@ -464,6 +392,7 @@ function locateTampermonkeyExtension(userDataDir, {
 function chromeLaunchArguments(userDataDir) {
   return [
     `--user-data-dir=${userDataDir}`,
+    CHROME_AUTOPLAY_ARGUMENT,
     "--remote-debugging-port=0",
     "--start-minimized",
     "--force-device-scale-factor=1",

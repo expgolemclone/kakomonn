@@ -411,6 +411,10 @@ test("rejects the standard Chrome profile and accepts an explicit dedicated prof
 test("launches the dedicated Chrome profile minimized", () => {
   const args = chromeLaunchArguments("C:\\profiles\\kakomonn-chrome-e2e");
   assert.equal(args.includes("--start-minimized"), true);
+  assert.equal(
+    args.includes("--autoplay-policy=no-user-gesture-required"),
+    true,
+  );
   assert.equal(args.some((argument) => argument.startsWith("--headless")), false);
   assert.equal(args.includes("--remote-debugging-port=0"), true);
   assert.equal(args.some((argument) => argument.startsWith("--load-extension")), false);

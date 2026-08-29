@@ -258,6 +258,40 @@ async function configureSyncToken(
   });
 }
 
+async function waitForAutomaticQuestionSpeech(page, expectedBuildFingerprint) {
+  const outcome = await waitUntil(
+    "the automatic question speech before any page interaction",
+    async () => {
+      const state = await readReaderState(page);
+      if (
+        !state.actionsPresent ||
+        state.outerURL !== currentQuestionUrl ||
+        state.frameURL !== currentQuestionUrl ||
+        state.settingsHidden !== true
+      ) {
+        return null;
+      }
+      if (
+        /^問題文(?: \d+\/\d+|完了)$/.test(state.status ?? "") ||
+        state.status === "画面をクリックまたはタップすると読み上げます" ||
+        state.status === "読み上げ非対応" ||
+        (state.status ?? "").includes("音声")
+      ) {
+        return state;
+      }
+      return null;
+    },
+    60_000,
+  );
+  assertRuntimeIdentity(outcome, expectedBuildFingerprint);
+  assert.match(
+    outcome.status,
+    /^問題文(?: \d+\/\d+|完了)$/,
+    `Question speech did not start automatically: ${JSON.stringify(outcome)}`,
+  );
+  return outcome;
+}
+
 async function submitCorrectAnswer(page) {
   const answerClickTarget = await waitUntil("the visible answer 5 label", async () => {
     const clickTarget = await evaluate(
@@ -521,6 +555,21 @@ async function main() {
     );
     assert.equal(
       configuredState.learningMetricsLabel,
+      expectedLearningMetricsLabel(baseline.learningMetrics),
+    );
+    await page.close();
+    page = await chrome.context.newPage();
+    await page.goto(currentQuestionUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 60_000,
+    });
+    await resizeToExactViewport(page);
+    const automaticSpeechState = await waitForAutomaticQuestionSpeech(
+      page,
+      expectedBuildFingerprint,
+    );
+    assert.equal(
+      automaticSpeechState.learningMetricsLabel,
       expectedLearningMetricsLabel(baseline.learningMetrics),
     );
     await submitCorrectAnswer(page);

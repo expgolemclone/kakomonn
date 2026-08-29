@@ -47,7 +47,7 @@ Releaseのtagは`kakomonn-reader-<commit SHA>`,titleは`kakomonn-reader <先頭1
 
 ## 動作環境
 
-Windows 11 Chrome + TampermonkeyとiPhone Safari + Tampermonkeyだけに対応します. 両端末ともAzure Speechの`ja-JP-NanamiNeural`を使用し,短期tokenの取得後はAzureから音声を直接受信します. 同期と問題ページの準備が完了すると, 問題文の自動読み上げを試みます. ブラウザが自動再生を拒否した場合だけ, 最初の画面クリックまたはタップで読み上げを再試行し, 以降の問題は自動で読み上げます. 読み上げにはインターネット接続が必要です.
+Windows 11 Chrome + TampermonkeyとiPhone Safari + Tampermonkeyだけに対応します. 両端末ともAzure Speechの`ja-JP-NanamiNeural`を使用し,短期tokenの取得後はAzureから音声を直接受信します. 同期と問題ページの準備が完了すると, 問題文の自動読み上げを試みます. Windowsのopen commandは専用Chrome processの自動再生optionを確認し, optionなしで起動済みの場合はその専用profileだけを再起動します. iPhone Safariが初回の自動再生を拒否した場合は, 最初の画面tapで読み上げを再試行し, 以降の問題は自動で読み上げます. 読み上げにはインターネット接続が必要です.
 
 ## 学習記録の同期設定
 

@@ -4,16 +4,22 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import kakomonnConfig from "./kakomonn-config.cjs";
+import windowsChromeProfile from "./windows-chrome-profile.cjs";
 
 const {
   kakomonnFreeEnvironment,
   readKakomonnConfiguration,
 } = kakomonnConfig;
+const {
+  CHROME_AUTOPLAY_ARGUMENT,
+  inspectDedicatedChrome,
+  isSameOrDescendantPath,
+  stopDedicatedChrome,
+} = windowsChromeProfile;
 
 export const KAKOMONN_OPEN_URL =
   "https://kakomonn-sync.kakomonn.workers.dev/open";
-export const CHROME_AUTOPLAY_ARGUMENT =
-  "--autoplay-policy=no-user-gesture-required";
+export { CHROME_AUTOPLAY_ARGUMENT };
 export const CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT =
   "--hide-crash-restore-bubble";
 
@@ -68,9 +74,17 @@ export function resolveKakomonnLaunch({
     configuration.KAKOMONN_CHROME_USER_DATA_DIR ??
       path.win32.join(localAppData, "kakomonn-chrome-e2e"),
   );
+  const standardUserDataDir = path.win32.resolve(
+    path.win32.join(localAppData, "Google", "Chrome", "User Data"),
+  );
 
   requirePathType(executablePath, "Chrome executable", stat);
   requirePathType(userDataDir, "Dedicated Chrome profile", stat);
+  if (isSameOrDescendantPath(standardUserDataDir, userDataDir, path.win32)) {
+    throw new Error(
+      "KAKOMONN_CHROME_USER_DATA_DIR must be outside the standard Chrome user data directory",
+    );
+  }
 
   return {
     arguments: [
@@ -86,9 +100,11 @@ export function resolveKakomonnLaunch({
 
 export function openKakomonn({
   configuration = readKakomonnConfiguration(),
+  inspectProfile = inspectDedicatedChrome,
   platform = process.platform,
   spawnProcess = spawn,
   stat = statSync,
+  stopProfile = stopDedicatedChrome,
   systemEnvironment = process.env,
 } = {}) {
   const launch = resolveKakomonnLaunch({
@@ -97,6 +113,12 @@ export function openKakomonn({
     stat,
     systemEnvironment,
   });
+  const profileState = inspectProfile(launch.userDataDir, {
+    systemEnvironment,
+  });
+  if (profileState.processCount > 0 && !profileState.autoplayAllowed) {
+    stopProfile(launch.userDataDir, { systemEnvironment });
+  }
   const browserProcess = spawnProcess(launch.executablePath, launch.arguments, {
     detached: true,
     env: kakomonnFreeEnvironment(systemEnvironment),

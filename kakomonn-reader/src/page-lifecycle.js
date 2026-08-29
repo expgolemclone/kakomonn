@@ -210,6 +210,7 @@
       return;
     }
 
+    clearFrameProblemScrollTimers();
     try {
       const frameWindow = frame.contentWindow;
       if ("scrollRestoration" in frameWindow.history) {

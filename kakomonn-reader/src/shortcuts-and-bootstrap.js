@@ -129,6 +129,7 @@
       return false;
     }
 
+    clearFrameProblemScrollTimers();
     frameWindow.scrollBy({
       behavior: "auto",
       left: 0,

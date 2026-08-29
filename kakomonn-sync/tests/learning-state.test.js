@@ -623,6 +623,57 @@ describe("learning metrics", () => {
     });
   });
 
+  it("replaces the maximum catalog size with bulk SQL", async () => {
+    const firstCatalog = Array.from({ length: 10_000 }, (_, index) =>
+      String(index + 1)
+    );
+    await expect(
+      stub().replaceCatalog(SITE, firstCatalog, 1, NOW + 1000)
+    ).resolves.toEqual({
+      site: SITE,
+      questionCount: 10_000,
+      updatedAtMs: NOW + 1000,
+      generation: 2,
+    });
+
+    const secondCatalog = Array.from({ length: 10_000 }, (_, index) =>
+      String(index + 5001)
+    );
+    await expect(
+      stub().replaceCatalog(SITE, secondCatalog, 2, NOW + 2000)
+    ).resolves.toEqual({
+      site: SITE,
+      questionCount: 10_000,
+      updatedAtMs: NOW + 2000,
+      generation: 3,
+    });
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT COUNT(*) AS question_count,
+                    SUM(
+                      CASE WHEN CAST(question_id AS INTEGER) BETWEEN 5001 AND 15000
+                           THEN 1 ELSE 0 END
+                    ) AS expected_question_count
+             FROM questions WHERE site = ?`,
+            SITE
+          )
+          .toArray()[0]
+      ).toEqual({
+        question_count: 10_000,
+        expected_question_count: 10_000,
+      });
+    });
+    await expect(stub().getState(SITE, NOW + 2000)).resolves.toMatchObject({
+      learningMetrics: {
+        stabilityDays: 0,
+        attemptedQuestionCount: 0,
+      },
+      catalog: { questionCount: 10_000, generation: 3 },
+    });
+  });
+
   it("returns the v8 attempt contract for correct and incorrect answers", async () => {
     const correct = await stub().recordAttempt(
       SITE,

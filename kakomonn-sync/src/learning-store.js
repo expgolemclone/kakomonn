@@ -844,20 +844,22 @@ export class LearningState extends DurableObject {
           : readStoredLearningMetrics(this.ctx.storage, site);
       const stabilityDaysBefore = integerStabilityDays(storedMetricsBefore);
       const generation = currentGeneration + 1;
-      for (const questionId of removedQuestionIds) {
-        this.ctx.storage.sql.exec(
-          "DELETE FROM questions WHERE site = ? AND question_id = ?",
-          site,
-          questionId
-        );
-      }
-      for (const questionId of addedQuestionIds) {
-        this.ctx.storage.sql.exec(
-          "INSERT INTO questions (site, question_id) VALUES (?, ?)",
-          site,
-          questionId
-        );
-      }
+      const questionIdsJSON = JSON.stringify(questionIds);
+      this.ctx.storage.sql.exec(
+        `DELETE FROM questions
+         WHERE site = ?
+           AND question_id NOT IN (
+             SELECT CAST(value AS TEXT) FROM json_each(?)
+           )`,
+        site,
+        questionIdsJSON
+      );
+      this.ctx.storage.sql.exec(
+        `INSERT OR IGNORE INTO questions (site, question_id)
+         SELECT ?, CAST(value AS TEXT) FROM json_each(?)`,
+        site,
+        questionIdsJSON
+      );
       this.ctx.storage.sql.exec(
         `INSERT INTO catalog_metadata (site, question_count, updated_at_ms, generation)
          VALUES (?, ?, ?, ?)

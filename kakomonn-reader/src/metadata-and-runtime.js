@@ -81,6 +81,8 @@
   const PENDING_CELEBRATION_KEY =
     `kakomonn-reader.${SITE_ID}.v8.pending-celebration`;
   const SYNC_TIMEOUT_MS = 15000;
+  const CATALOG_TIMEOUT_MS = 15000;
+  const CATALOG_FETCH_CONCURRENCY = 4;
   const SPEECH_TIMEOUT_MS = 30000;
   const FRAME_LOAD_DELAY_MS = 900;
   const FRAME_CHANGE_DELAY_MS = 700;

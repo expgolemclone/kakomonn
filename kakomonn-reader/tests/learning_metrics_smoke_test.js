@@ -397,6 +397,24 @@ async function runCatalogRefreshCase(browser) {
     const page = await context.newPage();
     const errors = [];
     const catalogRequests = [];
+    let activeCatalogRequests = 0;
+    let maximumActiveCatalogRequests = 0;
+    const fulfillCatalogPage = async (route, body) => {
+      activeCatalogRequests += 1;
+      maximumActiveCatalogRequests = Math.max(
+        maximumActiveCatalogRequests,
+        activeCatalogRequests,
+      );
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return await route.fulfill({
+          contentType: "text/html; charset=utf-8",
+          body,
+        });
+      } finally {
+        activeCatalogRequests -= 1;
+      }
+    };
     page.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
     await page.route(`https://${site}/**`, (route) => {
       const url = new URL(route.request().url());
@@ -423,36 +441,36 @@ async function runCatalogRefreshCase(browser) {
         });
       }
       if (url.pathname === "/list1/100" && url.searchParams.get("page") === "1") {
-        return route.fulfill({
-          contentType: "text/html; charset=utf-8",
-          body: catalogListPage([
+        return fulfillCatalogPage(
+          route,
+          catalogListPage([
             { href: "/questions/10" },
             { href: "/questions/11" },
           ], 1, 3),
-        });
+        );
       }
       if (url.pathname === "/list1/100" && url.searchParams.get("page") === "2") {
-        return route.fulfill({
-          contentType: "text/html; charset=utf-8",
-          body: catalogListPage([
+        return fulfillCatalogPage(
+          route,
+          catalogListPage([
             { href: "/questions/12" },
             { href: "/questions/14" },
           ], 2, 3),
-        });
+        );
       }
       if (url.pathname === "/list1/100" && url.searchParams.get("page") === "3") {
-        return route.fulfill({
-          contentType: "text/html; charset=utf-8",
-          body: catalogListPage([
+        return fulfillCatalogPage(
+          route,
+          catalogListPage([
             { href: "/questions/13" },
           ], 3, 3),
-        });
+        );
       }
       if (url.pathname === "/list1/200" && url.searchParams.get("page") === "1") {
-        return route.fulfill({
-          contentType: "text/html; charset=utf-8",
-          body: catalogListPage([{ href: "/questions/20" }], 1, 1),
-        });
+        return fulfillCatalogPage(
+          route,
+          catalogListPage([{ href: "/questions/20" }], 1, 1),
+        );
       }
       return route.fulfill({ status: 404, contentType: "text/plain", body: "unexpected catalog URL" });
     });
@@ -486,7 +504,126 @@ async function runCatalogRefreshCase(browser) {
     );
     assert.equal(catalogRequests.includes("/list"), true);
     assert.equal(catalogRequests.filter((url) => url === "/list1/200?page=1").length, 2);
+    assert.equal(maximumActiveCatalogRequests > 1, true);
+    assert.equal(maximumActiveCatalogRequests <= 4, true);
     await page.waitForFunction(() => document.querySelector("#kakomonn-reader-status")?.textContent === "待機中");
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
+async function runCatalogTimeoutRecoveryCase(browser) {
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
+  try {
+    const page = await context.newPage();
+    const errors = [];
+    const catalogRequests = [];
+    let holdCatalogRequest = true;
+    let completeHeldCatalogRequest;
+    const heldCatalogRequestCompleted = new Promise((resolve) => {
+      completeHeldCatalogRequest = resolve;
+    });
+    page.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
+    await page.route(`https://${site}/**`, (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname === "/questions/123") {
+        return route.fulfill({
+          contentType: "text/html; charset=utf-8",
+          body: questionHTML(),
+        });
+      }
+      catalogRequests.push(`${url.pathname}${url.search}`);
+      if (url.pathname === "/createques") {
+        if (holdCatalogRequest) {
+          holdCatalogRequest = false;
+          return (async () => {
+            try {
+              await new Promise((resolve) => setTimeout(resolve, 16_000));
+              await route.fulfill({
+                contentType: "text/html; charset=utf-8",
+                body: linkPage([
+                  { href: "/list1/100", text: "recent" },
+                  { href: "/list", text: "more" },
+                ]),
+              });
+            } catch {
+              // AbortControllerが先に通信を終了した場合もfixtureを解放します.
+            } finally {
+              completeHeldCatalogRequest();
+            }
+          })();
+        }
+        return route.fulfill({
+          contentType: "text/html; charset=utf-8",
+          body: linkPage([
+            { href: "/list1/100", text: "recent" },
+            { href: "/list", text: "more" },
+          ]),
+        });
+      }
+      if (url.pathname === "/list") {
+        return route.fulfill({
+          contentType: "text/html; charset=utf-8",
+          body: linkPage([{ href: "/list1/100", text: "recent" }]),
+        });
+      }
+      if (url.pathname === "/list1/100" && url.searchParams.get("page") === "1") {
+        return route.fulfill({
+          contentType: "text/html; charset=utf-8",
+          body: catalogListPage([{ href: "/questions/10" }], 1, 1),
+        });
+      }
+      return route.fulfill({
+        status: 404,
+        contentType: "text/plain",
+        body: "unexpected catalog URL",
+      });
+    });
+    await page.goto(`https://${site}/questions/123`);
+    await page.evaluate(() => {
+      Object.defineProperty(window, "Audio", { configurable: true, value: undefined });
+      Object.defineProperty(window, "speechSynthesis", { configurable: true, value: undefined });
+      Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, value: undefined });
+    });
+    await installSyncMock(page, { catalogQuestionCount: null });
+    await page.addScriptTag({ content: fs.readFileSync(scriptPath, "utf8") });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("#kakomonn-reader-status")?.textContent ===
+        "問題一覧の同期がタイムアウトしました.再試行してください",
+      undefined,
+      { timeout: 20_000 },
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-next").innerText(),
+      "同期を再試行",
+    );
+    assert.equal(await page.locator("#kakomonn-reader-next").isEnabled(), true);
+
+    await heldCatalogRequestCompleted;
+    await page.locator("#kakomonn-reader-next").click();
+    await page.waitForFunction(
+      () =>
+        window.__syncMock.calls.filter(
+          (call) => new URL(call.url).pathname === "/v8/questions",
+        ).length === 1 &&
+        document.querySelector("#kakomonn-reader-next")?.textContent ===
+          "次の問題へ",
+    );
+    assert.equal((await stateCalls(page)).length, 2);
+    assert.equal(
+      await page.evaluate(() =>
+        window.__syncMock.calls.filter(
+          (call) => new URL(call.url).pathname === "/v8/questions",
+        ).length,
+      ),
+      1,
+    );
+    assert.equal(
+      catalogRequests.filter((url) => url === "/createques").length,
+      3,
+    );
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
@@ -984,6 +1121,7 @@ async function main() {
     await runUnknownURLCase(browser);
     await runRetryCase(browser);
     await runCatalogRefreshCase(browser);
+    await runCatalogTimeoutRecoveryCase(browser);
     await runCatalogIncompleteCase(browser);
     await runCatalogFinalPageMismatchCase(browser);
     await runCatalogSamePageDuplicateCase(browser);

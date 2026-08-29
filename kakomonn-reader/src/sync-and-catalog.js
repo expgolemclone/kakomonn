@@ -386,6 +386,9 @@
     if (error?.code === "request_timeout") {
       return "学習記録の同期がタイムアウトしました";
     }
+    if (error?.code === "catalog_timeout") {
+      return "問題一覧の同期がタイムアウトしました";
+    }
     if (error?.code === "invalid_response") {
       return "同期APIの応答が不正です";
     }
@@ -475,22 +478,76 @@
     syncSettingsError.textContent = "";
   }
 
-  async function fetchCatalogDocument(url) {
+  async function fetchCatalogDocument(url, signal) {
     let response;
+    let text;
     try {
-      response = await fetch(url, { credentials: "same-origin", cache: "no-store" });
-    } catch {
+      response = await fetch(url, {
+        credentials: "same-origin",
+        cache: "no-store",
+        signal,
+      });
+      if (!response.ok) {
+        throw new SyncRequestError("catalog_error", response.status);
+      }
+      text = await response.text();
+    } catch (error) {
+      if (signal.aborted) {
+        throw new SyncRequestError("catalog_timeout");
+      }
+      if (error instanceof SyncRequestError) {
+        throw error;
+      }
       throw new SyncRequestError("catalog_error");
     }
-    if (!response.ok) {
-      throw new SyncRequestError("catalog_error", response.status);
-    }
-    const text = await response.text();
     const documentNode = new DOMParser().parseFromString(text, "text/html");
     if (documentNode.querySelector("parsererror") !== null) {
       throw new SyncRequestError("catalog_error");
     }
     return documentNode;
+  }
+
+  function createCatalogDocumentLoader(signal) {
+    let activeCount = 0;
+    const queue = [];
+
+    const startNext = () => {
+      while (activeCount < CATALOG_FETCH_CONCURRENCY && queue.length > 0) {
+        const task = queue.shift();
+        if (signal.aborted) {
+          task.reject(new SyncRequestError("catalog_timeout"));
+          continue;
+        }
+        activeCount += 1;
+        void fetchCatalogDocument(task.url, signal)
+          .then(task.resolve, task.reject)
+          .finally(() => {
+            activeCount -= 1;
+            startNext();
+          });
+      }
+    };
+
+    return (url) =>
+      new Promise((resolve, reject) => {
+        queue.push({ url, resolve, reject });
+        startNext();
+      });
+  }
+
+  async function mapCatalogConcurrently(items, mapper) {
+    const results = new Array(items.length);
+    let nextIndex = 0;
+    const workerCount = Math.min(CATALOG_FETCH_CONCURRENCY, items.length);
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await mapper(items[index], index);
+      }
+    });
+    await Promise.all(workers);
+    return results;
   }
 
   function strictSameOriginURL(href, baseURL) {
@@ -574,15 +631,22 @@
     return null;
   }
 
-  async function loadCatalogListSnapshot(listURL) {
+  async function loadCatalogListSnapshot(listURL, loadCatalogDocument) {
     const questionIds = new Set();
     let totalPages = null;
     let fullPageSize = null;
 
-    for (let page = 1; totalPages === null || page <= totalPages; page += 1) {
+    const loadPage = async (page) => {
       const pageURL = new URL(listURL);
       pageURL.searchParams.set("page", String(page));
-      const pageDocument = await fetchCatalogDocument(pageURL.href);
+      return {
+        page,
+        pageURL: pageURL.href,
+        pageDocument: await loadCatalogDocument(pageURL.href),
+      };
+    };
+
+    const consumePage = ({ page, pageURL, pageDocument }) => {
       const position = catalogPagePosition(pageDocument);
       if (position.currentPage !== page) {
         throw new SyncRequestError("catalog_error");
@@ -593,7 +657,7 @@
         throw new SyncRequestError("catalog_error");
       }
 
-      const pageIds = collectQuestionIds(pageDocument, pageURL.href);
+      const pageIds = collectQuestionIds(pageDocument, pageURL);
       if (pageIds.size === 0) {
         throw new SyncRequestError("catalog_error");
       }
@@ -610,6 +674,26 @@
         }
         questionIds.add(id);
       }
+    };
+
+    consumePage(await loadPage(1));
+    for (
+      let firstPage = 2;
+      firstPage <= totalPages;
+      firstPage += CATALOG_FETCH_CONCURRENCY
+    ) {
+      const lastPage = Math.min(
+        totalPages,
+        firstPage + CATALOG_FETCH_CONCURRENCY - 1
+      );
+      const pages = [];
+      for (let page = firstPage; page <= lastPage; page += 1) {
+        pages.push(page);
+      }
+      const pageResults = await Promise.all(pages.map(loadPage));
+      for (const pageResult of pageResults) {
+        consumePage(pageResult);
+      }
     }
 
     return {
@@ -618,9 +702,9 @@
     };
   }
 
-  async function loadQuestionCatalogSnapshot() {
+  async function loadQuestionCatalogSnapshot(loadCatalogDocument) {
     const createURL = `https://${SITE_ID}/createques`;
-    const createDocument = await fetchCatalogDocument(createURL);
+    const createDocument = await loadCatalogDocument(createURL);
     const catalogIndexURL = findCatalogIndexURL(createDocument, createURL);
     if (catalogIndexURL === null) {
       throw new SyncRequestError("catalog_error");
@@ -628,18 +712,21 @@
 
     const listURLs = new Map();
     collectCatalogListURLs(createDocument, createURL, listURLs);
-    const catalogIndexDocument = await fetchCatalogDocument(catalogIndexURL);
+    const catalogIndexDocument = await loadCatalogDocument(catalogIndexURL);
     collectCatalogListURLs(catalogIndexDocument, catalogIndexURL, listURLs);
     if (listURLs.size === 0) {
       throw new SyncRequestError("catalog_error");
     }
 
-    const lists = new Map();
     const sortedLists = [...listURLs.entries()].sort(([left], [right]) => left.localeCompare(right));
-    for (const [listPath, listURL] of sortedLists) {
-      lists.set(listPath, await loadCatalogListSnapshot(listURL));
-    }
-    return lists;
+    const snapshots = await mapCatalogConcurrently(
+      sortedLists,
+      async ([listPath, listURL]) => [
+        listPath,
+        await loadCatalogListSnapshot(listURL, loadCatalogDocument),
+      ]
+    );
+    return new Map(snapshots);
   }
 
   function sameCatalogSnapshot(left, right) {
@@ -661,22 +748,35 @@
   }
 
   async function loadCompleteQuestionCatalog() {
-    const firstSnapshot = await loadQuestionCatalogSnapshot();
-    const secondSnapshot = await loadQuestionCatalogSnapshot();
-    if (!sameCatalogSnapshot(firstSnapshot, secondSnapshot)) {
-      throw new SyncRequestError("catalog_error");
-    }
-
-    const questionIds = new Set();
-    for (const { questionIds: listQuestionIds } of secondSnapshot.values()) {
-      for (const id of listQuestionIds) {
-        questionIds.add(id);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      CATALOG_TIMEOUT_MS
+    );
+    const loadCatalogDocument = createCatalogDocumentLoader(controller.signal);
+    try {
+      const firstSnapshot = await loadQuestionCatalogSnapshot(loadCatalogDocument);
+      const secondSnapshot = await loadQuestionCatalogSnapshot(loadCatalogDocument);
+      if (!sameCatalogSnapshot(firstSnapshot, secondSnapshot)) {
+        throw new SyncRequestError("catalog_error");
       }
+
+      const questionIds = new Set();
+      for (const { questionIds: listQuestionIds } of secondSnapshot.values()) {
+        for (const id of listQuestionIds) {
+          questionIds.add(id);
+        }
+      }
+      if (questionIds.size === 0) {
+        throw new SyncRequestError("catalog_error");
+      }
+      return [...questionIds].sort((left, right) => Number(left) - Number(right));
+    } catch (error) {
+      controller.abort();
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
     }
-    if (questionIds.size === 0) {
-      throw new SyncRequestError("catalog_error");
-    }
-    return [...questionIds].sort((left, right) => Number(left) - Number(right));
   }
 
   async function ensureQuestionCatalog(token, state) {

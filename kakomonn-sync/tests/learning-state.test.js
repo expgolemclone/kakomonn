@@ -5,6 +5,7 @@ import {
 } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ratingForResult } from "../src/fsrs.js";
+import { getTokyoDate } from "../src/dates.js";
 import { initializeLearningSchema } from "../src/storage/schema.js";
 import { Rating } from "ts-fsrs";
 
@@ -50,6 +51,58 @@ async function reset() {
   await raw.replaceCatalog(SITE, ["1", "2", "3", "4"], 0, NOW);
 }
 
+function rebuildUsageTablesAsV8(storage) {
+  storage.sql.exec(`
+    DROP INDEX IF EXISTS cards_by_site_due;
+    DROP INDEX IF EXISTS attempts_by_site_attempted_at_operation;
+    DROP INDEX IF EXISTS questions_by_site_attempted_number;
+
+    ALTER TABLE cards RENAME TO cards_v9;
+    CREATE TABLE cards (
+      site TEXT NOT NULL, question_id TEXT NOT NULL, due_ms INTEGER NOT NULL,
+      stability REAL NOT NULL, difficulty REAL NOT NULL,
+      scheduled_days INTEGER NOT NULL, learning_steps INTEGER NOT NULL,
+      reps INTEGER NOT NULL, lapses INTEGER NOT NULL, state INTEGER NOT NULL,
+      last_review_ms INTEGER, PRIMARY KEY (site, question_id)
+    ) WITHOUT ROWID;
+    INSERT INTO cards
+    SELECT site, question_id, due_ms, stability, difficulty, scheduled_days,
+           learning_steps, reps, lapses, state, last_review_ms
+    FROM cards_v9;
+    DROP TABLE cards_v9;
+
+    ALTER TABLE questions RENAME TO questions_v9;
+    CREATE TABLE questions (
+      site TEXT NOT NULL, question_id TEXT NOT NULL,
+      PRIMARY KEY (site, question_id)
+    ) WITHOUT ROWID;
+    INSERT INTO questions SELECT site, question_id FROM questions_v9;
+    DROP TABLE questions_v9;
+
+    ALTER TABLE catalog_metadata RENAME TO catalog_metadata_v9;
+    CREATE TABLE catalog_metadata (
+      site TEXT PRIMARY KEY, question_count INTEGER NOT NULL,
+      updated_at_ms INTEGER NOT NULL, generation INTEGER NOT NULL
+    ) WITHOUT ROWID;
+    INSERT INTO catalog_metadata
+    SELECT site, question_count, updated_at_ms, generation
+    FROM catalog_metadata_v9;
+    DROP TABLE catalog_metadata_v9;
+
+    ALTER TABLE stability_history RENAME TO stability_history_v9;
+    CREATE TABLE stability_history (
+      site TEXT NOT NULL, date TEXT NOT NULL,
+      opening_stability_days INTEGER NOT NULL,
+      closing_stability_days INTEGER NOT NULL,
+      PRIMARY KEY (site, date)
+    ) WITHOUT ROWID;
+    INSERT INTO stability_history
+    SELECT site, date, opening_stability_days, closing_stability_days
+    FROM stability_history_v9;
+    DROP TABLE stability_history_v9;
+  `);
+}
+
 async function seedReviewCard(
   questionId,
   stability,
@@ -57,12 +110,13 @@ async function seedReviewCard(
   lastReviewMs = NOW - 30 * DAY_MS,
   site = SITE
 ) {
+  const lastAttemptDate = getTokyoDate(new Date(lastReviewMs));
   await runInRawDurableObject(stub(), (_instance, state) => {
     state.storage.sql.exec(
       `INSERT INTO cards (
          site, question_id, due_ms, stability, difficulty, scheduled_days,
-         learning_steps, reps, lapses, state, last_review_ms
-       ) VALUES (?, ?, ?, ?, 5, 30, 0, 5, 0, 2, ?)
+         learning_steps, reps, lapses, state, last_review_ms, last_attempt_date
+       ) VALUES (?, ?, ?, ?, 5, 30, 0, 5, 0, 2, ?, ?)
        ON CONFLICT(site, question_id) DO UPDATE SET
          due_ms = excluded.due_ms,
          stability = excluded.stability,
@@ -72,12 +126,20 @@ async function seedReviewCard(
          reps = excluded.reps,
          lapses = excluded.lapses,
          state = excluded.state,
-         last_review_ms = excluded.last_review_ms`,
+         last_review_ms = excluded.last_review_ms,
+         last_attempt_date = excluded.last_attempt_date`,
       site,
       questionId,
       dueMs,
       stability,
-      lastReviewMs
+      lastReviewMs,
+      lastAttemptDate
+    );
+    state.storage.sql.exec(
+      `UPDATE questions SET attempted = 1
+       WHERE site = ? AND question_id = ?`,
+      site,
+      questionId
     );
     state.storage.sql.exec(
       `UPDATE learning_metrics
@@ -130,8 +192,115 @@ describe("LearningState schema", () => {
     });
   });
 
+  it("migrates schema v8 usage data and installs bounded-query indexes", async () => {
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      rebuildUsageTablesAsV8(state.storage);
+      state.storage.sql.exec(
+        `INSERT INTO cards (
+           site, question_id, due_ms, stability, difficulty, scheduled_days,
+           learning_steps, reps, lapses, state, last_review_ms
+         ) VALUES (?, '2', ?, 3.5, 5, 1, 0, 1, 0, 2, ?)`,
+        SITE,
+        NOW + DAY_MS,
+        NOW
+      );
+      state.storage.sql.exec(
+        `INSERT INTO attempts (
+           site, operation_id, question_id, attempted_at_ms, answer_result,
+           previous_card_stability_days, resulting_card_stability_days
+         ) VALUES (?, ?, '2', ?, 'correct', 0, 3.5)`,
+        SITE,
+        operationId(999),
+        NOW
+      );
+      state.storage.sql.exec(
+        `UPDATE stability_history SET closing_stability_days = 3
+         WHERE site = ? AND date = '2026-08-10'`,
+        SITE
+      );
+      state.storage.sql.exec(
+        "UPDATE schema_metadata SET version = 8 WHERE singleton = 1"
+      );
+
+      initializeLearningSchema(state.storage, NOW);
+
+      expect(
+        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
+      ).toEqual({ version: 9 });
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT last_attempt_date FROM cards
+             WHERE site = ? AND question_id = '2'`,
+            SITE
+          )
+          .toArray()[0]
+      ).toEqual({ last_attempt_date: "2026-08-10" });
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT question_number, attempted FROM questions
+             WHERE site = ? AND question_id = '2'`,
+            SITE
+          )
+          .toArray()[0]
+      ).toEqual({ question_number: 2, attempted: 1 });
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT question_ids_json FROM catalog_metadata WHERE site = ?`,
+            SITE
+          )
+          .toArray()[0]
+      ).toEqual({ question_ids_json: '["1","2","3","4"]' });
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT attempted_question_count, attempt_count,
+                    correct_attempt_count
+             FROM stability_history
+             WHERE site = ? AND date = '2026-08-10'`,
+            SITE
+          )
+          .toArray()[0]
+      ).toEqual({
+        attempted_question_count: 1,
+        attempt_count: 1,
+        correct_attempt_count: 1,
+      });
+
+      const unseenPlan = state.storage.sql
+        .exec(
+          `EXPLAIN QUERY PLAN
+           SELECT question_id FROM questions
+           WHERE site = ? AND attempted = 0
+           ORDER BY question_number, question_id LIMIT 1`,
+          SITE
+        )
+        .toArray()
+        .map((row) => row.detail)
+        .join(" ");
+      expect(unseenPlan).toContain("questions_by_site_attempted_number");
+      const attemptsPlan = state.storage.sql
+        .exec(
+          `EXPLAIN QUERY PLAN
+           SELECT operation_id FROM attempts
+           WHERE site = ? AND attempted_at_ms >= ? AND attempted_at_ms < ?
+           ORDER BY attempted_at_ms, operation_id`,
+          SITE,
+          TODAY_START_MS,
+          TODAY_END_MS
+        )
+        .toArray()
+        .map((row) => row.detail)
+        .join(" ");
+      expect(attemptsPlan).toContain("attempts_by_site_attempted_at_operation");
+    });
+  });
+
   it("migrates schema v5 and removes retired KPI storage", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
+      rebuildUsageTablesAsV8(state.storage);
       state.storage.sql.exec(`
         DROP TABLE daily_due_card_achievements;
         CREATE TABLE site_settings (
@@ -166,7 +335,7 @@ describe("LearningState schema", () => {
       initializeLearningSchema(state.storage, NOW);
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 8 });
+      ).toEqual({ version: 9 });
       expect(
         state.storage.sql
           .exec(
@@ -182,24 +351,28 @@ describe("LearningState schema", () => {
       const indexes = state.storage.sql
         .exec(
           `SELECT name FROM sqlite_master
-           WHERE type = 'index' AND name IN (?, ?, ?, ?)
+           WHERE type = 'index' AND name IN (?, ?, ?, ?, ?, ?)
            ORDER BY name`,
           "attempts_by_site",
           "attempts_by_site_attempted_at_question",
+          "attempts_by_site_attempted_at_operation",
           "cards_by_site_due",
-          "cards_by_site_stability"
+          "cards_by_site_stability",
+          "questions_by_site_attempted_number"
         )
         .toArray()
         .map((row) => row.name);
       expect(indexes).toEqual([
-        "attempts_by_site_attempted_at_question",
+        "attempts_by_site_attempted_at_operation",
         "cards_by_site_due",
+        "questions_by_site_attempted_number",
       ]);
     });
   });
 
   it("migrates the deployed schema v7 after retired tables were removed", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
+      rebuildUsageTablesAsV8(state.storage);
       state.storage.sql.exec(`
         ALTER TABLE learning_metrics RENAME TO learning_metrics_v8;
         CREATE TABLE learning_metrics (
@@ -221,7 +394,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 8 });
+      ).toEqual({ version: 9 });
       expect(
         state.storage.sql
           .exec(
@@ -240,7 +413,7 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates legacy data to schema v8 without retaining threshold-based fields", async () => {
+  it("migrates legacy data to schema v9 without retaining threshold-based fields", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
         DROP TABLE daily_due_card_achievements;
@@ -317,7 +490,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 8 });
+      ).toEqual({ version: 9 });
       expect(
         state.storage.sql
           .exec("SELECT * FROM daily_due_card_achievements")
@@ -330,6 +503,9 @@ describe("LearningState schema", () => {
         date: "2026-08-10",
         opening_stability_days: 12,
         closing_stability_days: 12,
+        attempted_question_count: 1,
+        attempt_count: 1,
+        correct_attempt_count: 1,
       });
       expect(
         state.storage.sql.exec("SELECT * FROM learning_metrics").toArray()[0]
@@ -363,7 +539,7 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates schema v2 data to v8 without losing rows", async () => {
+  it("migrates schema v2 data to v9 without losing rows", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
         DROP TABLE daily_due_card_achievements;
@@ -443,7 +619,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 8 });
+      ).toEqual({ version: 9 });
       expect(
         state.storage.sql
           .exec("SELECT * FROM daily_due_card_achievements")
@@ -483,6 +659,9 @@ describe("LearningState schema", () => {
         date: "2026-08-10",
         opening_stability_days: 0,
         closing_stability_days: 2,
+        attempted_question_count: 1,
+        attempt_count: 1,
+        correct_attempt_count: 0,
       });
       expect(
         state.storage.sql
@@ -496,6 +675,7 @@ describe("LearningState schema", () => {
 
   it("migrates schema v4 aggregates into one metrics row", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
+      rebuildUsageTablesAsV8(state.storage);
       state.storage.sql.exec(`
         DROP TABLE daily_due_card_achievements;
         CREATE TABLE site_settings (
@@ -531,7 +711,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 8 });
+      ).toEqual({ version: 9 });
       const cursor = state.storage.sql.exec(
         `SELECT stability_days, attempted_question_count,
                 daily_metrics_date, today_attempted_question_count,
@@ -600,7 +780,7 @@ describe("learning metrics", () => {
     });
 
     await expect(
-      stub().replaceCatalog(SITE, ["1", "2", "3", "4"], 1, NOW + 1000)
+      stub().replaceCatalog(SITE, ["4", "2", "1", "3"], 1, NOW + 1000)
     ).resolves.toEqual({
       site: SITE,
       questionCount: 4,
@@ -634,6 +814,38 @@ describe("learning metrics", () => {
       questionCount: 10_000,
       updatedAtMs: NOW + 1000,
       generation: 2,
+    });
+
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec(`
+        CREATE TABLE usage_audit (event TEXT NOT NULL);
+        CREATE TRIGGER audit_questions_insert AFTER INSERT ON questions
+        BEGIN
+          INSERT INTO usage_audit VALUES ('insert');
+        END;
+        CREATE TRIGGER audit_questions_delete AFTER DELETE ON questions
+        BEGIN
+          INSERT INTO usage_audit VALUES ('delete');
+        END;
+      `);
+    });
+    await expect(
+      stub().replaceCatalog(SITE, [...firstCatalog].reverse(), 2, NOW + 1500)
+    ).resolves.toEqual({
+      site: SITE,
+      questionCount: 10_000,
+      updatedAtMs: NOW + 1500,
+      generation: 2,
+    });
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual(
+        []
+      );
+      state.storage.sql.exec(`
+        DROP TRIGGER audit_questions_insert;
+        DROP TRIGGER audit_questions_delete;
+        DROP TABLE usage_audit;
+      `);
     });
 
     const secondCatalog = Array.from({ length: 10_000 }, (_, index) =>
@@ -773,12 +985,15 @@ describe("attempt idempotency and attempted question totals", () => {
     });
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual(
-        [{ event: "learning_metrics" }]
+        [
+          { event: "learning_metrics" },
+          { event: "stability_history" },
+        ]
       );
     });
   });
 
-  it("records early practice without changing the card or stability metrics", async () => {
+  it("records early practice without rescheduling the card or stability metrics", async () => {
     await seedReviewCard("1", 35, NOW + DAY_MS, NOW - 30 * DAY_MS);
     const before = await runInRawDurableObject(stub(), (_instance, state) =>
       state.storage.transactionSync(() => {
@@ -841,7 +1056,7 @@ describe("attempt idempotency and attempted question totals", () => {
         state.storage.sql
           .exec("SELECT * FROM cards WHERE site = ? AND question_id = '1'", SITE)
           .toArray()[0]
-      ).toEqual(before);
+      ).toEqual({ ...before, last_attempt_date: "2026-08-10" });
       expect(
         state.storage.sql
           .exec(
@@ -1031,6 +1246,46 @@ describe("attempt idempotency and attempted question totals", () => {
           dailyCorrectRatePercent: 67,
         },
       ],
+    });
+  });
+
+  it("keeps a removed and readded question out of the unseen queue", async () => {
+    await stub().recordAttempt(SITE, "1", operationId(46), "correct", NOW);
+    await stub().replaceCatalog(SITE, ["2", "3", "4"], 1, NOW + 1);
+    await stub().replaceCatalog(SITE, ["4", "1", "3", "2"], 2, NOW + 2);
+
+    await expect(stub().nextQuestion(SITE, NOW + 2)).resolves.toMatchObject({
+      questionId: "2",
+      kind: "new",
+    });
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT question_number, attempted FROM questions
+             WHERE site = ? AND question_id = '1'`,
+            SITE
+          )
+          .toArray()[0]
+      ).toEqual({ question_number: 1, attempted: 1 });
+    });
+
+    const repeated = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(47),
+      "correct",
+      NOW + 3
+    );
+    expect(repeated.learningMetrics.attemptedQuestionCount).toBe(1);
+  });
+
+  it("orders unseen questions by numeric question number", async () => {
+    await stub().replaceCatalog(SITE, ["10", "3", "2"], 1, NOW + 1);
+    await expect(stub().nextQuestion(SITE, NOW + 1)).resolves.toEqual({
+      questionId: "2",
+      kind: "new",
+      dueMs: null,
     });
   });
 
@@ -1275,6 +1530,24 @@ describe("stability history", () => {
       (await stub().getHistory(SITE, 2, nextDay)).days.at(-1)
         .stabilityDaysDelta
     ).toBeLessThan(0);
+  });
+
+  it("serves daily attempt metrics from aggregates instead of raw attempts", async () => {
+    await stub().recordAttempt(SITE, "1", operationId(14), "correct", NOW);
+    await stub().recordAttempt(SITE, "2", operationId(15), "incorrect", NOW + 1);
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      state.storage.sql.exec("DELETE FROM attempts");
+    });
+
+    await expect(stub().getHistory(SITE, 1, NOW + 1)).resolves.toMatchObject({
+      days: [
+        {
+          date: "2026-08-10",
+          dailyAttemptedQuestionCount: 2,
+          dailyCorrectRatePercent: 50,
+        },
+      ],
+    });
   });
 });
 

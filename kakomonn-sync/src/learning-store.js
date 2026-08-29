@@ -12,6 +12,7 @@ import {
 import { isSite } from "./auth.js";
 import {
   ANSWER_RESULTS,
+  canonicalQuestionIds,
   OPERATION_ID_PATTERN,
   QUESTION_ID_PATTERN,
 } from "./contracts.js";
@@ -43,12 +44,12 @@ function rowToCard(row) {
   };
 }
 
-function saveCard(storage, site, questionId, card) {
+function saveCard(storage, site, questionId, card, lastAttemptDate) {
   storage.sql.exec(
     `INSERT INTO cards (
        site, question_id, due_ms, stability, difficulty, scheduled_days,
-       learning_steps, reps, lapses, state, last_review_ms
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       learning_steps, reps, lapses, state, last_review_ms, last_attempt_date
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(site, question_id) DO UPDATE SET
        due_ms = excluded.due_ms,
        stability = excluded.stability,
@@ -58,7 +59,8 @@ function saveCard(storage, site, questionId, card) {
        reps = excluded.reps,
        lapses = excluded.lapses,
        state = excluded.state,
-       last_review_ms = excluded.last_review_ms`,
+       last_review_ms = excluded.last_review_ms,
+       last_attempt_date = excluded.last_attempt_date`,
     site,
     questionId,
     card.due.getTime(),
@@ -69,7 +71,8 @@ function saveCard(storage, site, questionId, card) {
     card.reps,
     card.lapses,
     card.state,
-    card.last_review?.getTime() ?? null
+    card.last_review?.getTime() ?? null,
+    lastAttemptDate
   );
 }
 
@@ -199,44 +202,6 @@ function correctRatePercent(correctAttemptCount, attemptCount) {
     : Math.round((correctAttemptCount * 100) / attemptCount);
 }
 
-function readDailyAttemptMetricsByDate(storage, site, dates) {
-  const { startMs, endMs } = tokyoDateRangeMs(dates[0], dates.at(-1));
-  const rowsByDateOrdinal = new Map(
-    storage.sql
-      .exec(
-        `SELECT CAST((attempted_at_ms + 32400000) / 86400000 AS INTEGER) AS date_ordinal,
-                COUNT(DISTINCT question_id) AS attempted_question_count,
-                COUNT(*) AS attempt_count,
-                SUM(CASE WHEN answer_result = 'correct' THEN 1 ELSE 0 END)
-                  AS correct_attempt_count
-         FROM attempts
-         WHERE site = ? AND attempted_at_ms >= ? AND attempted_at_ms < ?
-         GROUP BY date_ordinal`,
-        site,
-        startMs,
-        endMs
-      )
-      .toArray()
-      .map((row) => [row.date_ordinal, row])
-  );
-  return new Map(
-    dates.map((date) => {
-      const row = rowsByDateOrdinal.get(dateOrdinal(date));
-      const attemptCount = row?.attempt_count ?? 0;
-      return [
-        date,
-        {
-          dailyAttemptedQuestionCount: row?.attempted_question_count ?? 0,
-          dailyCorrectRatePercent: correctRatePercent(
-            row?.correct_attempt_count ?? 0,
-            attemptCount
-          ),
-        },
-      ];
-    })
-  );
-}
-
 function readTodayStabilityDaysDelta(storage, site, today) {
   const row = storage.sql
     .exec(
@@ -349,25 +314,39 @@ function learningMetrics(
   };
 }
 
-function recordDailyStabilityDays(
+function recordDailyMetrics(
   storage,
   site,
   date,
   openingStabilityDays,
-  closingStabilityDays
+  closingStabilityDays,
+  attemptedQuestionCountDelta = 0,
+  attemptCountDelta = 0,
+  correctAttemptCountDelta = 0
 ) {
   storage.sql.exec(
     `INSERT INTO stability_history (
-       site, date, opening_stability_days, closing_stability_days
-     ) VALUES (?, ?, ?, ?)
+       site, date, opening_stability_days, closing_stability_days,
+       attempted_question_count, attempt_count, correct_attempt_count
+     ) VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(site, date) DO UPDATE SET
-        closing_stability_days = excluded.closing_stability_days
+        closing_stability_days = excluded.closing_stability_days,
+        attempted_question_count =
+          stability_history.attempted_question_count +
+          excluded.attempted_question_count,
+        attempt_count = stability_history.attempt_count + excluded.attempt_count,
+        correct_attempt_count =
+          stability_history.correct_attempt_count + excluded.correct_attempt_count
       WHERE stability_history.closing_stability_days <>
-            excluded.closing_stability_days`,
+            excluded.closing_stability_days
+         OR excluded.attempt_count > 0`,
     site,
     date,
     openingStabilityDays,
-    closingStabilityDays
+    closingStabilityDays,
+    attemptedQuestionCountDelta,
+    attemptCountDelta,
+    correctAttemptCountDelta
   );
 }
 
@@ -420,7 +399,7 @@ function selectNextQuestion(storage, site, nowMs, excludeQuestionId) {
        JOIN questions q ON q.site = c.site AND q.question_id = c.question_id
        WHERE c.site = ? AND c.due_ms <= ?
          AND (? IS NULL OR c.question_id <> ?)
-       ORDER BY c.due_ms ASC, CAST(c.question_id AS INTEGER) ASC, c.question_id ASC
+       ORDER BY c.due_ms ASC, q.question_number ASC, c.question_id ASC
        LIMIT 1`,
       site,
       nowMs,
@@ -435,10 +414,9 @@ function selectNextQuestion(storage, site, nowMs, excludeQuestionId) {
     .exec(
       `SELECT q.question_id
        FROM questions q
-       LEFT JOIN cards c ON c.site = q.site AND c.question_id = q.question_id
-       WHERE q.site = ? AND c.question_id IS NULL
+       WHERE q.site = ? AND q.attempted = 0
          AND (? IS NULL OR q.question_id <> ?)
-       ORDER BY CAST(q.question_id AS INTEGER) ASC, q.question_id ASC
+       ORDER BY q.question_number ASC, q.question_id ASC
        LIMIT 1`,
       site,
       excludeQuestionId,
@@ -505,7 +483,8 @@ export class LearningState extends DurableObject {
 
       const catalogQuestion = this.ctx.storage.sql
         .exec(
-          "SELECT question_id FROM questions WHERE site = ? AND question_id = ?",
+          `SELECT question_id, attempted FROM questions
+           WHERE site = ? AND question_id = ?`,
           site,
           questionId
         )
@@ -517,7 +496,7 @@ export class LearningState extends DurableObject {
       const stored = this.ctx.storage.sql
         .exec(
           `SELECT due_ms, stability, difficulty, scheduled_days, learning_steps,
-                  reps, lapses, state, last_review_ms
+                  reps, lapses, state, last_review_ms, last_attempt_date
            FROM cards WHERE site = ? AND question_id = ?`,
           site,
           questionId
@@ -531,27 +510,30 @@ export class LearningState extends DurableObject {
         ? scheduleAnswer(card, answerResult, nowMs)
         : card;
       const today = getTokyoDate(new Date(nowMs));
-      const { startMs, endMs } = tokyoDateRangeMs(today);
-      const attemptedToday = this.ctx.storage.sql
-        .exec(
-          `SELECT 1 AS found
-           FROM attempts
-           WHERE site = ? AND question_id = ?
-             AND attempted_at_ms >= ? AND attempted_at_ms < ?
-           LIMIT 1`,
-          site,
-          questionId,
-          startMs,
-          endMs
-        )
-        .toArray()[0];
-      const todayAttemptedQuestionCountDelta = attemptedToday === undefined ? 1 : 0;
+      const todayAttemptedQuestionCountDelta =
+        stored?.last_attempt_date === today ? 0 : 1;
       const storedMetricsBefore = readStoredLearningMetrics(this.ctx.storage, site);
       const stabilityDaysBefore = integerStabilityDays(storedMetricsBefore);
       if (schedulingApplied) {
-        saveCard(this.ctx.storage, site, questionId, nextCard);
+        saveCard(this.ctx.storage, site, questionId, nextCard, today);
+      } else if (stored.last_attempt_date !== today) {
+        this.ctx.storage.sql.exec(
+          `UPDATE cards SET last_attempt_date = ?
+           WHERE site = ? AND question_id = ?`,
+          today,
+          site,
+          questionId
+        );
       }
-      const attemptedQuestionCountDelta = stored === undefined ? 1 : 0;
+      const attemptedQuestionCountDelta = catalogQuestion.attempted === 0 ? 1 : 0;
+      if (attemptedQuestionCountDelta === 1) {
+        this.ctx.storage.sql.exec(
+          `UPDATE questions SET attempted = 1
+           WHERE site = ? AND question_id = ?`,
+          site,
+          questionId
+        );
+      }
       const storedMetricsAfter = updateStoredLearningMetrics(
         this.ctx.storage,
         site,
@@ -568,12 +550,15 @@ export class LearningState extends DurableObject {
         site,
         today
       );
-      recordDailyStabilityDays(
+      recordDailyMetrics(
         this.ctx.storage,
         site,
         today,
         stabilityDaysBefore,
-        stabilityDaysAfter
+        stabilityDaysAfter,
+        todayAttemptedQuestionCountDelta,
+        1,
+        answerResult === "correct" ? 1 : 0
       );
       this.ctx.storage.sql.exec(
         `INSERT INTO attempts (
@@ -675,11 +660,6 @@ export class LearningState extends DurableObject {
     return this.ctx.storage.transactionSync(() => {
       const today = getTokyoDate(new Date(nowMs));
       const dates = recentTokyoDates(today, days);
-      const dailyAttemptMetricsByDate = readDailyAttemptMetricsByDate(
-        this.ctx.storage,
-        site,
-        dates
-      );
       const baseline = this.ctx.storage.sql
         .exec(
           `SELECT closing_stability_days FROM stability_history
@@ -691,7 +671,9 @@ export class LearningState extends DurableObject {
       const rows = new Map(
         this.ctx.storage.sql
           .exec(
-            `SELECT date, opening_stability_days, closing_stability_days
+            `SELECT date, opening_stability_days, closing_stability_days,
+                    attempted_question_count, attempt_count,
+                    correct_attempt_count
              FROM stability_history
              WHERE site = ? AND date >= ? AND date <= ? ORDER BY date`,
             site,
@@ -716,7 +698,11 @@ export class LearningState extends DurableObject {
           date,
           closingStabilityDays,
           stabilityDaysDelta,
-          ...dailyAttemptMetricsByDate.get(date),
+          dailyAttemptedQuestionCount: row?.attempted_question_count ?? 0,
+          dailyCorrectRatePercent: correctRatePercent(
+            row?.correct_attempt_count ?? 0,
+            row?.attempt_count ?? 0
+          ),
         };
       });
       return { site, timeZone: "Asia/Tokyo", today, days: history };
@@ -791,9 +777,12 @@ export class LearningState extends DurableObject {
     }
     return this.ctx.storage.transactionSync(() => {
       const today = getTokyoDate(new Date(nowMs));
+      const canonicalIds = canonicalQuestionIds(questionIds);
+      const questionIdsJSON = JSON.stringify(canonicalIds);
       const metadata = this.ctx.storage.sql
         .exec(
-          "SELECT question_count, generation FROM catalog_metadata WHERE site = ?",
+          `SELECT question_count, generation, question_ids_json
+           FROM catalog_metadata WHERE site = ?`,
           site
         )
         .toArray()[0];
@@ -801,24 +790,7 @@ export class LearningState extends DurableObject {
       if (currentGeneration !== expectedGeneration) {
         return { error: "catalog_conflict", currentGeneration };
       }
-      const currentQuestionIds = new Set(
-        this.ctx.storage.sql
-          .exec("SELECT question_id FROM questions WHERE site = ?", site)
-          .toArray()
-          .map((row) => row.question_id)
-      );
-      const incomingQuestionIds = new Set(questionIds);
-      const removedQuestionIds = [...currentQuestionIds].filter(
-        (questionId) => !incomingQuestionIds.has(questionId)
-      );
-      const addedQuestionIds = questionIds.filter(
-        (questionId) => !currentQuestionIds.has(questionId)
-      );
-      if (
-        metadata !== undefined &&
-        removedQuestionIds.length === 0 &&
-        addedQuestionIds.length === 0
-      ) {
+      if (metadata?.question_ids_json === questionIdsJSON) {
         this.ctx.storage.sql.exec(
           "UPDATE catalog_metadata SET updated_at_ms = ? WHERE site = ?",
           nowMs,
@@ -843,9 +815,7 @@ export class LearningState extends DurableObject {
             }
           : readStoredLearningMetrics(this.ctx.storage, site);
       const stabilityDaysBefore = integerStabilityDays(storedMetricsBefore);
-      const generation = currentGeneration + 1;
-      const questionIdsJSON = JSON.stringify(questionIds);
-      this.ctx.storage.sql.exec(
+      const deleteCursor = this.ctx.storage.sql.exec(
         `DELETE FROM questions
          WHERE site = ?
            AND question_id NOT IN (
@@ -854,23 +824,56 @@ export class LearningState extends DurableObject {
         site,
         questionIdsJSON
       );
-      this.ctx.storage.sql.exec(
-        `INSERT OR IGNORE INTO questions (site, question_id)
-         SELECT ?, CAST(value AS TEXT) FROM json_each(?)`,
+      const insertCursor = this.ctx.storage.sql.exec(
+        `INSERT OR IGNORE INTO questions (
+           site, question_id, question_number, attempted
+         )
+         SELECT ?, CAST(incoming.value AS TEXT),
+                CAST(incoming.value AS INTEGER),
+                CASE WHEN EXISTS (
+                  SELECT 1 FROM cards
+                  WHERE cards.site = ?
+                    AND cards.question_id = CAST(incoming.value AS TEXT)
+                ) THEN 1 ELSE 0 END
+         FROM json_each(?) incoming`,
+        site,
         site,
         questionIdsJSON
       );
+      const catalogChanged =
+        deleteCursor.rowsWritten + insertCursor.rowsWritten > 0;
+      if (!catalogChanged) {
+        this.ctx.storage.sql.exec(
+          `UPDATE catalog_metadata
+           SET updated_at_ms = ?, question_ids_json = ?
+           WHERE site = ?`,
+          nowMs,
+          questionIdsJSON,
+          site
+        );
+        return {
+          site,
+          questionCount: metadata.question_count,
+          updatedAtMs: nowMs,
+          generation: currentGeneration,
+        };
+      }
+      const generation = currentGeneration + 1;
       this.ctx.storage.sql.exec(
-        `INSERT INTO catalog_metadata (site, question_count, updated_at_ms, generation)
-         VALUES (?, ?, ?, ?)
+        `INSERT INTO catalog_metadata (
+           site, question_count, updated_at_ms, generation, question_ids_json
+         )
+         VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(site) DO UPDATE SET
            question_count = excluded.question_count,
            updated_at_ms = excluded.updated_at_ms,
-           generation = excluded.generation`,
+           generation = excluded.generation,
+           question_ids_json = excluded.question_ids_json`,
         site,
-        questionIds.length,
+        canonicalIds.length,
         nowMs,
-        generation
+        generation,
+        questionIdsJSON
       );
       const storedMetricsAfter = replaceStoredLearningMetrics(
         this.ctx.storage,
@@ -885,7 +888,7 @@ export class LearningState extends DurableObject {
         today
       );
       const stabilityDaysAfter = integerStabilityDays(storedMetricsAfter);
-      recordDailyStabilityDays(
+      recordDailyMetrics(
         this.ctx.storage,
         site,
         today,
@@ -894,7 +897,7 @@ export class LearningState extends DurableObject {
       );
       return {
         site,
-        questionCount: questionIds.length,
+        questionCount: canonicalIds.length,
         updatedAtMs: nowMs,
         generation,
       };

@@ -1,6 +1,7 @@
 import { getTokyoDate, tokyoDateRangeMs } from "../dates.js";
+import { canonicalQuestionIds } from "../contracts.js";
 
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 
 function tableDefinition(storage, tableName) {
   return storage.sql
@@ -22,6 +23,7 @@ function createCurrentTables(storage) {
       lapses INTEGER NOT NULL,
       state INTEGER NOT NULL,
       last_review_ms INTEGER,
+      last_attempt_date TEXT,
       PRIMARY KEY (site, question_id)
     ) WITHOUT ROWID;
 
@@ -41,12 +43,20 @@ function createCurrentTables(storage) {
       date TEXT NOT NULL,
       opening_stability_days INTEGER NOT NULL CHECK (opening_stability_days >= 0),
       closing_stability_days INTEGER NOT NULL CHECK (closing_stability_days >= 0),
+      attempted_question_count INTEGER NOT NULL DEFAULT 0
+        CHECK (attempted_question_count >= 0),
+      attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+      correct_attempt_count INTEGER NOT NULL DEFAULT 0
+        CHECK (correct_attempt_count >= 0),
+      CHECK (correct_attempt_count <= attempt_count),
       PRIMARY KEY (site, date)
     ) WITHOUT ROWID;
 
     CREATE TABLE questions (
       site TEXT NOT NULL,
       question_id TEXT NOT NULL,
+      question_number INTEGER NOT NULL,
+      attempted INTEGER NOT NULL DEFAULT 0 CHECK (attempted IN (0, 1)),
       PRIMARY KEY (site, question_id)
     ) WITHOUT ROWID;
 
@@ -54,7 +64,8 @@ function createCurrentTables(storage) {
       site TEXT PRIMARY KEY,
       question_count INTEGER NOT NULL CHECK (question_count > 0),
       updated_at_ms INTEGER NOT NULL,
-      generation INTEGER NOT NULL CHECK (generation > 0)
+      generation INTEGER NOT NULL CHECK (generation > 0),
+      question_ids_json TEXT NOT NULL
     ) WITHOUT ROWID;
 
     CREATE TABLE learning_metrics (
@@ -274,6 +285,112 @@ function migrateSchemaV7ToV8(storage, today, startMs, endMs) {
   `);
 }
 
+function migrateSchemaV8ToV9(storage) {
+  storage.sql.exec(`
+    ALTER TABLE cards ADD COLUMN last_attempt_date TEXT;
+    ALTER TABLE questions
+      ADD COLUMN question_number INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE questions
+      ADD COLUMN attempted INTEGER NOT NULL DEFAULT 0
+      CHECK (attempted IN (0, 1));
+    ALTER TABLE catalog_metadata
+      ADD COLUMN question_ids_json TEXT NOT NULL DEFAULT '[]';
+    ALTER TABLE stability_history
+      ADD COLUMN attempted_question_count INTEGER NOT NULL DEFAULT 0
+      CHECK (attempted_question_count >= 0);
+    ALTER TABLE stability_history
+      ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0
+      CHECK (attempt_count >= 0);
+    ALTER TABLE stability_history
+      ADD COLUMN correct_attempt_count INTEGER NOT NULL DEFAULT 0
+      CHECK (correct_attempt_count >= 0);
+
+    UPDATE questions
+    SET question_number = CAST(question_id AS INTEGER),
+        attempted = CASE WHEN EXISTS (
+          SELECT 1 FROM cards
+          WHERE cards.site = questions.site
+            AND cards.question_id = questions.question_id
+        ) THEN 1 ELSE 0 END;
+  `);
+
+  const attempts = storage.sql
+    .exec(
+      `SELECT site, question_id, attempted_at_ms, answer_result
+       FROM attempts ORDER BY site, attempted_at_ms, operation_id`
+    )
+    .toArray();
+  const lastAttemptDates = new Map();
+  const dailyMetrics = new Map();
+  for (const attempt of attempts) {
+    const date = getTokyoDate(new Date(attempt.attempted_at_ms));
+    lastAttemptDates.set(`${attempt.site}\0${attempt.question_id}`, {
+      site: attempt.site,
+      questionId: attempt.question_id,
+      date,
+    });
+    const dailyKey = `${attempt.site}\0${date}`;
+    let metrics = dailyMetrics.get(dailyKey);
+    if (metrics === undefined) {
+      metrics = {
+        site: attempt.site,
+        date,
+        questionIds: new Set(),
+        attemptCount: 0,
+        correctAttemptCount: 0,
+      };
+      dailyMetrics.set(dailyKey, metrics);
+    }
+    metrics.questionIds.add(attempt.question_id);
+    metrics.attemptCount += 1;
+    if (attempt.answer_result === "correct") {
+      metrics.correctAttemptCount += 1;
+    }
+  }
+  for (const value of lastAttemptDates.values()) {
+    storage.sql.exec(
+      `UPDATE cards SET last_attempt_date = ?
+       WHERE site = ? AND question_id = ?`,
+      value.date,
+      value.site,
+      value.questionId
+    );
+  }
+  for (const metrics of dailyMetrics.values()) {
+    storage.sql.exec(
+      `UPDATE stability_history
+       SET attempted_question_count = ?, attempt_count = ?,
+           correct_attempt_count = ?
+       WHERE site = ? AND date = ?`,
+      metrics.questionIds.size,
+      metrics.attemptCount,
+      metrics.correctAttemptCount,
+      metrics.site,
+      metrics.date
+    );
+  }
+
+  const catalogSites = storage.sql
+    .exec("SELECT site FROM catalog_metadata ORDER BY site")
+    .toArray();
+  for (const { site } of catalogSites) {
+    const questionIds = canonicalQuestionIds(
+      storage.sql
+        .exec("SELECT question_id FROM questions WHERE site = ?", site)
+        .toArray()
+        .map((row) => row.question_id)
+    );
+    storage.sql.exec(
+      `UPDATE catalog_metadata SET question_ids_json = ? WHERE site = ?`,
+      JSON.stringify(questionIds),
+      site
+    );
+  }
+  storage.sql.exec(
+    "UPDATE schema_metadata SET version = 9 WHERE singleton = 1"
+  );
+}
+
 function migrateLegacySchema(storage, today) {
   const { startMs, endMs } = tokyoDateRangeMs(today);
   storage.sql.exec(`
@@ -338,7 +455,7 @@ function migrateLegacySchema(storage, today) {
     ) WITHOUT ROWID;
 
     INSERT INTO schema_metadata (singleton, version)
-    VALUES (1, ${CURRENT_SCHEMA_VERSION});
+    VALUES (1, 8);
   `);
 
   const sites = storage.sql.exec("SELECT site FROM catalog_metadata").toArray();
@@ -416,11 +533,16 @@ function migrateLegacySchema(storage, today) {
 
 function installIndexes(storage) {
   storage.sql.exec("DROP INDEX IF EXISTS attempts_by_site");
+  storage.sql.exec(
+    "DROP INDEX IF EXISTS attempts_by_site_attempted_at_question"
+  );
   storage.sql.exec(`
     CREATE INDEX IF NOT EXISTS cards_by_site_due
       ON cards (site, due_ms, question_id);
-    CREATE INDEX IF NOT EXISTS attempts_by_site_attempted_at_question
-      ON attempts (site, attempted_at_ms, question_id);
+    CREATE INDEX IF NOT EXISTS attempts_by_site_attempted_at_operation
+      ON attempts (site, attempted_at_ms, operation_id);
+    CREATE INDEX IF NOT EXISTS questions_by_site_attempted_number
+      ON questions (site, attempted, question_number, question_id);
   `);
 }
 
@@ -456,6 +578,7 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       [5, [...thresholdMetricTables, "learning_metrics"]],
       [6, [...thresholdMetricTables, "learning_metrics"]],
       [7, currentTables],
+      [8, currentTables],
       [CURRENT_SCHEMA_VERSION, currentTables],
     ]);
     const legacyTables = [
@@ -492,12 +615,13 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       );
       if (existingSchemaV3.length === 0 && existingLegacy.length === 0) {
         createCurrentTables(storage);
+        version = CURRENT_SCHEMA_VERSION;
       } else if (existingLegacy.length === legacyTables.length) {
         migrateLegacySchema(storage, today);
+        version = 8;
       } else {
         throw new Error("incomplete LearningState schema");
       }
-      version = CURRENT_SCHEMA_VERSION;
     }
 
     if (version === 2) {
@@ -523,6 +647,10 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     if (version === 7) {
       migrateSchemaV7ToV8(storage, today, startMs, endMs);
       version = 8;
+    }
+    if (version === 8) {
+      migrateSchemaV8ToV9(storage);
+      version = 9;
     }
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error("unsupported LearningState schema version");

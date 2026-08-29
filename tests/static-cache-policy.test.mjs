@@ -10,10 +10,20 @@ async function headersSource(relativePath) {
     .trim();
 }
 
+async function jsonFile(relativePath) {
+  return JSON.parse(await readFile(new URL(relativePath, projectRoot), "utf8"));
+}
+
 test("sync static assets are stored for revalidation", async () => {
   const source = await headersSource("kakomonn-sync/public/_headers");
   assert.match(source, /^\/\*\n  Cache-Control: no-cache\n/);
   assert.equal(source.includes("Cache-Control: no-store"), false);
+});
+
+test("sync invokes the Worker only for APIs and disables persistent telemetry", async () => {
+  const config = await jsonFile("kakomonn-sync/wrangler.jsonc");
+  assert.deepEqual(config.assets.run_worker_first, ["/v8/*"]);
+  assert.deepEqual(config.observability, { enabled: false });
 });
 
 test("congratulations caches stable and content-addressed assets", async () => {

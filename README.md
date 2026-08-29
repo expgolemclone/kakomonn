@@ -18,7 +18,7 @@
 
 ## 普段使いのChrome
 
-次のcommandは, production同期WorkerからFSRSに基づく次の問題を取得し, `%LOCALAPPDATA%\kakomonn-chrome-e2e` の専用profileでChromeを起動して, `https://chushoks.kakomonn.com/questions/<questionId>` を開きます. この専用Chrome processでは音声の自動再生を許可し, 画面をクリックせずに最初の問題文から読み上げます. `KAKOMONN_SYNC_TOKEN`はrepository rootのignore済み`.env`だけから読みます. token未設定, API error, 不正responseの場合はChromeを起動しません.
+次のcommandは, `%LOCALAPPDATA%\kakomonn-chrome-e2e` の専用profileでChromeを起動し, iPhoneと同じ固定`/open` URLを開きます. redirect先のuserscriptがTampermonkey専用storageの同期tokenでFSRSに基づく次の問題を取得します. この専用Chrome processでは音声の自動再生を許可し, 画面をクリックせずに最初の問題文から読み上げます. command自体はrepository rootの`.env`にある`KAKOMONN_SYNC_TOKEN`を使用しません. token未設定またはAPI errorの場合は, 起動後の画面で同期設定または再試行を行えます.
 
 ```powershell
 npm run open:kakomonn
@@ -28,13 +28,13 @@ Chromeが同じprofileで起動済みの場合は, 既存windowへ新しいtab�
 
 ## iPhone Safari
 
-iPhone Safariでは, 最新の`kakomonn-reader`をTampermonkeyへinstallして同期tokenを保存した後, 次の固定URLをbookmarkまたはshortcutへ設定します. URLを開くと, Tampermonkeyが既に動作する`chushoks.kakomonn.com`へredirectしてから, FSRSに基づく次の問題へ移動します. 同期tokenはURLやpageの`localStorage`へ保存しません.
+iPhone Safariでは, 最新の`kakomonn-reader`をTampermonkeyへinstallして同期tokenを保存した後, 次の固定URLをbookmarkまたはshortcutへ設定します. URLを開くと, Tampermonkeyが既に動作する`chushoks.kakomonn.com`へredirectし, 同じuserscript sessionのreader内でFSRSに基づく次の問題を開きます. 同期tokenはURLやpageの`localStorage`へ保存しません.
 
 ```text
 https://kakomonn-sync.kakomonn.workers.dev/open
 ```
 
-token未設定または認証失敗の場合は, redirect先から同期設定画面を開いてtokenを保存できます. 通信失敗, 問題catalog未同期, 次問なしの場合は, 原因と再試行操作を表示します.
+token未設定または認証失敗の場合は, redirect先で同期設定画面を直接表示してtokenを保存できます. 通信失敗, 問題catalog未同期, 次問なしの場合は, 原因と再試行操作を表示します.
 
 ## テスト
 

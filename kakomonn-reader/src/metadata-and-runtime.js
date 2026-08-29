@@ -50,6 +50,9 @@
     `https://${NEXT_QUESTION_SITE_ID}/createques#kakomonn-sync-settings`;
   const isNextQuestionLauncher = location.href === NEXT_QUESTION_LAUNCHER_URL;
   const isSyncSettingsEntry = location.href === SYNC_SETTINGS_ENTRY_URL;
+  let shouldLaunchNextQuestionAfterSync =
+    isNextQuestionLauncher || isSyncSettingsEntry;
+  let forceSyncSettingsOnInitialize = isSyncSettingsEntry;
   const CONGRATULATIONS_URL =
     "https://kakomonn-congratulations.kakomonn.workers.dev/";
   const SITE_ID = location.hostname.toLowerCase();
@@ -241,8 +244,8 @@
   let frameDocument = null;
   let boundFrameDocument = null;
   let currentPageReadPending = false;
-  let currentFrameURL = isSyncSettingsEntry
-    ? `https://${NEXT_QUESTION_SITE_ID}/createques`
+  let currentFrameURL = shouldLaunchNextQuestionAfterSync
+    ? "about:blank"
     : location.href;
   let loadTimer = null;
   let frameChangeTimer = null;

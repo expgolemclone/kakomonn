@@ -164,6 +164,9 @@ async function prepareLauncherPage(
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
   await page.goto(nextQuestionLauncherURL);
+  await page.evaluate(() => {
+    window.__launcherDocumentSentinel = "same-document";
+  });
   await installSyncMock(page, syncOptions);
   if (mutateMock !== null) {
     await page.evaluate(mutateMock);
@@ -219,7 +222,6 @@ async function assertLauncherFailure(
     expectedState,
     expectedStatus,
     expectedTitle,
-    showSettings,
     syncOptions = {},
     mutateMock = null,
   },
@@ -247,40 +249,61 @@ async function assertLauncherFailure(
       await page.locator("#kakomonn-next-question-panel").getAttribute("aria-busy"),
       "false",
     );
-    assert.equal(
-      await page.locator("#next-question-settings").isVisible(),
-      showSettings,
-    );
-    if (showSettings) {
-      assert.equal(
-        await page.locator("#next-question-settings").getAttribute("href"),
-        syncSettingsEntryURL,
-      );
-    }
     const layout = await page.evaluate(() => {
       const panel = document.querySelector("#kakomonn-next-question-panel");
       const retry = document.querySelector("#next-question-retry");
-      const settings = document.querySelector("#next-question-settings");
       const panelRect = panel.getBoundingClientRect();
       const retryRect = retry.getBoundingClientRect();
-      const settingsRect = settings.getBoundingClientRect();
       return {
         horizontalOverflow:
           document.documentElement.scrollWidth > window.innerWidth,
         panelInsideViewport:
           panelRect.left >= 0 && panelRect.right <= window.innerWidth,
         retryHeight: retryRect.height,
-        settingsHeight: settingsRect.height,
       };
     });
     assert.equal(layout.horizontalOverflow, false, JSON.stringify(layout));
     assert.equal(layout.panelInsideViewport, true, JSON.stringify(layout));
     assert.equal(layout.retryHeight >= 44, true, JSON.stringify(layout));
-    if (showSettings) {
-      assert.equal(layout.settingsHeight >= 44, true, JSON.stringify(layout));
-    }
     assert.equal(page.url(), nextQuestionLauncherURL);
     assert.equal(await page.locator("#kakomonn-reader-shell").count(), 0);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
+async function assertLauncherRequiresSettings(
+  context,
+  script,
+  { syncOptions = {}, mutateMock = null } = {},
+) {
+  const { errors, page } = await prepareLauncherPage(context, script, {
+    syncOptions,
+    mutateMock,
+  });
+  try {
+    await page
+      .locator("#kakomonn-reader-sync-settings")
+      .waitFor({ state: "visible" });
+    assert.equal(page.url(), nextQuestionLauncherURL);
+    assert.equal(await page.locator("#kakomonn-reader-shell").count(), 1);
+    assert.equal(
+      await page.locator("#kakomonn-reader-sync-settings-button").isVisible(),
+      true,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-sync-settings-cancel").isHidden(),
+      true,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-next-question-launcher").count(),
+      0,
+    );
+    assert.equal(
+      await page.evaluate(() => window.__launcherDocumentSentinel),
+      "same-document",
+    );
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
@@ -380,40 +403,44 @@ async function main() {
       await noNextLauncher.page.close();
     }
 
-    await assertLauncherFailure(context, script, {
-      expectedState: "configuration-error",
-      expectedTitle: "同期設定が必要です",
-      expectedStatus:
-        "このiPhoneに同期トークンが保存されていません. 同期設定でトークンを保存してください.",
-      showSettings: true,
+    await assertLauncherRequiresSettings(context, script, {
       syncOptions: { configured: false },
     });
-    await assertLauncherFailure(context, script, {
-      expectedState: "configuration-error",
-      expectedTitle: "同期トークンを確認してください",
-      expectedStatus:
-        "保存済みの同期トークンでは接続できませんでした. 同期設定で正しいトークンを保存してください.",
-      showSettings: true,
+    await assertLauncherRequiresSettings(context, script, {
       mutateMock: () => {
         window.__syncMock.token = "server-token";
       },
     });
-    await assertLauncherFailure(context, script, {
-      expectedState: "service-error",
-      expectedTitle: "同期サービスに接続できません",
-      expectedStatus:
-        "ネットワーク接続を確認してから, もう一度試してください.",
-      showSettings: false,
+
+    const retryLauncher = await prepareLauncherPage(context, script, {
+      syncOptions: { nextQuestionId: "86957" },
       mutateMock: () => {
         window.__syncMock.failNextRequest = true;
       },
     });
+    await waitForLauncherState(
+      retryLauncher.page,
+      retryLauncher.errors,
+      "service-error",
+    );
+    await retryLauncher.page.locator("#next-question-retry").click();
+    await retryLauncher.page.waitForURL(nextQuestionURL);
+    assert.equal(
+      await retryLauncher.page.evaluate(() => window.__launcherDocumentSentinel),
+      "same-document",
+    );
+    assert.equal(
+      await retryLauncher.page.locator("#kakomonn-reader-shell").count(),
+      1,
+    );
+    assert.deepEqual(retryLauncher.errors, []);
+    await retryLauncher.page.close();
+
     await assertLauncherFailure(context, script, {
       expectedState: "service-error",
       expectedTitle: "問題一覧を同期できません",
       expectedStatus:
         "問題画面で問題一覧を同期してから, もう一度試してください.",
-      showSettings: false,
       syncOptions: { nextError: "catalog_missing" },
     });
     await assertLauncherFailure(context, script, {
@@ -421,7 +448,6 @@ async function main() {
       expectedTitle: "同期サービスを利用できません",
       expectedStatus:
         "同期APIの応答を確認できませんでした. 時間を置いて, もう一度試してください.",
-      showSettings: false,
       syncOptions: { nextQuestionId: "invalid" },
     });
 
@@ -431,7 +457,13 @@ async function main() {
       settingsEntryErrors.push(String(error)),
     );
     await settingsEntryPage.goto(syncSettingsEntryURL);
-    await installSyncMock(settingsEntryPage, { configured: false });
+    await installSyncMock(settingsEntryPage, {
+      configured: false,
+      nextQuestionId: "86957",
+    });
+    await settingsEntryPage.evaluate(() => {
+      window.__settingsDocumentSentinel = "same-document";
+    });
     await settingsEntryPage.addScriptTag({ content: script });
     await settingsEntryPage
       .locator("#kakomonn-reader-sync-settings")
@@ -495,7 +527,15 @@ async function main() {
     await settingsEntryPage.evaluate(() =>
       window.__syncMock.releaseHeldSetValue(),
     );
-    await settingsEntryPage.waitForURL(nextQuestionLauncherURL);
+    await settingsEntryPage.waitForURL(nextQuestionURL);
+    assert.equal(
+      await settingsEntryPage.evaluate(() => window.__settingsDocumentSentinel),
+      "same-document",
+    );
+    assert.equal(
+      await settingsEntryPage.locator("#kakomonn-reader-shell").count(),
+      1,
+    );
     assert.deepEqual(settingsEntryErrors, []);
     await settingsEntryPage.close();
 
@@ -503,6 +543,24 @@ async function main() {
       syncOptions: { nextQuestionId: "86957" },
     });
     await successfulLauncher.page.waitForURL(nextQuestionURL);
+    await successfulLauncher.page.waitForFunction(
+      (expectedURL) =>
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href === expectedURL,
+      nextQuestionURL,
+    );
+    assert.equal(
+      await successfulLauncher.page.evaluate(
+        () => window.__launcherDocumentSentinel,
+      ),
+      "same-document",
+    );
+    assert.equal(
+      await successfulLauncher.page
+        .locator("#kakomonn-reader-sync-settings-button")
+        .isVisible(),
+      true,
+    );
     assert.deepEqual(successfulLauncher.errors, []);
     await successfulLauncher.page.close();
 

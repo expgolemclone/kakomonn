@@ -12,7 +12,7 @@
 - `Enter`は未解答なら解答を実行し,解答後は次問へ進みます. 下部の`次の問題へ`をクリックまたはタップして進むこともできます.
 - 正解時は`NORMAL` 88.9%, `RARE` 10%, `SUPER RARE` 1%, `SSR` 0.1%からsecure randomで1種類を選び, tierごとの`That's Right`表示, chime, 英語音声を再生します.
 - 正解または不正解が表示された時点で, 解答記録を`kakomonn-sync`へ保存します. 保存responseに含まれる次問を端末へ保持するため, `次の問題へ`の操作では追加のWorker通信を行いません.
-- iPhone Safariでは`https://kakomonn-sync.kakomonn.workers.dev/open`を開くと, 保存済みの同期tokenでFSRSに基づく次の問題を取得して移動します. token未設定または認証失敗時は, 同じoriginの同期設定画面へ移動してtokenを保存できます. tokenはURLへ含めません.
+- Windowsのopen commandとiPhone Safariは`https://kakomonn-sync.kakomonn.workers.dev/open`を開き, 保存済みの同期tokenでFSRSに基づく次の問題を取得します. launcherからreaderと問題iframeまでは同じuserscript session内で切り替えます. token未設定または認証失敗時は, 同じ画面の同期設定へtokenを保存できます. tokenはURLへ含めません.
 - 期限を迎えた最後のcardを解答して`dueCardsCompleted`が`true`になると, その日のprimary KPI達成を祝う専用pageへ移動します. 同じ日の祝福はsiteごとに1回だけです.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
 - 現在の問題catalogに含まれる全問題のstabilityを合計して切り捨てた定着日数stabilityDaysと解答履歴. 値は`kakomonn-sync`へ保存され,Windows 11 ChromeとiPhone Safariで共有されます. 問題画面では`dueCardsRemaining`を常時表示し, クリックすると`dueCardsCompleted`, `todayStabilityDaysDelta`, `todayAttemptedQuestionCount`, `todayCorrectRatePercent`も確認できます. 同期Workerのrootでは`dueCardsCompleted`, `dueCardsRemaining`, `stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`, `todayCorrectRatePercent`, 直近31日間の`dailyCorrectRatePercent`を確認できます. 解いた問題数は問題IDの種類数で,同じ問題を同じ日に繰り返しても1問として数えます. 正答率は同じ日の全attemptを分母にするため, 同じ問題の繰り返しも個別に数えます.
@@ -57,7 +57,7 @@ Windows 11 Chrome + TampermonkeyとiPhone Safari + Tampermonkeyだけに対応�
 
 remote stateはreader sessionの開始時に取得します. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
 
-iPhoneの固定URLは同じユーザースクリプト専用storageからtokenを読みます. token未設定時は過去問pageで同期設定を完了してから, 固定URLを再度開きます.
+WindowsとiPhoneの固定URLは同じユーザースクリプト専用storageからtokenを読みます. token未設定時は固定URLから直接開く同期設定で保存し, 再読込せず次の問題へ進みます.
 
 正解と不正解のどちらでも,正誤表示時に解答記録を同期します.同期に失敗した場合は次問へ進まず,同じ操作IDで再試行します.通信が復旧した後に`同期を再試行`を押してください.同じ操作の再送は二重加算されません.保存成功後は解説pageへ留まり,`次の問題へ`を押した時だけ保存responseで取得済みの次問へ移動します.
 

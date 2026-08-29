@@ -51,8 +51,6 @@ const nextQuestionOpenURL =
   "https://kakomonn-sync.kakomonn.workers.dev/open";
 const nextQuestionLauncherURL =
   "https://chushoks.kakomonn.com/createques#kakomonn-next";
-const syncSettingsEntryURL =
-  "https://chushoks.kakomonn.com/createques#kakomonn-sync-settings";
 const kakomonnConfiguration = readKakomonnConfiguration();
 const expectedXcodeVersion =
   kakomonnConfiguration.KAKOMONN_XCODE_VERSION ?? "26.6";
@@ -1067,56 +1065,9 @@ async function runTest() {
         timeoutMsg: "The production /open URL did not reach the launcher",
       },
     );
-    await installReader(driver, script, { configured: false });
-    await waitForElementText(
-      driver,
-      "#kakomonn-next-question-title",
-      "同期設定が必要です",
-    );
-    const launcherLayout = await driver.execute(() => {
-      const launcher = document.querySelector(
-        "#kakomonn-next-question-launcher",
-      );
-      const panel = document.querySelector("#kakomonn-next-question-panel");
-      const settings = document.querySelector("#next-question-settings");
-      const retry = document.querySelector("#next-question-retry");
-      const panelRect = panel.getBoundingClientRect();
-      const settingsRect = settings.getBoundingClientRect();
-      const retryRect = retry.getBoundingClientRect();
-      return {
-        horizontalOverflow: launcher.scrollWidth > launcher.clientWidth,
-        panelBusy: panel.getAttribute("aria-busy"),
-        panelInsideViewport:
-          panelRect.left >= 0 && panelRect.right <= innerWidth,
-        panelState: panel.dataset.state,
-        retryHeight: retryRect.height,
-        settingsHeight: settingsRect.height,
-        settingsURL: settings.href,
-      };
+    await driver.execute(() => {
+      window.__launcherDocumentSentinel = "same-document";
     });
-    assert.deepEqual(launcherLayout, {
-      horizontalOverflow: false,
-      panelBusy: "false",
-      panelInsideViewport: true,
-      panelState: "configuration-error",
-      retryHeight: 52,
-      settingsHeight: 52,
-      settingsURL: syncSettingsEntryURL,
-    });
-
-    await waitForElement(
-      driver,
-      "#next-question-settings",
-    );
-    await clickWebElementNatively(driver, "#next-question-settings");
-    await driver.waitUntil(
-      () => driver.getUrl().then((url) => url === syncSettingsEntryURL),
-      {
-        interval: 250,
-        timeout: 30_000,
-        timeoutMsg: "The launcher did not open the sync settings entry",
-      },
-    );
     await installReader(driver, script, { configured: false });
     await waitForElement(driver, "#kakomonn-reader-sync-settings");
     await waitForElement(
@@ -1184,18 +1135,6 @@ async function runTest() {
       "#kakomonn-reader-sync-settings-save",
     );
     await driver.waitUntil(
-      () =>
-        driver
-          .getUrl()
-          .then((url) => url === nextQuestionLauncherURL),
-      {
-        interval: 250,
-        timeout: 30_000,
-        timeoutMsg: "Saving sync settings did not return to the launcher",
-      },
-    );
-    await installReader(driver, script);
-    await driver.waitUntil(
       () => driver.getUrl().then((url) => url === nextQuestionURL),
       {
         interval: 250,
@@ -1203,6 +1142,21 @@ async function runTest() {
         timeoutMsg: "The configured launcher did not open the next question",
       },
     );
+    const launcherTransition = await driver.execute(() => ({
+      documentSentinel: window.__launcherDocumentSentinel,
+      frameURL: document.querySelector("#kakomonn-reader-frame")?.contentWindow
+        ?.location.href,
+      readerControlsVisible:
+        document.querySelector("#kakomonn-reader-controls") !== null,
+      settingsButtonVisible:
+        document.querySelector("#kakomonn-reader-sync-settings-button") !== null,
+    }));
+    assert.deepEqual(launcherTransition, {
+      documentSentinel: "same-document",
+      frameURL: nextQuestionURL,
+      readerControlsVisible: true,
+      settingsButtonVisible: true,
+    });
 
     console.log(
       JSON.stringify({

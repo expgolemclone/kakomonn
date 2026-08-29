@@ -323,6 +323,9 @@
     if (nextURL === "about:blank" && frame.src !== "about:blank") {
       return;
     }
+    if (nextURL === "about:blank" && shouldLaunchNextQuestionAfterSync) {
+      return;
+    }
 
     if (!nextDocument?.body) {
       setStatus("ページ本文がありません");
@@ -354,7 +357,7 @@
 
     try {
       currentFrameURL = nextURL;
-      if (!isSyncSettingsEntry) {
+      if (!shouldLaunchNextQuestionAfterSync) {
         history.replaceState(null, "", currentFrameURL);
       }
     } catch {
@@ -407,11 +410,16 @@
   });
 
   renderLearningMetrics();
-  void initializeSync();
+  if (isNextQuestionLauncher) {
+    void startNextQuestionLauncher();
+  } else {
+    enterReaderUI();
+  }
 
   // iframeのloadがキャッシュ等で先に完了していた場合にも対応します.
   try {
     if (
+      !shouldLaunchNextQuestionAfterSync &&
       frame.contentDocument?.readyState === "complete" &&
       (frame.contentWindow.location.href !== "about:blank" ||
         frame.src === "about:blank")

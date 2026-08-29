@@ -280,8 +280,18 @@
   );
   syncSettings.appendChild(syncSettingsPanel);
 
-  document.body.dataset.kakomonnReaderUi = "true";
-  document.body.replaceChildren(controls, shell, actions, syncSettings);
+  function mountReaderUI() {
+    document.body.dataset.kakomonnReaderUi = "true";
+    if (
+      controls.isConnected &&
+      shell.isConnected &&
+      actions.isConnected &&
+      syncSettings.isConnected
+    ) {
+      return;
+    }
+    document.body.replaceChildren(controls, shell, actions, syncSettings);
+  }
 
   function renderLearningMetrics() {
     const dueCardsCompletedText =

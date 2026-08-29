@@ -780,6 +780,9 @@
       try {
         let state = await requestSyncState(candidateToken);
         state = await ensureQuestionCatalog(candidateToken, state);
+        const nextQuestionResult = shouldLaunchNextQuestionAfterSync
+          ? await requestNextQuestion(candidateToken)
+          : null;
         await GM.setValue(SYNC_TOKEN_KEY, candidateToken);
         syncToken = candidateToken;
         clearAzureSpeechToken();
@@ -789,8 +792,10 @@
         syncSettings.hidden = true;
         syncTokenInput.value = "";
         setStatus("学習記録を同期しました");
-        if (isSyncSettingsEntry) {
-          window.location.replace(NEXT_QUESTION_LAUNCHER_URL);
+        if (nextQuestionResult?.question === null) {
+          showNoNextQuestionLauncher();
+        } else if (nextQuestionResult?.question !== undefined) {
+          openScheduledQuestionInReader(nextQuestionResult.question.url);
         }
         return true;
       } catch (error) {
@@ -843,7 +848,7 @@
       }
       clearAzureSpeechToken();
       await restorePendingState(storedPendingAttempt, storedCelebration);
-      if (isSyncSettingsEntry) {
+      if (forceSyncSettingsOnInitialize) {
         syncReady = false;
         setStatus("同期トークンを設定してください");
         openSyncSettings(true);
@@ -861,6 +866,9 @@
     } catch {
       syncReady = false;
       setStatus("同期設定を読み込めません");
+      if (forceSyncSettingsOnInitialize) {
+        openSyncSettings(true);
+      }
       updateSyncDependentControls();
     }
   }

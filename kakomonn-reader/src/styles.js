@@ -97,10 +97,6 @@
       backdrop-filter: blur(20px);
     }
 
-    #kakomonn-next-question-panel[data-state="configuration-error"] {
-      --kakomonn-launcher-accent: var(--kakomonn-reader-p-amber-400);
-    }
-
     #kakomonn-next-question-panel[data-state="service-error"] {
       --kakomonn-launcher-accent: var(--kakomonn-reader-error);
     }
@@ -161,8 +157,6 @@
       animation: kakomonn-launcher-spin 900ms linear infinite;
     }
 
-    [data-state="configuration-error"]
-      #kakomonn-next-question-indicator::before,
     [data-state="service-error"]
       #kakomonn-next-question-indicator::before {
       width: 4px;
@@ -172,8 +166,6 @@
       transform: translateY(-4px);
     }
 
-    [data-state="configuration-error"]
-      #kakomonn-next-question-indicator::after,
     [data-state="service-error"]
       #kakomonn-next-question-indicator::after {
       width: 4px;
@@ -220,8 +212,7 @@
       display: none;
     }
 
-    #next-question-retry,
-    #next-question-settings {
+    #next-question-retry {
       min-height: 52px;
       display: flex;
       align-items: center;
@@ -239,33 +230,19 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    #next-question-retry[hidden],
-    #next-question-settings[hidden] {
+    #next-question-retry[hidden] {
       display: none;
-    }
-
-    #next-question-settings {
-      background: var(--kakomonn-reader-primary);
-      box-shadow: 0 10px 28px oklch(0.35 0.14 255 / 0.38);
     }
 
     #next-question-retry {
       background: var(--kakomonn-reader-primary);
     }
 
-    #next-question-retry[data-variant="secondary"] {
-      border-color: oklch(0.72 0.025 255 / 0.2);
-      background: var(--kakomonn-reader-raised);
-      box-shadow: none;
-    }
-
-    #next-question-retry:active,
-    #next-question-settings:active {
+    #next-question-retry:active {
       transform: scale(0.98);
     }
 
-    #next-question-retry:focus-visible,
-    #next-question-settings:focus-visible {
+    #next-question-retry:focus-visible {
       outline: 2px solid var(--kakomonn-reader-focus-ring);
       outline-offset: 4px;
     }

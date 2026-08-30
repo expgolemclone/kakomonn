@@ -150,6 +150,12 @@ function extractSyncTokenCandidates(buffers) {
   return candidates;
 }
 
+function registeredUserscriptsContainFingerprint(registrations, fingerprint) {
+  return registrations.some((registration) =>
+    JSON.stringify(registration).includes(fingerprint),
+  );
+}
+
 function listProfileDirectories(userDataRoot, {
   existsSync = fs.existsSync,
   readdirSync = fs.readdirSync,
@@ -738,6 +744,27 @@ async function installUserscript(context, userscriptPath) {
     true,
     "Tampermonkey did not enable the current userscript",
   );
+  const registrationDeadline = Date.now() + 60_000;
+  let registrationReady = false;
+  while (!registrationReady && Date.now() < registrationDeadline) {
+    registrationReady = await utilityPage.evaluate(
+      async ({ expectedFingerprint }) => {
+        const registrations = await chrome.userScripts.getScripts();
+        return registrations.some((registration) =>
+          JSON.stringify(registration).includes(expectedFingerprint),
+        );
+      },
+      { expectedFingerprint: buildFingerprint },
+    );
+    if (!registrationReady) {
+      await delay(250);
+    }
+  }
+  if (!registrationReady) {
+    throw new Error(
+      "Tampermonkey did not register the current userscript with Chrome",
+    );
+  }
   for (const page of context.pages()) {
     if (!initialPages.has(page)) {
       await page.close().catch(() => null);
@@ -763,6 +790,7 @@ module.exports = {
   readConfiguredToken,
   readDirectoryBuffers,
   readChromeUserDataDir,
+  registeredUserscriptsContainFingerprint,
   resolveSyncToken,
   scanStoredSyncTokenCandidates,
   kakomonnFreeEnvironment,

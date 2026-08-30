@@ -16,6 +16,7 @@ const {
   locateTampermonkeyExtension,
   readConfiguredToken,
   readChromeUserDataDir,
+  registeredUserscriptsContainFingerprint,
   resolveSyncToken,
   stopDedicatedChrome,
   stopDedicatedChromePowerShell,
@@ -95,6 +96,21 @@ test("extracts exactly one generated build fingerprint", () => {
         `const BUILD_FINGERPRINT = "${fingerprint}";\nconst BUILD_FINGERPRINT = "${fingerprint}";`,
       ),
     /found 2/,
+  );
+});
+
+test("detects the current build in Chrome userscript registrations", () => {
+  const registrations = [
+    { id: "other", js: [{ code: "const value = 1;" }] },
+    { id: "reader", js: [{ code: `const BUILD_FINGERPRINT = "${fingerprint}";` }] },
+  ];
+  assert.equal(
+    registeredUserscriptsContainFingerprint(registrations, fingerprint),
+    true,
+  );
+  assert.equal(
+    registeredUserscriptsContainFingerprint(registrations, "b".repeat(64)),
+    false,
   );
 });
 

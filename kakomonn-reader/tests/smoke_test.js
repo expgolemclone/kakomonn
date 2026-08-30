@@ -1032,6 +1032,7 @@ async function main() {
     assert.equal(await page.locator("#kakomonn-reader-skip").count(), 0);
     for (const viewport of [
       { width: 320, height: 568 },
+      { width: 390, height: 844 },
       { width: 1280, height: 720 },
       { width: 2560, height: 1440 },
     ]) {
@@ -1068,11 +1069,15 @@ async function main() {
         const actions = actionsElement.getBoundingClientRect();
         const copy = copyElement.getBoundingClientRect();
         const next = nextElement.getBoundingClientRect();
+        const metricRows = [
+          ...metricsElement.querySelectorAll(".kakomonn-reader-metric"),
+        ];
         const statusStyle = getComputedStyle(statusElement);
         const metricsStyle = getComputedStyle(metricsElement);
         const nextStyle = getComputedStyle(nextElement);
         const approximatelyEqual = (left, right) =>
           Math.abs(left - right) <= 1;
+        const isMobileLayout = innerWidth <= 480;
         return {
           actionsFullWidth:
             approximatelyEqual(actions.left, 0) &&
@@ -1092,6 +1097,17 @@ async function main() {
           noHorizontalOverflow:
             controlsElement.scrollWidth <= controlsElement.clientWidth &&
             actionsElement.scrollWidth <= actionsElement.clientWidth,
+          metricLabelsFit: metricRows.every((row) => {
+            const label = row.querySelector(".kakomonn-reader-metric-label");
+            return label.scrollWidth <= label.clientWidth;
+          }),
+          responsiveControlLayout: isMobileLayout
+            ? approximatelyEqual(status.top, sync.top) &&
+              approximatelyEqual(metrics.top, status.bottom + 8) &&
+              approximatelyEqual(metrics.left, controls.left + 8) &&
+              approximatelyEqual(metrics.right, controls.right - 8)
+            : approximatelyEqual(status.top, metrics.top) &&
+              approximatelyEqual(metrics.top, sync.top),
           sharedBorderlessSurface:
             statusStyle.borderTopWidth === "0px" &&
             metricsStyle.borderTopWidth === "0px" &&
@@ -1102,9 +1118,6 @@ async function main() {
           topFillsWidth:
             approximatelyEqual(status.left, controls.left + 8) &&
             approximatelyEqual(sync.right, controls.right - 8),
-          topItemsShareRow:
-            approximatelyEqual(status.top, metrics.top) &&
-            approximatelyEqual(metrics.top, sync.top),
         };
       });
       assert.deepEqual(
@@ -1116,10 +1129,11 @@ async function main() {
           controlsFullWidth: true,
           detailsHidden: true,
           frameFillsMiddle: true,
+          metricLabelsFit: true,
           noHorizontalOverflow: true,
+          responsiveControlLayout: true,
           sharedBorderlessSurface: true,
           topFillsWidth: true,
-          topItemsShareRow: true,
         },
         `${JSON.stringify(viewport)} ${JSON.stringify(readerLayout)}`,
       );

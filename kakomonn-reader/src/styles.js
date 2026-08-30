@@ -691,6 +691,31 @@
       opacity: 0.55;
     }
 
+    @media (max-width: 480px) {
+      #kakomonn-reader-controls {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+
+      #kakomonn-reader-status {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      #kakomonn-reader-sync-settings-button {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      #kakomonn-reader-learning-metrics {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+
+      #kakomonn-reader-learning-metrics-details {
+        grid-row: 3;
+      }
+    }
+
     #kakomonn-reader-next:focus-visible,
     #kakomonn-reader-copy:focus-visible,
     #kakomonn-reader-learning-metrics:focus-visible,

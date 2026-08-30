@@ -611,72 +611,116 @@ async function main() {
         document.querySelector("#kakomonn-reader-due-cards-completed")?.textContent ===
         "未達成",
     );
-    assert.deepEqual(
-      await page.evaluate(() => {
-        const controls = document.querySelector("#kakomonn-reader-controls");
-        const status = document.querySelector("#kakomonn-reader-status");
-        const learningMetrics = document.querySelector(
-          "#kakomonn-reader-learning-metrics",
-        );
-        const learningMetricsDetails = document.querySelector(
-          "#kakomonn-reader-learning-metrics-details",
-        );
-        const syncSettingsButton = document.querySelector(
-          "#kakomonn-reader-sync-settings-button",
-        );
-        const shell = document.querySelector("#kakomonn-reader-shell");
-        const actions = document.querySelector("#kakomonn-reader-actions");
-        const copy = document.querySelector("#kakomonn-reader-copy");
-        const next = document.querySelector("#kakomonn-reader-next");
-        const controlsRect = controls.getBoundingClientRect();
-        const statusRect = status.getBoundingClientRect();
-        const learningMetricsRect = learningMetrics.getBoundingClientRect();
-        const syncSettingsButtonRect =
-          syncSettingsButton.getBoundingClientRect();
-        const shellRect = shell.getBoundingClientRect();
-        const actionsRect = actions.getBoundingClientRect();
-        const copyRect = copy.getBoundingClientRect();
-        const nextRect = next.getBoundingClientRect();
-        return {
-          actionsFullWidth:
-            Math.abs(actionsRect.left) <= 1 &&
-            Math.abs(actionsRect.right - innerWidth) <= 1,
-          bottomButtonsEqual: Math.abs(copyRect.width - nextRect.width) <= 1,
-          controlsFullWidth:
-            Math.abs(controlsRect.left) <= 1 &&
-            Math.abs(controlsRect.right - innerWidth) <= 1,
-          controlsOverflow: controls.scrollWidth > controls.clientWidth,
-          detailsHidden: learningMetricsDetails.hidden,
-          learningMetricsClipped:
-            learningMetrics.scrollWidth > learningMetrics.clientWidth ||
-            learningMetrics.scrollHeight > learningMetrics.clientHeight,
-          learningMetricsInsideHeader:
-            learningMetricsRect.left >= controlsRect.left &&
-            learningMetricsRect.right <= controlsRect.right &&
-            learningMetricsRect.bottom <= controlsRect.bottom,
-          shellFillsMiddle:
-            Math.abs(shellRect.top - controlsRect.bottom) <= 1 &&
-            Math.abs(shellRect.bottom - actionsRect.top) <= 1 &&
-            shellRect.height > 0,
-          topItemsShareRow:
-            Math.abs(learningMetricsRect.top - statusRect.top) <= 1 &&
-            Math.abs(
-              learningMetricsRect.top - syncSettingsButtonRect.top,
-            ) <= 1,
-        };
-      }),
-      {
-        actionsFullWidth: true,
-        bottomButtonsEqual: true,
-        controlsFullWidth: true,
-        controlsOverflow: false,
-        detailsHidden: true,
-        learningMetricsClipped: false,
-        learningMetricsInsideHeader: true,
-        shellFillsMiddle: true,
-        topItemsShareRow: true,
-      },
-    );
+    for (const viewport of [
+      { width: 320, height: 568 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      assert.deepEqual(
+        await page.evaluate(() => {
+          const controls = document.querySelector("#kakomonn-reader-controls");
+          const status = document.querySelector("#kakomonn-reader-status");
+          const learningMetrics = document.querySelector(
+            "#kakomonn-reader-learning-metrics",
+          );
+          const learningMetricsDetails = document.querySelector(
+            "#kakomonn-reader-learning-metrics-details",
+          );
+          const syncSettingsButton = document.querySelector(
+            "#kakomonn-reader-sync-settings-button",
+          );
+          const shell = document.querySelector("#kakomonn-reader-shell");
+          const actions = document.querySelector("#kakomonn-reader-actions");
+          const copy = document.querySelector("#kakomonn-reader-copy");
+          const next = document.querySelector("#kakomonn-reader-next");
+          const controlsRect = controls.getBoundingClientRect();
+          const statusRect = status.getBoundingClientRect();
+          const learningMetricsRect = learningMetrics.getBoundingClientRect();
+          const syncSettingsButtonRect =
+            syncSettingsButton.getBoundingClientRect();
+          const shellRect = shell.getBoundingClientRect();
+          const actionsRect = actions.getBoundingClientRect();
+          const copyRect = copy.getBoundingClientRect();
+          const nextRect = next.getBoundingClientRect();
+          const metricRows = [
+            ...learningMetrics.querySelectorAll(".kakomonn-reader-metric"),
+          ];
+          return {
+            actionsFullWidth:
+              Math.abs(actionsRect.left) <= 1 &&
+              Math.abs(actionsRect.right - innerWidth) <= 1,
+            bottomButtonsEqual: Math.abs(copyRect.width - nextRect.width) <= 1,
+            controlsFullWidth:
+              Math.abs(controlsRect.left) <= 1 &&
+              Math.abs(controlsRect.right - innerWidth) <= 1,
+            controlsOverflow: controls.scrollWidth > controls.clientWidth,
+            detailsHidden: learningMetricsDetails.hidden,
+            learningMetricsClipped:
+              learningMetrics.scrollWidth > learningMetrics.clientWidth ||
+              learningMetrics.scrollHeight > learningMetrics.clientHeight,
+            metricLabelsFit: metricRows.every((row) => {
+              const label = row.querySelector(".kakomonn-reader-metric-label");
+              return label.scrollWidth <= label.clientWidth;
+            }),
+            learningMetricsInsideHeader:
+              learningMetricsRect.left >= controlsRect.left &&
+              learningMetricsRect.right <= controlsRect.right &&
+              learningMetricsRect.bottom <= controlsRect.bottom,
+            shellFillsMiddle:
+              Math.abs(shellRect.top - controlsRect.bottom) <= 1 &&
+              Math.abs(shellRect.bottom - actionsRect.top) <= 1 &&
+              shellRect.height > 0,
+            mobileControlRows:
+              Math.abs(statusRect.top - syncSettingsButtonRect.top) <= 1 &&
+              Math.abs(
+                learningMetricsRect.top - statusRect.bottom - 8,
+              ) <= 1 &&
+              Math.abs(learningMetricsRect.left - controlsRect.left - 8) <=
+                1 &&
+              Math.abs(learningMetricsRect.right - controlsRect.right + 8) <=
+                1,
+          };
+        }),
+        {
+          actionsFullWidth: true,
+          bottomButtonsEqual: true,
+          controlsFullWidth: true,
+          controlsOverflow: false,
+          detailsHidden: true,
+          learningMetricsClipped: false,
+          metricLabelsFit: true,
+          learningMetricsInsideHeader: true,
+          mobileControlRows: true,
+          shellFillsMiddle: true,
+        },
+        JSON.stringify(viewport),
+      );
+      await page.locator("#kakomonn-reader-learning-metrics").click();
+      assert.deepEqual(
+        await page.evaluate(() => {
+          const details = document.querySelector(
+            "#kakomonn-reader-learning-metrics-details",
+          );
+          return {
+            detailsClipped:
+              details.scrollWidth > details.clientWidth ||
+              details.scrollHeight > details.clientHeight,
+            detailsLabelsFit: [...details.querySelectorAll("dt")].every(
+              (label) => label.scrollWidth <= label.clientWidth,
+            ),
+            detailsVisible: !details.hidden,
+          };
+        }),
+        {
+          detailsClipped: false,
+          detailsLabelsFit: true,
+          detailsVisible: true,
+        },
+        JSON.stringify(viewport),
+      );
+      await page.locator("#kakomonn-reader-learning-metrics").click();
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
     assert.deepEqual(
       await childFrame.evaluate(() => {
         const choiceImage = document.createElement("img");

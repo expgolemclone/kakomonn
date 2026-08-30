@@ -77,9 +77,9 @@
     return;
   }
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
-  const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE_ID}.v8.pending-attempt`;
+  const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE_ID}.v9.pending-attempt`;
   const PENDING_CELEBRATION_KEY =
-    `kakomonn-reader.${SITE_ID}.v8.pending-celebration`;
+    `kakomonn-reader.${SITE_ID}.v9.pending-celebration`;
   const SYNC_TIMEOUT_MS = 15000;
   const CATALOG_TIMEOUT_MS = 15000;
   const CATALOG_FETCH_CONCURRENCY = 4;

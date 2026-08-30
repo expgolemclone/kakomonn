@@ -27,7 +27,7 @@ export async function handleRequest(request, env, fetcher = fetch) {
     ["/questions", ["POST"]],
     ["/speech-token", ["POST"]],
   ]);
-  if (!url.pathname.startsWith("/v8/")) {
+  if (!url.pathname.startsWith("/v9/")) {
     return errorResponse("not_found", 404);
   }
   const route = url.pathname.slice(3);

@@ -1,5 +1,9 @@
 - E2Eテストを通過してからpush/deployすること.
-- dashboardとreaderでは, `dueCardsCompleted`だけをprimary KPIとし, stabilityと解いた問題数は表示だけにすること.
+- dashboardとreaderでは, 日本時間の同じ日に`dueCardsCompleted`が`true`で, かつ`todayNewQuestionCount`が100問以上のときだけ`dailyKpiCompleted`をprimary KPIとして達成扱いにすること.
+- 新規問題数はsiteごとに, その問題IDを初めて解答した日に正誤を問わず1問だけ数えること. 同じ問題の再解答は数えないこと.
+- `dueCardsRemaining`と`newQuestionsRemaining`は常時表示し, stability, 解いた問題数, 正答率は詳細指標として表示すること.
+- sync API, reader, congratulationsを跨ぐ破壊的変更は, local test, smoke E2E, live-site E2Eを通過後にjjの`main`だけをoriginへpushすること. 続けてsync Workerとcongratulations Workerをdeployし, production testを通過させ, 最後に`npm run release:kakomonn-reader`で本番syncを使うlive E2EとGitHub Releaseまで完了すること. 途中の工程を省略して完了扱いにしないこと.
+- private repositoryではGitHub Actionsを使わないこと.
 
 - Cloudflare Workers Static Assetsで配信できる静的fileはWorkerを起動せず, 動的APIだけをWorkerへ通すこと.
 - 本番のobservability, 永続log, traceは無効にし, 障害調査時だけreal-time tailを使うこと.

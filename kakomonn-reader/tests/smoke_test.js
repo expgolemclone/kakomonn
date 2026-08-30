@@ -490,7 +490,7 @@ async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v8/speech-token",
+        (call) => new URL(call.url).pathname === "/v9/speech-token",
       ).length,
   );
 }
@@ -842,7 +842,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
     (route) =>
       route.fulfill({
         contentType: "text/html; charset=utf-8",
-        body: "<!doctype html><html><body><h1>dueCardsCompleted達成</h1></body></html>",
+        body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
       }),
   );
   const errors = await preparePage(page, "audio-manual", {
@@ -861,7 +861,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
       window.__syncMock.nextCelebration = {
         site: "chushoks.kakomonn.com",
         date: "2026-08-10",
-        dueCardsCompleted: true,
+        dailyKpiCompleted: true,
       };
     });
     await markAnswerResult(childFrame, "correct");
@@ -898,7 +898,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
     await page.waitForURL((url) =>
       url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
-    assert.equal(new URL(page.url()).searchParams.get("dueCardsCompleted"), "true");
+    assert.equal(new URL(page.url()).searchParams.get("dailyKpiCompleted"), "true");
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
@@ -926,10 +926,10 @@ async function assertIncorrectSkip(context, script) {
     );
     const calls = await page.evaluate(() => ({
       attempts: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v8/attempts",
+        (call) => new URL(call.url).pathname === "/v9/attempts",
       ),
       next: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v8/next",
+        (call) => new URL(call.url).pathname === "/v9/next",
       ),
     }));
     assert.equal(calls.attempts.length, 1);
@@ -1518,7 +1518,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v8/attempts",
+              new URL(call.url).pathname === "/v9/attempts",
           ).length,
       ),
       0,
@@ -1600,7 +1600,7 @@ async function main() {
 
     const stateCallsAfterAnswer = await page.evaluate(() =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v8/state",
+        (call) => new URL(call.url).pathname === "/v9/state",
       ).length,
     );
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -1608,7 +1608,7 @@ async function main() {
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v8/state",
+          (call) => new URL(call.url).pathname === "/v9/state",
         ).length,
       ),
       stateCallsAfterAnswer,
@@ -1675,7 +1675,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v8/attempts",
+              new URL(call.url).pathname === "/v9/attempts",
           ).length,
       ),
       1,
@@ -1704,7 +1704,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v8/attempts",
+              new URL(call.url).pathname === "/v9/attempts",
           ).length,
       ),
       1,
@@ -1722,7 +1722,7 @@ async function main() {
 
     const stateCallsBeforeResume = await page.evaluate(() =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v8/state",
+        (call) => new URL(call.url).pathname === "/v9/state",
       ).length,
     );
     await page.evaluate(() => {
@@ -1738,7 +1738,7 @@ async function main() {
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v8/state",
+          (call) => new URL(call.url).pathname === "/v9/state",
         ).length,
       ),
       stateCallsBeforeResume,
@@ -2126,7 +2126,7 @@ async function main() {
     );
     const iosStateCallsBeforeResume = await iosPage.evaluate(() =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v8/state",
+        (call) => new URL(call.url).pathname === "/v9/state",
       ).length,
     );
     await iosPage.evaluate(() => {
@@ -2142,7 +2142,7 @@ async function main() {
     assert.equal(
       await iosPage.evaluate(() =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v8/state",
+          (call) => new URL(call.url).pathname === "/v9/state",
         ).length,
       ),
       iosStateCallsBeforeResume,
@@ -2161,7 +2161,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v8/attempts",
+              new URL(call.url).pathname === "/v9/attempts",
           ).length,
       ),
       1,

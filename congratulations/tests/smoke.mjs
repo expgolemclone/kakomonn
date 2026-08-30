@@ -40,7 +40,7 @@ assert.deepEqual(manifest.experiences.map(({ id }) => id), expectedIds);
 const celebration = {
   site: "chushoks.kakomonn.com",
   date: "2026-08-13",
-  dueCardsCompleted: true,
+  dailyKpiCompleted: true,
 };
 const search = celebrationSearch(celebration);
 assert.deepEqual(parseCelebration(search), celebration);
@@ -48,7 +48,7 @@ for (const invalidSearch of [
   "",
   `${search}&extra=1`,
   search.replace("2026-08-13", "2026-02-30"),
-  search.replace("dueCardsCompleted=true", "dueCardsCompleted=false"),
+  search.replace("dailyKpiCompleted=true", "dailyKpiCompleted=false"),
   `${search}&site=chushoks.kakomonn.com`,
 ]) {
   assert.throws(() => parseCelebration(invalidSearch), /invalid/i);

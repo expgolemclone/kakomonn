@@ -17,7 +17,7 @@ function sameCelebration(left, right) {
   return (
     left?.site === right.site &&
     left?.date === right.date &&
-    left?.dueCardsCompleted === right.dueCardsCompleted
+    left?.dailyKpiCompleted === right.dailyKpiCompleted
   );
 }
 
@@ -39,8 +39,8 @@ try {
   const selected = chooseCelebration(validatedManifest);
   const entryUrl = new URL(selected.entry, window.location.href);
 
-  document.title = `dueCardsCompleted achieved | ${selected.label}`;
-  frame.title = `dueCardsCompleted celebration - ${selected.label}`;
+  document.title = `dailyKpiCompleted achieved | ${selected.label}`;
+  frame.title = `dailyKpiCompleted celebration - ${selected.label}`;
   frame.dataset.experienceId = selected.id;
 
   const readyTimeout = window.setTimeout(() => {

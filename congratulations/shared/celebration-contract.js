@@ -1,8 +1,8 @@
 const SITE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const REQUIRED_KEYS = [
+  "dailyKpiCompleted",
   "date",
-  "dueCardsCompleted",
   "site",
 ];
 
@@ -28,13 +28,13 @@ export function parseCelebration(search) {
   if (!SITE_PATTERN.test(site ?? "") || !validDate(date ?? "")) {
     throw new TypeError("Celebration identity is invalid.");
   }
-  if (parameters.get("dueCardsCompleted") !== "true") {
+  if (parameters.get("dailyKpiCompleted") !== "true") {
     throw new TypeError("Celebration metrics are invalid.");
   }
   return {
     site,
     date,
-    dueCardsCompleted: true,
+    dailyKpiCompleted: true,
   };
 }
 

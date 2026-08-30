@@ -16,7 +16,7 @@ const origin = "https://kakomonn-congratulations.kakomonn.workers.dev";
 const search = celebrationSearch({
   site: "chushoks.kakomonn.com",
   date: "2026-08-13",
-  dueCardsCompleted: true,
+  dailyKpiCompleted: true,
 });
 
 function captureErrors(page) {

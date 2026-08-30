@@ -7,6 +7,37 @@
     }
   }
 
+  function isLearningMetrics(metrics) {
+    return (
+      metrics !== null &&
+      typeof metrics === "object" &&
+      Number.isSafeInteger(metrics.stabilityDays) &&
+      metrics.stabilityDays >= 0 &&
+      typeof metrics.dailyKpiCompleted === "boolean" &&
+      typeof metrics.dueCardsCompleted === "boolean" &&
+      Number.isSafeInteger(metrics.dueCardsRemaining) &&
+      metrics.dueCardsRemaining >= 0 &&
+      metrics.dueCardsCompleted === (metrics.dueCardsRemaining === 0) &&
+      Number.isSafeInteger(metrics.todayNewQuestionCount) &&
+      metrics.todayNewQuestionCount >= 0 &&
+      metrics.newQuestionGoal === 100 &&
+      Number.isSafeInteger(metrics.newQuestionsRemaining) &&
+      metrics.newQuestionsRemaining ===
+        Math.max(0, metrics.newQuestionGoal - metrics.todayNewQuestionCount) &&
+      metrics.dailyKpiCompleted ===
+        (metrics.dueCardsCompleted && metrics.newQuestionsRemaining === 0) &&
+      Number.isSafeInteger(metrics.todayStabilityDaysDelta) &&
+      Number.isSafeInteger(metrics.attemptedQuestionCount) &&
+      metrics.attemptedQuestionCount >= 0 &&
+      Number.isSafeInteger(metrics.todayAttemptedQuestionCount) &&
+      metrics.todayAttemptedQuestionCount >= 0 &&
+      (metrics.todayCorrectRatePercent === null ||
+        (Number.isSafeInteger(metrics.todayCorrectRatePercent) &&
+          metrics.todayCorrectRatePercent >= 0 &&
+          metrics.todayCorrectRatePercent <= 100))
+    );
+  }
+
   function isSyncState(value) {
     const validCatalog =
       value?.catalog === null ||
@@ -18,25 +49,7 @@
         value.catalog.updatedAtMs > 0 &&
         Number.isSafeInteger(value.catalog.generation) &&
         value.catalog.generation > 0);
-    const metrics = value?.learningMetrics;
-    const validLearningMetrics =
-      metrics !== null &&
-      typeof metrics === "object" &&
-      Number.isSafeInteger(metrics.stabilityDays) &&
-      metrics.stabilityDays >= 0 &&
-      typeof metrics.dueCardsCompleted === "boolean" &&
-      Number.isSafeInteger(metrics.dueCardsRemaining) &&
-      metrics.dueCardsRemaining >= 0 &&
-      metrics.dueCardsCompleted === (metrics.dueCardsRemaining === 0) &&
-      Number.isSafeInteger(metrics.todayStabilityDaysDelta) &&
-      Number.isSafeInteger(metrics.attemptedQuestionCount) &&
-      metrics.attemptedQuestionCount >= 0 &&
-      Number.isSafeInteger(metrics.todayAttemptedQuestionCount) &&
-      metrics.todayAttemptedQuestionCount >= 0 &&
-      (metrics.todayCorrectRatePercent === null ||
-        (Number.isSafeInteger(metrics.todayCorrectRatePercent) &&
-          metrics.todayCorrectRatePercent >= 0 &&
-          metrics.todayCorrectRatePercent <= 100));
+    const validLearningMetrics = isLearningMetrics(value?.learningMetrics);
     return (
       value !== null &&
       typeof value === "object" &&
@@ -69,23 +82,7 @@
       value.attempt.previousStabilityDays >= 0 &&
       Number.isSafeInteger(value.attempt.resultingStabilityDays) &&
       value.attempt.resultingStabilityDays >= 0 &&
-      metrics !== null &&
-      typeof metrics === "object" &&
-      Number.isSafeInteger(metrics.stabilityDays) &&
-      metrics.stabilityDays >= 0 &&
-      typeof metrics.dueCardsCompleted === "boolean" &&
-      Number.isSafeInteger(metrics.dueCardsRemaining) &&
-      metrics.dueCardsRemaining >= 0 &&
-      metrics.dueCardsCompleted === (metrics.dueCardsRemaining === 0) &&
-      Number.isSafeInteger(metrics.todayStabilityDaysDelta) &&
-      Number.isSafeInteger(metrics.attemptedQuestionCount) &&
-      metrics.attemptedQuestionCount >= 0 &&
-      Number.isSafeInteger(metrics.todayAttemptedQuestionCount) &&
-      metrics.todayAttemptedQuestionCount >= 0 &&
-      (metrics.todayCorrectRatePercent === null ||
-        (Number.isSafeInteger(metrics.todayCorrectRatePercent) &&
-          metrics.todayCorrectRatePercent >= 0 &&
-          metrics.todayCorrectRatePercent <= 100)) &&
+      isLearningMetrics(metrics) &&
       isNextQuestion(value.nextQuestion) &&
       validCelebration
     );
@@ -106,10 +103,10 @@
       typeof value === "object" &&
       !Array.isArray(value) &&
       Object.keys(value).sort().join(",") ===
-        "date,dueCardsCompleted,site" &&
+        "dailyKpiCompleted,date,site" &&
       value.site === SITE_ID &&
       isCalendarDate(value.date) &&
-      value.dueCardsCompleted === true
+      value.dailyKpiCompleted === true
     );
   }
 
@@ -313,13 +310,13 @@
 
   function requestSyncState(token) {
     const parameters = new URLSearchParams({ site: SITE_ID });
-    return requestSyncResponse("GET", `/v8/state?${parameters}`, token, isSyncState);
+    return requestSyncResponse("GET", `/v9/state?${parameters}`, token, isSyncState);
   }
 
   function requestAttemptResult(token, operation) {
     return requestSyncResponse(
       "POST",
-      "/v8/attempts",
+      "/v9/attempts",
       token,
       isAttemptResponse,
       {
@@ -336,11 +333,11 @@
     if (excludeQuestionId !== null) {
       parameters.set("excludeQuestionId", excludeQuestionId);
     }
-    return requestSyncResponse("GET", `/v8/next?${parameters}`, token, isNextResponse);
+    return requestSyncResponse("GET", `/v9/next?${parameters}`, token, isNextResponse);
   }
 
   function requestCatalogUpdate(token, questionIds, expectedGeneration) {
-    return requestSyncResponse("POST", "/v8/questions", token, isCatalogResponse, {
+    return requestSyncResponse("POST", "/v9/questions", token, isCatalogResponse, {
       site: SITE_ID,
       questionIds,
       expectedGeneration,
@@ -348,7 +345,7 @@
   }
 
   function requestSpeechTokenResult(token) {
-    return requestSyncResponse("POST", "/v8/speech-token", token, isSpeechTokenResponse);
+    return requestSyncResponse("POST", "/v9/speech-token", token, isSpeechTokenResponse);
   }
 
   function clearAzureSpeechToken() {

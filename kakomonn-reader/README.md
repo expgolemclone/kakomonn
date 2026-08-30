@@ -13,9 +13,9 @@
 - 正解時は`NORMAL` 88.9%, `RARE` 10%, `SUPER RARE` 1%, `SSR` 0.1%からsecure randomで1種類を選び, tierごとの`That's Right`表示, chime, 英語音声を再生します.
 - 正解または不正解が表示された時点で, 解答記録を`kakomonn-sync`へ保存します. 保存responseに含まれる次問を端末へ保持するため, `次の問題へ`の操作では追加のWorker通信を行いません.
 - Windowsのopen commandとiPhone Safariは`https://kakomonn-sync.kakomonn.workers.dev/open`を開き, 保存済みの同期tokenでFSRSに基づく次の問題を取得します. launcherからreaderと問題iframeまでは同じuserscript session内で切り替えます. token未設定または認証失敗時は, 同じ画面の同期設定へtokenを保存できます. tokenはURLへ含めません.
-- 期限を迎えた最後のcardを解答して`dueCardsCompleted`が`true`になると, その日のprimary KPI達成を祝う専用pageへ移動します. 同じ日の祝福はsiteごとに1回だけです.
+- 日本時間の同じ日に, 期限を迎えた全cardの解答と新規問題100問の初回解答を両方完了して`dailyKpiCompleted`が`true`になると, primary KPI達成を祝う専用pageへ移動します. 同じ日の祝福はsiteごとに1回だけです.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
-- 現在の問題catalogに含まれる全問題のstabilityを合計して切り捨てた定着日数stabilityDaysと解答履歴. 値は`kakomonn-sync`へ保存され,Windows 11 ChromeとiPhone Safariで共有されます. 問題画面では`dueCardsRemaining`を常時表示し, クリックすると`dueCardsCompleted`, `todayStabilityDaysDelta`, `todayAttemptedQuestionCount`, `todayCorrectRatePercent`も確認できます. 同期Workerのrootでは`dueCardsCompleted`, `dueCardsRemaining`, `stabilityDays`, `todayStabilityDaysDelta`, `attemptedQuestionCount`, `todayAttemptedQuestionCount`, `todayCorrectRatePercent`, 直近31日間の`dailyCorrectRatePercent`を確認できます. 解いた問題数は問題IDの種類数で,同じ問題を同じ日に繰り返しても1問として数えます. 正答率は同じ日の全attemptを分母にするため, 同じ問題の繰り返しも個別に数えます.
+- 現在の問題catalogに含まれる全問題のstabilityを合計して切り捨てた定着日数stabilityDaysと解答履歴. 値は`kakomonn-sync`へ保存され, Windows 11 ChromeとiPhone Safariで共有されます. 問題画面では`dueCardsRemaining`と`newQuestionsRemaining`を常時表示し, クリックすると`dailyKpiCompleted`, `dueCardsCompleted`, `todayNewQuestionCount`, `newQuestionGoal`, `todayStabilityDaysDelta`, `todayAttemptedQuestionCount`, `todayCorrectRatePercent`も確認できます. 同期Workerのrootでも同じ指標と, 直近31日間の`dailyNewQuestionCount`と`dailyCorrectRatePercent`を確認できます. 新規問題数はsite内でその問題IDを初めて解答した日に正誤を問わず1問だけ数えます. 解いた問題数は日別では同じ問題を同じ日に繰り返しても1問として数え, 正答率は同じ日の全attemptを分母にするため同じ問題の繰り返しも個別に数えます.
 - 問題catalogは固定の`question/no`範囲を持ちません. 24時間ごとに`/createques`と`/list`から年度listを再発見し, 各listの全paginationにある実在の問題IDを同期します. サイトが同じ構造で新年度を追加する限り, コード変更は不要です.
 - 解答後に, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でクリップボードへコピー. `yy`でもコピーできます.
 
@@ -100,9 +100,7 @@ npm test
 
 `npm run test:kakomonn-live-sync`で最後のlive E2Eだけを再実行できますが,build,local test,smoke test,live-site E2Eを含む完全な完了条件は`npm test`です. live-sync E2Eをskipまたはforce通過させるoptionはありません. `npm run test:smoke`には,Chromiumの回帰テストに加えて,Playwright WebKitをiPhone相当のviewportとmobile設定で動かすテストが含まれます.
 
-GitHub Actionsでは, `macos-26`, Xcode 26.6, iPhone 17, iOS 26.5 Simulator上のactual Mobile Safari E2Eも実行します. Appium XCUITestによるnative tapで回答, Markdown copy, 次問遷移を操作し, copy結果はSimulatorのactual pasteboardから取得します. 同期とTampermonkeyの`GM` APIだけをtest doubleへ置換し, `navigator.clipboard`はactual Safari implementationを使用します.
-
-同じMac環境では`npm run test:kakomonn-ios-safari`で再実行できます. actual Tampermonkey extension, iPhone実機, production同期, actual音声再生はこのtestの対象外です.
+対応するmacOS, Xcode, iOS Simulatorを用意したローカル環境では, `npm run test:kakomonn-ios-safari`でactual Mobile Safari E2Eを実行できます. Appium XCUITestによるnative tapで回答, Markdown copy, 次問遷移を操作し, copy結果はSimulatorのactual pasteboardから取得します. 同期とTampermonkeyの`GM` APIだけをtest doubleへ置換し, `navigator.clipboard`はactual Safari implementationを使用します. actual Tampermonkey extension, iPhone実機, production同期, actual音声再生はこのtestの対象外です.
 
 ## Acknowledgements
 

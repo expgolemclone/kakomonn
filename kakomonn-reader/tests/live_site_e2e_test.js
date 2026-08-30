@@ -389,12 +389,12 @@ async function runLiveCatalogCrawlCase(browser, script) {
     await injectReader(page, script);
 
     await page.waitForFunction(
-      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v8/questions"),
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v9/questions"),
       null,
       { timeout: 180_000 },
     );
     const catalogCall = await page.evaluate(() =>
-      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v8/questions"),
+      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v9/questions"),
     );
     assert.equal(Array.isArray(catalogCall.body.questionIds), true);
     assert.equal(catalogCall.body.expectedGeneration, 0);
@@ -619,7 +619,7 @@ async function runCase(
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v8/attempts",
+          (call) => new URL(call.url).pathname === "/v9/attempts",
         ).length,
       ),
       1,
@@ -627,7 +627,7 @@ async function runCase(
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.some(
-          (call) => new URL(call.url).pathname === "/v8/next",
+          (call) => new URL(call.url).pathname === "/v9/next",
         ),
       ),
       false,
@@ -1247,7 +1247,7 @@ async function runCrossDomainActivationCase(browser, script) {
       );
       const stateSites = await page.evaluate(() =>
         window.__syncMock.calls
-          .filter((call) => new URL(call.url).pathname === "/v8/state")
+          .filter((call) => new URL(call.url).pathname === "/v9/state")
           .map((call) => new URL(call.url).searchParams.get("site"))
       );
       assert.equal(stateSites.length >= 1, true);

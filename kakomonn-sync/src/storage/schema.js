@@ -1,7 +1,7 @@
 import { getTokyoDate, tokyoDateRangeMs } from "../dates.js";
 import { canonicalQuestionIds } from "../contracts.js";
 
-const CURRENT_SCHEMA_VERSION = 9;
+const CURRENT_SCHEMA_VERSION = 10;
 
 function tableDefinition(storage, tableName) {
   return storage.sql
@@ -48,6 +48,8 @@ function createCurrentTables(storage) {
       attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
       correct_attempt_count INTEGER NOT NULL DEFAULT 0
         CHECK (correct_attempt_count >= 0),
+      new_question_count INTEGER NOT NULL DEFAULT 0
+        CHECK (new_question_count >= 0),
       CHECK (correct_attempt_count <= attempt_count),
       PRIMARY KEY (site, date)
     ) WITHOUT ROWID;
@@ -76,10 +78,11 @@ function createCurrentTables(storage) {
       today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0),
       today_attempt_count INTEGER NOT NULL CHECK (today_attempt_count >= 0),
       today_correct_attempt_count INTEGER NOT NULL CHECK (today_correct_attempt_count >= 0),
+      today_new_question_count INTEGER NOT NULL CHECK (today_new_question_count >= 0),
       CHECK (today_correct_attempt_count <= today_attempt_count)
     ) WITHOUT ROWID;
 
-    CREATE TABLE daily_due_card_achievements (
+    CREATE TABLE daily_kpi_achievements (
       site TEXT NOT NULL,
       date TEXT NOT NULL,
       operation_id TEXT NOT NULL UNIQUE,
@@ -391,6 +394,64 @@ function migrateSchemaV8ToV9(storage) {
   );
 }
 
+function migrateSchemaV9ToV10(storage, today) {
+  storage.sql.exec(`
+    ALTER TABLE stability_history
+      ADD COLUMN new_question_count INTEGER NOT NULL DEFAULT 0
+      CHECK (new_question_count >= 0);
+    ALTER TABLE learning_metrics
+      ADD COLUMN today_new_question_count INTEGER NOT NULL DEFAULT 0
+      CHECK (today_new_question_count >= 0);
+
+    DROP TABLE daily_due_card_achievements;
+    CREATE TABLE daily_kpi_achievements (
+      site TEXT NOT NULL,
+      date TEXT NOT NULL,
+      operation_id TEXT NOT NULL UNIQUE,
+      achieved_at_ms INTEGER NOT NULL CHECK (achieved_at_ms > 0),
+      PRIMARY KEY (site, date)
+    ) WITHOUT ROWID;
+  `);
+
+  const dailyNewQuestionCounts = new Map();
+  const firstAttempts = storage.sql
+    .exec(
+      `SELECT site, question_id, MIN(attempted_at_ms) AS first_attempted_at_ms
+       FROM attempts
+       GROUP BY site, question_id
+       ORDER BY site, question_id`
+    )
+    .toArray();
+  for (const attempt of firstAttempts) {
+    const date = getTokyoDate(new Date(attempt.first_attempted_at_ms));
+    const key = `${attempt.site}\0${date}`;
+    dailyNewQuestionCounts.set(key, (dailyNewQuestionCounts.get(key) ?? 0) + 1);
+  }
+  for (const [key, count] of dailyNewQuestionCounts) {
+    const separator = key.indexOf("\0");
+    const site = key.slice(0, separator);
+    const date = key.slice(separator + 1);
+    storage.sql.exec(
+      `UPDATE stability_history SET new_question_count = ?
+       WHERE site = ? AND date = ?`,
+      count,
+      site,
+      date
+    );
+    if (date === today) {
+      storage.sql.exec(
+        `UPDATE learning_metrics SET today_new_question_count = ?
+         WHERE site = ?`,
+        count,
+        site
+      );
+    }
+  }
+  storage.sql.exec(
+    "UPDATE schema_metadata SET version = 10 WHERE singleton = 1"
+  );
+}
+
 function migrateLegacySchema(storage, today) {
   const { startMs, endMs } = tokyoDateRangeMs(today);
   storage.sql.exec(`
@@ -564,6 +625,11 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     const schemaV3Tables = [...versionedCoreTables, "site_settings"];
     const currentTables = [
       ...versionedCoreTables,
+      "daily_kpi_achievements",
+      "learning_metrics",
+    ];
+    const dueCardMetricTables = [
+      ...versionedCoreTables,
       "daily_due_card_achievements",
       "learning_metrics",
     ];
@@ -577,8 +643,9 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       [4, thresholdMetricTables],
       [5, [...thresholdMetricTables, "learning_metrics"]],
       [6, [...thresholdMetricTables, "learning_metrics"]],
-      [7, currentTables],
-      [8, currentTables],
+      [7, dueCardMetricTables],
+      [8, dueCardMetricTables],
+      [9, dueCardMetricTables],
       [CURRENT_SCHEMA_VERSION, currentTables],
     ]);
     const legacyTables = [
@@ -651,6 +718,10 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     if (version === 8) {
       migrateSchemaV8ToV9(storage);
       version = 9;
+    }
+    if (version === 9) {
+      migrateSchemaV9ToV10(storage, today);
+      version = 10;
     }
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error("unsupported LearningState schema version");

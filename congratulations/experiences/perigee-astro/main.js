@@ -197,7 +197,7 @@ function makeSky(o) {
    Network nodes
    --------------------------------------------------------- */
 const NODES = [
-  { name: 'Atacama Beacon', loc: 'Cerro Paranal, Chile', lat: '−24.6272°', lon: '−70.4039°', el: '2635 m', see: '0.9″', ap: '0.6 m RC', status: 'live', target: 'dueCardsCompleted · confirmed' },
+  { name: 'Atacama Beacon', loc: 'Cerro Paranal, Chile', lat: '−24.6272°', lon: '−70.4039°', el: '2635 m', see: '0.9″', ap: '0.6 m RC', status: 'live', target: 'dailyKpiCompleted · confirmed' },
   { name: 'Pacific Chorus', loc: 'Hawaiʻi, USA', lat: '+19.8207°', lon: '−155.4681°', el: '3068 m', see: '1.1″', ap: '0.5 m Newt', status: 'slew', target: 'sending → one more cheer' },
   { name: 'Canary Glow', loc: 'Canary Islands, ES', lat: '+28.7606°', lon: '−17.8814°', el: '2396 m', see: '1.0″', ap: '0.4 m APO', status: 'live', target: 'today · beautifully complete' },
   { name: 'Karoo Spark', loc: 'Sutherland, ZA', lat: '−32.3789°', lon: '+20.8107°', el: '1798 m', see: '1.3″', ap: '0.7 m CDK', status: 'live', target: 'your finish · recorded' },

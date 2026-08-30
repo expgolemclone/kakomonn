@@ -1,11 +1,11 @@
 # Congratulations
 
 This static site celebrates a learner when `kakomonn-reader` reports that
-`dueCardsCompleted` is `true`. Each visit selects one installed experience with
+`dailyKpiCompleted` is `true`. Each visit selects one installed experience with
 cryptographically unbiased randomness.
 
 The shell query string must contain exactly `site`, `date`, and
-`dueCardsCompleted=true`. The shell keeps the selected iframe URL free of
+`dailyKpiCompleted=true`. The shell keeps the selected iframe URL free of
 achievement parameters so static experience documents share one browser cache
 entry. An experience opened directly accepts the same query string. Invalid or
 incomplete celebration data is rejected.

@@ -124,7 +124,7 @@ async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
     await waitForNextQuestion(page);
     const answerCalls = await page.evaluate(() =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v8/attempts"
+        (call) => new URL(call.url).pathname === "/v9/attempts"
       )
     );
     assert.equal(answerCalls.length, 1);
@@ -134,7 +134,7 @@ async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.some(
-          (call) => new URL(call.url).pathname === "/v8/next"
+          (call) => new URL(call.url).pathname === "/v9/next"
         )
       ),
       false
@@ -164,13 +164,13 @@ async function explanationExpiryRecordsAndAdvances(browser, script) {
     await page.waitForFunction(
       () =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v8/attempts"
+          (call) => new URL(call.url).pathname === "/v9/attempts"
         ).length === 1
     );
     const recorded = await page.evaluate(() => ({
       answered: window.__syncMock.attemptCount,
       body: window.__syncMock.calls.find(
-        (call) => new URL(call.url).pathname === "/v8/attempts"
+        (call) => new URL(call.url).pathname === "/v9/attempts"
       ).body,
     }));
     assert.equal(recorded.answered, 1);

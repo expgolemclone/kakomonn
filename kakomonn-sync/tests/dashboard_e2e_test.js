@@ -23,6 +23,7 @@ const history = Array.from({ length: 31 }, (_, index) => {
     closingStabilityDays: currentWeekIndex < 0 ? null : closingStabilityDaysHistory[currentWeekIndex],
     stabilityDaysDelta: currentWeekIndex < 0 ? null : deltaHistory[currentWeekIndex],
     dailyAttemptedQuestionCount: currentWeekIndex < 0 ? 0 : attemptedQuestionCountHistory[currentWeekIndex],
+    dailyNewQuestionCount: currentWeekIndex < 0 ? 0 : attemptedQuestionCountHistory[currentWeekIndex],
     dailyCorrectRatePercent: currentWeekIndex < 0 ? null : correctRateHistory[currentWeekIndex],
   };
 });
@@ -36,6 +37,10 @@ const dailyDetails = {
       date: "2026-08-10",
       opening_stability_days: 9808,
       closing_stability_days: 9912,
+      attempted_question_count: 28,
+      new_question_count: 100,
+      attempt_count: 42,
+      correct_attempt_count: 28,
     }],
     attempts: [{
       site,
@@ -119,7 +124,7 @@ async function installApiMock(page) {
         if (headers.get("Authorization") !== `Bearer ${tokenValue}`) {
           return respond(401, { error: "unauthorized" });
         }
-        if (url.pathname === "/v8/dashboard") {
+        if (url.pathname === "/v9/dashboard") {
           const requestedSite = [siteValue, otherSiteValue].includes(url.searchParams.get("site"))
             ? url.searchParams.get("site")
             : siteValue;
@@ -134,8 +139,12 @@ async function installApiMock(page) {
               today: "2026-08-10",
               learningMetrics: {
                 stabilityDays: requestedSite === siteValue ? 9912 : 2999,
+                dailyKpiCompleted: requestedSite === siteValue,
                 dueCardsCompleted: requestedSite === siteValue,
                 dueCardsRemaining: requestedSite === siteValue ? 0 : 12,
+                todayNewQuestionCount: requestedSite === siteValue ? 100 : 30,
+                newQuestionGoal: 100,
+                newQuestionsRemaining: requestedSite === siteValue ? 0 : 70,
                 todayStabilityDaysDelta: requestedSite === siteValue ? 104 : 21,
                 attemptedQuestionCount: requestedSite === siteValue ? 640 : 100,
                 todayAttemptedQuestionCount: requestedSite === siteValue ? 28 : 4,
@@ -153,7 +162,7 @@ async function installApiMock(page) {
             },
           });
         }
-        if (url.pathname === "/v8/daily-details") {
+        if (url.pathname === "/v9/daily-details") {
           const requestedSite = url.searchParams.get("site");
           const date = url.searchParams.get("date");
           if (date === window.__delayedDetailDate) {
@@ -185,11 +194,12 @@ async function assertDashboard(page) {
   await page.addScriptTag({ content: appSource });
   await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+104");
 
-  assert.equal(await page.locator("#primary-kpi-title").innerText(), "dueCardsCompleted");
-  assert.equal(await page.locator("#due-cards-completed").innerText(), "達成");
-  assert.equal(await page.locator("#due-cards-completed").getAttribute("data-completed"), "true");
-  assert.equal(await page.locator(".primary-kpi-remaining > span").innerText(), "dueCardsRemaining");
+  assert.equal(await page.locator("#primary-kpi-title").innerText(), "dailyKpiCompleted");
+  assert.equal(await page.locator("#daily-kpi-completed").innerText(), "達成");
+  assert.equal(await page.locator("#daily-kpi-completed").getAttribute("data-completed"), "true");
+  assert.deepEqual(await page.locator(".primary-kpi-remaining > span").allInnerTexts(), ["dueCardsRemaining", "newQuestionsRemaining"]);
   assert.equal(await page.locator("#due-cards-remaining").innerText(), "0");
+  assert.equal(await page.locator("#new-questions-remaining").innerText(), "0");
   assert.equal(await page.locator("#today-stability-days-delta").innerText(), "+104");
   assert.equal(await page.locator("#stability-days").innerText(), "9,912");
   assert.equal(await page.locator(".goal-card").count(), 0);
@@ -243,16 +253,16 @@ async function assertDashboard(page) {
   assert.equal(text.includes("祝福"), false);
   assert.equal(await page.locator(".primary-kpi-card").innerText().then((value) => value.includes("解いた問題数")), false);
   const calls = await page.evaluate(() => window.__apiCalls);
-  assert.equal(calls.some((call) => !call.pathname.startsWith("/v8/")), false);
-  assert.equal(calls.filter((call) => call.pathname === "/v8/dashboard").length, 1);
-  assert.equal(calls.filter((call) => ["/v8/sites", "/v8/state", "/v8/history"].includes(call.pathname)).length, 0);
+  assert.equal(calls.some((call) => !call.pathname.startsWith("/v9/")), false);
+  assert.equal(calls.filter((call) => call.pathname === "/v9/dashboard").length, 1);
+  assert.equal(calls.filter((call) => ["/v9/sites", "/v9/state", "/v9/history"].includes(call.pathname)).length, 0);
   assert.deepEqual(errors, []);
 
   await page.locator('[data-chart-date="2026-08-10"]').click();
   await page.waitForFunction(() => document.querySelector("#attempts-table tbody td")?.textContent === "chushoks.kakomonn.com");
   assert.equal(await page.locator('[data-chart-date="2026-08-10"]').getAttribute("aria-pressed"), "true");
   assert.equal(await page.locator("#daily-details-date").innerText(), "2026-08-10");
-  assert.equal(await page.locator("#stability-history-table th").allInnerTexts().then((values) => values.join("\n")), "site\ndate\nopening_stability_days\nclosing_stability_days");
+  assert.equal(await page.locator("#stability-history-table th").allInnerTexts().then((values) => values.join("\n")), "site\ndate\nopening_stability_days\nclosing_stability_days\nattempted_question_count\nnew_question_count\nattempt_count\ncorrect_attempt_count");
   assert.equal(await page.locator("#attempts-table th").allInnerTexts().then((values) => values.join("\n")), "site\noperation_id\nquestion_id\nattempted_at_ms\nanswer_result\nprevious_card_stability_days\nresulting_card_stability_days");
   assert.equal(await page.locator("#attempts-table tbody").innerText().then((value) => value.includes("1786320000000")), true);
   assert.equal(await page.locator("#attempts-table tbody").innerText().then((value) => value.includes("1,786,320,000,000")), false);
@@ -281,8 +291,9 @@ async function assertDashboard(page) {
 
   await page.locator("#site-select").selectOption(otherSite);
   await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+21");
-  assert.equal(await page.locator("#due-cards-completed").innerText(), "未達成");
+  assert.equal(await page.locator("#daily-kpi-completed").innerText(), "未達成");
   assert.equal(await page.locator("#due-cards-remaining").innerText(), "12");
+  assert.equal(await page.locator("#new-questions-remaining").innerText(), "70");
   assert.equal(await page.locator("#today-correct-rate-percent").innerText(), "--");
   assert.equal(await page.locator("#today-correct-rate-percent-unit").isHidden(), true);
   await page.locator("#site-select").selectOption(site);
@@ -306,7 +317,7 @@ async function assertDashboard(page) {
   await page.locator("#refresh-button").click();
   await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "更新日 2026-08-10");
   const finalCalls = await page.evaluate(() => window.__apiCalls);
-  const finalDashboardCall = finalCalls.filter((call) => call.pathname === "/v8/dashboard").at(-1);
+  const finalDashboardCall = finalCalls.filter((call) => call.pathname === "/v9/dashboard").at(-1);
   assert.equal(finalDashboardCall.authorization, `Bearer ${token}`);
 }
 

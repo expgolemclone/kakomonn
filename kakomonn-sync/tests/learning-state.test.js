@@ -37,7 +37,7 @@ async function reset() {
       DROP TABLE IF EXISTS usage_audit;
     `);
     for (const table of [
-      "daily_due_card_achievements",
+      "daily_kpi_achievements",
       "attempts",
       "stability_history",
       "cards",
@@ -56,6 +56,13 @@ function rebuildUsageTablesAsV8(storage) {
     DROP INDEX IF EXISTS cards_by_site_due;
     DROP INDEX IF EXISTS attempts_by_site_attempted_at_operation;
     DROP INDEX IF EXISTS questions_by_site_attempted_number;
+
+    DROP TABLE daily_kpi_achievements;
+    CREATE TABLE daily_due_card_achievements (
+      site TEXT NOT NULL, date TEXT NOT NULL,
+      operation_id TEXT NOT NULL UNIQUE, achieved_at_ms INTEGER NOT NULL,
+      PRIMARY KEY (site, date)
+    ) WITHOUT ROWID;
 
     ALTER TABLE cards RENAME TO cards_v9;
     CREATE TABLE cards (
@@ -78,6 +85,23 @@ function rebuildUsageTablesAsV8(storage) {
     ) WITHOUT ROWID;
     INSERT INTO questions SELECT site, question_id FROM questions_v9;
     DROP TABLE questions_v9;
+
+    ALTER TABLE learning_metrics RENAME TO learning_metrics_v10;
+    CREATE TABLE learning_metrics (
+      site TEXT PRIMARY KEY,
+      stability_days REAL NOT NULL,
+      attempted_question_count INTEGER NOT NULL,
+      daily_metrics_date TEXT NOT NULL,
+      today_attempted_question_count INTEGER NOT NULL,
+      today_attempt_count INTEGER NOT NULL,
+      today_correct_attempt_count INTEGER NOT NULL
+    ) WITHOUT ROWID;
+    INSERT INTO learning_metrics
+    SELECT site, stability_days, attempted_question_count, daily_metrics_date,
+           today_attempted_question_count, today_attempt_count,
+           today_correct_attempt_count
+    FROM learning_metrics_v10;
+    DROP TABLE learning_metrics_v10;
 
     ALTER TABLE catalog_metadata RENAME TO catalog_metadata_v9;
     CREATE TABLE catalog_metadata (
@@ -172,6 +196,23 @@ async function seedReviewCard(
   });
 }
 
+async function seedTodayNewQuestionCount(
+  count,
+  date = "2026-08-10",
+  site = SITE
+) {
+  await runInRawDurableObject(stub(), (_instance, state) => {
+    state.storage.sql.exec(
+      `UPDATE learning_metrics
+       SET daily_metrics_date = ?, today_new_question_count = ?
+       WHERE site = ?`,
+      date,
+      count,
+      site
+    );
+  });
+}
+
 beforeEach(reset);
 
 describe("LearningState schema", () => {
@@ -226,7 +267,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 9 });
+      ).toEqual({ version: 10 });
       expect(
         state.storage.sql
           .exec(
@@ -256,8 +297,8 @@ describe("LearningState schema", () => {
       expect(
         state.storage.sql
           .exec(
-            `SELECT attempted_question_count, attempt_count,
-                    correct_attempt_count
+            `SELECT attempted_question_count, new_question_count,
+                    attempt_count, correct_attempt_count
              FROM stability_history
              WHERE site = ? AND date = '2026-08-10'`,
             SITE
@@ -265,6 +306,7 @@ describe("LearningState schema", () => {
           .toArray()[0]
       ).toEqual({
         attempted_question_count: 1,
+        new_question_count: 1,
         attempt_count: 1,
         correct_attempt_count: 1,
       });
@@ -335,7 +377,7 @@ describe("LearningState schema", () => {
       initializeLearningSchema(state.storage, NOW);
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 9 });
+      ).toEqual({ version: 10 });
       expect(
         state.storage.sql
           .exec(
@@ -345,9 +387,9 @@ describe("LearningState schema", () => {
       ).toEqual([]);
       expect(
         state.storage.sql
-          .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daily_due_card_achievements'")
+            .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daily_kpi_achievements'")
           .toArray()
-      ).toEqual([{ name: "daily_due_card_achievements" }]);
+      ).toEqual([{ name: "daily_kpi_achievements" }]);
       const indexes = state.storage.sql
         .exec(
           `SELECT name FROM sqlite_master
@@ -394,12 +436,13 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 9 });
+      ).toEqual({ version: 10 });
       expect(
         state.storage.sql
           .exec(
             `SELECT daily_metrics_date, today_attempted_question_count,
-                    today_attempt_count, today_correct_attempt_count
+                    today_attempt_count, today_correct_attempt_count,
+                    today_new_question_count
              FROM learning_metrics WHERE site = ?`,
             SITE
           )
@@ -409,14 +452,15 @@ describe("LearningState schema", () => {
         today_attempted_question_count: 0,
         today_attempt_count: 0,
         today_correct_attempt_count: 0,
+        today_new_question_count: 0,
       });
     });
   });
 
-  it("migrates legacy data to schema v9 without retaining threshold-based fields", async () => {
+  it("migrates legacy data to schema v10 without retaining threshold-based fields", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
-        DROP TABLE daily_due_card_achievements;
+        DROP TABLE daily_kpi_achievements;
         DROP TABLE attempts;
         DROP TABLE stability_history;
         DROP TABLE cards;
@@ -490,10 +534,10 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 9 });
+      ).toEqual({ version: 10 });
       expect(
         state.storage.sql
-          .exec("SELECT * FROM daily_due_card_achievements")
+          .exec("SELECT * FROM daily_kpi_achievements")
           .toArray()
       ).toEqual([]);
       expect(
@@ -506,6 +550,7 @@ describe("LearningState schema", () => {
         attempted_question_count: 1,
         attempt_count: 1,
         correct_attempt_count: 1,
+        new_question_count: 1,
       });
       expect(
         state.storage.sql.exec("SELECT * FROM learning_metrics").toArray()[0]
@@ -517,6 +562,7 @@ describe("LearningState schema", () => {
         today_attempted_question_count: 1,
         today_attempt_count: 1,
         today_correct_attempt_count: 1,
+        today_new_question_count: 1,
       });
       expect(
         state.storage.sql.exec("SELECT * FROM attempts").toArray()[0]
@@ -539,10 +585,10 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates schema v2 data to v9 without losing rows", async () => {
+  it("migrates schema v2 data to v10 without losing rows", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
-        DROP TABLE daily_due_card_achievements;
+        DROP TABLE daily_kpi_achievements;
         DROP TABLE attempts;
         DROP TABLE stability_history;
         DROP TABLE cards;
@@ -619,10 +665,10 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 9 });
+      ).toEqual({ version: 10 });
       expect(
         state.storage.sql
-          .exec("SELECT * FROM daily_due_card_achievements")
+          .exec("SELECT * FROM daily_kpi_achievements")
           .toArray()
       ).toEqual([]);
       expect(
@@ -651,6 +697,7 @@ describe("LearningState schema", () => {
         today_attempted_question_count: 1,
         today_attempt_count: 1,
         today_correct_attempt_count: 0,
+        today_new_question_count: 1,
       });
       expect(
         state.storage.sql.exec("SELECT * FROM stability_history").toArray()[0]
@@ -662,6 +709,7 @@ describe("LearningState schema", () => {
         attempted_question_count: 1,
         attempt_count: 1,
         correct_attempt_count: 0,
+        new_question_count: 1,
       });
       expect(
         state.storage.sql
@@ -711,11 +759,12 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 9 });
+      ).toEqual({ version: 10 });
       const cursor = state.storage.sql.exec(
         `SELECT stability_days, attempted_question_count,
                 daily_metrics_date, today_attempted_question_count,
-                today_attempt_count, today_correct_attempt_count
+                today_attempt_count, today_correct_attempt_count,
+                today_new_question_count
          FROM learning_metrics WHERE site = ?`,
         SITE
       );
@@ -726,6 +775,7 @@ describe("LearningState schema", () => {
       expect(metrics.today_attempted_question_count).toBe(2);
       expect(metrics.today_attempt_count).toBe(0);
       expect(metrics.today_correct_attempt_count).toBe(0);
+      expect(metrics.today_new_question_count).toBe(0);
       expect(cursor.rowsRead).toBe(1);
     });
   });
@@ -886,7 +936,7 @@ describe("learning metrics", () => {
     });
   });
 
-  it("returns the v8 attempt contract for correct and incorrect answers", async () => {
+  it("returns the v9 attempt contract for correct and incorrect answers", async () => {
     const correct = await stub().recordAttempt(
       SITE,
       "1",
@@ -1300,7 +1350,80 @@ describe("attempt idempotency and attempted question totals", () => {
   });
 });
 
-describe("daily due card celebrations", () => {
+describe("daily KPI celebrations", () => {
+  it("counts the first answer regardless of correctness and celebrates question 100", async () => {
+    await seedTodayNewQuestionCount(99);
+
+    const result = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(28),
+      "incorrect",
+      NOW
+    );
+
+    expect(result.learningMetrics).toMatchObject({
+      dailyKpiCompleted: true,
+      dueCardsCompleted: true,
+      dueCardsRemaining: 0,
+      todayNewQuestionCount: 100,
+      newQuestionGoal: 100,
+      newQuestionsRemaining: 0,
+    });
+    expect(result.celebration).toEqual({
+      site: SITE,
+      date: "2026-08-10",
+      dailyKpiCompleted: true,
+    });
+
+    const repeated = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(27),
+      "correct",
+      NOW + 1
+    );
+    expect(repeated.learningMetrics.todayNewQuestionCount).toBe(100);
+    expect(repeated).not.toHaveProperty("celebration");
+  });
+
+  it("isolates the daily new-question goal by site", async () => {
+    await stub().replaceCatalog(OTHER_SITE, ["1"], 0, NOW);
+    await seedTodayNewQuestionCount(99, "2026-08-10", OTHER_SITE);
+
+    const otherResult = await stub().recordAttempt(
+      OTHER_SITE,
+      "1",
+      operationId(26),
+      "correct",
+      NOW
+    );
+
+    expect(otherResult.learningMetrics.dailyKpiCompleted).toBe(true);
+    await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
+      learningMetrics: {
+        dailyKpiCompleted: false,
+        todayNewQuestionCount: 0,
+        newQuestionsRemaining: 100,
+      },
+    });
+  });
+
+  it("does not celebrate when the daily KPI was already complete", async () => {
+    await seedTodayNewQuestionCount(100);
+
+    const result = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(25),
+      "correct",
+      NOW
+    );
+
+    expect(result.learningMetrics.dailyKpiCompleted).toBe(true);
+    expect(result).not.toHaveProperty("celebration");
+  });
+
   it("counts only due cards in the current catalog", async () => {
     await seedReviewCard("1", 30, NOW);
     await seedReviewCard("2", 30, NOW + 1);
@@ -1341,6 +1464,7 @@ describe("daily due card celebrations", () => {
   });
 
   it("returns one celebration when the final due card is answered", async () => {
+    await seedTodayNewQuestionCount(100);
     await seedReviewCard("1", 30);
     await seedReviewCard("2", 30);
     const partial = await stub().recordAttempt(
@@ -1363,10 +1487,11 @@ describe("daily due card celebrations", () => {
     );
     expect(first.learningMetrics.dueCardsCompleted).toBe(true);
     expect(first.learningMetrics.dueCardsRemaining).toBe(0);
+    expect(first.learningMetrics.dailyKpiCompleted).toBe(true);
     expect(first.celebration).toEqual({
       site: SITE,
       date: "2026-08-10",
-      dueCardsCompleted: true,
+      dailyKpiCompleted: true,
     });
 
     const retry = await stub().recordAttempt(
@@ -1380,7 +1505,7 @@ describe("daily due card celebrations", () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(
         state.storage.sql
-          .exec("SELECT * FROM daily_due_card_achievements")
+          .exec("SELECT * FROM daily_kpi_achievements")
           .toArray()
       ).toEqual([
         {
@@ -1394,6 +1519,7 @@ describe("daily due card celebrations", () => {
   });
 
   it("does not celebrate a second completion on the same site and Tokyo date", async () => {
+    await seedTodayNewQuestionCount(100);
     await seedReviewCard("1", 30);
     const first = await stub().recordAttempt(
       SITE,
@@ -1418,6 +1544,7 @@ describe("daily due card celebrations", () => {
   });
 
   it("allows another celebration on the next Tokyo date", async () => {
+    await seedTodayNewQuestionCount(100);
     await seedReviewCard("1", 30);
     const first = await stub().recordAttempt(
       SITE,
@@ -1427,6 +1554,7 @@ describe("daily due card celebrations", () => {
       NOW
     );
     await seedReviewCard("2", 30, NOW + DAY_MS);
+    await seedTodayNewQuestionCount(100, "2026-08-11");
     const nextDay = await stub().recordAttempt(
       SITE,
       "2",
@@ -1439,7 +1567,7 @@ describe("daily due card celebrations", () => {
     expect(nextDay.celebration).toMatchObject({
       site: SITE,
       date: "2026-08-11",
-      dueCardsCompleted: true,
+      dailyKpiCompleted: true,
     });
   });
 
@@ -1450,7 +1578,7 @@ describe("daily due card celebrations", () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(
         state.storage.sql
-          .exec("SELECT COUNT(*) AS count FROM daily_due_card_achievements")
+          .exec("SELECT COUNT(*) AS count FROM daily_kpi_achievements")
           .toArray()[0].count
       ).toBe(0);
     });
@@ -1579,6 +1707,10 @@ describe("daily raw details", () => {
             date: "2026-08-10",
             opening_stability_days: 0,
             closing_stability_days: earlier.learningMetrics.stabilityDays,
+            attempted_question_count: 2,
+            new_question_count: 2,
+            attempt_count: 2,
+            correct_attempt_count: 1,
           },
         ],
         attempts: [
@@ -1645,9 +1777,9 @@ describe("daily raw details", () => {
   });
 });
 
-describe("v8 HTTP contract", () => {
+describe("v9 HTTP contract", () => {
   it("does not expose older API versions", async () => {
-    for (const version of ["v3", "v4", "v5", "v6", "v7"]) {
+    for (const version of ["v3", "v4", "v5", "v6", "v7", "v8"]) {
       const response = await SELF.fetch(
         `https://example.test/${version}/state?site=${SITE}`,
         { headers: AUTHORIZATION }
@@ -1658,8 +1790,8 @@ describe("v8 HTTP contract", () => {
 
   it("requires the configured bearer token", async () => {
     for (const url of [
-      "https://example.test/v8/sites",
-      `https://example.test/v8/daily-details?site=${SITE}&date=2026-08-10`,
+      "https://example.test/v9/sites",
+      `https://example.test/v9/daily-details?site=${SITE}&date=2026-08-10`,
     ]) {
       const missing = await SELF.fetch(url);
       const incorrect = await SELF.fetch(url, {
@@ -1671,12 +1803,12 @@ describe("v8 HTTP contract", () => {
   });
 
   it("lists sites and returns state and history", async () => {
-    const sites = await SELF.fetch("https://example.test/v8/sites", {
+    const sites = await SELF.fetch("https://example.test/v9/sites", {
       headers: AUTHORIZATION,
     });
     await expect(sites.json()).resolves.toEqual({ sites: [SITE] });
 
-    const state = await SELF.fetch(`https://example.test/v8/state?site=${SITE}`, {
+    const state = await SELF.fetch(`https://example.test/v9/state?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(state.status).toBe(200);
@@ -1691,8 +1823,12 @@ describe("v8 HTTP contract", () => {
       site: SITE,
       learningMetrics: {
         stabilityDays: 0,
+        dailyKpiCompleted: false,
         dueCardsCompleted: true,
         dueCardsRemaining: 0,
+        todayNewQuestionCount: 0,
+        newQuestionGoal: 100,
+        newQuestionsRemaining: 100,
         todayStabilityDaysDelta: 0,
         attemptedQuestionCount: 0,
         todayAttemptedQuestionCount: 0,
@@ -1703,7 +1839,7 @@ describe("v8 HTTP contract", () => {
     expect(stateBody.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
     const history = await SELF.fetch(
-      `https://example.test/v8/history?site=${SITE}&days=7`,
+      `https://example.test/v9/history?site=${SITE}&days=7`,
       { headers: AUTHORIZATION }
     );
     expect(history.status).toBe(200);
@@ -1714,11 +1850,12 @@ describe("v8 HTTP contract", () => {
       closingStabilityDays: 0,
       stabilityDaysDelta: 0,
       dailyAttemptedQuestionCount: 0,
+      dailyNewQuestionCount: 0,
       dailyCorrectRatePercent: null,
     });
 
     const details = await SELF.fetch(
-      `https://example.test/v8/daily-details?site=${SITE}&date=2026-08-10`,
+      `https://example.test/v9/daily-details?site=${SITE}&date=2026-08-10`,
       { headers: AUTHORIZATION }
     );
     expect(details.status).toBe(200);
@@ -1732,7 +1869,7 @@ describe("v8 HTTP contract", () => {
 
   it("returns all dashboard reads through one endpoint", async () => {
     const response = await SELF.fetch(
-      `https://example.test/v8/dashboard?site=${SITE}`,
+      `https://example.test/v9/dashboard?site=${SITE}`,
       { headers: AUTHORIZATION }
     );
     expect(response.status).toBe(200);
@@ -1746,7 +1883,7 @@ describe("v8 HTTP contract", () => {
     expect(dashboardBody.history.days).toHaveLength(31);
 
     const selectedDefault = await SELF.fetch(
-      "https://example.test/v8/dashboard",
+      "https://example.test/v9/dashboard",
       { headers: AUTHORIZATION }
     );
     await expect(selectedDefault.json()).resolves.toMatchObject({
@@ -1756,7 +1893,7 @@ describe("v8 HTTP contract", () => {
 
     for (const search of ["site=invalid.example", `site=${SITE}&site=${SITE}`, "extra=true"]) {
       const invalid = await SELF.fetch(
-        `https://example.test/v8/dashboard?${search}`,
+        `https://example.test/v9/dashboard?${search}`,
         { headers: AUTHORIZATION }
       );
       expect(invalid.status).toBe(400);
@@ -1765,7 +1902,7 @@ describe("v8 HTTP contract", () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec("DELETE FROM catalog_metadata");
     });
-    const empty = await SELF.fetch("https://example.test/v8/dashboard", {
+    const empty = await SELF.fetch("https://example.test/v9/dashboard", {
       headers: AUTHORIZATION,
     });
     await expect(empty.json()).resolves.toEqual({
@@ -1785,7 +1922,7 @@ describe("v8 HTTP contract", () => {
       `site=${SITE}&date=2026-08-10&extra=true`,
     ]) {
       const response = await SELF.fetch(
-        `https://example.test/v8/daily-details?${search}`,
+        `https://example.test/v9/daily-details?${search}`,
         { headers: AUTHORIZATION }
       );
       expect(response.status).toBe(400);
@@ -1793,7 +1930,7 @@ describe("v8 HTTP contract", () => {
   });
 
   it("replaces the catalog and serves the canonical next URL", async () => {
-    const replace = await SELF.fetch("https://example.test/v8/questions", {
+    const replace = await SELF.fetch("https://example.test/v9/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1804,7 +1941,7 @@ describe("v8 HTTP contract", () => {
     });
     expect(replace.status).toBe(200);
 
-    const next = await SELF.fetch(`https://example.test/v8/next?site=${SITE}`, {
+    const next = await SELF.fetch(`https://example.test/v9/next?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     await expect(next.json()).resolves.toEqual({
@@ -1816,7 +1953,7 @@ describe("v8 HTTP contract", () => {
       },
     });
 
-    const conflict = await SELF.fetch("https://example.test/v8/questions", {
+    const conflict = await SELF.fetch("https://example.test/v9/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1834,7 +1971,7 @@ describe("v8 HTTP contract", () => {
       { site: SITE, questionIds: ["1"], expectedGeneration: -1 },
       { site: SITE, questionIds: ["1"] },
     ]) {
-      const invalid = await SELF.fetch("https://example.test/v8/questions", {
+      const invalid = await SELF.fetch("https://example.test/v9/questions", {
         method: "POST",
         headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1844,7 +1981,7 @@ describe("v8 HTTP contract", () => {
   });
 
   it("rejects unknown questions and non-canonical attempt fields", async () => {
-    const unknown = await SELF.fetch("https://example.test/v8/attempts", {
+    const unknown = await SELF.fetch("https://example.test/v9/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1857,7 +1994,7 @@ describe("v8 HTTP contract", () => {
     expect(unknown.status).toBe(409);
     await expect(unknown.json()).resolves.toEqual({ error: "unknown_question" });
 
-    const extra = await SELF.fetch("https://example.test/v8/attempts", {
+    const extra = await SELF.fetch("https://example.test/v9/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1870,7 +2007,7 @@ describe("v8 HTTP contract", () => {
     });
     expect(extra.status).toBe(400);
 
-    const legacyKey = await SELF.fetch("https://example.test/v8/attempts", {
+    const legacyKey = await SELF.fetch("https://example.test/v9/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1883,8 +2020,8 @@ describe("v8 HTTP contract", () => {
     expect(legacyKey.status).toBe(400);
   });
 
-  it("returns the exact v8 attempt contract", async () => {
-    const response = await SELF.fetch("https://example.test/v8/attempts", {
+  it("returns the exact v9 attempt contract", async () => {
+    const response = await SELF.fetch("https://example.test/v9/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1907,8 +2044,12 @@ describe("v8 HTTP contract", () => {
       },
       learningMetrics: {
         stabilityDays: expect.any(Number),
+        dailyKpiCompleted: false,
         dueCardsCompleted: true,
         dueCardsRemaining: 0,
+        todayNewQuestionCount: 1,
+        newQuestionGoal: 100,
+        newQuestionsRemaining: 99,
         todayStabilityDaysDelta: expect.any(Number),
         attemptedQuestionCount: 1,
         todayAttemptedQuestionCount: 1,
@@ -1925,6 +2066,7 @@ describe("v8 HTTP contract", () => {
 
   it("returns and replays the exact primary KPI celebration contract", async () => {
     await seedReviewCard("1", 30);
+    await seedTodayNewQuestionCount(100, getTokyoDate(new Date()));
 
     const body = {
       site: SITE,
@@ -1932,7 +2074,7 @@ describe("v8 HTTP contract", () => {
       operationId: operationId(22),
       answerResult: "correct",
     };
-    const response = await SELF.fetch("https://example.test/v8/attempts", {
+    const response = await SELF.fetch("https://example.test/v9/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -1940,17 +2082,17 @@ describe("v8 HTTP contract", () => {
     expect(response.status).toBe(200);
     const result = await response.json();
     expect(Object.keys(result.celebration).sort()).toEqual([
+      "dailyKpiCompleted",
       "date",
-      "dueCardsCompleted",
       "site",
     ]);
     expect(result.celebration).toEqual({
       site: SITE,
       date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-      dueCardsCompleted: true,
+      dailyKpiCompleted: true,
     });
 
-    const retry = await SELF.fetch("https://example.test/v8/attempts", {
+    const retry = await SELF.fetch("https://example.test/v9/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -1967,7 +2109,7 @@ describe("v8 HTTP contract", () => {
       state.storage.sql.exec("DELETE FROM catalog_metadata WHERE site = ?", SITE);
     });
     const response = await SELF.fetch(
-      `https://example.test/v8/next?site=${SITE}`,
+      `https://example.test/v9/next?site=${SITE}`,
       { headers: AUTHORIZATION }
     );
     expect(response.status).toBe(409);

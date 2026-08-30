@@ -151,7 +151,7 @@
       for (const el of [name, email, date]) { if (!el.checkValidity()) { el.reportValidity(); return; } }
       const label = tfLabel ? tfLabel.textContent : 'Your pause';
       form.innerHTML =
-        '<div class="ticket-done"><strong>Milestone marked — dueCardsCompleted is achieved.</strong>' +
+        '<div class="ticket-done"><strong>Milestone marked — dailyKpiCompleted is achieved.</strong>' +
         '<span class="mono">' + label + ' · return on ' + date.value +
         '. nothing was sent or stored. the finish remains entirely yours.</span></div>';
     });

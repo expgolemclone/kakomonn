@@ -46,6 +46,7 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .primary-kpi-values { display: flex; align-items: center; justify-content: flex-end; gap: clamp(18px, 4vw, 42px); }
 .primary-kpi-status strong { display: inline-flex; min-height: 3.1rem; align-items: center; border: 1px solid var(--accent); border-radius: 999px; padding: .55rem 1rem; color: var(--accent-2); font-size: clamp(1.35rem, 4vw, 2.2rem); letter-spacing: .04em; }
 .primary-kpi-status strong[data-completed="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.primary-kpi-progress { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(18px, 3vw, 30px); }
 .primary-kpi-remaining { display: grid; gap: 4px; color: var(--muted); font-size: .82rem; font-weight: 700; }
 .primary-kpi-remaining > span { overflow-wrap: anywhere; }
 .primary-kpi-remaining strong { display: flex; align-items: baseline; gap: 5px; color: var(--accent-2); font-size: clamp(2rem, 5vw, 3.35rem); font-variant-numeric: tabular-nums; line-height: 1; }
@@ -120,7 +121,8 @@ dialog::backdrop { background: rgba(0,0,0,.68); }
   .input-row, .toolbar { align-items: stretch; flex-direction: column; }
   .toolbar select { min-width: 100%; width: 100%; }
   .primary-kpi-card { grid-template-columns: 1fr; }
-  .primary-kpi-values { justify-content: space-between; }
+  .primary-kpi-values { align-items: stretch; flex-direction: column; }
+  .primary-kpi-progress { gap: 14px; }
   .metric-list { grid-template-columns: 1fr; }
   .metric-item, .metric-item:first-child, .metric-item:last-child { padding: 14px 0; border-top: 1px solid var(--border); border-left: 0; }
   .metric-item:first-child { padding-top: 0; border-top: 0; }

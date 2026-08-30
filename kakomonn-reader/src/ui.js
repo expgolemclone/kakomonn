@@ -74,6 +74,19 @@
   learningMetricsDetails.id = "kakomonn-reader-learning-metrics-details";
   learningMetricsDetails.hidden = true;
 
+  const dailyKpiCompletedMetric = document.createElement("div");
+  dailyKpiCompletedMetric.className = "kakomonn-reader-detail-metric";
+  const dailyKpiCompletedLabel = document.createElement("dt");
+  dailyKpiCompletedLabel.textContent = "dailyKpiCompleted";
+  const dailyKpiCompletedDefinition = document.createElement("dd");
+  const dailyKpiCompletedValue = document.createElement("strong");
+  dailyKpiCompletedValue.id = "kakomonn-reader-daily-kpi-completed";
+  dailyKpiCompletedDefinition.appendChild(dailyKpiCompletedValue);
+  dailyKpiCompletedMetric.append(
+    dailyKpiCompletedLabel,
+    dailyKpiCompletedDefinition
+  );
+
   const dueCardsCompletedMetric = document.createElement("div");
   dueCardsCompletedMetric.className = "kakomonn-reader-detail-metric";
   const dueCardsCompletedLabel = document.createElement("dt");
@@ -110,6 +123,45 @@
     dueCardsRemainingValue
   );
   learningMetricsButton.appendChild(dueCardsRemainingMetric);
+
+  const newQuestionsRemainingMetric = document.createElement("div");
+  newQuestionsRemainingMetric.className = "kakomonn-reader-metric";
+  const newQuestionsRemainingLabel = document.createElement("span");
+  newQuestionsRemainingLabel.className = "kakomonn-reader-metric-label";
+  newQuestionsRemainingLabel.textContent = "newQuestionsRemaining";
+  const newQuestionsRemainingValue = document.createElement("span");
+  newQuestionsRemainingValue.className = "kakomonn-reader-remaining-value";
+  const newQuestionsRemainingPrefix = document.createElement("small");
+  newQuestionsRemainingPrefix.textContent = "あと";
+  const newQuestionsRemainingNumber = document.createElement("strong");
+  newQuestionsRemainingNumber.id = "kakomonn-reader-new-questions-remaining";
+  const newQuestionsRemainingUnit = document.createElement("small");
+  newQuestionsRemainingUnit.textContent = "問";
+  newQuestionsRemainingValue.append(
+    newQuestionsRemainingPrefix,
+    newQuestionsRemainingNumber,
+    newQuestionsRemainingUnit
+  );
+  newQuestionsRemainingMetric.append(
+    newQuestionsRemainingLabel,
+    newQuestionsRemainingValue
+  );
+  learningMetricsButton.appendChild(newQuestionsRemainingMetric);
+
+  const todayNewQuestionCountMetric = document.createElement("div");
+  todayNewQuestionCountMetric.className = "kakomonn-reader-detail-metric";
+  const todayNewQuestionCountLabel = document.createElement("dt");
+  todayNewQuestionCountLabel.textContent = "todayNewQuestionCount";
+  const todayNewQuestionCountValue = document.createElement("dd");
+  const todayNewQuestionCountNumber = document.createElement("strong");
+  todayNewQuestionCountNumber.id = "kakomonn-reader-today-new-question-count";
+  const newQuestionGoal = document.createElement("span");
+  newQuestionGoal.id = "kakomonn-reader-new-question-goal";
+  todayNewQuestionCountValue.append(todayNewQuestionCountNumber, newQuestionGoal);
+  todayNewQuestionCountMetric.append(
+    todayNewQuestionCountLabel,
+    todayNewQuestionCountValue
+  );
 
   const todayStabilityDaysDeltaMetric = document.createElement("div");
   todayStabilityDaysDeltaMetric.className = "kakomonn-reader-detail-metric";
@@ -170,7 +222,9 @@
     todayCorrectRatePercentValue
   );
   learningMetricsDetails.append(
+    dailyKpiCompletedMetric,
     dueCardsCompletedMetric,
+    todayNewQuestionCountMetric,
     todayStabilityDaysDeltaMetric,
     todayAttemptedQuestionCountMetric,
     todayCorrectRatePercentMetric
@@ -294,6 +348,10 @@
   }
 
   function renderLearningMetrics() {
+    const dailyKpiCompletedText =
+      learningMetrics === null
+        ? "--"
+        : learningMetrics.dailyKpiCompleted ? "達成" : "未達成";
     const dueCardsCompletedText =
       learningMetrics === null
         ? "--"
@@ -302,6 +360,14 @@
       learningMetrics === null
         ? "--"
         : learningMetrics.dueCardsRemaining.toLocaleString("ja-JP");
+    const newQuestionsRemainingText =
+      learningMetrics === null
+        ? "--"
+        : learningMetrics.newQuestionsRemaining.toLocaleString("ja-JP");
+    const todayNewQuestionCountText =
+      learningMetrics === null
+        ? "--"
+        : learningMetrics.todayNewQuestionCount.toLocaleString("ja-JP");
     const todayStabilityDaysDeltaText =
       learningMetrics === null
         ? "--"
@@ -315,15 +381,24 @@
       learningMetrics === null
         ? "--"
         : learningMetrics.todayCorrectRatePercent.toLocaleString("ja-JP");
+    dailyKpiCompletedValue.textContent = dailyKpiCompletedText;
     dueCardsCompletedValue.textContent = dueCardsCompletedText;
     if (learningMetrics === null) {
+      delete dailyKpiCompletedValue.dataset.completed;
       delete dueCardsCompletedValue.dataset.completed;
     } else {
+      dailyKpiCompletedValue.dataset.completed = String(
+        learningMetrics.dailyKpiCompleted
+      );
       dueCardsCompletedValue.dataset.completed = String(
         learningMetrics.dueCardsCompleted
       );
     }
     dueCardsRemainingNumber.textContent = dueCardsRemainingText;
+    newQuestionsRemainingNumber.textContent = newQuestionsRemainingText;
+    todayNewQuestionCountNumber.textContent = todayNewQuestionCountText;
+    newQuestionGoal.textContent =
+      learningMetrics === null ? "" : `/ ${learningMetrics.newQuestionGoal}問`;
     todayStabilityDaysDeltaNumber.textContent = todayStabilityDaysDeltaText;
     todayAttemptedQuestionCountNumber.textContent =
       todayAttemptedQuestionCountText;
@@ -333,16 +408,18 @@
       learningMetrics === null;
     const dueCardsRemainingAccessibleText =
       learningMetrics === null ? "--" : `あと${dueCardsRemainingText}問`;
+    const newQuestionsRemainingAccessibleText =
+      learningMetrics === null ? "--" : `あと${newQuestionsRemainingText}問`;
     const detailsAction =
       learningMetricsButton.getAttribute("aria-expanded") === "true"
         ? "詳細を非表示"
         : "詳細を表示";
     learningMetricsButton.setAttribute(
       "aria-label",
-      `dueCardsRemaining ${dueCardsRemainingAccessibleText}. ${detailsAction}`
+      `dueCardsRemaining ${dueCardsRemainingAccessibleText}. newQuestionsRemaining ${newQuestionsRemainingAccessibleText}. ${detailsAction}`
     );
     learningMetricsLiveStatus.textContent =
-      `dueCardsRemaining ${dueCardsRemainingAccessibleText}`;
+      `dueCardsRemaining ${dueCardsRemainingAccessibleText}. newQuestionsRemaining ${newQuestionsRemainingAccessibleText}`;
   }
 
   function setLearningMetricsExpanded(expanded) {

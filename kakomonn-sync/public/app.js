@@ -22,7 +22,7 @@ const el = {
   authPanel: byId("auth-panel"), authForm: byId("auth-form"), authToken: byId("auth-token"), authMessage: byId("auth-message"),
   dashboard: byId("dashboard"), siteEmpty: byId("site-empty"), loadError: byId("load-error"), errorMessage: byId("error-message"), retryButton: byId("retry-button"),
   settingsButton: byId("settings-button"), settingsDialog: byId("settings-dialog"), settingsForm: byId("settings-form"), settingsToken: byId("settings-token"), settingsMessage: byId("settings-message"), settingsClose: byId("settings-close"), forgetToken: byId("forget-token"),
-  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), dueCardsCompletedElement: byId("due-cards-completed"), dueCardsRemainingElement: byId("due-cards-remaining"), todayStabilityDaysDeltaElement: byId("today-stability-days-delta"), stabilityDaysElement: byId("stability-days"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), todayCorrectRatePercentElement: byId("today-correct-rate-percent"), todayCorrectRatePercentUnit: byId("today-correct-rate-percent-unit"), stabilityChartAxis: byId("stability-chart-axis"), historyScroll: byId("history-scroll"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
+  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), dailyKpiCompletedElement: byId("daily-kpi-completed"), dueCardsRemainingElement: byId("due-cards-remaining"), newQuestionsRemainingElement: byId("new-questions-remaining"), todayStabilityDaysDeltaElement: byId("today-stability-days-delta"), stabilityDaysElement: byId("stability-days"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), todayCorrectRatePercentElement: byId("today-correct-rate-percent"), todayCorrectRatePercentUnit: byId("today-correct-rate-percent-unit"), stabilityChartAxis: byId("stability-chart-axis"), historyScroll: byId("history-scroll"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
   dailyDetails: byId("daily-details"), dailyDetailsDate: byId("daily-details-date"), dailyDetailsInstruction: byId("daily-details-instruction"), dailyDetailsStatus: byId("daily-details-status"), dailyDetailsTables: byId("daily-details-tables"), stabilityHistoryTable: byId("stability-history-table"), attemptsTable: byId("attempts-table"),
 };
 
@@ -30,7 +30,7 @@ const state = { token: "", site: "", sites: [], learning: null, history: null, s
 let loadGeneration = 0;
 let detailGeneration = 0;
 const RAW_TABLE_COLUMNS = {
-  stability_history: ["site", "date", "opening_stability_days", "closing_stability_days"],
+  stability_history: ["site", "date", "opening_stability_days", "closing_stability_days", "attempted_question_count", "new_question_count", "attempt_count", "correct_attempt_count"],
   attempts: ["site", "operation_id", "question_id", "attempted_at_ms", "answer_result", "previous_card_stability_days", "resulting_card_stability_days"],
 };
 
@@ -55,13 +55,13 @@ function validCorrectRatePercent(value) {
   return value === null || (Number.isSafeInteger(value) && value >= 0 && value <= 100);
 }
 function validLearningMetrics(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value) && Number.isSafeInteger(value.stabilityDays) && value.stabilityDays >= 0 && typeof value.dueCardsCompleted === "boolean" && Number.isSafeInteger(value.dueCardsRemaining) && value.dueCardsRemaining >= 0 && value.dueCardsCompleted === (value.dueCardsRemaining === 0) && Number.isSafeInteger(value.todayStabilityDaysDelta) && Number.isSafeInteger(value.attemptedQuestionCount) && value.attemptedQuestionCount >= 0 && Number.isSafeInteger(value.todayAttemptedQuestionCount) && value.todayAttemptedQuestionCount >= 0 && validCorrectRatePercent(value.todayCorrectRatePercent);
+  return value !== null && typeof value === "object" && !Array.isArray(value) && Number.isSafeInteger(value.stabilityDays) && value.stabilityDays >= 0 && typeof value.dailyKpiCompleted === "boolean" && typeof value.dueCardsCompleted === "boolean" && Number.isSafeInteger(value.dueCardsRemaining) && value.dueCardsRemaining >= 0 && value.dueCardsCompleted === (value.dueCardsRemaining === 0) && Number.isSafeInteger(value.todayNewQuestionCount) && value.todayNewQuestionCount >= 0 && value.newQuestionGoal === 100 && Number.isSafeInteger(value.newQuestionsRemaining) && value.newQuestionsRemaining === Math.max(0, value.newQuestionGoal - value.todayNewQuestionCount) && value.dailyKpiCompleted === (value.dueCardsCompleted && value.newQuestionsRemaining === 0) && Number.isSafeInteger(value.todayStabilityDaysDelta) && Number.isSafeInteger(value.attemptedQuestionCount) && value.attemptedQuestionCount >= 0 && Number.isSafeInteger(value.todayAttemptedQuestionCount) && value.todayAttemptedQuestionCount >= 0 && validCorrectRatePercent(value.todayCorrectRatePercent);
 }
 function validState(value, site) {
   return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && validLearningMetrics(value.learningMetrics);
 }
 function validHistory(value, site) {
-  return value && value.site === site && Array.isArray(value.days) && value.days.length === DASHBOARD_HISTORY_DAYS && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && (day.closingStabilityDays === null || (Number.isSafeInteger(day.closingStabilityDays) && day.closingStabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.dailyAttemptedQuestionCount) && day.dailyAttemptedQuestionCount >= 0 && validCorrectRatePercent(day.dailyCorrectRatePercent));
+  return value && value.site === site && Array.isArray(value.days) && value.days.length === DASHBOARD_HISTORY_DAYS && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && (day.closingStabilityDays === null || (Number.isSafeInteger(day.closingStabilityDays) && day.closingStabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.dailyAttemptedQuestionCount) && day.dailyAttemptedQuestionCount >= 0 && Number.isSafeInteger(day.dailyNewQuestionCount) && day.dailyNewQuestionCount >= 0 && validCorrectRatePercent(day.dailyCorrectRatePercent));
 }
 function validDashboard(value) {
   if (!hasExactKeys(value, ["sites", "selectedSite", "state", "history"]) || !Array.isArray(value.sites) || value.sites.some((site) => !validSite(site)) || new Set(value.sites).size !== value.sites.length) return false;
@@ -73,7 +73,7 @@ function hasExactKeys(value, keys) {
 }
 function validDailyDetails(value, site, date) {
   if (!hasExactKeys(value, ["site", "date", "timeZone", "tables"]) || value.site !== site || value.date !== date || value.timeZone !== "Asia/Tokyo" || !hasExactKeys(value.tables, ["stability_history", "attempts"]) || !Array.isArray(value.tables.stability_history) || value.tables.stability_history.length > 1 || !Array.isArray(value.tables.attempts)) return false;
-  const validStabilityHistory = value.tables.stability_history.every((row) => hasExactKeys(row, RAW_TABLE_COLUMNS.stability_history) && row.site === site && row.date === date && Number.isSafeInteger(row.opening_stability_days) && row.opening_stability_days >= 0 && Number.isSafeInteger(row.closing_stability_days) && row.closing_stability_days >= 0);
+  const validStabilityHistory = value.tables.stability_history.every((row) => hasExactKeys(row, RAW_TABLE_COLUMNS.stability_history) && row.site === site && row.date === date && Number.isSafeInteger(row.opening_stability_days) && row.opening_stability_days >= 0 && Number.isSafeInteger(row.closing_stability_days) && row.closing_stability_days >= 0 && Number.isSafeInteger(row.attempted_question_count) && row.attempted_question_count >= 0 && Number.isSafeInteger(row.new_question_count) && row.new_question_count >= 0 && Number.isSafeInteger(row.attempt_count) && row.attempt_count >= 0 && Number.isSafeInteger(row.correct_attempt_count) && row.correct_attempt_count >= 0 && row.correct_attempt_count <= row.attempt_count);
   const validAttempts = value.tables.attempts.every((row) => hasExactKeys(row, RAW_TABLE_COLUMNS.attempts) && row.site === site && /^[0-9a-f]{32}$/.test(row.operation_id) && /^\d+$/.test(row.question_id) && Number.isSafeInteger(row.attempted_at_ms) && row.attempted_at_ms > 0 && (row.answer_result === "correct" || row.answer_result === "incorrect") && Number.isFinite(row.previous_card_stability_days) && row.previous_card_stability_days >= 0 && Number.isFinite(row.resulting_card_stability_days) && row.resulting_card_stability_days >= 0);
   return validStabilityHistory && validAttempts;
 }
@@ -354,7 +354,7 @@ async function loadDailyDetails(date, { focusChart = false } = {}) {
   if (focusChart) el.stabilityChart.querySelector(`[data-chart-date="${date}"]`)?.focus();
   let details;
   try {
-    details = await requestJSON(`/v8/daily-details?${new URLSearchParams({ site, date })}`, token);
+    details = await requestJSON(`/v9/daily-details?${new URLSearchParams({ site, date })}`, token);
     if (!validDailyDetails(details, site, date)) throw new DashboardError("invalid_response");
   } catch (error) {
     if (generation !== detailGeneration || site !== state.site || token !== state.token || date !== state.selectedDate) return false;
@@ -370,9 +370,10 @@ async function loadDailyDetails(date, { focusChart = false } = {}) {
 function renderDashboard() {
   const learning = state.learning;
   const metrics = learning.learningMetrics;
-  el.dueCardsCompletedElement.textContent = metrics.dueCardsCompleted ? "達成" : "未達成";
-  el.dueCardsCompletedElement.dataset.completed = String(metrics.dueCardsCompleted);
+  el.dailyKpiCompletedElement.textContent = metrics.dailyKpiCompleted ? "達成" : "未達成";
+  el.dailyKpiCompletedElement.dataset.completed = String(metrics.dailyKpiCompleted);
   el.dueCardsRemainingElement.textContent = formatted(metrics.dueCardsRemaining);
+  el.newQuestionsRemainingElement.textContent = formatted(metrics.newQuestionsRemaining);
   el.todayStabilityDaysDeltaElement.textContent = signed(metrics.todayStabilityDaysDelta);
   el.stabilityDaysElement.textContent = formatted(metrics.stabilityDays);
   el.attemptedQuestionCountElement.textContent = formatted(metrics.attemptedQuestionCount);
@@ -405,7 +406,7 @@ async function fetchDashboardData(site, token) {
   const parameters = new URLSearchParams();
   if (site !== null) parameters.set("site", site);
   const suffix = parameters.size === 0 ? "" : `?${parameters}`;
-  const data = await requestJSON(`/v8/dashboard${suffix}`, token);
+  const data = await requestJSON(`/v9/dashboard${suffix}`, token);
   if (!validDashboard(data)) throw new DashboardError("invalid_response");
   return data;
 }

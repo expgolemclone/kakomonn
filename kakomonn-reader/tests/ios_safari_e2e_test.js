@@ -878,6 +878,12 @@ async function runTest() {
       const dueCardsCompleted = document.querySelector(
         "#kakomonn-reader-due-cards-completed",
       );
+      const dailyKpiCompleted = document.querySelector(
+        "#kakomonn-reader-daily-kpi-completed",
+      );
+      const newQuestionsRemaining = document.querySelector(
+        "#kakomonn-reader-new-questions-remaining",
+      );
       const shell = document.querySelector("#kakomonn-reader-shell");
       const actions = document.querySelector("#kakomonn-reader-actions");
       const copy = document.querySelector("#kakomonn-reader-copy");
@@ -905,6 +911,11 @@ async function runTest() {
           completed: dueCardsCompleted.dataset.completed,
           text: dueCardsCompleted.textContent,
         },
+        dailyKpiCompleted: {
+          completed: dailyKpiCompleted.dataset.completed,
+          text: dailyKpiCompleted.textContent,
+        },
+        newQuestionsRemaining: newQuestionsRemaining.textContent,
         learningMetricsClipped:
           learningMetrics.scrollWidth > learningMetrics.clientWidth ||
           learningMetrics.scrollHeight > learningMetrics.clientHeight,
@@ -928,6 +939,8 @@ async function runTest() {
       controlsOverflow: false,
       detailsHidden: true,
       dueCardsCompleted: { completed: "false", text: "未達成" },
+      dailyKpiCompleted: { completed: "false", text: "未達成" },
+      newQuestionsRemaining: "100",
       learningMetricsClipped: false,
       learningMetricsInsideHeader: true,
       shellFillsMiddle: true,
@@ -1037,7 +1050,7 @@ async function runTest() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v8/attempts",
+              new URL(call.url).pathname === "/v9/attempts",
           ).length,
       ),
       1,

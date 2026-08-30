@@ -391,9 +391,11 @@
     }
 
     #kakomonn-reader-learning-metrics {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
-      gap: 10px;
+      column-gap: 10px;
+      row-gap: 2px;
       padding: 6px 12px;
       font: inherit;
       text-align: left;
@@ -404,6 +406,8 @@
     }
 
     #kakomonn-reader-learning-metrics::after {
+      grid-column: 2;
+      grid-row: 1 / span 2;
       width: 8px;
       height: 8px;
       flex: 0 0 auto;
@@ -420,7 +424,7 @@
 
     .kakomonn-reader-metric {
       display: flex;
-      flex: 1 1 auto;
+      grid-column: 1;
       min-width: 0;
       align-items: baseline;
       justify-content: space-between;
@@ -446,7 +450,8 @@
       color: var(--kakomonn-reader-metric-accent);
     }
 
-    #kakomonn-reader-due-cards-remaining {
+    #kakomonn-reader-due-cards-remaining,
+    #kakomonn-reader-new-questions-remaining {
       font-size: 20px;
       font-variant-numeric: tabular-nums;
     }
@@ -500,6 +505,7 @@
       font-variant-numeric: tabular-nums;
     }
 
+    #kakomonn-reader-daily-kpi-completed[data-completed="true"],
     #kakomonn-reader-due-cards-completed[data-completed="true"] {
       color: var(--kakomonn-reader-success);
     }

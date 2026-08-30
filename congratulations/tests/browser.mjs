@@ -16,7 +16,7 @@ const manifest = validateManifest(
 const celebration = {
   site: "chushoks.kakomonn.com",
   date: "2026-08-13",
-  dueCardsCompleted: true,
+  dailyKpiCompleted: true,
 };
 const search = celebrationSearch(celebration);
 const japaneseText = /[\u3040-\u30ff\u3400-\u9fff]/u;

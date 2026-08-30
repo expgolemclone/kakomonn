@@ -394,7 +394,7 @@ async function main() {
           {
             authorization: "Bearer test-sync-token",
             method: "GET",
-            url: `${SYNC_API_ORIGIN}/v8/next?site=chushoks.kakomonn.com`,
+            url: `${SYNC_API_ORIGIN}/v9/next?site=chushoks.kakomonn.com`,
           },
         ],
       );
@@ -942,7 +942,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v8/attempts",
+              new URL(call.url).pathname === "/v9/attempts",
           ).length,
       ),
       1,

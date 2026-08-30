@@ -366,7 +366,7 @@
       e.preventDefault();
       const amt = currentAmount();
       if (!amt) { customAmt.focus(); update(); return; }
-      status.textContent = 'Moment marked. dueCardsCompleted is true, and this finish is yours.';
+      status.textContent = 'Moment marked. dailyKpiCompleted is true: all due cards are complete and 100 new questions are answered, and this finish is yours.';
       status.classList.add('show');
     });
 

@@ -87,10 +87,23 @@ function assertSyncState(state) {
   assert.equal(metrics !== null && typeof metrics === "object", true);
   assert.equal(Number.isSafeInteger(metrics.stabilityDays), true);
   assert.equal(metrics.stabilityDays >= 0, true);
+  assert.equal(typeof metrics.dailyKpiCompleted, "boolean");
   assert.equal(typeof metrics.dueCardsCompleted, "boolean");
   assert.equal(Number.isSafeInteger(metrics.dueCardsRemaining), true);
   assert.equal(metrics.dueCardsRemaining >= 0, true);
   assert.equal(metrics.dueCardsCompleted, metrics.dueCardsRemaining === 0);
+  assert.equal(Number.isSafeInteger(metrics.todayNewQuestionCount), true);
+  assert.equal(metrics.todayNewQuestionCount >= 0, true);
+  assert.equal(metrics.newQuestionGoal, 100);
+  assert.equal(Number.isSafeInteger(metrics.newQuestionsRemaining), true);
+  assert.equal(
+    metrics.newQuestionsRemaining,
+    Math.max(0, metrics.newQuestionGoal - metrics.todayNewQuestionCount),
+  );
+  assert.equal(
+    metrics.dailyKpiCompleted,
+    metrics.dueCardsCompleted && metrics.newQuestionsRemaining === 0,
+  );
   assert.equal(Number.isSafeInteger(metrics.todayStabilityDaysDelta), true);
   assert.equal(Number.isSafeInteger(metrics.attemptedQuestionCount), true);
   assert.equal(metrics.attemptedQuestionCount >= 0, true);
@@ -116,12 +129,12 @@ function assertSyncState(state) {
 
 function expectedLearningMetricsLabel(metrics) {
   const formatted = (value) => value.toLocaleString("ja-JP");
-  return `dueCardsRemaining あと${formatted(metrics.dueCardsRemaining)}問. 詳細を表示`;
+  return `dueCardsRemaining あと${formatted(metrics.dueCardsRemaining)}問. newQuestionsRemaining あと${formatted(metrics.newQuestionsRemaining)}問. 詳細を表示`;
 }
 
 async function requestSyncState(token) {
   const query = new URLSearchParams({ site: "chushoks.kakomonn.com" });
-  const response = await fetch(`${syncApiOrigin}/v8/state?${query}`, {
+  const response = await fetch(`${syncApiOrigin}/v9/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
@@ -442,7 +455,7 @@ async function waitForAutomaticTransition(page) {
       !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
         state.outerURL,
       ) ||
-      !/^dueCardsRemaining あと[\d,]+問\. 詳細を表示$/.test(
+      !/^dueCardsRemaining あと[\d,]+問\. newQuestionsRemaining あと[\d,]+問\. 詳細を表示$/.test(
         state.learningMetricsLabel ?? "",
       )
     ) {
@@ -598,14 +611,14 @@ async function main() {
     } else {
       const celebrationURL = new URL(navigationResult.outerURL);
       assert.deepEqual([...celebrationURL.searchParams.keys()].sort(), [
+        "dailyKpiCompleted",
         "date",
-        "dueCardsCompleted",
         "site",
       ]);
       assert.equal(celebrationURL.searchParams.get("site"), finalState.site);
       assert.equal(celebrationURL.searchParams.get("date"), finalState.today);
-      assert.equal(celebrationURL.searchParams.get("dueCardsCompleted"), "true");
-      assert.equal(finalState.learningMetrics.dueCardsCompleted, true);
+      assert.equal(celebrationURL.searchParams.get("dailyKpiCompleted"), "true");
+      assert.equal(finalState.learningMetrics.dailyKpiCompleted, true);
     }
     console.log(
       JSON.stringify({

@@ -79,9 +79,9 @@ const ICON = {
 const ROUTES = {
   coastal: {
     km: 'TRUE', stops: 'due queue clear', arrive: 'reached now', batt: 100,
-    stats: [['dueCardsCompleted', 'milestone'], ['achieved', 'status'], ['0', 'dueCardsRemaining'], ['100%', 'credit yours']],
+    stats: [['dailyKpiCompleted', 'milestone'], ['achieved', 'status'], ['0', 'dueCardsRemaining'], ['100%', 'credit yours']],
     chip: ['TRUE', '1', '0', '100%'],
-    from: 'Due queue opened', fromC: 'FOCUS · CALLED', to: 'dueCardsCompleted', toC: 'STATUS · ACHIEVED',
+    from: 'Due queue opened', fromC: 'FOCUS · CALLED', to: 'dailyKpiCompleted', toC: 'STATUS · ACHIEVED',
     items: [
       { k: 'origin', place: 'Due queue opened', coord: 'FOCUS · CALLED', time: 'THEN' },
       { k: 'stop', drive: 'Met the next card · stayed present', place: 'First Light', coord: 'ATTENTION · ON', time: 'BEGAN',
@@ -92,14 +92,14 @@ const ROUTES = {
         net: 'Distraction did not choose the ending', grade: 'YES', adapter: false, dwell: 'STAYED',
         meta: ['RETURNED', 'CONTINUED', { avail: 'ROUTE OPEN' }, 'YOUR CHOICE'],
         tags: [{ i: 'coffee', t: 'Came back' }, { i: 'view', t: 'Saw it through' }] },
-      { k: 'dest', drive: 'Carried focus to the far edge', place: 'dueCardsCompleted', coord: 'STATUS · ACHIEVED', time: 'NOW' },
+      { k: 'dest', drive: 'Carried focus to the far edge', place: 'dailyKpiCompleted', coord: 'STATUS · ACHIEVED', time: 'NOW' },
     ],
   },
   alpine: {
     km: 'TRUE', stops: 'due queue clear', arrive: 'reached now', batt: 100,
-    stats: [['dueCardsCompleted', 'milestone'], ['achieved', 'status'], ['0', 'dueCardsRemaining'], ['100%', 'credit yours']],
+    stats: [['dailyKpiCompleted', 'milestone'], ['achieved', 'status'], ['0', 'dueCardsRemaining'], ['100%', 'credit yours']],
     chip: ['TRUE', '1', '0', '100%'],
-    from: 'Due queue opened', fromC: 'WORK · IN MOTION', to: 'dueCardsCompleted', toC: 'STATUS · ACHIEVED',
+    from: 'Due queue opened', fromC: 'WORK · IN MOTION', to: 'dailyKpiCompleted', toC: 'STATUS · ACHIEVED',
     items: [
       { k: 'origin', place: 'Due queue opened', coord: 'THE ROUTE · BEGAN', time: 'THEN' },
       { k: 'stop', drive: 'Kept moving · one card at a time', place: 'Attention Pass', coord: 'FOCUS · HELD', time: 'MIDWAY',
@@ -110,14 +110,14 @@ const ROUTES = {
         net: 'Memory brought back into reach', grade: 'YES', adapter: true, dwell: 'RETURNED',
         meta: ['RECALLED', 'RETRIED', { avail: 'KEPT GOING' }, 'YOUR WORK'],
         tags: [{ i: 'coffee', t: 'Found the memory' }, { i: 'fast', t: 'Turn completed' }] },
-      { k: 'dest', drive: 'Carried the route to its end', place: 'dueCardsCompleted', coord: 'STATUS · ACHIEVED', time: 'NOW' },
+      { k: 'dest', drive: 'Carried the route to its end', place: 'dailyKpiCompleted', coord: 'STATUS · ACHIEVED', time: 'NOW' },
     ],
   },
   desert: {
     km: 'TRUE', stops: 'due queue clear', arrive: 'reached now', batt: 100,
-    stats: [['dueCardsCompleted', 'milestone'], ['achieved', 'status'], ['0', 'dueCardsRemaining'], ['100%', 'credit yours']],
+    stats: [['dailyKpiCompleted', 'milestone'], ['achieved', 'status'], ['0', 'dueCardsRemaining'], ['100%', 'credit yours']],
     chip: ['TRUE', '1', '0', '100%'],
-    from: 'Due queue opened', fromC: 'RESOLVE · TESTED', to: 'dueCardsCompleted', toC: 'STATUS · ACHIEVED',
+    from: 'Due queue opened', fromC: 'RESOLVE · TESTED', to: 'dailyKpiCompleted', toC: 'STATUS · ACHIEVED',
     items: [
       { k: 'origin', place: 'Due queue opened', coord: 'RESOLVE · TESTED', time: 'THEN' },
       { k: 'stop', drive: 'Reached the hard card · did not turn back', place: 'Hard Turn', coord: 'PATIENCE · HELD', time: 'EARLY',
@@ -132,7 +132,7 @@ const ROUTES = {
         net: 'The unfinished edge disappeared', grade: 'YES', adapter: false, dwell: 'FINISHED',
         meta: ['NO RUSH', 'NO RETREAT', { avail: 'HORIZON CLEAR' }, 'YOUR RESOLVE'],
         tags: [{ i: 'view', t: 'Saw the end' }, { i: 'walk', t: 'Crossed it' }] },
-      { k: 'dest', drive: 'Finished the full route', place: 'dueCardsCompleted', coord: 'STATUS · ACHIEVED', time: 'NOW' },
+      { k: 'dest', drive: 'Finished the full route', place: 'dailyKpiCompleted', coord: 'STATUS · ACHIEVED', time: 'NOW' },
     ],
   },
 };

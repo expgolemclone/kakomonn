@@ -174,7 +174,7 @@
         setStatus(
           pendingCelebration === null
             ? "解答記録を同期しました"
-            : "dueCardsCompleted達成.祝福を準備中"
+            : "dailyKpiCompleted達成.祝福を準備中"
         );
         return true;
       }
@@ -241,7 +241,7 @@
     const url = new URL(CONGRATULATIONS_URL);
     url.searchParams.set("site", celebration.site);
     url.searchParams.set("date", celebration.date);
-    url.searchParams.set("dueCardsCompleted", "true");
+    url.searchParams.set("dailyKpiCompleted", "true");
     return url.href;
   }
 
@@ -265,7 +265,7 @@
           await correctFeedbackPromise;
         }
         stopSpeech();
-        setStatus("dueCardsCompleted達成");
+        setStatus("dailyKpiCompleted達成");
         await clearPendingCelebration();
         location.assign(congratulationsURL(celebration));
         return true;

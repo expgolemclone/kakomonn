@@ -78,6 +78,7 @@ async function prepare(page, startPath, options = {}) {
     todayStabilityDaysDelta: options.todayStabilityDaysDelta ?? 0,
     todayAttemptedQuestionCount:
       options.todayAttemptedQuestionCount ?? 0,
+    todayNewQuestionCount: options.todayNewQuestionCount ?? 0,
     todayAttemptCount: options.todayAttemptCount ?? 0,
     todayCorrectAttemptCount: options.todayCorrectAttemptCount ?? 0,
     dueCardsCompleted: options.dueCardsCompleted ?? false,
@@ -93,7 +94,7 @@ async function prepare(page, startPath, options = {}) {
 async function readerFrame(page) {
   await page.waitForSelector("#kakomonn-reader-frame");
   await page.waitForFunction(() =>
-    document.querySelector("#kakomonn-reader-due-cards-completed")?.textContent !== "--"
+    document.querySelector("#kakomonn-reader-daily-kpi-completed")?.textContent !== "--"
   );
   const frame = page.frames().find((candidate) => candidate !== page.mainFrame());
   assert(frame, "reader frame must exist");
@@ -110,13 +111,13 @@ async function revealAnswerResult(frame, answerResult) {
 
 function attemptCalls(page) {
   return page.evaluate(() =>
-    window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v8/attempts"),
+    window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v9/attempts"),
   );
 }
 
 function stateCalls(page) {
   return page.evaluate(() =>
-    window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v8/state"),
+    window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v9/state"),
   );
 }
 
@@ -144,7 +145,7 @@ async function runResumeWithoutRemoteRefreshCase(browser) {
     await revealAnswerResult(frame, "correct");
     await page.waitForFunction(() =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v8/attempts",
+        (call) => new URL(call.url).pathname === "/v9/attempts",
       ).length === 1,
     );
     await frame.waitForURL(`https://${site}/questions/456`);
@@ -176,7 +177,7 @@ async function runQuestionIdCase(browser, startPath) {
     });
     await revealAnswerResult(frame, "correct");
     await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v8/attempts"),
+      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v9/attempts"),
     );
     const calls = await attemptCalls(page);
     assert.equal(calls.length, 1);
@@ -191,7 +192,7 @@ async function runQuestionIdCase(browser, startPath) {
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.some(
-          (call) => new URL(call.url).pathname === "/v8/next",
+          (call) => new URL(call.url).pathname === "/v9/next",
         ),
       ),
       false,
@@ -210,7 +211,7 @@ async function runQuestionIdCase(browser, startPath) {
     );
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-label"),
-      "dueCardsRemaining あと11問. 詳細を表示"
+      "dueCardsRemaining あと11問. newQuestionsRemaining あと99問. 詳細を表示"
     );
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-expanded"),
@@ -222,7 +223,7 @@ async function runQuestionIdCase(browser, startPath) {
     );
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics-live-status").textContent(),
-      "dueCardsRemaining あと11問"
+      "dueCardsRemaining あと11問. newQuestionsRemaining あと99問"
     );
     const collapsedControlsHeight = await page.locator(
       "#kakomonn-reader-controls"
@@ -234,15 +235,31 @@ async function runQuestionIdCase(browser, startPath) {
     );
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics").getAttribute("aria-label"),
-      "dueCardsRemaining あと11問. 詳細を非表示"
+      "dueCardsRemaining あと11問. newQuestionsRemaining あと99問. 詳細を非表示"
     );
     assert.equal(
       await page.locator("#kakomonn-reader-learning-metrics-details").isVisible(),
       true
     );
     assert.equal(
+      await page.locator("#kakomonn-reader-daily-kpi-completed").innerText(),
+      "未達成"
+    );
+    assert.equal(
       await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
       "未達成"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-new-questions-remaining").innerText(),
+      "99"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-today-new-question-count").innerText(),
+      "1"
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-new-question-goal").innerText(),
+      "/ 100問"
     );
     assert.equal(
       await page.locator("#kakomonn-reader-today-stability-days-delta").innerText(),
@@ -339,7 +356,7 @@ async function runUnknownURLCase(browser) {
     assert.equal(await page.locator("#kakomonn-reader-next").isDisabled(), true);
     assert.equal((await attemptCalls(page)).length, 0);
     assert.equal(
-      await page.evaluate(() => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v8/next")),
+      await page.evaluate(() => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v9/next")),
       false,
     );
     assert.deepEqual(errors, []);
@@ -367,7 +384,7 @@ async function runRetryCase(browser) {
 
     await page.locator("#kakomonn-reader-next").click();
     await page.waitForFunction(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v8/attempts").length === 2,
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v9/attempts").length === 2,
     );
     const calls = await attemptCalls(page);
     assert.equal(calls[0].body.operationId, calls[1].body.operationId);
@@ -376,7 +393,7 @@ async function runRetryCase(browser) {
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.some(
-          (call) => new URL(call.url).pathname === "/v8/next",
+          (call) => new URL(call.url).pathname === "/v9/next",
         ),
       ),
       false,
@@ -483,10 +500,10 @@ async function runCatalogRefreshCase(browser) {
     await installSyncMock(page, { catalogQuestionCount: null });
     await page.addScriptTag({ content: fs.readFileSync(scriptPath, "utf8") });
     await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v8/questions"),
+      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v9/questions"),
     );
     const catalogCall = await page.evaluate(() =>
-      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v8/questions"),
+      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v9/questions"),
     );
     assert.deepEqual(catalogCall.body.questionIds, ["10", "11", "12", "13", "14", "20"]);
     assert.equal(catalogCall.body.expectedGeneration, 0);
@@ -606,7 +623,7 @@ async function runCatalogTimeoutRecoveryCase(browser) {
     await page.waitForFunction(
       () =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v8/questions",
+          (call) => new URL(call.url).pathname === "/v9/questions",
         ).length === 1 &&
         document.querySelector("#kakomonn-reader-next")?.textContent ===
           "次の問題へ",
@@ -615,7 +632,7 @@ async function runCatalogTimeoutRecoveryCase(browser) {
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v8/questions",
+          (call) => new URL(call.url).pathname === "/v9/questions",
         ).length,
       ),
       1,
@@ -677,7 +694,7 @@ async function runCatalogIncompleteCase(browser) {
       "問題一覧を同期できません.再試行してください",
     );
     const catalogCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v8/questions"),
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v9/questions"),
     );
     assert.equal(catalogCalls.length, 0);
     assert.deepEqual(errors, []);
@@ -737,7 +754,7 @@ async function runCatalogFinalPageMismatchCase(browser) {
       "問題一覧を同期できません.再試行してください",
     );
     const catalogCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v8/questions"),
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v9/questions"),
     );
     assert.equal(finalPageReads, 2);
     assert.equal(catalogCalls.length, 0);
@@ -797,7 +814,7 @@ async function runCatalogSamePageDuplicateCase(browser) {
       "問題一覧を同期できません.再試行してください",
     );
     const catalogCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v8/questions"),
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v9/questions"),
     );
     assert.equal(catalogCalls.length, 0);
     assert.deepEqual(errors, []);
@@ -871,7 +888,7 @@ async function runCatalogHybridSnapshotCase(browser) {
       "問題一覧を同期できません.再試行してください",
     );
     const catalogCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v8/questions"),
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v9/questions"),
     );
     assert.equal(pageOneReads, 2);
     assert.equal(catalogCalls.length, 0);
@@ -926,7 +943,7 @@ async function runCatalogCASConflictCase(browser) {
     await page.addScriptTag({ content: fs.readFileSync(scriptPath, "utf8") });
     await page.waitForFunction(() => document.querySelector("#kakomonn-reader-status")?.textContent === "待機中");
     const catalogCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v8/questions"),
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v9/questions"),
     );
     assert.equal(catalogCalls.length, 1);
     assert.equal(catalogCalls[0].body.expectedGeneration, 0);
@@ -988,7 +1005,7 @@ async function runCelebrationCase(browser) {
     await page.route("https://kakomonn-congratulations.kakomonn.workers.dev/**", (route) =>
       route.fulfill({
         contentType: "text/html; charset=utf-8",
-        body: "<!doctype html><html><body><h1>dueCardsCompleted達成</h1></body></html>",
+        body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
       }),
     );
     const errors = await prepare(page, "/questions/123", { nextQuestionId: "456" });
@@ -998,7 +1015,7 @@ async function runCelebrationCase(browser) {
       window.__syncMock.nextCelebration = {
         site: "chushoks.kakomonn.com",
         date: "2026-08-10",
-        dueCardsCompleted: true,
+        dailyKpiCompleted: true,
       };
     });
     await revealAnswerResult(frame, "correct");
@@ -1008,7 +1025,7 @@ async function runCelebrationCase(browser) {
     const url = new URL(page.url());
     assert.equal(url.searchParams.get("site"), site);
     assert.equal(url.searchParams.get("date"), "2026-08-10");
-    assert.equal(url.searchParams.get("dueCardsCompleted"), "true");
+    assert.equal(url.searchParams.get("dailyKpiCompleted"), "true");
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
@@ -1022,13 +1039,13 @@ async function runPendingCelebrationRecoveryCase(browser) {
     await page.route("https://kakomonn-congratulations.kakomonn.workers.dev/**", (route) =>
       route.fulfill({
         contentType: "text/html; charset=utf-8",
-        body: "<!doctype html><html><body><h1>dueCardsCompleted達成</h1></body></html>",
+        body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
       }),
     );
     const celebration = {
       site,
       date: "2026-08-10",
-      dueCardsCompleted: true,
+      dailyKpiCompleted: true,
     };
     const errors = await prepare(page, "/questions/123", {
       pendingCelebration: celebration,
@@ -1037,7 +1054,7 @@ async function runPendingCelebrationRecoveryCase(browser) {
       url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
     const url = new URL(page.url());
-    assert.equal(url.searchParams.get("dueCardsCompleted"), "true");
+    assert.equal(url.searchParams.get("dailyKpiCompleted"), "true");
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
@@ -1107,8 +1124,8 @@ async function main() {
   });
   const script = fs.readFileSync(scriptPath, "utf8");
   assert.equal(script.includes("/v3/answers"), false);
-  assert.equal(script.includes("/v8/attempts"), true);
-  assert.equal(script.includes("/v8/next"), true);
+  assert.equal(script.includes("/v9/attempts"), true);
+  assert.equal(script.includes("/v9/next"), true);
   assert.equal(script.includes("completedMilestone"), false);
   assert.equal(script.includes("masteryDelta"), false);
   assert.equal(script.includes("findNextQuestionURL"), false);

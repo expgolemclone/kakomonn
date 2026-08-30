@@ -258,7 +258,7 @@
         dose: '03', grind: 'durable', water: 'shown', temp: 'yours', time: 'earned', yield: 'true',
         recipe: ['You met another card whenever another card was due.',
                  'You reset and continued, even when the rhythm changed.',
-                 'Then the last due card passed, and dueCardsCompleted became true.'] }
+                 'Then the last due card passed, and dailyKpiCompleted became true after all due cards were complete and 100 new questions were answered.'] }
     };
 
     function moveThumb(tab) {

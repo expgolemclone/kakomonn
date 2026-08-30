@@ -150,7 +150,7 @@ function extractSyncTokenCandidates(buffers) {
   return candidates;
 }
 
-function registeredUserscriptsContainFingerprint(registrations, fingerprint) {
+function registeredScriptEntriesContainFingerprint(registrations, fingerprint) {
   return registrations.some((registration) =>
     JSON.stringify(registration).includes(fingerprint),
   );
@@ -790,7 +790,7 @@ module.exports = {
   readConfiguredToken,
   readDirectoryBuffers,
   readChromeUserDataDir,
-  registeredUserscriptsContainFingerprint,
+  registeredScriptEntriesContainFingerprint,
   resolveSyncToken,
   scanStoredSyncTokenCandidates,
   kakomonnFreeEnvironment,

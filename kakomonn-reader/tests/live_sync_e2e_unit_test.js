@@ -16,7 +16,7 @@ const {
   locateTampermonkeyExtension,
   readConfiguredToken,
   readChromeUserDataDir,
-  registeredUserscriptsContainFingerprint,
+  registeredScriptEntriesContainFingerprint,
   resolveSyncToken,
   stopDedicatedChrome,
   stopDedicatedChromePowerShell,
@@ -105,11 +105,11 @@ test("detects the current build in Chrome userscript registrations", () => {
     { id: "reader", js: [{ code: `const BUILD_FINGERPRINT = "${fingerprint}";` }] },
   ];
   assert.equal(
-    registeredUserscriptsContainFingerprint(registrations, fingerprint),
+    registeredScriptEntriesContainFingerprint(registrations, fingerprint),
     true,
   );
   assert.equal(
-    registeredUserscriptsContainFingerprint(registrations, "b".repeat(64)),
+    registeredScriptEntriesContainFingerprint(registrations, "b".repeat(64)),
     false,
   );
 });

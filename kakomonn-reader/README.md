@@ -25,7 +25,7 @@
 python3 build.py
 ```
 
-`src/`にはmetadataとruntime,correct feedback,style,syncとcatalog,次問launcher,UI,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `kakomonn-reader.user.js`を生成します. Tampermonkeyへ生成されたファイルを登録してください.
+`src/`にはmetadataとruntime,correct feedback,style,syncとcatalog,次問launcher,UI,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `kakomonn-reader.user.js`を生成します. 通常installでは[Latest Release asset](https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js)をTampermonkeyへ登録してください.
 
 ## Release
 
@@ -41,7 +41,7 @@ npm run release:kakomonn-reader
 
 release前の初回準備では, 専用のuser data directoryでChromeを起動し, そのprofileだけにTampermonkeyをinstallして`Allow User Scripts`を有効にしてからChromeを閉じます. test scriptが専用profileのChromeを最小化して起動し, 最新の`kakomonn-reader.user.js`をTampermonkeyへ更新します. 本番Workerの`KAKOMONN_SYNC_TOKEN`はrepository rootの`.env`だけから読みます. 値が未設定の場合は, 専用Chrome profileと標準Chrome profileのTampermonkey storageからproductionで認証できる値を自動取得して`.env`へ保存します. 専用profile, Tampermonkey, token, 最新buildのいずれかが欠けている場合は, releaseを作成せず終了します. 通常利用するChrome user data directoryとその配下はlive E2Eに使用しません.
 
-Releaseのtagは`kakomonn-reader-<commit SHA>`,titleは`kakomonn-reader <先頭12文字のSHA>`です.同期済みの`main`先端だけを`Latest`として公開し,生成fileはrepositoryの差分へ含めません. 作業内容とmainの不一致,localとoriginまたはGitHub上のmainの不一致,local検証の失敗,検証中のmain更新,同一tagの既存Releaseのいずれかを検出した場合は公開せず終了します. 原因を解消して同じcommandを最初から実行してください. skip,force,任意revisionを指定するoptionはありません.
+Releaseのtagは`kakomonn-reader-v<version>`,titleは`kakomonn-reader v<version>`です. `@version`はSemVerで手動更新し, 同期済みの`main`先端だけを`Latest`として公開します. 生成fileはrepositoryの差分へ含めません. 作業内容とmainの不一致,localとoriginまたはGitHub上のmainの不一致,local検証の失敗,検証中のmain更新,同一tagの既存Releaseのいずれかを検出した場合は公開せず終了します. 原因を解消して同じcommandを最初から実行してください. skip,force,任意revisionを指定するoptionはありません.
 
 公開されたファイルは[GitHub Releases](https://github.com/expgolemclone/kakomonn/releases)から取得できます.
 
@@ -65,7 +65,7 @@ WindowsとiPhoneの固定URLは同じユーザースクリプト専用storageか
 
 ## バージョン管理
 
-ファイル名およびユーザースクリプトのメタデータにはバージョン番号を付けません. 変更履歴はjjで管理します.
+userscript metadataの`@version`をSemVerで管理します. TampermonkeyはLatest Release assetの`@version`を比較し, 新しいversionを自動更新します. 変更履歴はjjで管理します.
 
 ## 動作確認
 

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parent
 SOURCE_DIR = ROOT / "src"
 OUTPUT_PATH = ROOT / "kakomonn-reader.user.js"
 BUILD_FINGERPRINT_PLACEHOLDER = "__KAKOMONN_READER_BUILD_FINGERPRINT__"
+VERSION_PATTERN = re.compile(rb"^// @version\s+(\d+\.\d+\.\d+)\s*$", re.MULTILINE)
 SOURCE_NAMES = (
     "metadata-and-runtime.js",
     "correct-feedback.js",
@@ -49,8 +51,12 @@ def main() -> None:
     output = render_userscript(parts)
     if not output.startswith(b"// ==UserScript=="):
         raise RuntimeError("generated output does not start with a userscript header")
-    if b"// @version" in output:
-        raise RuntimeError("userscript version metadata must not be added")
+    versions = VERSION_PATTERN.findall(output)
+    if len(versions) != 1:
+        raise RuntimeError(
+            "userscript must contain exactly one semantic @version: "
+            f"found {len(versions)}"
+        )
 
     OUTPUT_PATH.write_bytes(output)
     print(OUTPUT_PATH)

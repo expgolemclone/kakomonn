@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import kakomonnConfig from "./kakomonn-config.cjs";
@@ -6,6 +7,7 @@ import kakomonnConfig from "./kakomonn-config.cjs";
 const { kakomonnFreeEnvironment } = kakomonnConfig;
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
 const RELEASE_ASSET = "kakomonn-reader/kakomonn-reader.user.js";
@@ -13,6 +15,14 @@ const WINDOWS_CMD_SAFE_PATTERN = /^[A-Za-z0-9_./:@=-]+$/;
 const WINDOWS_WRAPPER_COMMANDS = new Set(["jj", "npm"]);
 
 export class ReleaseError extends Error {}
+
+export function readUserscriptVersion(source) {
+  const matches = [...source.matchAll(/^\/\/ @version\s+(\S+)\s*$/gm)];
+  if (matches.length !== 1 || !VERSION_PATTERN.test(matches[0][1])) {
+    throw new ReleaseError("The userscript must contain exactly one semantic @version");
+  }
+  return matches[0][1];
+}
 
 function formatCommand(command, args) {
   return [command, ...args]
@@ -211,6 +221,7 @@ function assertReleaseState(runCommand, expectedSha = null) {
 }
 
 export async function runRelease({
+  readFile = readFileSync,
   runCommand = createCommandRunner(),
   logger = console.log,
 } = {}) {
@@ -232,6 +243,9 @@ export async function runRelease({
 
   logger("Building the release asset");
   runCommand("npm", ["run", "build:kakomonn-reader"]);
+  const version = readUserscriptVersion(
+    readFile(path.join(PROJECT_ROOT, RELEASE_ASSET), "utf8"),
+  );
 
   logger("Rechecking main immediately before publishing");
   const finalState = assertReleaseState(runCommand, commitSha);
@@ -239,9 +253,8 @@ export async function runRelease({
     throw new ReleaseError("The GitHub repository changed during release validation");
   }
 
-  const shortSha = commitSha.slice(0, 12);
-  const tagName = `kakomonn-reader-${commitSha}`;
-  const title = `kakomonn-reader ${shortSha}`;
+  const tagName = `kakomonn-reader-v${version}`;
+  const title = `kakomonn-reader v${version}`;
   const notes = `Built from commit [${commitSha}](${repository.url}/commit/${commitSha}).`;
   runCommand("gh", [
     "release",

@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   createCommandRunner,
+  readUserscriptVersion,
   runRelease,
 } from "../scripts/release-kakomonn-reader.mjs";
 
@@ -90,11 +91,23 @@ function createFakeRunner({
 
 function releaseOptions(fake, overrides = {}) {
   return {
+    readFile: () => "// @version 1.0.0\n",
     runCommand: fake.runCommand,
     logger: () => {},
     ...overrides,
   };
 }
+
+test("reads exactly one semantic userscript version", () => {
+  assert.equal(readUserscriptVersion("// @version 1.2.3\n"), "1.2.3");
+  for (const source of [
+    "",
+    "// @version next\n",
+    "// @version 1.0.0\n// @version 1.0.1\n",
+  ]) {
+    assert.throws(() => readUserscriptVersion(source));
+  }
+});
 
 function findCall(calls, command, firstArg, secondArg) {
   return calls.find(
@@ -160,7 +173,7 @@ test("publishes the synchronized main only after the complete test suite", async
   const result = await runRelease(releaseOptions(fake));
 
   assert.equal(result.commitSha, SHA);
-  assert.equal(result.tagName, `kakomonn-reader-${SHA}`);
+  assert.equal(result.tagName, "kakomonn-reader-v1.0.0");
   assert.equal(
     findCall(fake.calls, "gh", "repo", "view").args[2],
     `${REPOSITORY_URL}.git`,
@@ -173,14 +186,14 @@ test("publishes the synchronized main only after the complete test suite", async
   assert.deepEqual(releaseCall.args, [
     "release",
     "create",
-    `kakomonn-reader-${SHA}`,
+    "kakomonn-reader-v1.0.0",
     "kakomonn-reader/kakomonn-reader.user.js",
     "--repo",
     REPOSITORY,
     "--target",
     SHA,
     "--title",
-    `kakomonn-reader ${SHA.slice(0, 12)}`,
+    "kakomonn-reader v1.0.0",
     "--notes",
     `Built from commit [${SHA}](${REPOSITORY_URL}/commit/${SHA}).`,
     "--latest",

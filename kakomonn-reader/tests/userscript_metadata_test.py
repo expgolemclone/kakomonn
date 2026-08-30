@@ -71,6 +71,11 @@ RUN_AT_VALUES = frozenset(
         "document-start",
     }
 )
+VERSION_PATTERN = re.compile(r"\d+\.\d+\.\d+")
+UPDATE_URL = (
+    "https://github.com/expgolemclone/kakomonn/releases/latest/download/"
+    "kakomonn-reader.user.js"
+)
 
 
 def extract_metadata(script: str) -> dict[str, list[str | None]]:
@@ -149,8 +154,10 @@ def validate(script_path: Path) -> None:
         "@grant none cannot be combined with other grants"
     )
 
-    version_values = metadata.get("version", [])
-    assert len(version_values) <= 1, "@version must not occur more than once"
+    version = require_single_value(metadata, "version")
+    assert VERSION_PATTERN.fullmatch(version), f"invalid semantic @version: {version}"
+    assert require_single_value(metadata, "updateURL") == UPDATE_URL
+    assert require_single_value(metadata, "downloadURL") == UPDATE_URL
     print(f"userscript metadata test passed: {script_path}")
 
 

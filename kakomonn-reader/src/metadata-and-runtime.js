@@ -1,7 +1,10 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
+// @version      1.0.0
 // @description  問題文と解説の読み上げ, コピー, 学習記録の端末間同期とdue card完了時の祝福を提供します.
+// @updateURL    https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
+// @downloadURL  https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @match        https://*.kakomonn.com/*
 // @connect      kakomonn-sync.kakomonn.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com

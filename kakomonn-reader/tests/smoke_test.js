@@ -955,7 +955,11 @@ async function main() {
   });
 
   const script = fs.readFileSync(scriptPath, "utf8");
-  assert.equal(script.includes("// @version"), false);
+  assert.match(script, /^\/\/ @version\s+1\.0\.0\s*$/m);
+  assert.match(
+    script,
+    /^\/\/ @updateURL\s+https:\/\/github\.com\/expgolemclone\/kakomonn\/releases\/latest\/download\/kakomonn-reader\.user\.js\s*$/m,
+  );
   assert.equal(script.includes(SYNC_API_ORIGIN), true);
   assert.equal(
     script.includes(`// @connect      ${new URL(SYNC_API_ORIGIN).host}`),

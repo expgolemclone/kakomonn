@@ -917,7 +917,7 @@ async function main() {
   });
 
   const script = fs.readFileSync(scriptPath, "utf8");
-  assert.match(script, /^\/\/ @version\s+2\.0\.0\s*$/m);
+  assert.match(script, /^\/\/ @version\s+2\.0\.1\s*$/m);
   assert.match(
     script,
     /^\/\/ @updateURL\s+https:\/\/github\.com\/expgolemclone\/kakomonn\/releases\/latest\/download\/kakomonn-reader\.user\.js\s*$/m,
@@ -1764,15 +1764,19 @@ async function main() {
     );
     const gestureRetryFrame = await loadMockQuestion(gestureRetryPage, script);
     await gestureRetryPage.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+      () => window.__audioPlayCalls === 1 && window.__audioInstance?.src === "",
     );
     assert.equal(
-      await gestureRetryPage.locator("#kakomonn-reader-error-title").innerText(),
-      "読み上げを開始できません",
+      await gestureRetryPage.locator("#kakomonn-reader-error-dialog").getAttribute("open"),
+      null,
     );
     assert.equal((await azureSpeechCalls(gestureRetryPage)).length, 0);
     assert.equal(await speechTokenCallCount(gestureRetryPage), 0);
-    await gestureRetryPage.locator("#kakomonn-reader-error-close").click();
+    const gestureRetryAnswer = gestureRetryFrame
+      .locator("input[name='answer']")
+      .first();
+    await gestureRetryAnswer.click();
+    assert.equal(await gestureRetryAnswer.isChecked(), true);
     await gestureRetryPage.waitForFunction(
       (url) =>
         window.__syncMock.calls.filter((call) => call.url === url).length === 1 &&
@@ -2047,11 +2051,19 @@ async function main() {
       script,
     );
     await iosGestureRetryPage.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+      () => window.__audioPlayCalls === 1 && window.__audioInstance?.src === "",
+    );
+    assert.equal(
+      await iosGestureRetryPage.locator("#kakomonn-reader-error-dialog").getAttribute("open"),
+      null,
     );
     assert.equal((await azureSpeechCalls(iosGestureRetryPage)).length, 0);
     assert.equal(await speechTokenCallCount(iosGestureRetryPage), 0);
-    await iosGestureRetryPage.locator("#kakomonn-reader-error-close").tap();
+    const iosGestureRetryAnswer = iosGestureRetryFrame
+      .locator("input[name='answer']")
+      .first();
+    await iosGestureRetryAnswer.tap();
+    assert.equal(await iosGestureRetryAnswer.isChecked(), true);
     await iosGestureRetryPage.waitForFunction(
       (url) =>
         window.__syncMock.calls.filter((call) => call.url === url).length === 1,

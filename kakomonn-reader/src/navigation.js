@@ -574,7 +574,6 @@
           speechInitializationInProgress = false;
           speechEnabled = false;
           finishSpeechInitialization();
-          showSpeechGestureError();
         }
       }
     );

@@ -93,11 +93,11 @@ test("production /open serves the repository dashboard bridge", async () => {
   });
   assert.equal(response.status, 200);
   const expected = canonicalAsset(
-    "index.html",
-    await readFile(resolve(publicDirectory, "index.html")),
+    "open.html",
+    await readFile(resolve(publicDirectory, "open.html")),
   );
   const actual = canonicalAsset(
-    "index.html",
+    "open.html",
     Buffer.from(await response.arrayBuffer()),
   );
   assert.equal(sha256(actual), sha256(expected));

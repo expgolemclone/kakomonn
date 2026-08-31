@@ -96,6 +96,8 @@ function fixtureHTML() {
 }
 
 const appSource = fs.readFileSync(path.join(publicDir, "app.js"), "utf8");
+const openPageSource = fs.readFileSync(path.join(publicDir, "open.html"), "utf8");
+const openScriptSource = fs.readFileSync(path.join(publicDir, "open.js"), "utf8");
 const stylesSource = fs.readFileSync(path.join(publicDir, "styles.css"), "utf8");
 
 async function launchBrowser(browserType = chromium) {
@@ -354,6 +356,10 @@ async function assertOpenBridge(browser) {
       await route.fulfill({ body: appSource, contentType: "text/javascript; charset=utf-8" });
       return;
     }
+    if (url.pathname === "/open.js") {
+      await route.fulfill({ body: openScriptSource, contentType: "text/javascript; charset=utf-8" });
+      return;
+    }
     if (url.pathname === "/styles.css") {
       await route.fulfill({ body: stylesSource, contentType: "text/css; charset=utf-8" });
       return;
@@ -366,7 +372,10 @@ async function assertOpenBridge(browser) {
       });
       return;
     }
-    await route.fulfill({ body: indexSource, contentType: "text/html; charset=utf-8" });
+    await route.fulfill({
+      body: url.pathname === "/open" ? openPageSource : indexSource,
+      contentType: "text/html; charset=utf-8",
+    });
   });
   await context.route("https://chushoks.kakomonn.com/**", (route) =>
     route.fulfill({

@@ -508,7 +508,44 @@ async function launchDedicatedChrome({
   };
 }
 
-async function installUserscript(context, userscriptPath) {
+async function readStoredUserscriptState(
+  extensionPage,
+  userscriptName,
+  buildFingerprint,
+) {
+  return extensionPage.evaluate(
+    async ({ expectedFingerprint, expectedName }) => {
+      const records = await chrome.storage.local.get(null);
+      const metadataRecords = Object.entries(records).filter(
+        ([key, record]) =>
+          key.startsWith("!extdb.@meta#") &&
+          !record?.value?.deleted &&
+          record?.value?.name === expectedName,
+      );
+      if (metadataRecords.length !== 1) {
+        return {
+          count: metadataRecords.length,
+          enabled: false,
+          reviewed: false,
+          sourceIsCurrent: false,
+        };
+      }
+      const metadata = metadataRecords[0][1].value;
+      const source = records[`!extdb.@source#${metadata.uuid}`]?.value;
+      return {
+        count: 1,
+        enabled: metadata.enabled === true,
+        reviewed: metadata.evilness === 0,
+        sourceIsCurrent: JSON.stringify(source ?? "").includes(
+          expectedFingerprint,
+        ),
+      };
+    },
+    { expectedFingerprint: buildFingerprint, expectedName: userscriptName },
+  );
+}
+
+async function updateInstalledUserscript(context, userscriptPath) {
   if (!fs.existsSync(userscriptPath)) {
     throw new Error(`Built userscript was not found: ${userscriptPath}`);
   }
@@ -568,97 +605,39 @@ async function installUserscript(context, userscriptPath) {
     await delay(2_000);
   }
 
-  const utilityPage = await context.newPage();
-  await utilityPage.goto(
-    `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=utils`,
-    { waitUntil: "commit", timeout: 30_000 },
-  );
-  const fileInput = utilityPage.locator('input[type="file"]');
-  await fileInput.waitFor({ state: "attached", timeout: 30_000 });
-  await fileInput.setInputFiles(userscriptPath);
-
-  const deadline = Date.now() + 30_000;
-  let clicked = false;
-  while (!clicked && Date.now() < deadline) {
-    for (const page of context.pages()) {
-      if (
-        !page.url().startsWith(
-          `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/ask.html`,
-        )
-      ) {
-        continue;
-      }
-      const controls = page.getByRole("button", {
-        name: /^(インストール|更新|再インストール|上書き|変更|Install|Update|Reinstall|Overwrite|Modify)$/,
-      });
-      for (let index = 0; index < (await controls.count()); index += 1) {
-        const control = controls.nth(index);
-        if (await control.isVisible().catch(() => false)) {
-          await control.click();
-          clicked = true;
-          break;
-        }
-      }
-      if (clicked) {
-        break;
-      }
-    }
-    if (!clicked) {
-      await delay(250);
-    }
-  }
-  if (!clicked) {
-    throw new Error("Tampermonkey did not show the userscript install confirmation");
-  }
-  const sourceUpdateDeadline = Date.now() + 30_000;
-  let sourceUpdated = false;
-  while (!sourceUpdated && Date.now() < sourceUpdateDeadline) {
-    sourceUpdated = await utilityPage.evaluate(async (expectedFingerprint) => {
-      const records = await chrome.storage.local.get(null);
-      return Object.entries(records).some(
-        ([key, record]) =>
-          key.startsWith("!extdb.@source#") &&
-          JSON.stringify(record?.value ?? "").includes(expectedFingerprint),
-      );
-    }, buildFingerprint);
-    if (!sourceUpdated) {
-      await delay(250);
-    }
-  }
-  if (!sourceUpdated) {
-    throw new Error("Tampermonkey did not save the current userscript source");
-  }
-  await delay(1_000);
-
-  await utilityPage.goto(
+  const dashboardPage = await context.newPage();
+  await dashboardPage.goto(
     `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=dashboard`,
     { waitUntil: "commit", timeout: 30_000 },
   );
-  const scriptRow = utilityPage
+  await dashboardPage
+    .locator("tr.scripttr")
+    .first()
+    .waitFor({ state: "visible", timeout: 30_000 });
+  const scriptRows = dashboardPage
     .locator("tr.scripttr")
     .filter({ hasText: userscriptName });
-  await scriptRow.waitFor({ state: "visible", timeout: 30_000 });
-  const enabledCheckbox = scriptRow.locator('input[type="checkbox"]');
-  const requiresReview = await utilityPage.evaluate(async (expectedName) => {
-    const records = await chrome.storage.local.get(null);
-    const metadata = Object.entries(records).find(
-      ([key, record]) =>
-        key.startsWith("!extdb.@meta#") &&
-        !record?.value?.deleted &&
-        record?.value?.name === expectedName,
-    )?.[1]?.value;
-    return metadata?.evilness !== 0;
-  }, userscriptName);
-  if (!(await enabledCheckbox.isChecked()) && requiresReview) {
-    await scriptRow.locator('[title="編集"],[title="Edit"]').click();
-    await utilityPage.waitForURL(/\+editor$/, { timeout: 10_000 });
-    const editor = utilityPage.locator(".CodeMirror:visible");
-    await editor.waitFor({ state: "visible", timeout: 10_000 });
-    await editor.evaluate((node) => {
-      const codeMirror = node.CodeMirror;
-      codeMirror.setValue(`${codeMirror.getValue()}\n`);
-    });
-    const fileMenus = utilityPage.getByText(/^(ファイル|File)$/, {
+  const scriptCount = await scriptRows.count();
+  if (scriptCount !== 1) {
+    throw new Error(
+      `The dedicated Chrome profile must contain exactly one installed ${userscriptName} userscript; found ${scriptCount}`,
+    );
+  }
+  const scriptRow = scriptRows.first();
+  await scriptRow.locator('[title="編集"],[title="Edit"]').click();
+  await dashboardPage.waitForURL(/\+editor$/, { timeout: 10_000 });
+  const editor = dashboardPage.locator(".CodeMirror:visible");
+  await editor.waitFor({ state: "visible", timeout: 10_000 });
+  const sourceIsCurrent = await editor.evaluate(
+    (node, expectedSource) => node.CodeMirror.getValue() === expectedSource,
+    userscriptSource,
+  );
+  if (!sourceIsCurrent) {
+    await editor.evaluate(
+      (node, expectedSource) => node.CodeMirror.setValue(expectedSource),
+      userscriptSource,
+    );
+    const fileMenus = dashboardPage.getByText(/^(ファイル|File)$/, {
       exact: true,
     });
     let fileMenuClicked = false;
@@ -673,14 +652,14 @@ async function installUserscript(context, userscriptPath) {
     if (!fileMenuClicked) {
       throw new Error("Tampermonkey editor File menu was not visible");
     }
-    await utilityPage
+    await dashboardPage
       .locator("tr.entry:visible")
       .filter({ hasText: /^(保存|Save).*Ctrl-S$/ })
       .click();
 
-    const modificationDeadline = Date.now() + 30_000;
-    let modificationConfirmed = false;
-    while (!modificationConfirmed && Date.now() < modificationDeadline) {
+    const sourceUpdateDeadline = Date.now() + 30_000;
+    let sourceUpdated = false;
+    while (!sourceUpdated && Date.now() < sourceUpdateDeadline) {
       for (const page of context.pages()) {
         const controls = page.getByRole("button", {
           name: /^(変更|Modify)$/,
@@ -689,65 +668,74 @@ async function installUserscript(context, userscriptPath) {
           const control = controls.nth(index);
           if (await control.isVisible().catch(() => false)) {
             await control.click();
-            modificationConfirmed = true;
             break;
           }
         }
-        if (modificationConfirmed) {
-          break;
-        }
       }
-      if (!modificationConfirmed) {
+      const storedState = await readStoredUserscriptState(
+        dashboardPage,
+        userscriptName,
+        buildFingerprint,
+      );
+      sourceUpdated = storedState.reviewed && storedState.sourceIsCurrent;
+      if (!sourceUpdated) {
         await delay(250);
       }
     }
-    if (!modificationConfirmed) {
-      throw new Error(
-        "Tampermonkey did not show the userscript modification confirmation",
-      );
+    if (!sourceUpdated) {
+      throw new Error("Tampermonkey did not save the current userscript source");
     }
-    await delay(5_000);
-    await utilityPage.goto(
-      `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=dashboard`,
-      { waitUntil: "commit", timeout: 30_000 },
-    );
-    const verifiedRow = utilityPage
-      .locator("tr.scripttr")
-      .filter({ hasText: userscriptName });
-    await verifiedRow.waitFor({ state: "visible", timeout: 30_000 });
-    const verifiedCheckbox = verifiedRow.locator('input[type="checkbox"]');
-    if (!(await verifiedCheckbox.isChecked())) {
-      await verifiedCheckbox.click();
-      await delay(1_000);
-    }
-    assert.equal(
-      await verifiedCheckbox.isChecked(),
-      true,
-      "Tampermonkey did not enable the reviewed userscript",
-    );
   }
-  await utilityPage.goto(
+  await delay(1_000);
+  await dashboardPage.goto(
     `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=dashboard`,
     { waitUntil: "commit", timeout: 30_000 },
   );
-  const enabledRow = utilityPage
+  const enabledRow = dashboardPage
     .locator("tr.scripttr")
     .filter({ hasText: userscriptName });
   await enabledRow.waitFor({ state: "visible", timeout: 30_000 });
-  const finalCheckbox = enabledRow.locator('input[type="checkbox"]');
-  if (!(await finalCheckbox.isChecked())) {
-    await finalCheckbox.click();
-    await delay(1_000);
+  let storedState = await readStoredUserscriptState(
+    dashboardPage,
+    userscriptName,
+    buildFingerprint,
+  );
+  assert.equal(
+    storedState.count,
+    1,
+    `Tampermonkey must store exactly one current ${userscriptName} userscript`,
+  );
+  assert.equal(
+    storedState.reviewed,
+    true,
+    "Tampermonkey requires review of the current userscript",
+  );
+  assert.equal(
+    storedState.sourceIsCurrent,
+    true,
+    "Tampermonkey did not retain the current userscript source",
+  );
+  if (!storedState.enabled) {
+    await enabledRow.locator(".enabler").click();
+    const enableDeadline = Date.now() + 10_000;
+    while (!storedState.enabled && Date.now() < enableDeadline) {
+      await delay(250);
+      storedState = await readStoredUserscriptState(
+        dashboardPage,
+        userscriptName,
+        buildFingerprint,
+      );
+    }
   }
   assert.equal(
-    await finalCheckbox.isChecked(),
+    storedState.enabled,
     true,
     "Tampermonkey did not enable the current userscript",
   );
   const registrationDeadline = Date.now() + 60_000;
   let registrationReady = false;
   while (!registrationReady && Date.now() < registrationDeadline) {
-    registrationReady = await utilityPage.evaluate(
+    registrationReady = await dashboardPage.evaluate(
       async ({ expectedFingerprint }) => {
         const registrations = await chrome.userScripts.getScripts();
         return registrations.some((registration) =>
@@ -782,7 +770,7 @@ module.exports = {
   discoverTampermonkeyStorageDirectories,
   chromeLaunchArguments,
   extractSyncTokenCandidates,
-  installUserscript,
+  updateInstalledUserscript,
   isSameOrDescendantPath,
   launchDedicatedChrome,
   listProfileDirectories,

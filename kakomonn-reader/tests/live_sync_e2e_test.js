@@ -7,7 +7,7 @@ const {
 } = require("../../scripts/kakomonn-config.cjs");
 
 const {
-  installUserscript,
+  updateInstalledUserscript,
   launchDedicatedChrome,
   readChromeUserDataDir,
   resolveSyncToken,
@@ -552,7 +552,7 @@ async function main() {
   const chrome = await launchDedicatedChrome({ configuration, userDataDir });
   let page = null;
   try {
-    await installUserscript(chrome.context, userscriptPath);
+    await updateInstalledUserscript(chrome.context, userscriptPath);
     page = await chrome.context.newPage();
     await page.goto(currentQuestionUrl, {
       waitUntil: "domcontentloaded",

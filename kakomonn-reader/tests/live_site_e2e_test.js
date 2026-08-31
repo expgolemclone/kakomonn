@@ -113,6 +113,10 @@ function collectSameOriginPaths(html, pageURL, pattern, allowSearch = false) {
 async function injectReader(page, script) {
   await page.evaluate(
     ({ source, sourceURL }) => {
+      Object.defineProperty(window, "Audio", {
+        configurable: true,
+        value: undefined,
+      });
       (0, eval)(`${source}\n//# sourceURL=${sourceURL}`);
     },
     { source: script, sourceURL: readerSourceURL },
@@ -139,15 +143,21 @@ async function darkModeImageFilters(locator) {
 
 async function waitForSyncReady(page) {
   await page.waitForFunction(
-    () => {
-      const status = document.querySelector(
-        "#kakomonn-reader-status",
-      )?.textContent;
-      return status === "待機中" || status === "読み上げ非対応";
-    },
+    () =>
+      window.__syncMock?.calls.some(
+        (call) => new URL(call.url).pathname === "/v9/state",
+      ) === true,
     null,
     { timeout: readerReadyTimeout },
   );
+  await page.waitForTimeout(1_500);
+  await dismissReaderErrorForTest(page);
+}
+
+async function dismissReaderErrorForTest(page) {
+  await page.locator("#kakomonn-reader-error-dialog").evaluate((dialog) => {
+    if (dialog.open) dialog.close();
+  });
 }
 
 async function submitAnswer(page, frame, answerText, inputMethod = "click") {
@@ -210,7 +220,7 @@ async function submitAnswer(page, frame, answerText, inputMethod = "click") {
           .scrollY === 0,
     );
 
-    await page.locator("#kakomonn-reader-sync-settings-button").focus();
+    await page.locator("#kakomonn-reader-frame").focus();
     await page.keyboard.press(answerShortcutKeys[choiceIndex]);
   } else {
     assert.equal(inputMethod, "click");
@@ -247,6 +257,7 @@ async function clickNextQuestion(page, frame, expectedNextUrl) {
     "次の問題へ",
   );
 
+  await dismissReaderErrorForTest(page);
   await page.locator("#kakomonn-reader-next").click();
   await page.waitForFunction(
     (expectedUrl) =>
@@ -481,12 +492,8 @@ async function runCase(
 
     console.log(JSON.stringify({ phase: "script-injected", answerText }));
     const frame = await getQuestionFrame(page);
-    await page.locator("#kakomonn-reader-learning-metrics").waitFor({ state: "visible" });
     await waitForSyncReady(page);
-    assert.equal(
-      await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
-      "未達成",
-    );
+    assert.equal(await page.locator("#kakomonn-reader-controls").count(), 0);
     assert.deepEqual(
       await frame.locator("body").evaluate((body) => {
         const documentNode = body.ownerDocument;
@@ -634,21 +641,6 @@ async function runCase(
     );
 
     const expectedTodayStabilityDaysDelta = attemptStabilityDaysDelta;
-    if (expectedTodayStabilityDaysDelta > 0) {
-      await page.waitForFunction(
-        () =>
-          document.querySelector("#kakomonn-reader-due-cards-completed")?.textContent ===
-          "未達成",
-        null,
-        { timeout: 10_000 },
-      );
-    } else {
-      await page.waitForTimeout(1_500);
-      assert.equal(
-        await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
-        "未達成",
-      );
-    }
 
     assert.equal(await readStoredStabilityDays(page), expectedTodayStabilityDaysDelta);
     assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
@@ -669,8 +661,8 @@ async function runCase(
         phase: "failed",
         answerText,
         pageUrl: page.url(),
-        countText: await page.locator("#kakomonn-reader-learning-metrics").textContent().catch(() => null),
-        statusText: await page.locator("#kakomonn-reader-status").textContent().catch(() => null),
+        errorTitle: await page.locator("#kakomonn-reader-error-title").textContent().catch(() => null),
+        errorDetail: await page.locator("#kakomonn-reader-error-detail").textContent().catch(() => null),
         nextButton: await page.locator("#kakomonn-reader-next").evaluate((button) => ({
           disabled: button.disabled,
           text: button.textContent,
@@ -745,7 +737,6 @@ async function runRandomNavigationCase(browser, script) {
     await injectReader(page, script);
 
     const frame = await getQuestionFrame(page);
-    await page.locator("#kakomonn-reader-learning-metrics").waitFor({ state: "visible" });
     await waitForSyncReady(page);
 
     const initialQuestion = (
@@ -796,6 +787,7 @@ async function runRandomNavigationCase(browser, script) {
         null,
         { timeout: 15_000 },
       );
+      await dismissReaderErrorForTest(page);
       await frame.getByRole("link", { name: "次の問題へ", exact: true }).click();
     }
     await page.waitForFunction(
@@ -854,14 +846,8 @@ async function runRandomNavigationCase(browser, script) {
       JSON.stringify({
         phase: "random-failed",
         pageUrl: page.url(),
-        countText: await page
-          .locator("#kakomonn-reader-learning-metrics")
-          .textContent()
-          .catch(() => null),
-        statusText: await page
-          .locator("#kakomonn-reader-status")
-          .textContent()
-          .catch(() => null),
+        errorTitle: await page.locator("#kakomonn-reader-error-title").textContent().catch(() => null),
+        errorDetail: await page.locator("#kakomonn-reader-error-detail").textContent().catch(() => null),
         frameUrl: await page
           .locator("#kakomonn-reader-frame")
           .evaluate((frame) => frame.contentWindow?.location.href ?? null)
@@ -925,7 +911,6 @@ async function runMarkdownCopyCase(browser, script) {
     await injectReader(page, script);
 
     const frame = await getQuestionFrame(page);
-    await page.locator("#kakomonn-reader-learning-metrics").waitFor({ state: "visible" });
     await waitForSyncReady(page);
 
     const heading = await frame
@@ -1025,6 +1010,7 @@ async function runMarkdownCopyCase(browser, script) {
       await page.evaluate(() => navigator.clipboard.readText()),
       clipboardNonce,
     );
+    await dismissReaderErrorForTest(page);
     await page.locator("#kakomonn-reader-copy").click();
     await page.waitForFunction(
       () =>
@@ -1066,10 +1052,8 @@ async function runMarkdownCopyCase(browser, script) {
           .locator("#kakomonn-reader-copy")
           .textContent()
           .catch(() => null),
-        statusText: await page
-          .locator("#kakomonn-reader-status")
-          .textContent()
-          .catch(() => null),
+        errorTitle: await page.locator("#kakomonn-reader-error-title").textContent().catch(() => null),
+        errorDetail: await page.locator("#kakomonn-reader-error-detail").textContent().catch(() => null),
         pageErrorLocations,
         pageErrors,
       }),
@@ -1139,6 +1123,7 @@ async function runReportedCopyCase(browser, script) {
       null,
       { timeout: 15_000 },
     );
+    await dismissReaderErrorForTest(page);
     await page.locator("#kakomonn-reader-copy").click();
     await page.waitForFunction(
       () =>

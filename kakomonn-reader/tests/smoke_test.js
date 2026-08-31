@@ -262,22 +262,6 @@ async function preparePage(page, speechMode, syncOptions = {}) {
         },
       },
     });
-    window.__readerStatusHistory = [];
-    const recordReaderStatus = () => {
-      const status = document.querySelector(
-        "#kakomonn-reader-status",
-      )?.textContent;
-      const history = window.__readerStatusHistory;
-      if (status && history[history.length - 1] !== status) {
-        history.push(status);
-      }
-    };
-    window.__readerStatusObserver = new MutationObserver(recordReaderStatus);
-    window.__readerStatusObserver.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
     let gestureRequired = mode === "audio-gesture-required";
     const manualPlayback = mode === "audio-manual";
     window.__audioPauseCalls = 0;
@@ -513,15 +497,11 @@ async function runCorrectFeedbackCase(context, script) {
   const childFrame = await loadMockQuestion(page, script);
   try {
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "問題文 1/1",
+      () => window.__audioPlayCalls >= 2 && typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "問題文完了",
+      () => window.__audioInstance?.src === "",
     );
 
     await markAnswerResult(childFrame, "correct");
@@ -623,9 +603,7 @@ async function runCorrectFeedbackCase(context, script) {
     );
     await finishManualAudio(page);
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "That's right!",
+      () => window.__audioBlobs.length === 3 && typeof window.__audioInstance?.onended === "function",
     );
     assert.equal(await carriedFeedback.isVisible(), true);
     await finishManualAudio(page);
@@ -673,9 +651,7 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
   const childFrame = await loadMockQuestion(page, script);
   try {
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "問題文完了",
+      () => window.__audioPlayCalls >= 1 && window.__audioInstance?.src === "",
     );
     await markAnswerResult(childFrame, "correct");
     const feedback = childFrame.locator(".kakomonn-reader-correct-feedback");
@@ -719,11 +695,7 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
       },
     );
 
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "正解完了",
-    );
+    await feedback.waitFor({ state: "hidden" });
     const speechCalls = await azureSpeechCalls(page);
     assert.equal(
       speechCalls.at(-1).body,
@@ -758,15 +730,11 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
   const childFrame = await loadMockQuestion(page, script);
   try {
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "問題文 1/1",
+      () => window.__audioPlayCalls >= 2 && typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "問題文完了",
+      () => window.__audioInstance?.src === "",
     );
 
     await markAnswerResult(childFrame, "correct");
@@ -797,9 +765,7 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
 
     await finishManualAudio(page);
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "Nice! That's right!",
+      () => window.__audioBlobs.length === 3 && typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
 
@@ -815,15 +781,11 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
     );
     await finishManualAudio(page);
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "Legendary! That's right!",
+      () => window.__audioBlobs.length === 5 && typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "正解完了",
+      () => window.__audioInstance?.src === "",
     );
     assert.deepEqual(
       await page.evaluate(() => window.__correctFeedbackRandomCalls),
@@ -852,9 +814,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
   const childFrame = await loadMockQuestion(page, script);
   try {
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "問題文 1/1",
+      () => window.__audioPlayCalls >= 2 && typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
     await page.evaluate(() => {
@@ -886,9 +846,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
 
     await finishManualAudio(page);
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "That's right!",
+      () => window.__audioBlobs.length === 3 && typeof window.__audioInstance?.onended === "function",
     );
     assert.equal(
       page.url(),
@@ -908,13 +866,17 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
 async function assertIncorrectSkip(context, script) {
   const page = await context.newPage();
   const errors = await preparePage(page, "none");
-  const frame = await loadMockQuestion(page, script);
+    const frame = await loadMockQuestion(page, script);
   try {
     await page.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-due-cards-remaining")
-          ?.textContent === "12",
+        window.__syncMock.calls.some(
+          (call) => new URL(call.url).pathname === "/v9/state",
+        ) && document.querySelector("#kakomonn-reader-sync-settings")?.open === false,
     );
+    if (await page.locator("#kakomonn-reader-error-dialog").getAttribute("open") !== null) {
+      await page.locator("#kakomonn-reader-error-close").click();
+    }
     await frame.evaluate(() => {
       document.querySelector("#next")?.remove();
       document.querySelector("#scroll-next")?.remove();
@@ -955,7 +917,7 @@ async function main() {
   });
 
   const script = fs.readFileSync(scriptPath, "utf8");
-  assert.match(script, /^\/\/ @version\s+1\.0\.0\s*$/m);
+  assert.match(script, /^\/\/ @version\s+2\.0\.0\s*$/m);
   assert.match(
     script,
     /^\/\/ @updateURL\s+https:\/\/github\.com\/expgolemclone\/kakomonn\/releases\/latest\/download\/kakomonn-reader\.user\.js\s*$/m,
@@ -1007,10 +969,10 @@ async function main() {
     assert.equal(initialProblemPresentation.phase, "question");
     assert.equal(initialProblemPresentation.scrollY > 300, true);
     assert.equal(await page.evaluate(() => typeof window.Audio), "function");
-    assert.equal(
-      await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
-      "未達成",
-    );
+    assert.equal(await page.locator("#kakomonn-reader-controls").count(), 0);
+    assert.equal(await page.locator("#kakomonn-reader-status").count(), 0);
+    assert.equal(await page.locator("#kakomonn-reader-learning-metrics").count(), 0);
+    assert.equal(await page.locator("#kakomonn-reader-sync-settings-button").count(), 0);
     assert.equal(
       await page.locator("#kakomonn-reader-start").count(),
       0,
@@ -1042,46 +1004,26 @@ async function main() {
     ]) {
       await page.setViewportSize(viewport);
       const readerLayout = await page.evaluate(() => {
-        const controlsElement = document.querySelector(
-          "#kakomonn-reader-controls",
-        );
-        const statusElement = document.querySelector(
-          "#kakomonn-reader-status",
-        );
-        const metricsElement = document.querySelector(
-          "#kakomonn-reader-learning-metrics",
-        );
-        const detailsElement = document.querySelector(
-          "#kakomonn-reader-learning-metrics-details",
-        );
-        const syncElement = document.querySelector(
-          "#kakomonn-reader-sync-settings-button",
-        );
+        const shellElement = document.querySelector("#kakomonn-reader-shell");
         const frameElement = document.querySelector(
           "#kakomonn-reader-frame",
         );
         const actionsElement = document.querySelector(
           "#kakomonn-reader-actions",
         );
+        const progressElement = document.querySelector(
+          "#kakomonn-reader-time-limit",
+        );
         const copyElement = document.querySelector("#kakomonn-reader-copy");
         const nextElement = document.querySelector("#kakomonn-reader-next");
-        const controls = controlsElement.getBoundingClientRect();
-        const status = statusElement.getBoundingClientRect();
-        const metrics = metricsElement.getBoundingClientRect();
-        const sync = syncElement.getBoundingClientRect();
+        const shell = shellElement.getBoundingClientRect();
         const frame = frameElement.getBoundingClientRect();
         const actions = actionsElement.getBoundingClientRect();
+        const progress = progressElement.getBoundingClientRect();
         const copy = copyElement.getBoundingClientRect();
         const next = nextElement.getBoundingClientRect();
-        const metricRows = [
-          ...metricsElement.querySelectorAll(".kakomonn-reader-metric"),
-        ];
-        const statusStyle = getComputedStyle(statusElement);
-        const metricsStyle = getComputedStyle(metricsElement);
-        const nextStyle = getComputedStyle(nextElement);
         const approximatelyEqual = (left, right) =>
           Math.abs(left - right) <= 1;
-        const isMobileLayout = innerWidth <= 480;
         return {
           actionsFullWidth:
             approximatelyEqual(actions.left, 0) &&
@@ -1090,38 +1032,22 @@ async function main() {
           bottomButtonsFill:
             approximatelyEqual(copy.left, actions.left + 8) &&
             approximatelyEqual(next.right, actions.right - 8),
-          controlsFullWidth:
-            approximatelyEqual(controls.left, 0) &&
-            approximatelyEqual(controls.right, innerWidth),
-          detailsHidden: detailsElement.hidden,
-          frameFillsMiddle:
-            approximatelyEqual(frame.top, controls.bottom) &&
-            approximatelyEqual(frame.bottom, actions.top) &&
+          frameFillsShell:
+            approximatelyEqual(frame.top, shell.top) &&
+            approximatelyEqual(frame.right, shell.right) &&
+            approximatelyEqual(frame.bottom, shell.bottom) &&
+            approximatelyEqual(frame.left, shell.left) &&
             frame.height > 0,
           noHorizontalOverflow:
-            controlsElement.scrollWidth <= controlsElement.clientWidth &&
+            shellElement.scrollWidth <= shellElement.clientWidth &&
             actionsElement.scrollWidth <= actionsElement.clientWidth,
-          metricLabelsFit: metricRows.every((row) => {
-            const label = row.querySelector(".kakomonn-reader-metric-label");
-            return label.scrollWidth <= label.clientWidth;
-          }),
-          responsiveControlLayout: isMobileLayout
-            ? approximatelyEqual(status.top, sync.top) &&
-              approximatelyEqual(metrics.top, status.bottom + 8) &&
-              approximatelyEqual(metrics.left, controls.left + 8) &&
-              approximatelyEqual(metrics.right, controls.right - 8)
-            : approximatelyEqual(status.top, metrics.top) &&
-              approximatelyEqual(metrics.top, sync.top),
-          sharedBorderlessSurface:
-            statusStyle.borderTopWidth === "0px" &&
-            metricsStyle.borderTopWidth === "0px" &&
-            statusStyle.borderRadius === nextStyle.borderRadius &&
-            metricsStyle.borderRadius === nextStyle.borderRadius &&
-            statusStyle.boxShadow === nextStyle.boxShadow &&
-            metricsStyle.boxShadow === nextStyle.boxShadow,
-          topFillsWidth:
-            approximatelyEqual(status.left, controls.left + 8) &&
-            approximatelyEqual(sync.right, controls.right - 8),
+          questionStartsAtTop: approximatelyEqual(shell.top, 0),
+          shellFillsAboveActions: approximatelyEqual(shell.bottom, actions.top),
+          timeBarOverlay:
+            approximatelyEqual(progress.top, shell.top) &&
+            approximatelyEqual(progress.left, shell.left) &&
+            approximatelyEqual(progress.right, shell.right) &&
+            approximatelyEqual(progress.height, 4),
         };
       });
       assert.deepEqual(
@@ -1130,14 +1056,11 @@ async function main() {
           actionsFullWidth: true,
           bottomButtonsEqual: true,
           bottomButtonsFill: true,
-          controlsFullWidth: true,
-          detailsHidden: true,
-          frameFillsMiddle: true,
-          metricLabelsFit: true,
+          frameFillsShell: true,
           noHorizontalOverflow: true,
-          responsiveControlLayout: true,
-          sharedBorderlessSurface: true,
-          topFillsWidth: true,
+          questionStartsAtTop: true,
+          shellFillsAboveActions: true,
+          timeBarOverlay: true,
         },
         `${JSON.stringify(viewport)} ${JSON.stringify(readerLayout)}`,
       );
@@ -1301,20 +1224,7 @@ async function main() {
       (element) => element.remove()
     );
     await page.waitForFunction(
-      () =>
-        window.__readerStatusHistory.includes("問題文 1/1") &&
-        document.querySelector("#kakomonn-reader-status").textContent ===
-          "問題文完了",
-    );
-    assert.equal(
-      await page.evaluate(() => window.__readerStatusHistory.includes("準備中")),
-      true,
-    );
-    assert.equal(
-      await page.evaluate(() =>
-        window.__readerStatusHistory.includes("問題文準備中"),
-      ),
-      false,
+      () => window.__audioPlayCalls >= 1 && window.__audioInstance?.src === "",
     );
     assert.equal(
       await page.locator("#kakomonn-reader-next").isDisabled(),
@@ -1324,7 +1234,7 @@ async function main() {
     const displayChoices = childFrame.locator(
       ".problem_detail > ul.list > li",
     );
-    await page.locator("#kakomonn-reader-sync-settings-button").focus();
+    await page.locator("#kakomonn-reader-frame").focus();
 
     await page.keyboard.press("q");
     assert.equal(await answerInputs.first().isChecked(), true);
@@ -1605,10 +1515,7 @@ async function main() {
       azureSpeechUrl,
     );
     await page.waitForFunction(
-      () =>
-        window.__readerStatusHistory.includes("不正解 1/1") &&
-        document.querySelector("#kakomonn-reader-status").textContent ===
-          "不正解完了",
+      () => window.__audioPlayCalls >= 2 && window.__audioInstance?.src === "",
     );
     assert.equal(
       (await azureSpeechCalls(page))[1].body,
@@ -1662,12 +1569,18 @@ async function main() {
     });
     await page.locator("#kakomonn-reader-copy").click();
     await page.waitForFunction(
-      () =>
-        window.__readerStatusHistory.includes(
-          "クリップボードへコピーできません",
-        ),
+      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-error-title").innerText(),
+      "クリップボードへコピーできません",
+    );
+    assert.match(
+      await page.locator("#kakomonn-reader-error-detail").innerText(),
+      /^context=clipboard-write/,
     );
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
+    await page.locator("#kakomonn-reader-error-close").click();
     await page.evaluate(() => {
       window.__clipboardWriteFails = false;
     });
@@ -1698,24 +1611,6 @@ async function main() {
       ),
       1,
     );
-    try {
-      await page.waitForFunction(
-        () =>
-          document.querySelector("#kakomonn-reader-due-cards-completed").textContent ===
-          "未達成",
-      );
-    } catch (error) {
-      error.readerState = await page.evaluate(() => ({
-        count: document.querySelector("#kakomonn-reader-learning-metrics")?.textContent,
-        status: document.querySelector("#kakomonn-reader-status")?.textContent,
-        calls: window.__syncMock.calls,
-        server: {
-          stabilityDays: window.__syncMock.stabilityDays,
-          attempts: window.__syncMock.attemptCount,
-        },
-      }));
-      throw error;
-    }
     assert.equal(
       await page.evaluate(
         () =>
@@ -1761,18 +1656,7 @@ async function main() {
       ),
       stateCallsBeforeResume,
     );
-    assert.equal(
-      await page.locator("#kakomonn-reader-due-cards-completed").innerText(),
-      "未達成",
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-due-cards-remaining").innerText(),
-      "12",
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-sync-settings-button").isDisabled(),
-      false,
-    );
+    assert.equal(await page.locator("#kakomonn-reader-controls").count(), 0);
 
     assert.deepEqual(errors, []);
 
@@ -1815,9 +1699,7 @@ async function main() {
       script,
     );
     await speechShortcutPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "問題文 1/1",
+      () => window.__audioPlayCalls >= 2 && window.__audioInstance?.paused === false,
     );
     const speechShortcutInput = speechShortcutFrame.locator(
       "#shortcut-text-input",
@@ -1828,10 +1710,7 @@ async function main() {
     await speechShortcutInput.focus();
     await speechShortcutPage.keyboard.type("n ");
     assert.equal(await speechShortcutInput.inputValue(), "n ");
-    assert.equal(
-      await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
-      "問題文 1/1",
-    );
+    assert.equal(await speechShortcutPage.evaluate(() => window.__audioInstance.paused), false);
     assert.equal(
       await speechShortcutPage.evaluate(() => window.__audioPauseCalls),
       pauseCallsBeforeInput,
@@ -1842,10 +1721,7 @@ async function main() {
       () => window.__audioPlayCalls,
     );
     await speechShortcutPage.keyboard.press("Space");
-    assert.equal(
-      await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
-      "読み上げ一時停止",
-    );
+    assert.equal(await speechShortcutPage.evaluate(() => window.__audioInstance.paused), true);
     assert.equal(
       await speechShortcutPage.evaluate(() => window.__audioPauseCalls),
       pauseCallsBeforeInput + 1,
@@ -1857,9 +1733,8 @@ async function main() {
 
     await speechShortcutPage.keyboard.press("Space");
     await speechShortcutPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "問題文 1/1",
+      (expected) => window.__audioPlayCalls === expected && window.__audioInstance?.paused === false,
+      playCallsBeforePause + 1,
     );
     assert.equal(
       await speechShortcutPage.evaluate(() => window.__audioPlayCalls),
@@ -1878,10 +1753,7 @@ async function main() {
       pauseCallsBeforeInput + 1,
     );
     await speechShortcutPage.waitForTimeout(150);
-    assert.equal(
-      await speechShortcutPage.locator("#kakomonn-reader-status").innerText(),
-      "問題文 1/1",
-    );
+    assert.equal(await speechShortcutPage.evaluate(() => window.__audioInstance.paused), false);
     assert.deepEqual(speechShortcutErrors, []);
     await speechShortcutPage.close();
 
@@ -1892,18 +1764,19 @@ async function main() {
     );
     const gestureRetryFrame = await loadMockQuestion(gestureRetryPage, script);
     await gestureRetryPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "画面をクリックまたはタップすると読み上げます",
+      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+    );
+    assert.equal(
+      await gestureRetryPage.locator("#kakomonn-reader-error-title").innerText(),
+      "読み上げを開始できません",
     );
     assert.equal((await azureSpeechCalls(gestureRetryPage)).length, 0);
     assert.equal(await speechTokenCallCount(gestureRetryPage), 0);
-    await gestureRetryFrame.locator("input[name='answer']").first().click();
+    await gestureRetryPage.locator("#kakomonn-reader-error-close").click();
     await gestureRetryPage.waitForFunction(
       (url) =>
         window.__syncMock.calls.filter((call) => call.url === url).length === 1 &&
-        document.querySelector("#kakomonn-reader-status").textContent ===
-          "問題文完了",
+        window.__audioInstance?.src === "",
       azureSpeechUrl,
     );
     assert.equal(
@@ -1938,9 +1811,7 @@ async function main() {
       azureSpeechUrl,
     );
     await delayedSyncPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "問題文完了",
+      () => window.__audioInstance?.src === "",
     );
     assert.equal(
       await delayedSyncPage.locator("#kakomonn-reader-start").count(),
@@ -1959,10 +1830,7 @@ async function main() {
     await setupPage.waitForSelector("#kakomonn-reader-sync-settings", {
       state: "visible",
     });
-    assert.equal(
-      await setupPage.locator("#kakomonn-reader-due-cards-completed").innerText(),
-      "--",
-    );
+    assert.equal(await setupPage.locator("#kakomonn-reader-sync-settings-cancel").count(), 0);
     await setupPage.locator("#kakomonn-reader-sync-token").focus();
     await setupPage.keyboard.type("qwert asdfg n gg yy xz ");
     assert.equal(
@@ -1974,10 +1842,7 @@ async function main() {
     await setupPage.waitForSelector("#kakomonn-reader-sync-settings", {
       state: "hidden",
     });
-    assert.equal(
-      await setupPage.locator("#kakomonn-reader-due-cards-completed").innerText(),
-      "未達成",
-    );
+    assert.equal(await setupPage.locator("#kakomonn-reader-controls").count(), 0);
     assert.equal(
       await setupPage.evaluate(
         (key) => window.__getGMValue(key),
@@ -2008,7 +1873,7 @@ async function main() {
     await failedSetupPage.waitForFunction(
       () =>
         document.querySelector("#kakomonn-reader-sync-settings-error")
-          .textContent === "学習記録を同期できません.",
+          .textContent.startsWith("学習記録を同期できません."),
     );
     assert.equal(
       await failedSetupPage.locator("#kakomonn-reader-sync-settings").isVisible(),
@@ -2039,9 +1904,11 @@ async function main() {
     );
     await unsupportedPage.addScriptTag({ content: script });
     await unsupportedPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "読み上げ非対応",
+      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+    );
+    assert.equal(
+      await unsupportedPage.locator("#kakomonn-reader-error-title").innerText(),
+      "読み上げを利用できません",
     );
     assert.equal(
       await unsupportedPage.locator("#kakomonn-reader-start").count(),
@@ -2095,9 +1962,7 @@ async function main() {
       azureSpeechUrl,
     );
     await iosPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "問題文完了",
+      () => window.__audioInstance?.src === "",
     );
     assert.deepEqual((await azureSpeechCalls(iosPage))[0], {
       method: "POST",
@@ -2123,9 +1988,7 @@ async function main() {
       azureSpeechUrl,
     );
     await iosPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "不正解完了",
+      () => window.__audioInstance?.src === "",
     );
     assert.equal(
       (await azureSpeechCalls(iosPage))[1].body,
@@ -2136,11 +1999,6 @@ async function main() {
     await iosPage.locator("#kakomonn-reader-next").tap();
     await iosFrame.waitForURL(
       "https://chushoks.kakomonn.com/questions/45125",
-    );
-    await iosPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-due-cards-completed").textContent ===
-        "未達成",
     );
     const iosStateCallsBeforeResume = await iosPage.evaluate(() =>
       window.__syncMock.calls.filter(
@@ -2165,14 +2023,7 @@ async function main() {
       ),
       iosStateCallsBeforeResume,
     );
-    assert.equal(
-      await iosPage.locator("#kakomonn-reader-due-cards-completed").innerText(),
-      "未達成",
-    );
-    assert.equal(
-      await iosPage.locator("#kakomonn-reader-due-cards-remaining").innerText(),
-      "12",
-    );
+    assert.equal(await iosPage.locator("#kakomonn-reader-controls").count(), 0);
     assert.equal(
       await iosPage.evaluate(
         () =>
@@ -2196,26 +2047,18 @@ async function main() {
       script,
     );
     await iosGestureRetryPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "画面をクリックまたはタップすると読み上げます",
+      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
     );
     assert.equal((await azureSpeechCalls(iosGestureRetryPage)).length, 0);
     assert.equal(await speechTokenCallCount(iosGestureRetryPage), 0);
-    const iosGestureAnswer = iosGestureRetryFrame
-      .locator("input[name='answer']")
-      .first();
-    await iosGestureAnswer.tap();
-    assert.equal(await iosGestureAnswer.isChecked(), true);
+    await iosGestureRetryPage.locator("#kakomonn-reader-error-close").tap();
     await iosGestureRetryPage.waitForFunction(
       (url) =>
         window.__syncMock.calls.filter((call) => call.url === url).length === 1,
       azureSpeechUrl,
     );
     await iosGestureRetryPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status").textContent ===
-        "問題文完了",
+      () => window.__audioInstance?.src === "",
     );
     assert.equal(await speechTokenCallCount(iosGestureRetryPage), 1);
     assert.deepEqual(iosGestureRetryErrors, []);

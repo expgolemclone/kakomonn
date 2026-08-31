@@ -33,209 +33,6 @@
     attributeFilter: ["height", "style", "width"],
   });
 
-  const carriedCorrectFeedback = document.createElement("div");
-  carriedCorrectFeedback.id = "kakomonn-reader-carried-correct-feedback";
-  carriedCorrectFeedback.className = "kakomonn-reader-correct-feedback";
-  carriedCorrectFeedback.hidden = true;
-  carriedCorrectFeedback.setAttribute("aria-hidden", "true");
-
-  shell.append(frame, carriedCorrectFeedback);
-  let activeCorrectFeedbackElement = null;
-
-  const controls = document.createElement("div");
-  controls.id = "kakomonn-reader-controls";
-
-  const statusBadge = document.createElement("div");
-  statusBadge.id = "kakomonn-reader-status";
-  statusBadge.setAttribute("role", "status");
-  statusBadge.setAttribute("aria-live", "polite");
-  statusBadge.setAttribute("aria-atomic", "true");
-  const statusText = document.createElement("span");
-  statusText.textContent = "読込中";
-  statusBadge.appendChild(statusText);
-
-  const learningMetricsButton = document.createElement("button");
-  learningMetricsButton.id = "kakomonn-reader-learning-metrics";
-  learningMetricsButton.type = "button";
-  learningMetricsButton.setAttribute("aria-expanded", "false");
-  learningMetricsButton.setAttribute(
-    "aria-controls",
-    "kakomonn-reader-learning-metrics-details"
-  );
-
-  const learningMetricsLiveStatus = document.createElement("span");
-  learningMetricsLiveStatus.id = "kakomonn-reader-learning-metrics-live-status";
-  learningMetricsLiveStatus.className = "kakomonn-reader-visually-hidden";
-  learningMetricsLiveStatus.setAttribute("role", "status");
-  learningMetricsLiveStatus.setAttribute("aria-live", "polite");
-  learningMetricsLiveStatus.setAttribute("aria-atomic", "true");
-
-  const learningMetricsDetails = document.createElement("dl");
-  learningMetricsDetails.id = "kakomonn-reader-learning-metrics-details";
-  learningMetricsDetails.hidden = true;
-
-  const dailyKpiCompletedMetric = document.createElement("div");
-  dailyKpiCompletedMetric.className = "kakomonn-reader-detail-metric";
-  const dailyKpiCompletedLabel = document.createElement("dt");
-  dailyKpiCompletedLabel.textContent = "dailyKpiCompleted";
-  const dailyKpiCompletedDefinition = document.createElement("dd");
-  const dailyKpiCompletedValue = document.createElement("strong");
-  dailyKpiCompletedValue.id = "kakomonn-reader-daily-kpi-completed";
-  dailyKpiCompletedDefinition.appendChild(dailyKpiCompletedValue);
-  dailyKpiCompletedMetric.append(
-    dailyKpiCompletedLabel,
-    dailyKpiCompletedDefinition
-  );
-
-  const dueCardsCompletedMetric = document.createElement("div");
-  dueCardsCompletedMetric.className = "kakomonn-reader-detail-metric";
-  const dueCardsCompletedLabel = document.createElement("dt");
-  dueCardsCompletedLabel.textContent = "dueCardsCompleted";
-  const dueCardsCompletedDefinition = document.createElement("dd");
-  const dueCardsCompletedValue = document.createElement("strong");
-  dueCardsCompletedValue.id = "kakomonn-reader-due-cards-completed";
-  dueCardsCompletedDefinition.appendChild(dueCardsCompletedValue);
-  dueCardsCompletedMetric.append(
-    dueCardsCompletedLabel,
-    dueCardsCompletedDefinition
-  );
-
-  const dueCardsRemainingMetric = document.createElement("div");
-  dueCardsRemainingMetric.className = "kakomonn-reader-metric";
-  const dueCardsRemainingLabel = document.createElement("span");
-  dueCardsRemainingLabel.className = "kakomonn-reader-metric-label";
-  dueCardsRemainingLabel.textContent = "dueCardsRemaining";
-  const dueCardsRemainingValue = document.createElement("span");
-  dueCardsRemainingValue.className = "kakomonn-reader-remaining-value";
-  const dueCardsRemainingPrefix = document.createElement("small");
-  dueCardsRemainingPrefix.textContent = "あと";
-  const dueCardsRemainingNumber = document.createElement("strong");
-  dueCardsRemainingNumber.id = "kakomonn-reader-due-cards-remaining";
-  const dueCardsRemainingUnit = document.createElement("small");
-  dueCardsRemainingUnit.textContent = "問";
-  dueCardsRemainingValue.append(
-    dueCardsRemainingPrefix,
-    dueCardsRemainingNumber,
-    dueCardsRemainingUnit
-  );
-  dueCardsRemainingMetric.append(
-    dueCardsRemainingLabel,
-    dueCardsRemainingValue
-  );
-  learningMetricsButton.appendChild(dueCardsRemainingMetric);
-
-  const newQuestionsRemainingMetric = document.createElement("div");
-  newQuestionsRemainingMetric.className = "kakomonn-reader-metric";
-  const newQuestionsRemainingLabel = document.createElement("span");
-  newQuestionsRemainingLabel.className = "kakomonn-reader-metric-label";
-  newQuestionsRemainingLabel.textContent = "newQuestionsRemaining";
-  const newQuestionsRemainingValue = document.createElement("span");
-  newQuestionsRemainingValue.className = "kakomonn-reader-remaining-value";
-  const newQuestionsRemainingPrefix = document.createElement("small");
-  newQuestionsRemainingPrefix.textContent = "あと";
-  const newQuestionsRemainingNumber = document.createElement("strong");
-  newQuestionsRemainingNumber.id = "kakomonn-reader-new-questions-remaining";
-  const newQuestionsRemainingUnit = document.createElement("small");
-  newQuestionsRemainingUnit.textContent = "問";
-  newQuestionsRemainingValue.append(
-    newQuestionsRemainingPrefix,
-    newQuestionsRemainingNumber,
-    newQuestionsRemainingUnit
-  );
-  newQuestionsRemainingMetric.append(
-    newQuestionsRemainingLabel,
-    newQuestionsRemainingValue
-  );
-  learningMetricsButton.appendChild(newQuestionsRemainingMetric);
-
-  const todayNewQuestionCountMetric = document.createElement("div");
-  todayNewQuestionCountMetric.className = "kakomonn-reader-detail-metric";
-  const todayNewQuestionCountLabel = document.createElement("dt");
-  todayNewQuestionCountLabel.textContent = "todayNewQuestionCount";
-  const todayNewQuestionCountValue = document.createElement("dd");
-  const todayNewQuestionCountNumber = document.createElement("strong");
-  todayNewQuestionCountNumber.id = "kakomonn-reader-today-new-question-count";
-  const newQuestionGoal = document.createElement("span");
-  newQuestionGoal.id = "kakomonn-reader-new-question-goal";
-  todayNewQuestionCountValue.append(todayNewQuestionCountNumber, newQuestionGoal);
-  todayNewQuestionCountMetric.append(
-    todayNewQuestionCountLabel,
-    todayNewQuestionCountValue
-  );
-
-  const todayStabilityDaysDeltaMetric = document.createElement("div");
-  todayStabilityDaysDeltaMetric.className = "kakomonn-reader-detail-metric";
-  const todayStabilityDaysDeltaLabel = document.createElement("dt");
-  todayStabilityDaysDeltaLabel.textContent = "todayStabilityDaysDelta";
-  const todayStabilityDaysDeltaValue = document.createElement("dd");
-  const todayStabilityDaysDeltaNumber = document.createElement("strong");
-  todayStabilityDaysDeltaNumber.id =
-    "kakomonn-reader-today-stability-days-delta";
-  const todayStabilityDaysDeltaUnit = document.createElement("span");
-  todayStabilityDaysDeltaUnit.textContent = "日";
-  todayStabilityDaysDeltaValue.append(
-    todayStabilityDaysDeltaNumber,
-    todayStabilityDaysDeltaUnit
-  );
-  todayStabilityDaysDeltaMetric.append(
-    todayStabilityDaysDeltaLabel,
-    todayStabilityDaysDeltaValue
-  );
-
-  const todayAttemptedQuestionCountMetric = document.createElement("div");
-  todayAttemptedQuestionCountMetric.className = "kakomonn-reader-detail-metric";
-  const todayAttemptedQuestionCountLabel = document.createElement("dt");
-  todayAttemptedQuestionCountLabel.textContent = "todayAttemptedQuestionCount";
-  const todayAttemptedQuestionCountValue = document.createElement("dd");
-  const todayAttemptedQuestionCountNumber = document.createElement("strong");
-  todayAttemptedQuestionCountNumber.id =
-    "kakomonn-reader-today-attempted-question-count";
-  const todayAttemptedQuestionCountUnit = document.createElement("span");
-  todayAttemptedQuestionCountUnit.textContent = "問";
-  todayAttemptedQuestionCountValue.append(
-    todayAttemptedQuestionCountNumber,
-    todayAttemptedQuestionCountUnit
-  );
-  todayAttemptedQuestionCountMetric.append(
-    todayAttemptedQuestionCountLabel,
-    todayAttemptedQuestionCountValue
-  );
-
-  const todayCorrectRatePercentMetric = document.createElement("div");
-  todayCorrectRatePercentMetric.className = "kakomonn-reader-detail-metric";
-  const todayCorrectRatePercentLabel = document.createElement("dt");
-  todayCorrectRatePercentLabel.textContent = "todayCorrectRatePercent";
-  const todayCorrectRatePercentValue = document.createElement("dd");
-  const todayCorrectRatePercentNumber = document.createElement("strong");
-  todayCorrectRatePercentNumber.id =
-    "kakomonn-reader-today-correct-rate-percent";
-  const todayCorrectRatePercentUnit = document.createElement("span");
-  todayCorrectRatePercentUnit.id =
-    "kakomonn-reader-today-correct-rate-percent-unit";
-  todayCorrectRatePercentUnit.textContent = "%";
-  todayCorrectRatePercentValue.append(
-    todayCorrectRatePercentNumber,
-    todayCorrectRatePercentUnit
-  );
-  todayCorrectRatePercentMetric.append(
-    todayCorrectRatePercentLabel,
-    todayCorrectRatePercentValue
-  );
-  learningMetricsDetails.append(
-    dailyKpiCompletedMetric,
-    dueCardsCompletedMetric,
-    todayNewQuestionCountMetric,
-    todayStabilityDaysDeltaMetric,
-    todayAttemptedQuestionCountMetric,
-    todayCorrectRatePercentMetric
-  );
-
-  const syncSettingsButton = document.createElement("button");
-  syncSettingsButton.id = "kakomonn-reader-sync-settings-button";
-  syncSettingsButton.type = "button";
-  syncSettingsButton.textContent = "同期設定";
-  syncSettingsButton.setAttribute("aria-label", "学習記録の同期設定を開く");
-
   const timeLimitProgress = document.createElement("progress");
   timeLimitProgress.id = "kakomonn-reader-time-limit";
   timeLimitProgress.max = TIME_LIMIT_MS;
@@ -243,14 +40,14 @@
   timeLimitProgress.hidden = true;
   timeLimitProgress.setAttribute("aria-label", "問題の制限時間");
 
-  controls.append(
-    statusBadge,
-    learningMetricsButton,
-    syncSettingsButton,
-    learningMetricsDetails,
-    learningMetricsLiveStatus,
-    timeLimitProgress
-  );
+  const carriedCorrectFeedback = document.createElement("div");
+  carriedCorrectFeedback.id = "kakomonn-reader-carried-correct-feedback";
+  carriedCorrectFeedback.className = "kakomonn-reader-correct-feedback";
+  carriedCorrectFeedback.hidden = true;
+  carriedCorrectFeedback.setAttribute("aria-hidden", "true");
+
+  shell.append(frame, timeLimitProgress, carriedCorrectFeedback);
+  let activeCorrectFeedbackElement = null;
 
   const nextQuestionButton = document.createElement("button");
   nextQuestionButton.id = "kakomonn-reader-next";
@@ -275,172 +72,152 @@
   actions.id = "kakomonn-reader-actions";
   actions.append(copyButton, nextQuestionButton);
 
-  const syncSettings = document.createElement("div");
+  const syncSettings = document.createElement("dialog");
   syncSettings.id = "kakomonn-reader-sync-settings";
-  syncSettings.hidden = true;
-  syncSettings.setAttribute("role", "dialog");
-  syncSettings.setAttribute("aria-modal", "true");
   syncSettings.setAttribute(
     "aria-labelledby",
     "kakomonn-reader-sync-settings-title"
   );
+  syncSettings.setAttribute(
+    "aria-describedby",
+    "kakomonn-reader-sync-settings-description"
+  );
 
-  const syncSettingsPanel = document.createElement("div");
+  const syncSettingsPanel = document.createElement("form");
   syncSettingsPanel.id = "kakomonn-reader-sync-settings-panel";
 
   const syncSettingsTitle = document.createElement("h2");
   syncSettingsTitle.id = "kakomonn-reader-sync-settings-title";
-  syncSettingsTitle.textContent = "学習記録の同期設定";
+  syncSettingsTitle.textContent = "学習記録へ接続";
 
   const syncSettingsDescription = document.createElement("p");
   syncSettingsDescription.id = "kakomonn-reader-sync-settings-description";
   syncSettingsDescription.textContent =
     "Win11とiPhoneに同じ同期トークンを入力してください.";
 
+  const syncTokenLabel = document.createElement("label");
+  syncTokenLabel.htmlFor = "kakomonn-reader-sync-token";
+  syncTokenLabel.textContent = "同期トークン";
+
   const syncTokenInput = document.createElement("input");
   syncTokenInput.id = "kakomonn-reader-sync-token";
   syncTokenInput.type = "password";
   syncTokenInput.autocomplete = "off";
-  syncTokenInput.placeholder = "同期トークン";
-  syncTokenInput.setAttribute("aria-label", "同期トークン");
+  syncTokenInput.spellcheck = false;
+  syncTokenInput.required = true;
 
-  const syncSettingsError = document.createElement("div");
+  const syncSettingsError = document.createElement("p");
   syncSettingsError.id = "kakomonn-reader-sync-settings-error";
   syncSettingsError.setAttribute("role", "alert");
 
-  const syncSettingsActions = document.createElement("div");
-  syncSettingsActions.id = "kakomonn-reader-sync-settings-actions";
-
-  const syncSettingsCancelButton = document.createElement("button");
-  syncSettingsCancelButton.id = "kakomonn-reader-sync-settings-cancel";
-  syncSettingsCancelButton.type = "button";
-  syncSettingsCancelButton.textContent = "キャンセル";
-
   const syncSettingsSaveButton = document.createElement("button");
   syncSettingsSaveButton.id = "kakomonn-reader-sync-settings-save";
-  syncSettingsSaveButton.type = "button";
+  syncSettingsSaveButton.type = "submit";
   syncSettingsSaveButton.textContent = "確認して保存";
 
-  syncSettingsActions.append(
-    syncSettingsCancelButton,
-    syncSettingsSaveButton
-  );
   syncSettingsPanel.append(
     syncSettingsTitle,
     syncSettingsDescription,
+    syncTokenLabel,
     syncTokenInput,
     syncSettingsError,
-    syncSettingsActions
+    syncSettingsSaveButton
   );
   syncSettings.appendChild(syncSettingsPanel);
+
+  const errorDialog = document.createElement("dialog");
+  errorDialog.id = "kakomonn-reader-error-dialog";
+  errorDialog.setAttribute("aria-labelledby", "kakomonn-reader-error-title");
+  errorDialog.setAttribute(
+    "aria-describedby",
+    "kakomonn-reader-error-message kakomonn-reader-error-detail"
+  );
+
+  const errorDialogPanel = document.createElement("form");
+  errorDialogPanel.id = "kakomonn-reader-error-panel";
+  errorDialogPanel.method = "dialog";
+
+  const errorDialogEyebrow = document.createElement("p");
+  errorDialogEyebrow.className = "kakomonn-reader-dialog-eyebrow";
+  errorDialogEyebrow.textContent = "ERROR";
+
+  const errorDialogTitle = document.createElement("h2");
+  errorDialogTitle.id = "kakomonn-reader-error-title";
+
+  const errorDialogMessage = document.createElement("p");
+  errorDialogMessage.id = "kakomonn-reader-error-message";
+
+  const errorDialogDetail = document.createElement("code");
+  errorDialogDetail.id = "kakomonn-reader-error-detail";
+
+  const errorDialogCloseButton = document.createElement("button");
+  errorDialogCloseButton.id = "kakomonn-reader-error-close";
+  errorDialogCloseButton.type = "submit";
+  errorDialogCloseButton.value = "close";
+  errorDialogCloseButton.textContent = "閉じる";
+  errorDialogCloseButton.autofocus = true;
+
+  errorDialogPanel.append(
+    errorDialogEyebrow,
+    errorDialogTitle,
+    errorDialogMessage,
+    errorDialogDetail,
+    errorDialogCloseButton
+  );
+  errorDialog.appendChild(errorDialogPanel);
+  let visibleReaderErrorSignature = "";
+
+  function readerErrorDetail(error, context) {
+    const details = [`context=${context}`];
+    if (typeof error?.code === "string" && error.code !== "") {
+      details.push(`code=${error.code}`);
+    }
+    if (Number.isSafeInteger(error?.status) && error.status > 0) {
+      details.push(`status=${error.status}`);
+    }
+    if (
+      typeof error?.message === "string" &&
+      error.message !== "" &&
+      error.message !== error.code
+    ) {
+      details.push(`detail=${error.message}`);
+    }
+    return details.join(" | ");
+  }
+
+  function showReaderError(context, title, message, error = null) {
+    const detail = readerErrorDetail(error, context);
+    const signature = `${title}\u0000${message}\u0000${detail}`;
+    if (errorDialog.open && signature === visibleReaderErrorSignature) {
+      return;
+    }
+    errorDialogTitle.textContent = title;
+    errorDialogMessage.textContent = message;
+    errorDialogDetail.textContent = detail;
+    visibleReaderErrorSignature = signature;
+    if (syncSettings.open) {
+      return;
+    }
+    if (!errorDialog.open) {
+      errorDialog.showModal();
+    }
+  }
+
+  errorDialog.addEventListener("close", () => {
+    visibleReaderErrorSignature = "";
+  });
 
   function mountReaderUI() {
     document.body.dataset.kakomonnReaderUi = "true";
     if (
-      controls.isConnected &&
       shell.isConnected &&
       actions.isConnected &&
-      syncSettings.isConnected
+      syncSettings.isConnected &&
+      errorDialog.isConnected
     ) {
       return;
     }
-    document.body.replaceChildren(controls, shell, actions, syncSettings);
-  }
-
-  function renderLearningMetrics() {
-    const dailyKpiCompletedText =
-      learningMetrics === null
-        ? "--"
-        : learningMetrics.dailyKpiCompleted ? "達成" : "未達成";
-    const dueCardsCompletedText =
-      learningMetrics === null
-        ? "--"
-        : learningMetrics.dueCardsCompleted ? "達成" : "未達成";
-    const dueCardsRemainingText =
-      learningMetrics === null
-        ? "--"
-        : learningMetrics.dueCardsRemaining.toLocaleString("ja-JP");
-    const newQuestionsRemainingText =
-      learningMetrics === null
-        ? "--"
-        : learningMetrics.newQuestionsRemaining.toLocaleString("ja-JP");
-    const todayNewQuestionCountText =
-      learningMetrics === null
-        ? "--"
-        : learningMetrics.todayNewQuestionCount.toLocaleString("ja-JP");
-    const todayStabilityDaysDeltaText =
-      learningMetrics === null
-        ? "--"
-        : `${learningMetrics.todayStabilityDaysDelta >= 0 ? "+" : ""}${learningMetrics.todayStabilityDaysDelta.toLocaleString("ja-JP")}`;
-    const todayAttemptedQuestionCountText =
-      learningMetrics === null
-        ? "--"
-        : learningMetrics.todayAttemptedQuestionCount.toLocaleString("ja-JP");
-    const todayCorrectRatePercentText =
-      learningMetrics?.todayCorrectRatePercent === null ||
-      learningMetrics === null
-        ? "--"
-        : learningMetrics.todayCorrectRatePercent.toLocaleString("ja-JP");
-    dailyKpiCompletedValue.textContent = dailyKpiCompletedText;
-    dueCardsCompletedValue.textContent = dueCardsCompletedText;
-    if (learningMetrics === null) {
-      delete dailyKpiCompletedValue.dataset.completed;
-      delete dueCardsCompletedValue.dataset.completed;
-    } else {
-      dailyKpiCompletedValue.dataset.completed = String(
-        learningMetrics.dailyKpiCompleted
-      );
-      dueCardsCompletedValue.dataset.completed = String(
-        learningMetrics.dueCardsCompleted
-      );
-    }
-    dueCardsRemainingNumber.textContent = dueCardsRemainingText;
-    newQuestionsRemainingNumber.textContent = newQuestionsRemainingText;
-    todayNewQuestionCountNumber.textContent = todayNewQuestionCountText;
-    newQuestionGoal.textContent =
-      learningMetrics === null ? "" : `/ ${learningMetrics.newQuestionGoal}問`;
-    todayStabilityDaysDeltaNumber.textContent = todayStabilityDaysDeltaText;
-    todayAttemptedQuestionCountNumber.textContent =
-      todayAttemptedQuestionCountText;
-    todayCorrectRatePercentNumber.textContent = todayCorrectRatePercentText;
-    todayCorrectRatePercentUnit.hidden =
-      learningMetrics?.todayCorrectRatePercent === null ||
-      learningMetrics === null;
-    const dueCardsRemainingAccessibleText =
-      learningMetrics === null ? "--" : `あと${dueCardsRemainingText}問`;
-    const newQuestionsRemainingAccessibleText =
-      learningMetrics === null ? "--" : `あと${newQuestionsRemainingText}問`;
-    const detailsAction =
-      learningMetricsButton.getAttribute("aria-expanded") === "true"
-        ? "詳細を非表示"
-        : "詳細を表示";
-    learningMetricsButton.setAttribute(
-      "aria-label",
-      `dueCardsRemaining ${dueCardsRemainingAccessibleText}. newQuestionsRemaining ${newQuestionsRemainingAccessibleText}. ${detailsAction}`
-    );
-    learningMetricsLiveStatus.textContent =
-      `dueCardsRemaining ${dueCardsRemainingAccessibleText}. newQuestionsRemaining ${newQuestionsRemainingAccessibleText}`;
-  }
-
-  function setLearningMetricsExpanded(expanded) {
-    learningMetricsButton.setAttribute("aria-expanded", String(expanded));
-    learningMetricsDetails.hidden = !expanded;
-    renderLearningMetrics();
-  }
-
-  learningMetricsButton.addEventListener("click", () => {
-    setLearningMetricsExpanded(
-      learningMetricsButton.getAttribute("aria-expanded") !== "true"
-    );
-  });
-
-  function setStatus(message, accessibleMessage = message) {
-    statusText.textContent = message;
-    if (accessibleMessage === message) {
-      statusBadge.removeAttribute("aria-label");
-    } else {
-      statusBadge.setAttribute("aria-label", accessibleMessage);
-    }
+    document.body.replaceChildren(shell, actions, syncSettings, errorDialog);
   }
 
   function clearCorrectFeedbackRemovalTimer() {

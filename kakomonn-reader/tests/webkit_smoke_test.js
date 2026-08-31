@@ -19,8 +19,6 @@ const currentQuestionURL = "https://chushoks.kakomonn.com/questions/86956";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
 const nextQuestionLauncherURL =
   "https://chushoks.kakomonn.com/createques#kakomonn-next";
-const syncSettingsEntryURL =
-  "https://chushoks.kakomonn.com/createques#kakomonn-sync-settings";
 const iosUserAgent =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 " +
@@ -288,14 +286,8 @@ async function assertLauncherRequiresSettings(
       .waitFor({ state: "visible" });
     assert.equal(page.url(), nextQuestionLauncherURL);
     assert.equal(await page.locator("#kakomonn-reader-shell").count(), 1);
-    assert.equal(
-      await page.locator("#kakomonn-reader-sync-settings-button").isVisible(),
-      true,
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-sync-settings-cancel").isHidden(),
-      true,
-    );
+    assert.equal(await page.locator("#kakomonn-reader-sync-settings-button").count(), 0);
+    assert.equal(await page.locator("#kakomonn-reader-sync-settings-cancel").count(), 0);
     assert.equal(
       await page.locator("#kakomonn-next-question-launcher").count(),
       0,
@@ -456,7 +448,7 @@ async function main() {
     settingsEntryPage.on("pageerror", (error) =>
       settingsEntryErrors.push(String(error)),
     );
-    await settingsEntryPage.goto(syncSettingsEntryURL);
+    await settingsEntryPage.goto(currentQuestionURL);
     await installSyncMock(settingsEntryPage, {
       configured: false,
       nextQuestionId: "86957",
@@ -471,12 +463,7 @@ async function main() {
     await settingsEntryPage.waitForFunction(
       () => document.activeElement?.id === "kakomonn-reader-sync-token",
     );
-    assert.equal(
-      await settingsEntryPage
-        .locator("#kakomonn-reader-sync-settings-cancel")
-        .isHidden(),
-      true,
-    );
+    assert.equal(await settingsEntryPage.locator("#kakomonn-reader-sync-settings-cancel").count(), 0);
     const settingsLayout = await settingsEntryPage.evaluate(() => {
       const panel = document.querySelector("#kakomonn-reader-sync-settings-panel");
       const input = document.querySelector("#kakomonn-reader-sync-token");
@@ -523,11 +510,14 @@ async function main() {
     await settingsEntryPage.waitForFunction(
       () => window.__syncMock.releaseHeldSetValue !== null,
     );
-    assert.equal(settingsEntryPage.url(), syncSettingsEntryURL);
+    assert.equal(settingsEntryPage.url(), currentQuestionURL);
     await settingsEntryPage.evaluate(() =>
       window.__syncMock.releaseHeldSetValue(),
     );
-    await settingsEntryPage.waitForURL(nextQuestionURL);
+    await settingsEntryPage.waitForSelector("#kakomonn-reader-sync-settings", {
+      state: "hidden",
+    });
+    assert.equal(settingsEntryPage.url(), currentQuestionURL);
     assert.equal(
       await settingsEntryPage.evaluate(() => window.__settingsDocumentSentinel),
       "same-document",
@@ -556,10 +546,8 @@ async function main() {
       "same-document",
     );
     assert.equal(
-      await successfulLauncher.page
-        .locator("#kakomonn-reader-sync-settings-button")
-        .isVisible(),
-      true,
+      await successfulLauncher.page.locator("#kakomonn-reader-sync-settings-button").count(),
+      0,
     );
     assert.deepEqual(successfulLauncher.errors, []);
     await successfulLauncher.page.close();
@@ -607,10 +595,12 @@ async function main() {
       });
     }, fixtureBody);
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-due-cards-completed")?.textContent ===
-        "未達成",
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v9/state"),
     );
+    await page.waitForTimeout(1_000);
+    if (await page.locator("#kakomonn-reader-error-dialog").getAttribute("open") !== null) {
+      await page.locator("#kakomonn-reader-error-close").click();
+    }
     for (const viewport of [
       { width: 320, height: 568 },
       { width: 390, height: 844 },
@@ -618,107 +608,52 @@ async function main() {
       await page.setViewportSize(viewport);
       assert.deepEqual(
         await page.evaluate(() => {
-          const controls = document.querySelector("#kakomonn-reader-controls");
-          const status = document.querySelector("#kakomonn-reader-status");
-          const learningMetrics = document.querySelector(
-            "#kakomonn-reader-learning-metrics",
-          );
-          const learningMetricsDetails = document.querySelector(
-            "#kakomonn-reader-learning-metrics-details",
-          );
-          const syncSettingsButton = document.querySelector(
-            "#kakomonn-reader-sync-settings-button",
-          );
           const shell = document.querySelector("#kakomonn-reader-shell");
+          const frame = document.querySelector("#kakomonn-reader-frame");
           const actions = document.querySelector("#kakomonn-reader-actions");
+          const progress = document.querySelector("#kakomonn-reader-time-limit");
           const copy = document.querySelector("#kakomonn-reader-copy");
           const next = document.querySelector("#kakomonn-reader-next");
-          const controlsRect = controls.getBoundingClientRect();
-          const statusRect = status.getBoundingClientRect();
-          const learningMetricsRect = learningMetrics.getBoundingClientRect();
-          const syncSettingsButtonRect =
-            syncSettingsButton.getBoundingClientRect();
           const shellRect = shell.getBoundingClientRect();
+          const frameRect = frame.getBoundingClientRect();
           const actionsRect = actions.getBoundingClientRect();
+          const progressRect = progress.getBoundingClientRect();
           const copyRect = copy.getBoundingClientRect();
           const nextRect = next.getBoundingClientRect();
-          const metricRows = [
-            ...learningMetrics.querySelectorAll(".kakomonn-reader-metric"),
-          ];
           return {
             actionsFullWidth:
               Math.abs(actionsRect.left) <= 1 &&
               Math.abs(actionsRect.right - innerWidth) <= 1,
             bottomButtonsEqual: Math.abs(copyRect.width - nextRect.width) <= 1,
-            controlsFullWidth:
-              Math.abs(controlsRect.left) <= 1 &&
-              Math.abs(controlsRect.right - innerWidth) <= 1,
-            controlsOverflow: controls.scrollWidth > controls.clientWidth,
-            detailsHidden: learningMetricsDetails.hidden,
-            learningMetricsClipped:
-              learningMetrics.scrollWidth > learningMetrics.clientWidth ||
-              learningMetrics.scrollHeight > learningMetrics.clientHeight,
-            metricLabelsFit: metricRows.every((row) => {
-              const label = row.querySelector(".kakomonn-reader-metric-label");
-              return label.scrollWidth <= label.clientWidth;
-            }),
-            learningMetricsInsideHeader:
-              learningMetricsRect.left >= controlsRect.left &&
-              learningMetricsRect.right <= controlsRect.right &&
-              learningMetricsRect.bottom <= controlsRect.bottom,
-            shellFillsMiddle:
-              Math.abs(shellRect.top - controlsRect.bottom) <= 1 &&
+            frameFillsShell:
+              Math.abs(frameRect.top - shellRect.top) <= 1 &&
+              Math.abs(frameRect.right - shellRect.right) <= 1 &&
+              Math.abs(frameRect.bottom - shellRect.bottom) <= 1 &&
+              Math.abs(frameRect.left - shellRect.left) <= 1,
+            noHorizontalOverflow:
+              shell.scrollWidth <= shell.clientWidth &&
+              actions.scrollWidth <= actions.clientWidth,
+            shellFillsAboveActions:
+              Math.abs(shellRect.top) <= 1 &&
               Math.abs(shellRect.bottom - actionsRect.top) <= 1 &&
               shellRect.height > 0,
-            mobileControlRows:
-              Math.abs(statusRect.top - syncSettingsButtonRect.top) <= 1 &&
-              Math.abs(
-                learningMetricsRect.top - statusRect.bottom - 8,
-              ) <= 1 &&
-              Math.abs(learningMetricsRect.left - controlsRect.left - 8) <=
-                1 &&
-              Math.abs(learningMetricsRect.right - controlsRect.right + 8) <=
-                1,
+            timeBarOverlay:
+              Math.abs(progressRect.top - shellRect.top) <= 1 &&
+              Math.abs(progressRect.left - shellRect.left) <= 1 &&
+              Math.abs(progressRect.right - shellRect.right) <= 1 &&
+              Math.abs(progressRect.height - 4) <= 1,
           };
         }),
         {
           actionsFullWidth: true,
           bottomButtonsEqual: true,
-          controlsFullWidth: true,
-          controlsOverflow: false,
-          detailsHidden: true,
-          learningMetricsClipped: false,
-          metricLabelsFit: true,
-          learningMetricsInsideHeader: true,
-          mobileControlRows: true,
-          shellFillsMiddle: true,
+          frameFillsShell: true,
+          noHorizontalOverflow: true,
+          shellFillsAboveActions: true,
+          timeBarOverlay: true,
         },
         JSON.stringify(viewport),
       );
-      await page.locator("#kakomonn-reader-learning-metrics").click();
-      assert.deepEqual(
-        await page.evaluate(() => {
-          const details = document.querySelector(
-            "#kakomonn-reader-learning-metrics-details",
-          );
-          return {
-            detailsClipped:
-              details.scrollWidth > details.clientWidth ||
-              details.scrollHeight > details.clientHeight,
-            detailsLabelsFit: [...details.querySelectorAll("dt")].every(
-              (label) => label.scrollWidth <= label.clientWidth,
-            ),
-            detailsVisible: !details.hidden,
-          };
-        }),
-        {
-          detailsClipped: false,
-          detailsLabelsFit: true,
-          detailsVisible: true,
-        },
-        JSON.stringify(viewport),
-      );
-      await page.locator("#kakomonn-reader-learning-metrics").click();
     }
     await page.setViewportSize({ width: 390, height: 844 });
     assert.deepEqual(
@@ -895,9 +830,11 @@ async function main() {
     });
     await copyButton.tap();
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-status")?.textContent ===
-        "クリップボードへコピーできません",
+      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-error-title").innerText(),
+      "クリップボードへコピーできません",
     );
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
     assert.equal(
@@ -908,6 +845,7 @@ async function main() {
       await page.evaluate(() => window.__syncMock.clipboardWrites),
       [],
     );
+    await page.locator("#kakomonn-reader-error-close").tap();
     await page.evaluate(() => {
       window.__clipboardWriteFails = false;
     });
@@ -975,11 +913,6 @@ async function main() {
       JSON.stringify({ hitTest, inputEvents }),
     );
     await childFrame.waitForURL(nextQuestionURL);
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-due-cards-completed")?.textContent ===
-        "未達成",
-    );
     assert.equal(
       await page.evaluate(
         () =>
@@ -1026,10 +959,12 @@ async function main() {
       document.body.innerHTML = html;
     }, fixtureBody);
     await correctPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-due-cards-completed")
-          ?.textContent === "未達成",
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v9/state"),
     );
+    await correctPage.waitForTimeout(1_000);
+    if (await correctPage.locator("#kakomonn-reader-error-dialog").getAttribute("open") !== null) {
+      await correctPage.locator("#kakomonn-reader-error-close").click();
+    }
     await correctPage.evaluate(() => {
       window.__syncMock.holdNextRequest = true;
     });

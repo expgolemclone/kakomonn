@@ -454,12 +454,16 @@
   async function copyReadableSections() {
     const copyDocument = buildCopyMarkdown(frameDocument);
     if (copyDocument.state === "locked") {
-      setStatus("回答後にコピーできます");
       updateCopyButton();
       return;
     }
     if (copyDocument.state !== "ready") {
-      setStatus("コピー対象を取得できません");
+      showReaderError(
+        "markdown-content",
+        "Markdownを作成できません",
+        "問題文, 選択肢, 回答, 解説のいずれかを取得できませんでした.",
+        { code: "copy_content_unavailable" }
+      );
       updateCopyButton();
       return;
     }
@@ -468,14 +472,18 @@
       await writeCopyMarkdownToClipboard(copyDocument.markdown);
       copyButton.textContent = "コピー済み";
       copyButton.disabled = true;
-      setStatus("問題文,自分の回答,解説をMarkdownでコピーしました");
       clearCopyFeedbackTimer();
       copyFeedbackTimer = window.setTimeout(() => {
         copyFeedbackTimer = null;
         updateCopyButton();
       }, COPY_FEEDBACK_DURATION_MS);
-    } catch {
-      setStatus("クリップボードへコピーできません");
+    } catch (error) {
+      showReaderError(
+        "clipboard-write",
+        "クリップボードへコピーできません",
+        "BrowserまたはUserscript managerのclipboard権限を確認してください.",
+        error
+      );
       updateCopyButton();
     }
   }

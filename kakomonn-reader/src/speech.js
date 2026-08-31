@@ -1,5 +1,13 @@
+  function showSpeechGestureError() {
+    showReaderError(
+      "speech-gesture",
+      "読み上げを開始できません",
+      `${SPEECH_GESTURE_STATUS}. このdialogを閉じる操作で再試行します.`,
+      { code: "autoplay_blocked" }
+    );
+  }
+
   function initializeSpeechPlayback(runId, onReady, onUnavailable) {
-    setStatus("準備中", "音声準備中");
     speechAudio.src = SILENT_AUDIO_DATA_URL;
 
     let playPromise;
@@ -146,12 +154,12 @@
   async function playActiveSpeechAudio(runId) {
     try {
       await speechAudio.play();
-    } catch {
+    } catch (error) {
       if (runId === speechRunId) {
         clearActiveSpeechAudio();
         speechEnabled = false;
         currentPageReadPending = true;
-        setStatus(SPEECH_GESTURE_STATUS);
+        showSpeechGestureError();
       }
     }
   }
@@ -164,12 +172,10 @@
     if (!speechPaused) {
       speechAudio.pause();
       speechPaused = true;
-      setStatus("読み上げ一時停止");
       return true;
     }
 
     speechPaused = false;
-    setStatus("読み上げ再開中");
     void playActiveSpeechAudio(speechRunId);
     return true;
   }
@@ -180,7 +186,6 @@
     }
 
     activeSpeechRequest = null;
-    setStatus(`${label}完了`);
   }
 
   async function speakAzureSpeechChunks(
@@ -222,7 +227,12 @@
     } catch (error) {
       if (runId === speechRunId && error?.code !== "request_aborted") {
         activeSpeechRequest = null;
-        setStatus(speechErrorMessage(error));
+        showReaderError(
+          "speech-request",
+          "音声を取得できません",
+          `${speechErrorMessage(error)}. 通信状態を確認してください.`,
+          error
+        );
       }
       return;
     }
@@ -239,7 +249,6 @@
     speechAudio.onplay = () => {
       if (runId === speechRunId) {
         speechPaused = false;
-        setStatus(`${label} ${index + 1}/${chunks.length}`);
       }
     };
 
@@ -264,7 +273,12 @@
       }
 
       clearActiveSpeechAudio();
-      setStatus("音声を再生できません");
+      showReaderError(
+        "speech-playback",
+        "音声を再生できません",
+        "Browserの音声出力を確認し, 画面を操作して再試行してください.",
+        { code: "audio_playback_failed" }
+      );
     };
 
     await playActiveSpeechAudio(runId);
@@ -283,14 +297,18 @@
 
     const chunks = splitText(text);
     if (chunks.length === 0) {
-      setStatus(`${label}を取得できません`);
+      showReaderError(
+        "speech-content",
+        `${label}を読み上げられません`,
+        `${label}の本文を取得できませんでした.`,
+        { code: "speech_text_missing" }
+      );
       return;
     }
 
     speechRunId += 1;
     const runId = speechRunId;
     cancelActiveSpeech();
-    setStatus("準備中", `${label}準備中`);
     void speakAzureSpeechChunks(
       chunks,
       runId,
@@ -376,7 +394,6 @@
       speechAudio.onplay = () => {
         if (runId === speechRunId) {
           speechPaused = false;
-          setStatus(label);
         }
       };
       speechAudio.onended = () => {
@@ -397,7 +414,12 @@
           activeSpeechPlaybackCancel = null;
         }
         clearActiveSpeechAudio();
-        setStatus("音声を再生できません");
+        showReaderError(
+          "correct-feedback-playback",
+          "正解feedbackを再生できません",
+          "Browserの音声出力を確認してください.",
+          { code: "feedback_playback_failed" }
+        );
         settle(false);
       };
 
@@ -409,7 +431,7 @@
           activeSpeechPlaybackCancel = null;
         }
         clearActiveSpeechAudio();
-        setStatus(SPEECH_GESTURE_STATUS);
+        showSpeechGestureError();
         settle(false);
         return;
       }
@@ -421,7 +443,7 @@
           activeSpeechPlaybackCancel = null;
         }
         clearActiveSpeechAudio();
-        setStatus(SPEECH_GESTURE_STATUS);
+        showSpeechGestureError();
         settle(false);
       });
     });
@@ -454,7 +476,7 @@
       await speechInitializationPromise;
     }
     if (!speechEnabled || speechAudio === null) {
-      setStatus(SPEECH_GESTURE_STATUS);
+      showSpeechGestureError();
       return;
     }
 
@@ -482,7 +504,12 @@
     }
     if (voiceResult.error !== null) {
       if (voiceResult.error?.code !== "request_aborted") {
-        setStatus(speechErrorMessage(voiceResult.error));
+        showReaderError(
+          "correct-feedback-request",
+          "正解feedbackの音声を取得できません",
+          `${speechErrorMessage(voiceResult.error)}. 通信状態を確認してください.`,
+          voiceResult.error
+        );
       }
       return;
     }
@@ -492,9 +519,7 @@
       runId,
       variant.speechText
     );
-    if (voiceCompleted && runId === speechRunId) {
-      setStatus("正解完了");
-    }
+    return voiceCompleted && runId === speechRunId;
   }
 
   function beginCorrectAnswerFeedback(sourceDocument = frameDocument) {
@@ -521,8 +546,13 @@
           playCorrectFeedbackSequence(variant),
           minimumDuration,
         ]);
-      } catch {
-        setStatus("正解feedbackを再生できません");
+      } catch (error) {
+        showReaderError(
+          "correct-feedback",
+          "正解feedbackを再生できません",
+          "音声出力を確認してください.",
+          error
+        );
       }
       await completeCorrectFeedbackVisual();
     });
@@ -562,7 +592,12 @@
 
     const questionText = extractQuestionText();
     if (!questionText) {
-      setStatus("問題文を取得できません");
+      showReaderError(
+        "question-speech-content",
+        "問題文を読み上げられません",
+        "問題pageから読み上げ対象の本文を取得できませんでした.",
+        { code: "question_text_missing" }
+      );
       return;
     }
 

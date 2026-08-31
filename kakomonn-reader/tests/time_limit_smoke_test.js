@@ -96,7 +96,6 @@ async function waitForNextQuestion(page) {
         text: document.querySelector("#kakomonn-reader-next")?.textContent,
       },
       pendingAttempt: window.__getGMValue(pendingAttemptKey),
-      status: document.querySelector("#kakomonn-reader-status")?.textContent,
       timeLimit: {
         phase: document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase,
         value: document.querySelector("#kakomonn-reader-time-limit")?.value,

@@ -144,20 +144,18 @@
 
   function requireSyncSettings(message) {
     const initializationAlreadyStarted = readerInitializationStarted;
-    forceSyncSettingsOnInitialize = true;
     shouldLaunchNextQuestionAfterSync = true;
     enterReaderUI();
     if (initializationAlreadyStarted) {
       syncReady = false;
-      setStatus(message);
-      openSyncSettings(true);
+      openSyncSettings();
+      syncSettingsError.textContent = message;
       updateSyncDependentControls();
     }
   }
 
   function openScheduledQuestionInReader(questionURL) {
     shouldLaunchNextQuestionAfterSync = false;
-    forceSyncSettingsOnInitialize = false;
     enterReaderUI();
     return navigateToScheduledQuestion(questionURL);
   }
@@ -186,9 +184,15 @@
         await GM.deleteValue(SYNC_TOKEN_KEY);
         storedToken = "";
       }
-    } catch {
+    } catch (error) {
       nextQuestionLauncherRequestInProgress = false;
-      requireSyncSettings("同期設定を読み込めません");
+      enterReaderUI();
+      showReaderError(
+        "launcher-storage",
+        "同期設定を読み込めません",
+        "Userscript storageを確認できませんでした. ページを再読み込みしてください.",
+        error
+      );
       return;
     }
 

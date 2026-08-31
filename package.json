@@ -27,7 +27,7 @@
     "test:congratulations": "npm --workspace congratulations test",
     "test:congratulations-production": "npm --workspace congratulations run build && node --use-system-ca congratulations/tests/production.mjs",
     "test:kakomonn-dashboard": "node kakomonn-sync/tests/dashboard_e2e_test.js",
-    "test:smoke": "node kakomonn-reader/tests/smoke_test.js && node kakomonn-reader/tests/learning_metrics_smoke_test.js && node kakomonn-reader/tests/time_limit_smoke_test.js && node kakomonn-reader/tests/webkit_smoke_test.js && node kakomonn-sync/tests/dashboard_e2e_test.js",
+    "test:smoke": "node kakomonn-reader/tests/smoke_test.js && node kakomonn-reader/tests/time_limit_smoke_test.js && node kakomonn-reader/tests/webkit_smoke_test.js && node kakomonn-sync/tests/dashboard_e2e_test.js",
     "test:kakomonn-webkit": "node kakomonn-reader/tests/webkit_smoke_test.js",
     "test:kakomonn-ios-safari": "node --use-system-ca kakomonn-reader/tests/ios_safari_e2e_test.js",
     "test:kakomonn-live-site": "node kakomonn-reader/tests/live_site_e2e_test.js",

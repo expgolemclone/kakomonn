@@ -127,11 +127,6 @@ function assertSyncState(state) {
   return state;
 }
 
-function expectedLearningMetricsLabel(metrics) {
-  const formatted = (value) => value.toLocaleString("ja-JP");
-  return `dueCardsRemaining あと${formatted(metrics.dueCardsRemaining)}問. newQuestionsRemaining あと${formatted(metrics.newQuestionsRemaining)}問. 詳細を表示`;
-}
-
 async function requestSyncState(token) {
   const query = new URLSearchParams({ site: "chushoks.kakomonn.com" });
   const response = await fetch(`${syncApiOrigin}/v9/state?${query}`, {
@@ -181,7 +176,7 @@ async function readReaderState(page) {
       const frame = document.querySelector("#kakomonn-reader-frame");
       const next = document.querySelector("#kakomonn-reader-next");
       const settings = document.querySelector("#kakomonn-reader-sync-settings");
-      const settingsButton = document.querySelector("#kakomonn-reader-sync-settings-button");
+      const errorDialog = document.querySelector("#kakomonn-reader-error-dialog");
       const frameStyle = frame ? getComputedStyle(frame) : null;
       const resultBox = frame?.contentDocument?.querySelector("#js-answer-result-box");
       const answerResult = resultBox?.classList.contains("is-correct")
@@ -193,7 +188,9 @@ async function readReaderState(page) {
         actionsPresent: Boolean(document.querySelector("#kakomonn-reader-actions")),
         answerResult,
         buildFingerprint: shell?.dataset.buildFingerprint ?? null,
-        learningMetricsLabel: document.querySelector("#kakomonn-reader-learning-metrics")?.getAttribute("aria-label") ?? null,
+        errorDetail: document.querySelector("#kakomonn-reader-error-detail")?.textContent ?? null,
+        errorOpen: errorDialog?.open ?? null,
+        errorTitle: document.querySelector("#kakomonn-reader-error-title")?.textContent ?? null,
         frameURL: frame?.contentWindow?.location?.href ?? null,
         frameClientHeight: frame?.clientHeight ?? null,
         frameClientWidth: frame?.clientWidth ?? null,
@@ -206,11 +203,10 @@ async function readReaderState(page) {
         nextText: next?.textContent ?? null,
         outerURL: location.href,
         scriptHandler: shell?.dataset.scriptHandler ?? null,
-        settingsButtonDisabled: settingsButton?.disabled ?? null,
-        settingsHidden: settings?.hidden ?? null,
-        status: document.querySelector("#kakomonn-reader-status")?.textContent ?? null,
+        settingsOpen: settings?.open ?? null,
         shellClientHeight: shell?.clientHeight ?? null,
         shellClientWidth: shell?.clientWidth ?? null,
+        topControlsPresent: document.querySelector("#kakomonn-reader-controls") !== null,
         userAgent: navigator.userAgent
       };
     }`,
@@ -220,7 +216,6 @@ async function readReaderState(page) {
 async function configureSyncToken(
   page,
   token,
-  baseline,
   expectedBuildFingerprint,
 ) {
   const ready = await waitUntil(
@@ -235,39 +230,23 @@ async function configureSyncToken(
     },
     60_000,
   );
+  await delay(2_000);
+  const connectionState = await readReaderState(page);
   assert.equal(ready.outerURL, currentQuestionUrl);
   assert.equal(ready.frameURL, currentQuestionUrl);
   assertRuntimeIdentity(ready, expectedBuildFingerprint);
 
-  if (ready.settingsHidden) {
-    await waitUntil("the open sync settings panel", async () => {
-      const state = await readReaderState(page);
-      if (state.settingsHidden === false) {
-        return state;
-      }
-      if (state.settingsButtonDisabled === false) {
-        await page
-          .locator("#kakomonn-reader-sync-settings-button")
-          .evaluate((button) => button.click());
-      }
-      return null;
-    });
+  if (connectionState.settingsOpen) {
+    await page.getByRole("textbox", { name: "同期トークン" }).fill(token);
+    await page
+      .getByRole("button", { name: "確認して保存" })
+      .evaluate((button) => button.click());
   }
 
-  await page.getByRole("textbox", { name: "同期トークン" }).fill(token);
-  await page
-    .getByRole("button", { name: "確認して保存" })
-    .evaluate((button) => button.click());
-
-  const expectedMetricsLabel = expectedLearningMetricsLabel(
-    baseline.learningMetrics,
-  );
   return waitUntil("the production sync baseline", async () => {
     const state = await readReaderState(page);
-    return state.settingsHidden &&
-      state.learningMetricsLabel === expectedMetricsLabel
-      ? state
-      : null;
+    return state.settingsOpen === false && state.topControlsPresent === false
+      ? state : null;
   });
 }
 
@@ -280,29 +259,18 @@ async function waitForAutomaticQuestionSpeech(page, expectedBuildFingerprint) {
         !state.actionsPresent ||
         state.outerURL !== currentQuestionUrl ||
         state.frameURL !== currentQuestionUrl ||
-        state.settingsHidden !== true
+        state.settingsOpen !== false
       ) {
         return null;
       }
-      if (
-        /^問題文(?: \d+\/\d+|完了)$/.test(state.status ?? "") ||
-        state.status === "画面をクリックまたはタップすると読み上げます" ||
-        state.status === "読み上げ非対応" ||
-        (state.status ?? "").includes("音声")
-      ) {
-        return state;
-      }
-      return null;
+      return state.errorOpen ? null : state;
     },
     60_000,
   );
   assertRuntimeIdentity(outcome, expectedBuildFingerprint);
-  assert.match(
-    outcome.status,
-    /^問題文(?: \d+\/\d+|完了)$/,
-    `Question speech did not start automatically: ${JSON.stringify(outcome)}`,
-  );
-  return outcome;
+  await delay(2_000);
+  const settled = await readReaderState(page);
+  return settled.errorOpen || settled.settingsOpen ? null : settled;
 }
 
 async function submitCorrectAnswer(page) {
@@ -454,9 +422,6 @@ async function waitForAutomaticTransition(page) {
       state.answerResult !== "unknown" ||
       !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
         state.outerURL,
-      ) ||
-      !/^dueCardsRemaining あと[\d,]+問\. newQuestionsRemaining あと[\d,]+問\. 詳細を表示$/.test(
-        state.learningMetricsLabel ?? "",
       )
     ) {
       return null;
@@ -477,8 +442,7 @@ async function waitForSynchronizedQuestionState(page, token, frameURL) {
       lastReaderState.frameURL === frameURL &&
       lastReaderState.answerResult === "unknown" &&
       lastReaderState.nextDisabled === true &&
-      lastReaderState.learningMetricsLabel ===
-        expectedLearningMetricsLabel(lastRemoteState.learningMetrics)
+      lastReaderState.topControlsPresent === false
     ) {
       return {
         readerState: lastReaderState,
@@ -563,13 +527,10 @@ async function main() {
     const configuredState = await configureSyncToken(
       page,
       token,
-      baseline,
       expectedBuildFingerprint,
     );
-    assert.equal(
-      configuredState.learningMetricsLabel,
-      expectedLearningMetricsLabel(baseline.learningMetrics),
-    );
+    assert.equal(configuredState.settingsOpen, false);
+    assert.equal(configuredState.topControlsPresent, false);
     await page.close();
     page = await chrome.context.newPage();
     await page.goto(currentQuestionUrl, {
@@ -581,10 +542,8 @@ async function main() {
       page,
       expectedBuildFingerprint,
     );
-    assert.equal(
-      automaticSpeechState.learningMetricsLabel,
-      expectedLearningMetricsLabel(baseline.learningMetrics),
-    );
+    assert.notEqual(automaticSpeechState, null);
+    assert.equal(automaticSpeechState.topControlsPresent, false);
     await submitCorrectAnswer(page);
     const navigationResult = await waitForAutomaticTransition(page);
     let finalState;
@@ -604,10 +563,7 @@ async function main() {
     let frameUrl = null;
     if (navigationResult.kind === "question") {
       frameUrl = navigationResult.state.frameURL;
-      assert.equal(
-        synchronizedReaderState.learningMetricsLabel,
-        expectedLearningMetricsLabel(finalState.learningMetrics),
-      );
+      assert.equal(synchronizedReaderState.topControlsPresent, false);
     } else {
       const celebrationURL = new URL(navigationResult.outerURL);
       assert.deepEqual([...celebrationURL.searchParams.keys()].sort(), [

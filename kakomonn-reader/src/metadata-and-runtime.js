@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @version      1.0.0
+// @version      2.0.0
 // @description  問題文と解説の読み上げ, コピー, 学習記録の端末間同期とdue card完了時の祝福を提供します.
 // @updateURL    https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @downloadURL  https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
@@ -47,15 +47,12 @@
   const SYNC_API_URL =
     "https://kakomonn-sync.kakomonn.workers.dev";
   const NEXT_QUESTION_SITE_ID = "chushoks.kakomonn.com";
-  const NEXT_QUESTION_LAUNCHER_URL =
-    `https://${NEXT_QUESTION_SITE_ID}/createques#kakomonn-next`;
-  const SYNC_SETTINGS_ENTRY_URL =
-    `https://${NEXT_QUESTION_SITE_ID}/createques#kakomonn-sync-settings`;
-  const isNextQuestionLauncher = location.href === NEXT_QUESTION_LAUNCHER_URL;
-  const isSyncSettingsEntry = location.href === SYNC_SETTINGS_ENTRY_URL;
-  let shouldLaunchNextQuestionAfterSync =
-    isNextQuestionLauncher || isSyncSettingsEntry;
-  let forceSyncSettingsOnInitialize = isSyncSettingsEntry;
+  const isNextQuestionLauncher =
+    location.hostname === NEXT_QUESTION_SITE_ID &&
+    location.pathname === "/createques" &&
+    location.search === "" &&
+    location.hash === "#kakomonn-next";
+  let shouldLaunchNextQuestionAfterSync = isNextQuestionLauncher;
   const CONGRATULATIONS_URL =
     "https://kakomonn-congratulations.kakomonn.workers.dev/";
   const SITE_ID = location.hostname.toLowerCase();
@@ -265,7 +262,6 @@
   let awaitingAnswerResultSpeech = false;
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;
-  let learningMetrics = null;
   let syncToken = "";
   let syncReady = false;
   let syncInProgress = false;

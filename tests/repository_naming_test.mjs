@@ -35,7 +35,6 @@ const SKIP_FILES = new Set(["package-lock.json", "kakomonn-reader.user.js"]);
 const EXEMPT_FILES = new Set([
   "kakomonn-sync/src/storage/schema.js",
   "kakomonn-sync/tests/learning-state.test.js",
-  "kakomonn-reader/tests/learning_metrics_smoke_test.js",
   "tests/repository_naming_test.mjs",
 ]);
 

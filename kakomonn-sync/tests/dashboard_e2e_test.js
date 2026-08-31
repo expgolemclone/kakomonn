@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { chromium } = require("playwright");
+const { chromium, webkit } = require("playwright");
 const {
   kakomonnFreeEnvironment,
   readKakomonnConfiguration,
@@ -54,9 +54,43 @@ const dailyDetails = {
   },
 };
 
+function dashboardFixture(requestedSite) {
+  return {
+    sites: [site, otherSite],
+    selectedSite: requestedSite,
+    state: {
+      site: requestedSite,
+      today: "2026-08-10",
+      learningMetrics: {
+        stabilityDays: requestedSite === site ? 9912 : 2999,
+        dailyKpiCompleted: requestedSite === site,
+        dueCardsCompleted: requestedSite === site,
+        dueCardsRemaining: requestedSite === site ? 0 : 12,
+        todayNewQuestionCount: requestedSite === site ? 100 : 30,
+        newQuestionGoal: 100,
+        newQuestionsRemaining: requestedSite === site ? 0 : 70,
+        todayStabilityDaysDelta: requestedSite === site ? 104 : 21,
+        attemptedQuestionCount: requestedSite === site ? 640 : 100,
+        todayAttemptedQuestionCount: requestedSite === site ? 28 : 4,
+        todayCorrectRatePercent: requestedSite === site ? 67 : null,
+      },
+      catalog: { questionCount: 999, updatedAtMs: 1786320000000 },
+    },
+    history: {
+      site: requestedSite,
+      timeZone: "Asia/Tokyo",
+      today: "2026-08-10",
+      days: requestedSite === site
+        ? history
+        : history.map((day) => ({ ...day, closingStabilityDays: 2999 })),
+    },
+  };
+}
+
+const indexSource = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
+
 function fixtureHTML() {
-  return fs
-    .readFileSync(path.join(publicDir, "index.html"), "utf8")
+  return indexSource
     .replace(/<link rel="stylesheet" href="\/styles\.css">/, "")
     .replace(/<script defer src="\/app\.js"><\/script>/, "");
 }
@@ -64,10 +98,12 @@ function fixtureHTML() {
 const appSource = fs.readFileSync(path.join(publicDir, "app.js"), "utf8");
 const stylesSource = fs.readFileSync(path.join(publicDir, "styles.css"), "utf8");
 
-async function launchBrowser() {
+async function launchBrowser(browserType = chromium) {
   const executablePath =
-    kakomonnConfiguration.KAKOMONN_CHROMIUM_EXECUTABLE;
-  return chromium.launch({
+    browserType === chromium
+      ? kakomonnConfiguration.KAKOMONN_CHROMIUM_EXECUTABLE
+      : "";
+  return browserType.launch({
     env: kakomonnFreeEnvironment(),
     headless: true,
     ...(executablePath ? { executablePath } : {}),
@@ -77,7 +113,7 @@ async function launchBrowser() {
 
 async function installApiMock(page) {
   await page.evaluate(
-    ({ tokenValue, siteValue, otherSiteValue, historyValue, dailyDetailsValue }) => {
+    ({ tokenValue, siteValue, otherSiteValue, dashboardBySite, dailyDetailsValue }) => {
       const storage = new Map([
         ["kakomonn-dashboard.sync-token", tokenValue],
         ["kakomonn-dashboard.site", siteValue],
@@ -131,36 +167,7 @@ async function installApiMock(page) {
           if (requestedSite === window.__delayedSite) {
             await new Promise((resolve) => window.__delayedResolvers.push(resolve));
           }
-          return respond(200, {
-            sites: [siteValue, otherSiteValue],
-            selectedSite: requestedSite,
-            state: {
-              site: requestedSite,
-              today: "2026-08-10",
-              learningMetrics: {
-                stabilityDays: requestedSite === siteValue ? 9912 : 2999,
-                dailyKpiCompleted: requestedSite === siteValue,
-                dueCardsCompleted: requestedSite === siteValue,
-                dueCardsRemaining: requestedSite === siteValue ? 0 : 12,
-                todayNewQuestionCount: requestedSite === siteValue ? 100 : 30,
-                newQuestionGoal: 100,
-                newQuestionsRemaining: requestedSite === siteValue ? 0 : 70,
-                todayStabilityDaysDelta: requestedSite === siteValue ? 104 : 21,
-                attemptedQuestionCount: requestedSite === siteValue ? 640 : 100,
-                todayAttemptedQuestionCount: requestedSite === siteValue ? 28 : 4,
-                todayCorrectRatePercent: requestedSite === siteValue ? 67 : null,
-              },
-              catalog: { questionCount: 999, updatedAtMs: Date.now() },
-            },
-            history: {
-              site: requestedSite,
-              timeZone: "Asia/Tokyo",
-              today: "2026-08-10",
-              days: requestedSite === siteValue
-                ? historyValue
-                : historyValue.map((day) => ({ ...day, closingStabilityDays: 2999 })),
-            },
-          });
+          return respond(200, dashboardBySite[requestedSite]);
         }
         if (url.pathname === "/v9/daily-details") {
           const requestedSite = url.searchParams.get("site");
@@ -180,7 +187,16 @@ async function installApiMock(page) {
         return respond(404, { error: "not_found" });
       };
     },
-    { tokenValue: token, siteValue: site, otherSiteValue: otherSite, historyValue: history, dailyDetailsValue: dailyDetails },
+    {
+      tokenValue: token,
+      siteValue: site,
+      otherSiteValue: otherSite,
+      dashboardBySite: {
+        [site]: dashboardFixture(site),
+        [otherSite]: dashboardFixture(otherSite),
+      },
+      dailyDetailsValue: dailyDetails,
+    },
   );
 }
 
@@ -321,6 +337,66 @@ async function assertDashboard(page) {
   assert.equal(finalDashboardCall.authorization, `Bearer ${token}`);
 }
 
+async function assertOpenBridge(browser) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(
+    ({ tokenValue, siteValue }) => {
+      if (location.hostname !== "dashboard.test") return;
+      localStorage.setItem("kakomonn-dashboard.sync-token", tokenValue);
+      localStorage.setItem("kakomonn-dashboard.site", siteValue);
+    },
+    { tokenValue: token, siteValue: site },
+  );
+  let dashboardRequestCount = 0;
+  await context.route("https://dashboard.test/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/app.js") {
+      await route.fulfill({ body: appSource, contentType: "text/javascript; charset=utf-8" });
+      return;
+    }
+    if (url.pathname === "/styles.css") {
+      await route.fulfill({ body: stylesSource, contentType: "text/css; charset=utf-8" });
+      return;
+    }
+    if (url.pathname === "/v9/dashboard") {
+      dashboardRequestCount += 1;
+      await route.fulfill({
+        body: JSON.stringify(dashboardFixture(site)),
+        contentType: "application/json; charset=utf-8",
+      });
+      return;
+    }
+    await route.fulfill({ body: indexSource, contentType: "text/html; charset=utf-8" });
+  });
+  await context.route("https://chushoks.kakomonn.com/**", (route) =>
+    route.fulfill({
+      body: "<!doctype html><html lang=\"ja\"><title>reader</title><body>reader</body></html>",
+      contentType: "text/html; charset=utf-8",
+    }),
+  );
+
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
+  try {
+    await page.goto("https://dashboard.test/open");
+    await page.waitForURL("https://chushoks.kakomonn.com/createques#kakomonn-next");
+    assert.equal(dashboardRequestCount, 0);
+
+    await page.goBack();
+    await page.waitForURL("https://dashboard.test/");
+    await page.waitForFunction(
+      () => document.querySelector("#today-stability-days-delta")?.textContent === "+104",
+    );
+    assert.equal(await page.locator("#dashboard").isVisible(), true);
+    assert.equal(await page.locator("#daily-kpi-completed").innerText(), "達成");
+    assert.equal(dashboardRequestCount, 1);
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+}
+
 async function main() {
   const browser = await launchBrowser();
   try {
@@ -333,8 +409,15 @@ async function main() {
     const metrics = await mobile.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: window.innerWidth }));
     assert.equal(metrics.width <= metrics.viewport, true, JSON.stringify(metrics));
     await mobile.close();
+    await assertOpenBridge(browser);
   } finally {
     await browser.close();
+  }
+  const webkitBrowser = await launchBrowser(webkit);
+  try {
+    await assertOpenBridge(webkitBrowser);
+  } finally {
+    await webkitBrowser.close();
   }
   console.log("dashboard KPI E2E passed");
 }

@@ -30,7 +30,7 @@
       !navigationInProgress &&
       pendingAttempt === null &&
       pendingCelebration === null &&
-      syncSettings.hidden
+      !syncSettings.open
     );
   }
 
@@ -131,7 +131,11 @@
   function navigateToScheduledQuestion(nextURL) {
     if (!isScheduledQuestionURL(nextURL)) {
       navigationInProgress = false;
-      setStatus("次の問題URLが不正です");
+      showReaderError(
+        "next-question-url",
+        "次の問題を開けません",
+        "同期APIから受け取った次の問題URLが不正です. 再同期してください."
+      );
       updateSyncDependentControls();
       return false;
     }
@@ -140,14 +144,18 @@
     if (correctFeedbackPromise === null) {
       stopSpeech();
     }
-    setStatus("次の問題を反映中");
     updateSyncDependentControls();
     try {
       frame.src = nextURL;
       return true;
-    } catch {
+    } catch (error) {
       navigationInProgress = false;
-      setStatus("次の問題へ移動できません");
+      showReaderError(
+        "next-question-navigation",
+        "次の問題へ移動できません",
+        "ページを再読み込みしてから再試行してください.",
+        error
+      );
       updateSyncDependentControls();
       return false;
     }
@@ -171,19 +179,19 @@
     pendingAttemptTransitionPromise = (async () => {
       if (currentFrameURL === operation.nextURL) {
         await clearPendingAttempt();
-        setStatus(
-          pendingCelebration === null
-            ? "解答記録を同期しました"
-            : "dailyKpiCompleted達成.祝福を準備中"
-        );
         return true;
       }
       return false;
     })();
     try {
       return await pendingAttemptTransitionPromise;
-    } catch {
-      setStatus("次の問題への遷移を完了できません.再試行してください");
+    } catch (error) {
+      showReaderError(
+        "pending-navigation",
+        "次の問題への遷移を完了できません",
+        "解答記録は保持されています. 次の問題へを押して再試行してください.",
+        error
+      );
       return false;
     } finally {
       pendingAttemptTransitionPromise = null;
@@ -209,7 +217,6 @@
       updateSyncDependentControls();
       return maybeContinuePendingCelebration();
     }
-    setStatus("出題できる問題はありません");
     updateSyncDependentControls();
     return false;
   }
@@ -265,14 +272,18 @@
           await correctFeedbackPromise;
         }
         stopSpeech();
-        setStatus("dailyKpiCompleted達成");
         await clearPendingCelebration();
         location.assign(congratulationsURL(celebration));
         return true;
-      } catch {
+      } catch (error) {
         await savePendingCelebration(celebration);
         navigationInProgress = false;
-        setStatus("祝福pageを開けません.再試行してください");
+        showReaderError(
+          "celebration-navigation",
+          "祝福pageを開けません",
+          "達成情報は保持されています. 次の問題へを押して再試行してください.",
+          error
+        );
         return false;
       } finally {
         celebrationTransitionPromise = null;
@@ -313,10 +324,10 @@
     nextQuestionOperationInProgress = true;
     const operation = pendingAttempt;
     syncInProgress = true;
-    setStatus("学習記録を同期中");
     updateSyncDependentControls();
 
     syncPromise = (async () => {
+      let failedError = null;
       try {
         const result = await requestAttemptResult(syncToken, operation);
         if (
@@ -325,52 +336,63 @@
         ) {
           throw new SyncRequestError("invalid_response");
         }
-        learningMetrics = result.learningMetrics;
-        renderLearningMetrics();
         if (result.celebration !== undefined) {
           await savePendingCelebration(result.celebration);
         }
 
         const nextQuestion = result.nextQuestion;
         syncReady = true;
-        setStatus("解答記録を同期しました");
         await markPendingAttemptRecorded(operation, nextQuestion?.url ?? null);
         return true;
       } catch (error) {
         if (error?.code === "unauthorized") {
           syncReady = false;
         }
-        if (error?.code === "question_id_missing") {
-          setStatus("問題IDを取得できないため解答を記録できません");
-        } else {
-          setStatus(`${syncErrorMessage(error)}.再試行してください`);
-        }
+        failedError = error;
         return false;
       } finally {
         nextQuestionOperationInProgress = false;
         syncInProgress = false;
         syncPromise = null;
         updateSyncDependentControls();
+        if (failedError?.code === "unauthorized") {
+          openSyncSettings();
+        } else if (failedError !== null) {
+          showReaderError(
+            "attempt-sync",
+            "解答記録を同期できません",
+            `${syncErrorMessage(failedError)}. 解答記録は保持されています. 再試行してください.`,
+            failedError
+          );
+        }
       }
     })();
     return syncPromise;
   }
 
-  async function recordCurrentAnswer(answerResult, status = "解答記録を保存中") {
+  async function recordCurrentAnswer(answerResult) {
     const questionId = currentQuestionId();
     if (questionId === null) {
-      setStatus("問題IDを取得できないため解答を記録できません");
+      showReaderError(
+        "question-id",
+        "解答記録を準備できません",
+        "現在の問題IDを取得できませんでした. ページを再読み込みしてください."
+      );
       updateSyncDependentControls();
       return false;
     }
     nextQuestionOperationInProgress = true;
-    setStatus(status);
     updateSyncDependentControls();
     try {
       await createPendingAttempt(answerResult);
-    } catch {
+    } catch (error) {
       nextQuestionOperationInProgress = false;
-      setStatus("解答記録を準備できません");
+      showReaderError(
+        "attempt-storage",
+        "解答記録を準備できません",
+        "Userscript storageへ未送信の解答を保存できませんでした.",
+        error
+      );
       updateSyncDependentControls();
       return false;
     }
@@ -386,7 +408,7 @@
       navigationInProgress ||
       pendingAttempt !== null ||
       pendingCelebration !== null ||
-      !syncSettings.hidden
+      syncSettings.open
     ) {
       return false;
     }
@@ -395,15 +417,15 @@
       return false;
     }
     if (answerResult === "correct") {
-      void recordCurrentQuestionAndAdvance(answerResult, "正解を記録中");
+      void recordCurrentQuestionAndAdvance(answerResult);
     } else {
       void recordCurrentAnswer(answerResult);
     }
     return true;
   }
 
-  async function recordCurrentQuestionAndAdvance(answerResult, status) {
-    const recorded = await recordCurrentAnswer(answerResult, status);
+  async function recordCurrentQuestionAndAdvance(answerResult) {
+    const recorded = await recordCurrentAnswer(answerResult);
     if (!recorded || pendingAttempt?.phase !== "recorded") {
       return false;
     }
@@ -485,7 +507,11 @@
     }
     const answerResult = getCurrentAnswerResult();
     if (answerResult === "unknown") {
-      setStatus("正誤を確認できません");
+      showReaderError(
+        "answer-result",
+        "正誤を確認できません",
+        "問題pageの正誤表示を取得できませんでした. ページを再読み込みしてください."
+      );
       updateNextQuestionButton();
       return;
     }
@@ -548,7 +574,7 @@
           speechInitializationInProgress = false;
           speechEnabled = false;
           finishSpeechInitialization();
-          setStatus(SPEECH_GESTURE_STATUS);
+          showSpeechGestureError();
         }
       }
     );
@@ -568,7 +594,12 @@
 
     if (!speechSupported) {
       currentPageReadPending = false;
-      setStatus("読み上げ非対応");
+      showReaderError(
+        "speech-runtime",
+        "読み上げを利用できません",
+        "このbrowserでは音声再生APIを利用できません.",
+        { code: "speech_unsupported" }
+      );
       return;
     }
     if (speechInitializationInProgress) {

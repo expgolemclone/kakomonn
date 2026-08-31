@@ -48,7 +48,7 @@
 
     body[data-kakomonn-reader-ui="true"] {
       display: grid !important;
-      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-rows: minmax(0, 1fr) auto;
     }
 
     #kakomonn-next-question-launcher {
@@ -284,46 +284,12 @@
       background: var(--kakomonn-reader-canvas);
     }
 
-    #kakomonn-reader-carried-correct-feedback {
-      position: absolute;
-      z-index: 2;
-      margin: 0;
-    }
-
-    #kakomonn-reader-carried-correct-feedback[hidden] {
-      display: none;
-    }
-
-    #kakomonn-reader-carried-correct-feedback[data-rarity="ssr"] {
-      inset: 0;
-      width: 100%;
-      min-height: 100%;
-    }
-
-    #kakomonn-reader-controls {
-      position: relative;
-      z-index: 2147483647;
-      display: grid;
-      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr) auto;
-      align-items: stretch;
-      gap: var(--kakomonn-reader-control-gap);
-      min-width: 0;
-      padding:
-        calc(var(--kakomonn-reader-control-gutter) + env(safe-area-inset-top))
-        max(var(--kakomonn-reader-control-gutter), env(safe-area-inset-right))
-        var(--kakomonn-reader-control-gutter)
-        max(var(--kakomonn-reader-control-gutter), env(safe-area-inset-left));
-      box-sizing: border-box;
-      background: var(--kakomonn-reader-surface);
-      pointer-events: none;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-
     #kakomonn-reader-time-limit {
       --kakomonn-reader-time-fill: var(--kakomonn-reader-time-question);
       position: absolute;
+      z-index: 3;
+      top: 0;
       right: 0;
-      bottom: 0;
       left: 0;
       width: 100%;
       height: 4px;
@@ -354,177 +320,20 @@
       background: var(--kakomonn-reader-time-fill);
     }
 
-    #kakomonn-reader-status,
-    #kakomonn-reader-learning-metrics,
-    #kakomonn-reader-sync-settings-button,
-    #kakomonn-reader-learning-metrics-details {
-      min-width: 0;
-      box-sizing: border-box;
-      border: 0;
-      border-radius: var(--kakomonn-reader-control-radius);
-      background: var(--kakomonn-reader-raised);
-      color: var(--kakomonn-reader-text);
-      box-shadow: var(--kakomonn-reader-control-shadow);
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-
-    #kakomonn-reader-status,
-    #kakomonn-reader-learning-metrics,
-    #kakomonn-reader-sync-settings-button {
-      min-height: 52px;
-    }
-
-    #kakomonn-reader-status {
-      display: flex;
-      align-items: center;
-      padding: 0 12px;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1;
-      white-space: nowrap;
-    }
-
-    #kakomonn-reader-status > span {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    #kakomonn-reader-learning-metrics {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      column-gap: 10px;
-      row-gap: 2px;
-      padding: 6px 12px;
-      font: inherit;
-      text-align: left;
-      pointer-events: auto;
-      cursor: pointer;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    #kakomonn-reader-learning-metrics::after {
-      grid-column: 2;
-      grid-row: 1 / span 2;
-      width: 8px;
-      height: 8px;
-      flex: 0 0 auto;
-      border-right: 2px solid var(--kakomonn-reader-muted);
-      border-bottom: 2px solid var(--kakomonn-reader-muted);
-      transform: translateY(-2px) rotate(45deg);
-      transition: transform 140ms ease;
-      content: "";
-    }
-
-    #kakomonn-reader-learning-metrics[aria-expanded="true"]::after {
-      transform: translateY(2px) rotate(225deg);
-    }
-
-    .kakomonn-reader-metric {
-      display: flex;
-      grid-column: 1;
-      min-width: 0;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 8px;
-      white-space: nowrap;
-    }
-
-    .kakomonn-reader-metric-label,
-    #kakomonn-reader-learning-metrics-details dt {
-      min-width: 0;
-      color: var(--kakomonn-reader-muted);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.015em;
-      overflow-wrap: anywhere;
-    }
-
-    .kakomonn-reader-remaining-value {
-      display: flex;
-      flex: 0 0 auto;
-      align-items: baseline;
-      gap: 3px;
-      color: var(--kakomonn-reader-metric-accent);
-    }
-
-    #kakomonn-reader-due-cards-remaining,
-    #kakomonn-reader-new-questions-remaining {
-      font-size: 20px;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .kakomonn-reader-remaining-value small {
-      color: var(--kakomonn-reader-muted);
-      font-size: 10px;
-    }
-
-    #kakomonn-reader-sync-settings-button {
-      padding: 0 14px;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1;
-      pointer-events: auto;
-      cursor: pointer;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    #kakomonn-reader-learning-metrics-details {
-      grid-column: 1 / -1;
-      display: grid;
+    #kakomonn-reader-carried-correct-feedback {
+      position: absolute;
+      z-index: 2;
       margin: 0;
-      padding: 4px 12px;
     }
 
-    #kakomonn-reader-learning-metrics-details[hidden] {
+    #kakomonn-reader-carried-correct-feedback[hidden] {
       display: none;
     }
 
-    .kakomonn-reader-detail-metric {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 16px;
-      min-height: 38px;
-      border-top: 1px solid var(--kakomonn-reader-border);
-    }
-
-    .kakomonn-reader-detail-metric:first-child {
-      border-top: 0;
-    }
-
-    #kakomonn-reader-learning-metrics-details dd {
-      display: flex;
-      align-items: baseline;
-      gap: 2px;
-      margin: 0;
-      font-size: 13px;
-      font-variant-numeric: tabular-nums;
-    }
-
-    #kakomonn-reader-daily-kpi-completed[data-completed="true"],
-    #kakomonn-reader-due-cards-completed[data-completed="true"] {
-      color: var(--kakomonn-reader-success);
-    }
-
-    .kakomonn-reader-visually-hidden {
-      position: absolute !important;
-      width: 1px !important;
-      height: 1px !important;
-      padding: 0 !important;
-      margin: -1px !important;
-      overflow: hidden !important;
-      clip: rect(0, 0, 0, 0) !important;
-      white-space: nowrap !important;
-      border: 0 !important;
-    }
-
-    #kakomonn-reader-sync-settings-button:disabled {
-      cursor: default;
-      opacity: 0.55;
+    #kakomonn-reader-carried-correct-feedback[data-rarity="ssr"] {
+      inset: 0;
+      width: 100%;
+      min-height: 100%;
     }
 
     #kakomonn-reader-actions {
@@ -575,8 +384,6 @@
       font-size: 14px;
     }
 
-    #kakomonn-reader-learning-metrics:active,
-    #kakomonn-reader-sync-settings-button:active:not(:disabled),
     #kakomonn-reader-next:active:not(:disabled),
     #kakomonn-reader-copy:active:not(:disabled) {
       transform: scale(0.97);
@@ -588,13 +395,16 @@
       opacity: 0.72;
     }
 
-    #kakomonn-reader-sync-settings {
+    #kakomonn-reader-sync-settings,
+    #kakomonn-reader-error-dialog {
       position: fixed;
       inset: 0;
       z-index: 2147483647;
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
+      width: 100%;
+      max-width: none;
+      height: 100%;
+      max-height: none;
+      margin: 0;
       padding:
         max(24px, env(safe-area-inset-top))
         max(20px, env(safe-area-inset-right))
@@ -603,20 +413,36 @@
       box-sizing: border-box;
       overflow-y: auto;
       overscroll-behavior: contain;
-      background: oklch(0.04 0.01 255 / 0.62);
+      border: 0;
+      background: transparent;
+      color: var(--kakomonn-reader-text);
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    #kakomonn-reader-sync-settings[hidden] {
+    #kakomonn-reader-sync-settings[open],
+    #kakomonn-reader-error-dialog[open] {
+      display: grid;
+      place-items: center;
+    }
+
+    #kakomonn-reader-sync-settings:not([open]),
+    #kakomonn-reader-error-dialog:not([open]) {
       display: none;
     }
 
-    #kakomonn-reader-sync-settings-panel {
+    #kakomonn-reader-sync-settings::backdrop,
+    #kakomonn-reader-error-dialog::backdrop {
+      background: oklch(0.04 0.01 255 / 0.72);
+    }
+
+    #kakomonn-reader-sync-settings-panel,
+    #kakomonn-reader-error-panel {
       width: min(420px, 100%);
       max-height: calc(100svh - 48px);
-      margin: auto;
       padding: 22px;
       box-sizing: border-box;
+      display: grid;
+      gap: 14px;
       overflow-y: auto;
       border: 1px solid var(--kakomonn-reader-border);
       border-radius: 18px;
@@ -625,15 +451,23 @@
       box-shadow: 0 16px 48px oklch(0.04 0.01 255 / 0.38);
     }
 
-    #kakomonn-reader-sync-settings-title {
-      margin: 0 0 10px;
+    #kakomonn-reader-sync-settings-title,
+    #kakomonn-reader-error-title {
+      margin: 0;
       font-size: 20px;
     }
 
-    #kakomonn-reader-sync-settings-description {
-      margin: 0 0 14px;
+    #kakomonn-reader-sync-settings-description,
+    #kakomonn-reader-error-message {
+      margin: 0;
       font-size: 14px;
       line-height: 1.5;
+    }
+
+    #kakomonn-reader-sync-settings-panel > label {
+      color: var(--kakomonn-reader-muted);
+      font-size: 13px;
+      font-weight: 700;
     }
 
     #kakomonn-reader-sync-token {
@@ -648,26 +482,16 @@
       font-size: 16px;
     }
 
-    #kakomonn-reader-sync-token::placeholder {
-      color: var(--kakomonn-reader-muted);
-    }
-
     #kakomonn-reader-sync-settings-error {
       min-height: 20px;
-      margin: 10px 0;
+      margin: 0;
       color: var(--kakomonn-reader-error);
       font-size: 13px;
       line-height: 1.4;
     }
 
-    #kakomonn-reader-sync-settings-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-
     #kakomonn-reader-sync-settings-save,
-    #kakomonn-reader-sync-settings-cancel {
+    #kakomonn-reader-error-close {
       min-height: 48px;
       padding: 0 16px;
       border: 0;
@@ -681,54 +505,46 @@
       color: var(--kakomonn-reader-text);
     }
 
-    #kakomonn-reader-sync-settings-cancel {
-      background: var(--kakomonn-reader-border);
+    #kakomonn-reader-error-close {
+      background: var(--kakomonn-reader-primary);
       color: var(--kakomonn-reader-text);
     }
 
-    #kakomonn-reader-sync-settings-save:disabled,
-    #kakomonn-reader-sync-settings-cancel:disabled {
+    #kakomonn-reader-sync-settings-save:disabled {
       opacity: 0.55;
     }
 
-    @media (max-width: 480px) {
-      #kakomonn-reader-controls {
-        grid-template-columns: minmax(0, 1fr) auto;
-      }
+    .kakomonn-reader-dialog-eyebrow {
+      margin: 0;
+      color: var(--kakomonn-reader-error);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+    }
 
-      #kakomonn-reader-status {
-        grid-column: 1;
-        grid-row: 1;
-      }
-
-      #kakomonn-reader-sync-settings-button {
-        grid-column: 2;
-        grid-row: 1;
-      }
-
-      #kakomonn-reader-learning-metrics {
-        grid-column: 1 / -1;
-        grid-row: 2;
-      }
-
-      #kakomonn-reader-learning-metrics-details {
-        grid-row: 3;
-      }
+    #kakomonn-reader-error-detail {
+      display: block;
+      padding: 12px;
+      border: 1px solid var(--kakomonn-reader-border);
+      border-radius: 10px;
+      background: var(--kakomonn-reader-canvas);
+      color: var(--kakomonn-reader-muted);
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+      white-space: normal;
     }
 
     #kakomonn-reader-next:focus-visible,
     #kakomonn-reader-copy:focus-visible,
-    #kakomonn-reader-learning-metrics:focus-visible,
-    #kakomonn-reader-sync-settings-button:focus-visible,
     #kakomonn-reader-sync-token:focus-visible,
     #kakomonn-reader-sync-settings-save:focus-visible,
-    #kakomonn-reader-sync-settings-cancel:focus-visible {
+    #kakomonn-reader-error-close:focus-visible {
       outline: 3px solid var(--kakomonn-reader-focus-ring);
       outline-offset: 2px;
     }
 
     @media (prefers-reduced-motion: reduce) {
-      #kakomonn-reader-learning-metrics::after,
       [data-state="loading"] #kakomonn-next-question-indicator::before {
         transition: none;
         animation: none;

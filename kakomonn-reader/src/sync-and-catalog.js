@@ -404,16 +404,11 @@
     return "学習記録を同期できません";
   }
 
-  function applyRemoteState(state) {
-    if (!isSyncState(state)) {
-      throw new SyncRequestError("invalid_response");
-    }
-    learningMetrics = state.learningMetrics;
-    renderLearningMetrics();
-  }
-
   function updateSyncDependentControls() {
-    syncSettingsButton.disabled = syncInProgress || nextQuestionOperationInProgress;
+    actions.setAttribute(
+      "aria-busy",
+      String(syncInProgress || nextQuestionOperationInProgress)
+    );
     updateNextQuestionButton();
     updateCopyButton();
     synchronizeTimeLimitPhase();
@@ -453,26 +448,20 @@
     pendingAttempt = completed;
   }
 
-  function openSyncSettings(required = false) {
+  function openSyncSettings() {
     if (syncInProgress || nextQuestionOperationInProgress) {
       return;
     }
     clearShortcutSequence();
     syncTokenInput.value = "";
     syncSettingsError.textContent = "";
-    syncSettings.dataset.required = String(required);
-    syncSettingsCancelButton.hidden = required;
-    syncSettings.hidden = false;
-    window.setTimeout(() => syncTokenInput.focus(), 0);
-  }
-
-  function closeSyncSettings() {
-    if (syncSettings.dataset.required === "true") {
-      return;
+    if (errorDialog.open) {
+      errorDialog.close();
     }
-    syncSettings.hidden = true;
-    syncTokenInput.value = "";
-    syncSettingsError.textContent = "";
+    if (!syncSettings.open) {
+      syncSettings.showModal();
+    }
+    window.setTimeout(() => syncTokenInput.focus(), 0);
   }
 
   async function fetchCatalogDocument(url, signal) {
@@ -785,7 +774,6 @@
     ) {
       return state;
     }
-    setStatus("問題一覧を同期中");
     const questionIds = await loadCompleteQuestionCatalog();
     const expectedGeneration = state.catalog?.generation ?? 0;
     try {
@@ -820,35 +808,37 @@
     }
     if (!syncToken) {
       syncReady = false;
-      openSyncSettings(true);
+      openSyncSettings();
       updateSyncDependentControls();
       return false;
     }
     syncPromise = (async () => {
+      let failedError = null;
       syncInProgress = true;
-      setStatus("学習記録を同期中");
       updateSyncDependentControls();
       try {
         let state = await requestSyncState(syncToken);
         state = await ensureQuestionCatalog(syncToken, state);
-        applyRemoteState(state);
         syncReady = true;
-        if (pendingAttempt?.phase === "queued") {
-          setStatus("未完了の解答同期があります");
-        } else if (pendingAttempt?.phase === "recorded") {
-          setStatus("解答記録を同期しました");
-        } else {
-          setStatus("待機中");
-        }
         return true;
       } catch (error) {
         syncReady = false;
-        setStatus(`${syncErrorMessage(error)}.再試行してください`);
+        failedError = error;
         return false;
       } finally {
         syncInProgress = false;
         syncPromise = null;
         updateSyncDependentControls();
+        if (failedError?.code === "unauthorized") {
+          openSyncSettings();
+        } else if (failedError !== null) {
+          showReaderError(
+            "sync-refresh",
+            "学習記録を同期できません",
+            `${syncErrorMessage(failedError)}. 通信状態を確認して再試行してください.`,
+            failedError
+          );
+        }
         void resumePendingLearningFlow();
         processCurrentPageSpeech();
       }
@@ -866,10 +856,8 @@
       syncSettingsError.textContent = "同期処理の完了を待ってください.";
       return;
     }
-    const previousSyncReady = syncReady;
     syncInProgress = true;
     syncSettingsSaveButton.disabled = true;
-    syncSettingsCancelButton.disabled = true;
     syncTokenInput.disabled = true;
     syncSettingsError.textContent = "同期APIを確認中です.";
     updateSyncDependentControls();
@@ -883,12 +871,9 @@
         await GM.setValue(SYNC_TOKEN_KEY, candidateToken);
         syncToken = candidateToken;
         clearAzureSpeechToken();
-        applyRemoteState(state);
         syncReady = true;
-        syncSettings.dataset.required = "false";
-        syncSettings.hidden = true;
+        syncSettings.close();
         syncTokenInput.value = "";
-        setStatus("学習記録を同期しました");
         if (nextQuestionResult?.question === null) {
           showNoNextQuestionLauncher();
         } else if (nextQuestionResult?.question !== undefined) {
@@ -896,14 +881,14 @@
         }
         return true;
       } catch (error) {
-        syncReady = previousSyncReady;
-        syncSettingsError.textContent = `${syncErrorMessage(error)}.`;
+        syncReady = false;
+        syncSettingsError.textContent =
+          `${syncErrorMessage(error)}. ${readerErrorDetail(error, "sync-token")}`;
         return false;
       } finally {
         syncInProgress = false;
         syncPromise = null;
         syncSettingsSaveButton.disabled = false;
-        syncSettingsCancelButton.disabled = false;
         syncTokenInput.disabled = false;
         updateSyncDependentControls();
         void resumePendingLearningFlow();
@@ -929,7 +914,6 @@
   }
 
   async function initializeSync() {
-    renderLearningMetrics();
     updateSyncDependentControls();
     try {
       const [storedToken, storedPendingAttempt, storedCelebration] = await Promise.all([
@@ -945,27 +929,21 @@
       }
       clearAzureSpeechToken();
       await restorePendingState(storedPendingAttempt, storedCelebration);
-      if (forceSyncSettingsOnInitialize) {
-        syncReady = false;
-        setStatus("同期トークンを設定してください");
-        openSyncSettings(true);
-        updateSyncDependentControls();
-        return;
-      }
       if (!syncToken) {
         syncReady = false;
-        setStatus("同期トークンを設定してください");
-        openSyncSettings(true);
+        openSyncSettings();
         updateSyncDependentControls();
         return;
       }
       await refreshRemoteState();
-    } catch {
+    } catch (error) {
       syncReady = false;
-      setStatus("同期設定を読み込めません");
-      if (forceSyncSettingsOnInitialize) {
-        openSyncSettings(true);
-      }
+      showReaderError(
+        "sync-storage",
+        "同期設定を読み込めません",
+        "Userscript storageを確認できませんでした. ページを再読み込みしてください.",
+        error
+      );
       updateSyncDependentControls();
     }
   }
@@ -979,7 +957,7 @@
       pendingAttempt === null &&
       pendingCelebration === null &&
       !nextQuestionOperationInProgress &&
-      syncSettings.hidden &&
+      !syncSettings.open &&
       getCurrentAnswerResult() !== "unknown"
     ) {
       recordCurrentAnswerIfAvailable();
@@ -995,7 +973,4 @@
     speechRunId += 1;
     cancelActiveSpeech();
 
-    if (speechEnabled) {
-      setStatus("待機中");
-    }
   }

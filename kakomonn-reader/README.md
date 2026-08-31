@@ -15,7 +15,8 @@
 - WindowsとiPhoneの起動経路は, [`kakomonn-sync`の次の問題を開く手順](../kakomonn-sync/README.md#次の問題を開く)を使用します. launcherからreaderと問題iframeまでは同じuserscript session内で切り替えます.
 - 同期Workerが`celebration`を返すと, primary KPI達成を祝う専用pageへ移動します.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
-- 問題画面では`dueCardsRemaining`と`newQuestionsRemaining`を常時表示し, クリックすると`dailyKpiCompleted`, `dueCardsCompleted`, `todayNewQuestionCount`, `newQuestionGoal`, `todayStabilityDaysDelta`, `todayAttemptedQuestionCount`, `todayCorrectRatePercent`も確認できます. 値の定義と集計規則は, [`kakomonn-sync`の`learningMetrics` contract](../kakomonn-sync/README.md#learningmetrics-contract)を正本とします.
+- 問題画面はtopのstatus, KPI, 同期設定を表示せず, 問題iframeを下部操作まで最大化します. 5分の残り時間は問題iframe上端の4px barへ重ねて表示します. KPIはbrowser backでdashboardへ戻って確認します.
+- 通常進行のstatusは表示せず, 処理に失敗した場合だけerror内容, context, code, HTTP statusをdialogへ表示します. tokenとresponse bodyは表示しません.
 - 問題catalogは固定の`question/no`範囲を持ちません. 24時間ごとに`/createques`と`/list`から年度listを再発見し, 各listの全paginationにある実在の問題IDを同期します. サイトが同じ構造で新年度を追加する限り, コード変更は不要です.
 - 解答後に, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でクリップボードへコピー. `yy`でもコピーできます.
 
@@ -53,7 +54,7 @@ Windows 11 Chrome + TampermonkeyとiPhone Safari + Tampermonkeyだけに対応�
 
 読み上げに必要なWorkerとAzure Speechは, [`kakomonn-sync`のデプロイ手順](../kakomonn-sync/README.md#デプロイ)で準備します. 生成されたAPI URLを`src/metadata-and-runtime.js`の`SYNC_API_URL`と`@connect`へ設定してビルドします.
 
-初回起動時に同期トークンの入力画面が開きます.Win11とiPhoneへ,Worker Secretの`SYNC_TOKEN`と同じ値を入力してください.トークンは各ユーザースクリプトマネージャーの専用ストレージへ保存され,対象サイトの`localStorage`には保存されません.
+同期tokenが未保存または認証失敗の場合だけ, 入力dialogが開きます. Win11とiPhoneへ, Worker Secretの`SYNC_TOKEN`と同じ値を入力してください. tokenは各userscript managerの専用storageへ保存され, 対象siteの`localStorage`には保存されません. 接続済みのreaderには設定buttonを表示しません.
 
 remote stateはreader sessionの開始時に取得します. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
 

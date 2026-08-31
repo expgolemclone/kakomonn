@@ -394,7 +394,7 @@ function renderDashboard() {
 
 function showError(error) {
   const messages = {
-    unauthorized: "同期tokenが正しくありません.", timeout: "読み込みがタイムアウトしました.", network_error: "networkへ接続できません.", storage_unavailable: "browser storageを利用できません.", invalid_response: "API応答が不正です.", server_misconfigured: "同期APIが設定されていません.",
+    unauthorized: "同期tokenが正しくありません.", timeout: "読み込みがタイムアウトしました.", network_error: "networkへ接続できません.", storage_unavailable: "browser storageを利用できません.", invalid_response: "API応答が不正です.", server_misconfigured: "同期APIが設定されていません.", open_bridge_misconfigured: "次の問題への接続先が設定されていません.",
   };
   el.errorMessage.textContent = messages[error?.code] ?? "学習記録を読み込めませんでした.";
   el.loadError.hidden = false;
@@ -510,8 +510,21 @@ el.forgetToken.addEventListener("click", () => {
   el.settingsDialog.close(); el.settingsButton.hidden = true; el.dashboard.hidden = true; el.siteEmpty.hidden = true; el.loadError.hidden = true; el.authPanel.hidden = false;
 });
 
-renderDailyDetailsInitial();
-(async () => {
+function nextQuestionURL() {
+  const content = document.querySelector('meta[name="kakomonn-next-question-url"]')?.content ?? "";
+  let url;
+  try { url = new URL(content); } catch { throw new DashboardError("open_bridge_misconfigured"); }
+  if (
+    url.protocol !== "https:" ||
+    !validSite(url.hostname) ||
+    url.pathname !== "/createques" ||
+    url.search !== "" ||
+    url.hash !== "#kakomonn-next"
+  ) throw new DashboardError("open_bridge_misconfigured");
+  return url.href;
+}
+
+async function initializeDashboard() {
   try {
     const token = storageGet(TOKEN_KEY) ?? "";
     if (!token) return;
@@ -520,4 +533,43 @@ renderDailyDetailsInitial();
     if (error?.code === "unauthorized") { storageRemove(TOKEN_KEY); el.authMessage.textContent = "保存済みtokenを確認してください."; return; }
     showError(error);
   }
-})();
+}
+
+function showDashboardFromOpenBridge() {
+  history.replaceState(null, "", "/");
+  void initializeDashboard();
+}
+
+renderDailyDetailsInitial();
+const isOpenBridge = location.pathname === "/open" && location.search === "" && location.hash === "";
+const openBridgeWasLaunched = history.state?.kakomonnOpenBridge === true;
+let openBridgePhase = isOpenBridge && !openBridgeWasLaunched ? "launch" : "dashboard";
+
+window.addEventListener("pageshow", (event) => {
+  if (openBridgePhase === "launch") {
+    openBridgePhase = "away";
+    try {
+      const target = nextQuestionURL();
+      history.replaceState(null, "", "/");
+      history.pushState({ kakomonnOpenBridge: true }, "", "/open");
+      location.replace(target);
+    } catch (error) {
+      openBridgePhase = "dashboard";
+      showDashboardFromOpenBridge();
+      showError(error);
+    }
+    return;
+  }
+  if (isOpenBridge && openBridgePhase === "away" && event.persisted) {
+    openBridgePhase = "dashboard";
+    showDashboardFromOpenBridge();
+    return;
+  }
+  if (event.persisted) void initializeDashboard();
+});
+
+if (isOpenBridge) {
+  if (openBridgePhase === "dashboard") showDashboardFromOpenBridge();
+} else {
+  void initializeDashboard();
+}

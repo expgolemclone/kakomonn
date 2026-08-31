@@ -9,8 +9,6 @@ const {
 } = require("../../scripts/kakomonn-config.cjs");
 
 const productionOrigin = "https://kakomonn-sync.kakomonn.workers.dev";
-const nextQuestionLauncherURL =
-  "https://chushoks.kakomonn.com/createques#kakomonn-next";
 const publicDirectory = resolve(__dirname, "..", "public");
 const assetControlFiles = new Set(["_headers", "_redirects"]);
 const textAssetExtensions = new Set([".css", ".html", ".js"]);
@@ -88,13 +86,21 @@ test("production assets match the repository", async (context) => {
   }
 });
 
-test("production redirects to the canonical next-question launcher", async () => {
+test("production /open serves the repository dashboard bridge", async () => {
   const response = await fetch(new URL("/open", productionOrigin), {
     headers: { "cache-control": "no-cache" },
     redirect: "manual",
   });
-  assert.equal(response.status, 302);
-  assert.equal(response.headers.get("location"), nextQuestionLauncherURL);
+  assert.equal(response.status, 200);
+  const expected = canonicalAsset(
+    "index.html",
+    await readFile(resolve(publicDirectory, "index.html")),
+  );
+  const actual = canonicalAsset(
+    "index.html",
+    Buffer.from(await response.arrayBuffer()),
+  );
+  assert.equal(sha256(actual), sha256(expected));
 });
 
 test("production serves only the authenticated v9 API backed by LearningState", async () => {

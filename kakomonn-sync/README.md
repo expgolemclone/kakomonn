@@ -22,7 +22,7 @@ Windowsのopen commandまたはiPhone Safariから, 次の固定URLでFSRSに基
 https://kakomonn-sync.kakomonn.workers.dev/open
 ```
 
-`/open`はTampermonkeyが既に動作する`https://chushoks.kakomonn.com/createques#kakomonn-next`へredirectします. redirect先のuserscriptが専用storageの同期tokenで`GET /v9/next`を呼ぶため, tokenをURLやdashboardの`localStorage`へ保存しません.
+`/open`はdashboard bridgeを表示してから, Tampermonkeyが既に動作する`https://chushoks.kakomonn.com/createques#kakomonn-next`へ自動で移動します. redirect先のuserscriptが専用storageの同期tokenで`GET /v9/next`を呼ぶため, tokenをURLやdashboardの`localStorage`へ保存しません. readerでbrowser backを実行するとbridgeが`/`へ戻し, 最新のdashboardを読み込みます.
 
 token未設定または認証失敗の場合は, redirect先の同期設定でtokenを保存し, 再読込せず次の問題へ進みます. 通信失敗, 問題catalog未同期, 次問なしの場合は, 原因と再試行操作を表示します.
 

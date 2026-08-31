@@ -858,43 +858,26 @@ async function runTest() {
 
     await installReader(driver, script);
     await waitForElement(driver, "#kakomonn-reader-frame");
-    await waitForElementText(
-      driver,
-      "#kakomonn-reader-status",
-      "読み上げ非対応",
+    await driver.waitUntil(
+      () => driver.execute(() => document.querySelector("#kakomonn-reader-error-dialog")?.open === true),
+      { interval: 250, timeout: 30_000, timeoutMsg: "The speech error dialog did not open" },
     );
+    assert.equal(
+      await driver.execute(() => document.querySelector("#kakomonn-reader-error-title")?.textContent),
+      "読み上げを利用できません",
+    );
+    await clickWebElementNatively(driver, "#kakomonn-reader-error-close");
     const layout = await driver.execute(() => {
-      const controls = document.querySelector("#kakomonn-reader-controls");
-      const status = document.querySelector("#kakomonn-reader-status");
-      const learningMetrics = document.querySelector(
-        "#kakomonn-reader-learning-metrics",
-      );
-      const learningMetricsDetails = document.querySelector(
-        "#kakomonn-reader-learning-metrics-details",
-      );
-      const syncSettingsButton = document.querySelector(
-        "#kakomonn-reader-sync-settings-button",
-      );
-      const dueCardsCompleted = document.querySelector(
-        "#kakomonn-reader-due-cards-completed",
-      );
-      const dailyKpiCompleted = document.querySelector(
-        "#kakomonn-reader-daily-kpi-completed",
-      );
-      const newQuestionsRemaining = document.querySelector(
-        "#kakomonn-reader-new-questions-remaining",
-      );
       const shell = document.querySelector("#kakomonn-reader-shell");
+      const frame = document.querySelector("#kakomonn-reader-frame");
       const actions = document.querySelector("#kakomonn-reader-actions");
+      const progress = document.querySelector("#kakomonn-reader-time-limit");
       const copy = document.querySelector("#kakomonn-reader-copy");
       const next = document.querySelector("#kakomonn-reader-next");
-      const controlsRect = controls.getBoundingClientRect();
-      const statusRect = status.getBoundingClientRect();
-      const learningMetricsRect = learningMetrics.getBoundingClientRect();
-      const syncSettingsButtonRect =
-        syncSettingsButton.getBoundingClientRect();
       const shellRect = shell.getBoundingClientRect();
+      const frameRect = frame.getBoundingClientRect();
       const actionsRect = actions.getBoundingClientRect();
+      const progressRect = progress.getBoundingClientRect();
       const copyRect = copy.getBoundingClientRect();
       const nextRect = next.getBoundingClientRect();
       return {
@@ -902,49 +885,32 @@ async function runTest() {
           Math.abs(actionsRect.left) <= 1 &&
           Math.abs(actionsRect.right - innerWidth) <= 1,
         bottomButtonsEqual: Math.abs(copyRect.width - nextRect.width) <= 1,
-        controlsFullWidth:
-          Math.abs(controlsRect.left) <= 1 &&
-          Math.abs(controlsRect.right - innerWidth) <= 1,
-        controlsOverflow: controls.scrollWidth > controls.clientWidth,
-        detailsHidden: learningMetricsDetails.hidden,
-        dueCardsCompleted: {
-          completed: dueCardsCompleted.dataset.completed,
-          text: dueCardsCompleted.textContent,
-        },
-        dailyKpiCompleted: {
-          completed: dailyKpiCompleted.dataset.completed,
-          text: dailyKpiCompleted.textContent,
-        },
-        newQuestionsRemaining: newQuestionsRemaining.textContent,
-        learningMetricsClipped:
-          learningMetrics.scrollWidth > learningMetrics.clientWidth ||
-          learningMetrics.scrollHeight > learningMetrics.clientHeight,
-        learningMetricsInsideHeader:
-          learningMetricsRect.left >= controlsRect.left &&
-          learningMetricsRect.right <= controlsRect.right &&
-          learningMetricsRect.bottom <= controlsRect.bottom,
-        shellFillsMiddle:
-          Math.abs(shellRect.top - controlsRect.bottom) <= 1 &&
+        frameFillsShell:
+          Math.abs(frameRect.top - shellRect.top) <= 1 &&
+          Math.abs(frameRect.right - shellRect.right) <= 1 &&
+          Math.abs(frameRect.bottom - shellRect.bottom) <= 1 &&
+          Math.abs(frameRect.left - shellRect.left) <= 1,
+        noHorizontalOverflow:
+          shell.scrollWidth <= shell.clientWidth &&
+          actions.scrollWidth <= actions.clientWidth,
+        shellFillsAboveActions:
+          Math.abs(shellRect.top) <= 1 &&
           Math.abs(shellRect.bottom - actionsRect.top) <= 1 &&
           shellRect.height > 0,
-        topItemsShareRow:
-          Math.abs(learningMetricsRect.top - statusRect.top) <= 1 &&
-          Math.abs(learningMetricsRect.top - syncSettingsButtonRect.top) <= 1,
+        timeBarOverlay:
+          Math.abs(progressRect.top - shellRect.top) <= 1 &&
+          Math.abs(progressRect.left - shellRect.left) <= 1 &&
+          Math.abs(progressRect.right - shellRect.right) <= 1 &&
+          Math.abs(progressRect.height - 4) <= 1,
       };
     });
     assert.deepEqual(layout, {
       actionsFullWidth: true,
       bottomButtonsEqual: true,
-      controlsFullWidth: true,
-      controlsOverflow: false,
-      detailsHidden: true,
-      dueCardsCompleted: { completed: "false", text: "未達成" },
-      dailyKpiCompleted: { completed: "false", text: "未達成" },
-      newQuestionsRemaining: "100",
-      learningMetricsClipped: false,
-      learningMetricsInsideHeader: true,
-      shellFillsMiddle: true,
-      topItemsShareRow: true,
+      frameFillsShell: true,
+      noHorizontalOverflow: true,
+      shellFillsAboveActions: true,
+      timeBarOverlay: true,
     });
 
     await switchToReaderFrame(driver);
@@ -1167,8 +1133,8 @@ async function runTest() {
     assert.deepEqual(launcherTransition, {
       documentSentinel: "same-document",
       frameURL: nextQuestionURL,
-      readerControlsVisible: true,
-      settingsButtonVisible: true,
+      readerControlsVisible: false,
+      settingsButtonVisible: false,
     });
 
     console.log(

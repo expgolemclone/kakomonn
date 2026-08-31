@@ -151,7 +151,11 @@
     const key = shortcutSequenceKey;
     const sourceDocument = shortcutSequenceDocument;
     clearShortcutSequence();
-    if (sourceDocument !== frameDocument || !syncSettings.hidden) {
+    if (
+      sourceDocument !== frameDocument ||
+      syncSettings.open ||
+      errorDialog.open
+    ) {
       return false;
     }
     if (key === "g") {
@@ -217,7 +221,8 @@
       event.metaKey ||
       event.shiftKey ||
       event.isComposing ||
-      !syncSettings.hidden ||
+      syncSettings.open ||
+      errorDialog.open ||
       isEditableShortcutTarget(event.target) ||
       (event.repeat && scrollDirection === 0)
     ) {
@@ -316,8 +321,13 @@
     try {
       nextDocument = frame.contentDocument;
       nextURL = frame.contentWindow.location.href;
-    } catch {
-      setStatus("ページへアクセスできません");
+    } catch (error) {
+      showReaderError(
+        "frame-access",
+        "問題pageへアクセスできません",
+        "Readerと問題pageが同じoriginであることを確認してください.",
+        error
+      );
       return;
     }
 
@@ -329,7 +339,12 @@
     }
 
     if (!nextDocument?.body) {
-      setStatus("ページ本文がありません");
+      showReaderError(
+        "frame-document",
+        "問題pageの本文がありません",
+        "問題pageを再読み込みしてください.",
+        { code: "document_body_missing" }
+      );
       return;
     }
 
@@ -361,8 +376,13 @@
       if (!shouldLaunchNextQuestionAfterSync) {
         history.replaceState(null, "", currentFrameURL);
       }
-    } catch {
-      setStatus("URLを取得できません");
+    } catch (error) {
+      showReaderError(
+        "frame-url",
+        "問題pageのURLを反映できません",
+        "Readerのhistoryを更新できませんでした.",
+        error
+      );
       return;
     }
 
@@ -384,18 +404,12 @@
   });
 
   copyButton.addEventListener("click", copyReadableSections);
-  syncSettingsButton.addEventListener("click", () => {
-    openSyncSettings(!syncToken);
+  syncSettings.addEventListener("cancel", (event) => {
+    event.preventDefault();
   });
-  syncSettingsCancelButton.addEventListener("click", closeSyncSettings);
-  syncSettingsSaveButton.addEventListener("click", () => {
+  syncSettingsPanel.addEventListener("submit", (event) => {
+    event.preventDefault();
     void saveSyncSettings();
-  });
-  syncTokenInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !syncSettingsSaveButton.disabled) {
-      event.preventDefault();
-      void saveSyncSettings();
-    }
   });
   frame.addEventListener("load", bindFrameDocument);
   document.addEventListener("keydown", onReaderKeyDown, true);
@@ -410,7 +424,6 @@
     }
   });
 
-  renderLearningMetrics();
   if (isNextQuestionLauncher) {
     void startNextQuestionLauncher();
   } else {
@@ -427,7 +440,12 @@
     ) {
       bindFrameDocument();
     }
-  } catch {
-    setStatus("ページへアクセスできません");
+  } catch (error) {
+    showReaderError(
+      "initial-frame-access",
+      "問題pageへアクセスできません",
+      "問題pageを再読み込みしてください.",
+      error
+    );
   }
 })();

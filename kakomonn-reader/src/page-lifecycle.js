@@ -184,12 +184,10 @@
     timeLimitProgress.value = 0;
 
     if (expectedPhase === "question") {
-      setStatus("問題の制限時間が終了しました");
       void handleSkipQuestion();
       return;
     }
 
-    setStatus("解説の制限時間が終了しました");
     void handleNextQuestion();
   }
 
@@ -225,8 +223,13 @@
       frameWindow.scrollTo(0, 0);
       sourceDocument.documentElement.scrollTop = 0;
       sourceDocument.body.scrollTop = 0;
-    } catch {
-      setStatus("ページ先頭へ戻せません");
+    } catch (error) {
+      showReaderError(
+        "page-scroll-top",
+        "ページ先頭へ戻せません",
+        "問題pageのscroll位置を変更できませんでした.",
+        error
+      );
     }
   }
 
@@ -270,8 +273,13 @@
         frameWindow.scrollY + problemHeading.getBoundingClientRect().top;
       frameWindow.scrollTo({ behavior: "auto", left: 0, top: headingTop });
       return true;
-    } catch {
-      setStatus("問題の位置へ移動できません");
+    } catch (error) {
+      showReaderError(
+        "problem-scroll",
+        "問題の位置へ移動できません",
+        "問題見出しまでscrollできませんでした.",
+        error
+      );
       return false;
     }
   }

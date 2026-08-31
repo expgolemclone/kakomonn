@@ -1,4 +1,4 @@
-- Testの完了条件は[`README.md`](README.md#テスト), releaseとdeploymentの順序は[`README.md`](README.md#release-and-deployment)を正本とし, `RULES.md`へ複製しないこと.
+- 本番成果物を変更する作業は, pushだけで完了とせず, 変更対象componentのreleaseまたはdeploymentとproduction検証まで完了すること. Testの完了条件は[`README.md`](README.md#テスト), releaseとdeploymentの手順および順序は[`README.md`](README.md#release-and-deployment)を正本とし, `RULES.md`へ複製しないこと.
 - 学習指標とKPIの契約は[`kakomonn-sync/README.md`](kakomonn-sync/README.md#learningmetrics-contract)を正本とし, consumer側へ定義を複製しないこと.
 - Cloudflare Workers Static Assetsで配信できる静的fileはWorkerを起動せず, 動的APIだけをWorkerへ通すこと.
 - 本番のobservability, 永続log, traceは無効にし, 障害調査時だけreal-time tailを使うこと.

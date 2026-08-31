@@ -49,29 +49,6 @@
   shell.append(frame, timeLimitProgress, carriedCorrectFeedback);
   let activeCorrectFeedbackElement = null;
 
-  const nextQuestionButton = document.createElement("button");
-  nextQuestionButton.id = "kakomonn-reader-next";
-  nextQuestionButton.type = "button";
-  nextQuestionButton.textContent = "次の問題へ";
-  nextQuestionButton.setAttribute("aria-label", "次の問題へ移動");
-  nextQuestionButton.setAttribute("aria-keyshortcuts", "Enter");
-  nextQuestionButton.disabled = true;
-
-  const copyButton = document.createElement("button");
-  copyButton.id = "kakomonn-reader-copy";
-  copyButton.type = "button";
-  copyButton.textContent = "回答後にコピー";
-  copyButton.setAttribute(
-    "aria-label",
-    "問題文,自分の回答,解説をMarkdownでコピー,ショートカットはyy"
-  );
-  copyButton.title = "ショートカット: yy";
-  copyButton.disabled = true;
-
-  const actions = document.createElement("div");
-  actions.id = "kakomonn-reader-actions";
-  actions.append(copyButton, nextQuestionButton);
-
   const syncSettings = document.createElement("dialog");
   syncSettings.id = "kakomonn-reader-sync-settings";
   syncSettings.setAttribute(
@@ -157,15 +134,22 @@
   errorDialogCloseButton.textContent = "閉じる";
   errorDialogCloseButton.autofocus = true;
 
+  const errorDialogRetryButton = document.createElement("button");
+  errorDialogRetryButton.id = "kakomonn-reader-error-retry";
+  errorDialogRetryButton.type = "button";
+  errorDialogRetryButton.hidden = true;
+
   errorDialogPanel.append(
     errorDialogEyebrow,
     errorDialogTitle,
     errorDialogMessage,
     errorDialogDetail,
+    errorDialogRetryButton,
     errorDialogCloseButton
   );
   errorDialog.appendChild(errorDialogPanel);
   let visibleReaderErrorSignature = "";
+  let readerErrorRetryAction = null;
 
   function readerErrorDetail(error, context) {
     const details = [`context=${context}`];
@@ -185,15 +169,26 @@
     return details.join(" | ");
   }
 
-  function showReaderError(context, title, message, error = null) {
+  function showReaderError(
+    context,
+    title,
+    message,
+    error = null,
+    retryAction = null
+  ) {
     const detail = readerErrorDetail(error, context);
-    const signature = `${title}\u0000${message}\u0000${detail}`;
+    const retryLabel = retryAction?.label ?? "";
+    const signature = `${title}\u0000${message}\u0000${detail}\u0000${retryLabel}`;
     if (errorDialog.open && signature === visibleReaderErrorSignature) {
       return;
     }
     errorDialogTitle.textContent = title;
     errorDialogMessage.textContent = message;
     errorDialogDetail.textContent = detail;
+    readerErrorRetryAction = retryAction?.run ?? null;
+    errorDialogRetryButton.hidden = readerErrorRetryAction === null;
+    errorDialogRetryButton.disabled = false;
+    errorDialogRetryButton.textContent = retryLabel;
     visibleReaderErrorSignature = signature;
     if (syncSettings.open) {
       return;
@@ -205,19 +200,39 @@
 
   errorDialog.addEventListener("close", () => {
     visibleReaderErrorSignature = "";
+    readerErrorRetryAction = null;
+    errorDialogRetryButton.hidden = true;
+    errorDialogRetryButton.disabled = false;
+  });
+
+  errorDialogRetryButton.addEventListener("click", async () => {
+    if (readerErrorRetryAction === null || errorDialogRetryButton.disabled) {
+      return;
+    }
+    const retryAction = readerErrorRetryAction;
+    errorDialogRetryButton.disabled = true;
+    try {
+      const completed = await retryAction();
+      if (completed && errorDialog.open) {
+        errorDialog.close();
+      }
+    } finally {
+      if (errorDialog.open) {
+        errorDialogRetryButton.disabled = false;
+      }
+    }
   });
 
   function mountReaderUI() {
     document.body.dataset.kakomonnReaderUi = "true";
     if (
       shell.isConnected &&
-      actions.isConnected &&
       syncSettings.isConnected &&
       errorDialog.isConnected
     ) {
       return;
     }
-    document.body.replaceChildren(shell, actions, syncSettings, errorDialog);
+    document.body.replaceChildren(shell, syncSettings, errorDialog);
   }
 
   function clearCorrectFeedbackRemovalTimer() {
@@ -275,42 +290,6 @@
     renderCorrectFeedbackElement(feedback, variant);
     feedback.dataset.state = "entering";
     activeCorrectFeedbackElement = feedback;
-    return true;
-  }
-
-  function handoffCorrectFeedbackVisual(sourceDocument = frameDocument) {
-    if (
-      correctFeedbackPromise === null ||
-      activeCorrectFeedbackElement === null ||
-      activeCorrectFeedbackElement.ownerDocument !== sourceDocument
-    ) {
-      return false;
-    }
-
-    const rarity = activeCorrectFeedbackElement.dataset.rarity;
-    const rect = activeCorrectFeedbackElement.getBoundingClientRect();
-
-    activeCorrectFeedbackElement.remove();
-    carriedCorrectFeedback.removeAttribute("style");
-    if (rarity !== "ssr") {
-      const inset = 16;
-      const availableWidth = Math.max(0, shell.clientWidth - inset * 2);
-      const width = Math.min(availableWidth, Math.max(220, rect.width));
-      const left = Math.min(
-        Math.max(inset, rect.left + (rect.width - width) / 2),
-        Math.max(inset, shell.clientWidth - width - inset)
-      );
-      const top = Math.min(
-        Math.max(inset, rect.top),
-        Math.max(inset, shell.clientHeight - rect.height - inset)
-      );
-      carriedCorrectFeedback.style.left = `${left}px`;
-      carriedCorrectFeedback.style.top = `${top}px`;
-      carriedCorrectFeedback.style.width = `${width}px`;
-    }
-    carriedCorrectFeedback.dataset.state = "carried";
-    carriedCorrectFeedback.hidden = false;
-    activeCorrectFeedbackElement = carriedCorrectFeedback;
     return true;
   }
 

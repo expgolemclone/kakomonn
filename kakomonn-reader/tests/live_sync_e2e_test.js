@@ -174,7 +174,6 @@ async function readReaderState(page) {
     `() => {
       const shell = document.querySelector("#kakomonn-reader-shell");
       const frame = document.querySelector("#kakomonn-reader-frame");
-      const next = document.querySelector("#kakomonn-reader-next");
       const settings = document.querySelector("#kakomonn-reader-sync-settings");
       const errorDialog = document.querySelector("#kakomonn-reader-error-dialog");
       const frameStyle = frame ? getComputedStyle(frame) : null;
@@ -199,8 +198,8 @@ async function readReaderState(page) {
         frameHeightAttribute: frame?.getAttribute("height") ?? null,
         frameStyleAttribute: frame?.getAttribute("style") ?? null,
         frameWidthAttribute: frame?.getAttribute("width") ?? null,
-        nextDisabled: next?.disabled ?? null,
-        nextText: next?.textContent ?? null,
+        historyEntryType: history.state?.entryType ?? null,
+        historyLength: history.length,
         outerURL: location.href,
         scriptHandler: shell?.dataset.scriptHandler ?? null,
         settingsOpen: settings?.open ?? null,
@@ -222,7 +221,8 @@ async function configureSyncToken(
     "the installed Tampermonkey userscript",
     async () => {
       const state = await readReaderState(page);
-      return state.actionsPresent &&
+      return state.actionsPresent === false &&
+        state.buildFingerprint !== null &&
         state.outerURL === currentQuestionUrl &&
         state.frameURL === currentQuestionUrl
         ? state
@@ -250,13 +250,29 @@ async function configureSyncToken(
   });
 }
 
+async function completeStoredDestinationIfAvailable(page) {
+  const initialState = await readReaderState(page);
+  await page.goForward({ waitUntil: "commit", timeout: 10_000 });
+  await delay(2_000);
+  const advancedState = await readReaderState(page);
+  if (
+    advancedState.outerURL === initialState.outerURL &&
+    advancedState.frameURL === initialState.frameURL
+  ) {
+    return false;
+  }
+  await waitForAutomaticTransition(page);
+  await delay(1_000);
+  return true;
+}
+
 async function waitForAutomaticQuestionSpeech(page, expectedBuildFingerprint) {
   const outcome = await waitUntil(
     "the automatic question speech before any page interaction",
     async () => {
       const state = await readReaderState(page);
       if (
-        !state.actionsPresent ||
+        state.actionsPresent ||
         state.outerURL !== currentQuestionUrl ||
         state.frameURL !== currentQuestionUrl ||
         state.settingsOpen !== false
@@ -373,7 +389,7 @@ async function submitCorrectAnswer(page) {
   await frame
     .locator('input[name="intAnswerData"][value="5"]')
     .locator("xpath=ancestor::label[1]")
-    .evaluate((label) => label.click());
+    .click();
 
   const selected = await evaluate(
     page,
@@ -387,7 +403,7 @@ async function submitCorrectAnswer(page) {
 
   await frame
     .getByRole("button", { name: "解答する", exact: true })
-    .evaluate((button) => button.click());
+    .click();
 
   await waitUntil("the real site correct result", async () =>
     evaluate(
@@ -441,7 +457,7 @@ async function waitForSynchronizedQuestionState(page, token, frameURL) {
     if (
       lastReaderState.frameURL === frameURL &&
       lastReaderState.answerResult === "unknown" &&
-      lastReaderState.nextDisabled === true &&
+      lastReaderState.actionsPresent === false &&
       lastReaderState.topControlsPresent === false
     ) {
       return {
@@ -531,6 +547,7 @@ async function main() {
     );
     assert.equal(configuredState.settingsOpen, false);
     assert.equal(configuredState.topControlsPresent, false);
+    await completeStoredDestinationIfAvailable(page);
     await page.close();
     page = await chrome.context.newPage();
     await page.goto(currentQuestionUrl, {
@@ -545,6 +562,16 @@ async function main() {
     assert.notEqual(automaticSpeechState, null);
     assert.equal(automaticSpeechState.topControlsPresent, false);
     await submitCorrectAnswer(page);
+    await waitUntil("the prepared Browser forward entry", async () => {
+      const state = await readReaderState(page);
+      return (
+        state.answerResult === "correct" &&
+        state.errorOpen === false &&
+        state.historyEntryType === "current" &&
+        state.historyLength > automaticSpeechState.historyLength
+      );
+    });
+    await page.goForward();
     const navigationResult = await waitForAutomaticTransition(page);
     let finalState;
     let synchronizedReaderState = null;

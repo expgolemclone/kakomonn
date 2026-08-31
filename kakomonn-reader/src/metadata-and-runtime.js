@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @version      2.0.1
-// @description  問題文と解説の読み上げ, コピー, 学習記録の端末間同期とdue card完了時の祝福を提供します.
+// @version      2.1.0
+// @description  問題文と解説の読み上げ, 解答後の自動Markdown copy, 学習記録の端末間同期とdue card完了時の祝福を提供します.
 // @updateURL    https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @downloadURL  https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @match        https://*.kakomonn.com/*
@@ -87,7 +87,6 @@
   const FRAME_LOAD_DELAY_MS = 900;
   const FRAME_CHANGE_DELAY_MS = 700;
   const FRAME_PROBLEM_SCROLL_DELAYS_MS = [0, 120, 600];
-  const COPY_FEEDBACK_DURATION_MS = 1400;
   const SHORTCUT_SEQUENCE_TIMEOUT_MS = 400;
   const TIME_LIMIT_MS = 5 * 60 * 1000;
   const MAX_CHUNK_LENGTH = 1500;
@@ -200,6 +199,11 @@
       background-color: var(--kakomonn-frame-surface) !important;
     }
 
+    .problem_detail .next_ques_btn,
+    .problem_detail .next_ques_btn .button_entity {
+      display: none !important;
+    }
+
     .problem_detail > .zoomin img,
     .problem_detail > ul.list img,
     #js-commentary-wrap > .item .text img {
@@ -257,7 +261,6 @@
   let timeLimitInterval = null;
   let timeLimitSourceDocument = null;
   let frameProblemScrollTimers = [];
-  let copyFeedbackTimer = null;
   let frameMutationObserver = null;
   let awaitingAnswerResultSpeech = false;
   let navigationInProgress = false;
@@ -269,4 +272,3 @@
   let pendingAttempt = null;
   let pendingAttemptTransitionPromise = null;
   let pendingCelebration = null;
-  let celebrationTransitionPromise = null;

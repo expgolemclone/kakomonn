@@ -226,6 +226,10 @@ class IOSWebDriver {
     await this.sessionRequest("POST", "/url", { url });
   }
 
+  async navigateForward() {
+    await this.sessionRequest("POST", "/forward", {});
+  }
+
   async request(method, endpoint, body, timeout = 180_000) {
     const requestBody = body === undefined ? null : JSON.stringify(body);
     const response = await new Promise((resolve, reject) => {
@@ -846,11 +850,11 @@ async function runTest() {
     await prepareSafariInitialPage(driver);
     await waitForElement(driver, "#send_exam_btn");
     const browserIdentity = await driver.execute(() => ({
-      clipboardWriteText: typeof navigator.clipboard?.writeText,
+      clipboardWrite: typeof navigator.clipboard?.write,
       secureContext: window.isSecureContext,
       userAgent: navigator.userAgent,
     }));
-    assert.equal(browserIdentity.clipboardWriteText, "function");
+    assert.equal(browserIdentity.clipboardWrite, "function");
     assert.equal(browserIdentity.secureContext, true);
     assert.match(browserIdentity.userAgent, /iPhone/);
     assert.match(browserIdentity.userAgent, /Version\/\d+(?:\.\d+)+/);
@@ -870,32 +874,22 @@ async function runTest() {
     const layout = await driver.execute(() => {
       const shell = document.querySelector("#kakomonn-reader-shell");
       const frame = document.querySelector("#kakomonn-reader-frame");
-      const actions = document.querySelector("#kakomonn-reader-actions");
       const progress = document.querySelector("#kakomonn-reader-time-limit");
-      const copy = document.querySelector("#kakomonn-reader-copy");
-      const next = document.querySelector("#kakomonn-reader-next");
       const shellRect = shell.getBoundingClientRect();
       const frameRect = frame.getBoundingClientRect();
-      const actionsRect = actions.getBoundingClientRect();
       const progressRect = progress.getBoundingClientRect();
-      const copyRect = copy.getBoundingClientRect();
-      const nextRect = next.getBoundingClientRect();
       return {
-        actionsFullWidth:
-          Math.abs(actionsRect.left) <= 1 &&
-          Math.abs(actionsRect.right - innerWidth) <= 1,
-        bottomButtonsEqual: Math.abs(copyRect.width - nextRect.width) <= 1,
         frameFillsShell:
           Math.abs(frameRect.top - shellRect.top) <= 1 &&
           Math.abs(frameRect.right - shellRect.right) <= 1 &&
           Math.abs(frameRect.bottom - shellRect.bottom) <= 1 &&
           Math.abs(frameRect.left - shellRect.left) <= 1,
         noHorizontalOverflow:
-          shell.scrollWidth <= shell.clientWidth &&
-          actions.scrollWidth <= actions.clientWidth,
-        shellFillsAboveActions:
+          shell.scrollWidth <= shell.clientWidth,
+        shellFillsViewport:
           Math.abs(shellRect.top) <= 1 &&
-          Math.abs(shellRect.bottom - actionsRect.top) <= 1 &&
+          Math.abs(shellRect.right - innerWidth) <= 1 &&
+          Math.abs(shellRect.bottom - innerHeight) <= 1 &&
           shellRect.height > 0,
         timeBarOverlay:
           Math.abs(progressRect.top - shellRect.top) <= 1 &&
@@ -905,14 +899,16 @@ async function runTest() {
       };
     });
     assert.deepEqual(layout, {
-      actionsFullWidth: true,
-      bottomButtonsEqual: true,
       frameFillsShell: true,
       noHorizontalOverflow: true,
-      shellFillsAboveActions: true,
+      shellFillsViewport: true,
       timeBarOverlay: true,
     });
 
+    const historyLengthBefore = await driver.execute(() => history.length);
+    const clipboardNonce = `kakomonn-ios-copy-before-${Date.now()}`;
+    await driver.setClipboardText(clipboardNonce);
+    assert.equal(await driver.getClipboardText(), clipboardNonce);
     await switchToReaderFrame(driver);
     await waitForElement(driver, "#send_exam_btn");
     await waitForElementPresent(driver, "#kakomonn-reader-dark-mode");
@@ -944,30 +940,13 @@ async function runTest() {
     );
 
     await driver.switchToTopFrame();
-    await waitForElementText(
-      driver,
-      "#kakomonn-reader-copy",
-      "Markdownをコピー",
-      30_000,
-    );
-    await driver.execute(() => {
-      window.__kakomonnCopyEvents = [];
-      document
-        .querySelector("#kakomonn-reader-copy")
-        .addEventListener("click", (event) => {
-          window.__kakomonnCopyEvents.push({ isTrusted: event.isTrusted });
-        });
-    });
-    const clipboardNonce = `kakomonn-ios-copy-before-${Date.now()}`;
-    await driver.setClipboardText(clipboardNonce);
-    assert.equal(await driver.getClipboardText(), clipboardNonce);
-
-    await clickWebElementNatively(driver, "#kakomonn-reader-copy");
-    await waitForElementText(
-      driver,
-      "#kakomonn-reader-copy",
-      "コピー済み",
-      30_000,
+    await driver.waitUntil(
+      async () => (await driver.getClipboardText()) !== clipboardNonce,
+      {
+        interval: 250,
+        timeout: 30_000,
+        timeoutMsg: "The answer was not copied automatically",
+      },
     );
     const copiedMarkdown = (await driver.getClipboardText()).replace(
       /\r\n/g,
@@ -981,21 +960,25 @@ async function runTest() {
       explanationContents,
       questionText,
     });
-    assert.deepEqual(await driver.execute(() => window.__kakomonnCopyEvents), [
-      { isTrusted: true },
-    ]);
     assert.deepEqual(
       await driver.execute(() => window.__syncMock.clipboardWrites),
       [],
     );
 
-    await waitForElementText(
-      driver,
-      "#kakomonn-reader-next",
-      "次の問題へ",
-      30_000,
+    await driver.waitUntil(
+      () => driver.execute(
+        (previousLength) =>
+          history.length > previousLength &&
+          history.state?.entryType === "current",
+        historyLengthBefore,
+      ),
+      {
+        interval: 250,
+        timeout: 30_000,
+        timeoutMsg: "Browser forward was not prepared",
+      },
     );
-    await clickWebElementNatively(driver, "#kakomonn-reader-next");
+    await driver.navigateForward();
     await driver.waitUntil(
       () =>
         driver.execute(

@@ -91,10 +91,6 @@ async function waitForNextQuestion(page) {
       calls: window.__syncMock.calls,
       frameURL: document.querySelector("#kakomonn-reader-frame")
         ?.contentWindow?.location.href,
-      nextButton: {
-        disabled: document.querySelector("#kakomonn-reader-next")?.disabled,
-        text: document.querySelector("#kakomonn-reader-next")?.textContent,
-      },
       pendingAttempt: window.__getGMValue(pendingAttemptKey),
       timeLimit: {
         phase: document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase,
@@ -144,7 +140,7 @@ async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
   }
 }
 
-async function explanationExpiryRecordsAndAdvances(browser, script) {
+async function explanationExpiryRecordsAndStays(browser, script) {
   const { browserErrors, page } = await preparePage(browser, script);
   try {
     const frame = await readerFrame(page);
@@ -176,7 +172,16 @@ async function explanationExpiryRecordsAndAdvances(browser, script) {
     assert.equal(recorded.body.answerResult, "incorrect");
     assert.equal(recorded.body.site, "chushoks.kakomonn.com");
     await page.clock.runFor(300_100);
-    await waitForNextQuestion(page);
+    assert.equal(
+      await frame.evaluate(() => location.href),
+      currentURL,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-time-limit").evaluate(
+        (progress) => progress.value,
+      ),
+      0,
+    );
     assert.deepEqual(browserErrors, []);
   } finally {
     await page.close();
@@ -191,7 +196,7 @@ async function main() {
   });
   try {
     await questionExpiryRecordsIncorrectAndSkips(browser, script);
-    await explanationExpiryRecordsAndAdvances(browser, script);
+    await explanationExpiryRecordsAndStays(browser, script);
   } finally {
     await browser.close();
   }

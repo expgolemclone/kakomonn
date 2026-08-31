@@ -161,6 +161,7 @@ async function dismissReaderErrorForTest(page) {
 }
 
 async function submitAnswer(page, frame, answerText, inputMethod = "click") {
+  const historyLengthBefore = await page.evaluate(() => history.length);
   const normalize = (value) => value.replace(/\s+/g, "").trim();
   const choiceTexts = await frame
     .locator(".problem_detail ul.list > li")
@@ -244,21 +245,28 @@ async function submitAnswer(page, frame, answerText, inputMethod = "click") {
       answerValue: await answerInput.getAttribute("value"),
     }),
   );
+  return historyLengthBefore;
 }
 
-async function clickNextQuestion(page, frame, expectedNextUrl) {
+async function forwardToNextQuestion(
+  page,
+  frame,
+  expectedNextUrl,
+  historyLengthBefore,
+) {
   const initialFrameUrl = await frame
     .locator("body")
     .evaluate(() => location.href);
-  assert.equal(
-    await frame
-      .getByRole("button", { name: "次の問題へ", exact: true })
-      .innerText(),
-    "次の問題へ",
-  );
-
   await dismissReaderErrorForTest(page);
-  await page.locator("#kakomonn-reader-next").click();
+  await page.waitForFunction(
+    (previousLength) =>
+      window.__syncMock.attemptCount === 1 &&
+      history.length > previousLength &&
+      history.state?.entryType === "current",
+    historyLengthBefore,
+    { timeout: 15_000 },
+  );
+  await page.goForward();
   await page.waitForFunction(
     (expectedUrl) =>
       location.href === expectedUrl &&
@@ -572,7 +580,12 @@ async function runCase(
     await page.evaluate((delta) => {
       window.__syncMock.nextAttemptStabilityDaysDelta = delta;
     }, attemptStabilityDaysDelta);
-    await submitAnswer(page, frame, answerText, inputMethod);
+    const historyLengthBefore = await submitAnswer(
+      page,
+      frame,
+      answerText,
+      inputMethod,
+    );
     console.log(JSON.stringify({ phase: "answer-submitted", answerText }));
     await frame.getByText(expectedBanner, { exact: true }).waitFor({
       state: "visible",
@@ -596,33 +609,17 @@ async function runCase(
         : "rgb(232, 146, 146)",
     );
 
-    if (expectedResultClass === "is-correct") {
-      await page.waitForFunction(
-        (expectedUrl) =>
-          location.href === expectedUrl &&
-          document.querySelector("#kakomonn-reader-frame")?.contentWindow
-            .location.href === expectedUrl,
-        fixedNextQuestionUrl,
-        { timeout: 15_000 },
-      );
-      console.log(JSON.stringify({ phase: "next-automatic", answerText }));
-    } else {
-      await page.waitForFunction(
-        () =>
-          window.__syncMock.attemptCount === 1 &&
-          document.querySelector("#kakomonn-reader-next")?.disabled === false &&
-          document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase ===
-            "explanation",
-        null,
-        { timeout: 15_000 },
-      );
-      assert.equal(
-        await frame.locator("body").evaluate(() => location.href),
-        fixedQuestionUrl,
-      );
-      await clickNextQuestion(page, frame, fixedNextQuestionUrl);
-      console.log(JSON.stringify({ phase: "next-clicked", answerText }));
-    }
+    assert.equal(
+      await frame.locator("body").evaluate(() => location.href),
+      fixedQuestionUrl,
+    );
+    await forwardToNextQuestion(
+      page,
+      frame,
+      fixedNextQuestionUrl,
+      historyLengthBefore,
+    );
+    console.log(JSON.stringify({ phase: "next-forward", answerText }));
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.filter(
@@ -663,10 +660,6 @@ async function runCase(
         pageUrl: page.url(),
         errorTitle: await page.locator("#kakomonn-reader-error-title").textContent().catch(() => null),
         errorDetail: await page.locator("#kakomonn-reader-error-detail").textContent().catch(() => null),
-        nextButton: await page.locator("#kakomonn-reader-next").evaluate((button) => ({
-          disabled: button.disabled,
-          text: button.textContent,
-        })).catch(() => null),
         resultClasses: await page.locator("#kakomonn-reader-frame").evaluate((frame) => [
           ...(frame.contentDocument?.querySelector("#js-answer-result-box")?.classList ?? []),
         ]).catch(() => null),
@@ -747,7 +740,7 @@ async function runRandomNavigationCase(browser, script) {
       .locator(".problem_detail ul.list > li")
       .first()
       .innerText();
-    await submitAnswer(page, frame, firstAnswer);
+    const historyLengthBefore = await submitAnswer(page, frame, firstAnswer);
     await frame
       .locator(
         "#js-answer-result-box.is-correct, #js-answer-result-box.is-wrong",
@@ -779,24 +772,12 @@ async function runRandomNavigationCase(browser, script) {
         new URL(nextQuestionUrl).pathname,
         /^\/questions\/next\/\d+$/,
       );
-      await page.waitForFunction(
-        () => {
-          const button = document.querySelector("#kakomonn-reader-next");
-          return button?.disabled === false && button.textContent === "次の問題へ";
-        },
-        null,
-        { timeout: 15_000 },
-      );
-      await dismissReaderErrorForTest(page);
-      await frame.getByRole("link", { name: "次の問題へ", exact: true }).click();
     }
-    await page.waitForFunction(
-      (expectedUrl) =>
-        location.href === expectedUrl &&
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow.location
-          .href === expectedUrl,
+    await forwardToNextQuestion(
+      page,
+      frame,
       randomScheduledQuestionUrl,
-      { timeout: 30_000 },
+      historyLengthBefore,
     );
     assert.notEqual(
       await frame.locator("body").evaluate(() => location.href),
@@ -836,7 +817,7 @@ async function runRandomNavigationCase(browser, script) {
         initialQuestion,
         nextQuestion,
         nextQuestionUrl,
-        navigation: isCorrect ? "automatic" : "manual",
+        navigation: "Browser forward",
         isCorrect,
         status: "passed",
       }),
@@ -851,10 +832,6 @@ async function runRandomNavigationCase(browser, script) {
         frameUrl: await page
           .locator("#kakomonn-reader-frame")
           .evaluate((frame) => frame.contentWindow?.location.href ?? null)
-          .catch(() => null),
-        nextButton: await page
-          .locator("#kakomonn-reader-next")
-          .evaluate((button) => ({ disabled: button.disabled, text: button.textContent }))
           .catch(() => null),
         resultClasses: await page
           .locator("#kakomonn-reader-frame")
@@ -948,6 +925,15 @@ async function runMarkdownCopyCase(browser, script) {
       markdownQuestionImageURLs.map(() => darkModeImageFilter),
     );
 
+    const clipboardNonce = `kakomonn-copy-before-${Date.now()}`;
+    await page.evaluate(
+      (value) => navigator.clipboard.writeText(value),
+      clipboardNonce,
+    );
+    assert.equal(
+      await page.evaluate(() => navigator.clipboard.readText()),
+      clipboardNonce,
+    );
     await submitAnswer(page, frame, MARKDOWN_INCORRECT_ANSWER_TEXT);
     await frame.getByText("残念...", { exact: true }).waitFor({
       state: "visible",
@@ -995,27 +981,7 @@ async function runMarkdownCopyCase(browser, script) {
     );
 
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-copy")?.textContent ===
-        "Markdownをコピー",
-      null,
-      { timeout: 15_000 },
-    );
-    const clipboardNonce = `kakomonn-copy-before-${Date.now()}`;
-    await page.evaluate(
-      (value) => navigator.clipboard.writeText(value),
-      clipboardNonce,
-    );
-    assert.equal(
-      await page.evaluate(() => navigator.clipboard.readText()),
-      clipboardNonce,
-    );
-    await dismissReaderErrorForTest(page);
-    await page.locator("#kakomonn-reader-copy").click();
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-copy")?.textContent ===
-        "コピー済み",
+      () => window.__syncMock.clipboardWrites.length === 1,
       null,
       { timeout: 15_000 },
     );
@@ -1048,10 +1014,6 @@ async function runMarkdownCopyCase(browser, script) {
       JSON.stringify({
         phase: "markdown-copy-failed",
         pageUrl: page.url(),
-        copyButtonText: await page
-          .locator("#kakomonn-reader-copy")
-          .textContent()
-          .catch(() => null),
         errorTitle: await page.locator("#kakomonn-reader-error-title").textContent().catch(() => null),
         errorDetail: await page.locator("#kakomonn-reader-error-detail").textContent().catch(() => null),
         pageErrorLocations,
@@ -1098,6 +1060,11 @@ async function runReportedCopyCase(browser, script) {
       .locator(".problem_detail ul.list > li")
       .nth(1)
       .innerText();
+    const clipboardNonce = `kakomonn-reported-copy-before-${Date.now()}`;
+    await page.evaluate(
+      (value) => navigator.clipboard.writeText(value),
+      clipboardNonce,
+    );
     await submitAnswer(
       page,
       frame,
@@ -1117,18 +1084,7 @@ async function runReportedCopyCase(browser, script) {
     assert.equal(await explanationTexts.count(), 2);
 
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-copy")?.textContent ===
-        "Markdownをコピー",
-      null,
-      { timeout: 15_000 },
-    );
-    await dismissReaderErrorForTest(page);
-    await page.locator("#kakomonn-reader-copy").click();
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-copy")?.textContent ===
-        "コピー済み",
+      () => window.__syncMock.clipboardWrites.length === 1,
       null,
       { timeout: 15_000 },
     );

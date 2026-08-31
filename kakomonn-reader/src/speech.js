@@ -1,9 +1,13 @@
-  function showSpeechGestureError() {
+  function showSpeechGestureError(error = null) {
+    const detail = { code: "autoplay_blocked" };
+    if (typeof error?.message === "string" && error.message !== "") {
+      detail.message = error.message;
+    }
     showReaderError(
       "speech-gesture",
       "読み上げを開始できません",
       `${SPEECH_GESTURE_STATUS}. このdialogを閉じる操作で再試行します.`,
-      { code: "autoplay_blocked" }
+      detail
     );
   }
 
@@ -13,9 +17,9 @@
     let playPromise;
     try {
       playPromise = speechAudio.play();
-    } catch {
+    } catch (error) {
       speechAudio.src = "";
-      onUnavailable();
+      onUnavailable(error);
       return;
     }
 
@@ -28,10 +32,10 @@
           onReady();
         }
       })
-      .catch(() => {
+      .catch((error) => {
         speechAudio.src = "";
         if (runId === speechRunId) {
-          onUnavailable();
+          onUnavailable(error);
         }
       });
   }
@@ -159,7 +163,7 @@
         clearActiveSpeechAudio();
         speechEnabled = false;
         currentPageReadPending = true;
-        showSpeechGestureError();
+        showSpeechGestureError(error);
       }
     }
   }
@@ -426,16 +430,16 @@
       let playPromise;
       try {
         playPromise = speechAudio.play();
-      } catch {
+      } catch (error) {
         if (activeSpeechPlaybackCancel === cancelPlayback) {
           activeSpeechPlaybackCancel = null;
         }
         clearActiveSpeechAudio();
-        showSpeechGestureError();
+        showSpeechGestureError(error);
         settle(false);
         return;
       }
-      Promise.resolve(playPromise).catch(() => {
+      Promise.resolve(playPromise).catch((error) => {
         if (runId !== speechRunId) {
           return;
         }
@@ -443,7 +447,7 @@
           activeSpeechPlaybackCancel = null;
         }
         clearActiveSpeechAudio();
-        showSpeechGestureError();
+        showSpeechGestureError(error);
         settle(false);
       });
     });
@@ -563,7 +567,7 @@
       }
       correctFeedbackPromise = null;
       processCurrentPageSpeech();
-      void maybeContinuePendingCelebration();
+      void maybePreparePendingDestination();
     });
     return true;
   }

@@ -560,7 +560,6 @@ async function updateInstalledUserscript(context, userscriptPath) {
   if (!buildFingerprint) {
     throw new Error("The built userscript must provide one build fingerprint");
   }
-  const initialPages = new Set(context.pages());
   const settingsPage = await context.newPage();
   await settingsPage.goto(
     `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=settings`,
@@ -752,11 +751,6 @@ async function updateInstalledUserscript(context, userscriptPath) {
     throw new Error(
       "Tampermonkey did not register the current userscript with Chrome",
     );
-  }
-  for (const page of context.pages()) {
-    if (!initialPages.has(page)) {
-      await page.close().catch(() => null);
-    }
   }
 }
 

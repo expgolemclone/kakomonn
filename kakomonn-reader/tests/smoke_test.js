@@ -220,6 +220,10 @@ const expectedCopiedMarkdown = `# 中小企業診断士試験 令和2年度（20
 ![解説画像 1](https://cdn.example.test/explanation-2.png)`;
 
 async function preparePage(page, speechMode, syncOptions = {}) {
+  const {
+    historyDashboard = false,
+    ...syncMockOptions
+  } = syncOptions;
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
 
@@ -230,6 +234,12 @@ async function preparePage(page, speechMode, syncOptions = {}) {
     }),
   );
   await page.goto("https://chushoks.kakomonn.com/questions/45124");
+  if (historyDashboard) {
+    await page.evaluate(() => {
+      history.replaceState(null, "", "/dashboard");
+      history.pushState(null, "", "/questions/45124");
+    });
+  }
   await page.evaluate((mode) => {
     if (
       ![
@@ -257,6 +267,16 @@ async function preparePage(page, speechMode, syncOptions = {}) {
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
+        async write(items) {
+          if (!navigator.userAgent.includes("iPhone")) {
+            throw new Error("page clipboard API must not be used");
+          }
+          if (window.__clipboardWriteFails) {
+            throw new Error("mock clipboard write failed");
+          }
+          const blob = await items[0].getType("text/plain");
+          window.__copiedTexts.push(await blob.text());
+        },
         async writeText() {
           throw new Error("page clipboard API must not be used");
         },
@@ -337,7 +357,7 @@ async function preparePage(page, speechMode, syncOptions = {}) {
     });
   }, speechMode);
 
-  await installSyncMock(page, syncOptions);
+  await installSyncMock(page, syncMockOptions);
 
   return errors;
 }
@@ -374,6 +394,12 @@ async function loadMockQuestion(page, script) {
     },
     mockBody,
   );
+  await page.evaluate(() => {
+    window.__readerPopstateCount = 0;
+    window.addEventListener("popstate", () => {
+      window.__readerPopstateCount += 1;
+    });
+  });
   await page.waitForTimeout(900);
   return childFrame;
 }
@@ -444,6 +470,12 @@ async function assertRuntimeRejected(
 
 async function markAnswerResult(childFrame, answerResult) {
   await childFrame.evaluate((result) => {
+    const selectedAnswer = document.querySelector(
+      "input[name='answer']:checked",
+    );
+    if (selectedAnswer === null) {
+      document.querySelector("input[name='answer']").checked = true;
+    }
     if (result === "correct") {
       document.querySelector("#correct-result").hidden = false;
     }
@@ -547,52 +579,19 @@ async function runCorrectFeedbackCase(context, script) {
     });
     await page.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          ?.location.href ===
-        "https://chushoks.kakomonn.com/questions/45125",
+        window.__syncMock.attemptCount === 1 &&
+        window.__copiedTexts.length === 1 &&
+        window.__readerPopstateCount >= 1 &&
+        history.state?.entryType === "current",
     );
-    const carriedFeedback = page.locator(
-      "#kakomonn-reader-carried-correct-feedback",
+    assert.equal(
+      await childFrame.evaluate(() => location.href),
+      "https://chushoks.kakomonn.com/questions/45124",
     );
-    await carriedFeedback.waitFor({ state: "visible" });
-    assert.deepEqual(
-      await carriedFeedback.evaluate((element) => {
-        const rect = element.getBoundingClientRect();
-        const shell = document
-          .querySelector("#kakomonn-reader-shell")
-          .getBoundingClientRect();
-        const style = getComputedStyle(element);
-        return {
-          animationName: style.animationName,
-          badge: element.querySelector(
-            ".kakomonn-reader-correct-feedback-badge",
-          )?.textContent,
-          message: element.querySelector(
-            ".kakomonn-reader-correct-feedback-message",
-          )?.textContent,
-          pointerEvents: style.pointerEvents,
-          rarity: element.dataset.rarity,
-          withinShell:
-            rect.left >= shell.left &&
-            rect.top >= shell.top &&
-            rect.right <= shell.right &&
-            rect.bottom <= shell.bottom,
-        };
-      }),
-      {
-        animationName: "none",
-        badge: "NORMAL",
-        message: "That's Right!!",
-        pointerEvents: "none",
-        rarity: "normal",
-        withinShell: true,
-      },
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () => window.__audioBlobs.length === 3 && typeof window.__audioInstance?.onended === "function",
     );
-
-    await childFrame.evaluate((html) => {
-      document.body.innerHTML = html;
-    }, mockBody);
-    await page.waitForTimeout(1_000);
     assert.equal((await azureSpeechCalls(page)).length, 2);
     assert.equal(
       (await azureSpeechCalls(page))[1].body,
@@ -602,24 +601,9 @@ async function runCorrectFeedbackCase(context, script) {
       }),
     );
     await finishManualAudio(page);
-    await page.waitForFunction(
-      () => window.__audioBlobs.length === 3 && typeof window.__audioInstance?.onended === "function",
-    );
-    assert.equal(await carriedFeedback.isVisible(), true);
-    await finishManualAudio(page);
-    await carriedFeedback.waitFor({ state: "hidden" });
-    await page.waitForFunction(
-      (url) =>
-        window.__syncMock.calls.filter((call) => call.url === url).length === 3,
-      azureSpeechUrl,
-    );
-    assert.equal(
-      (await azureSpeechCalls(page))[2].body,
-      expectedSpeechSSML(
-        "問題文。これは動作確認用の問題文です.。これは改行後の問題文です.",
-        "+100%",
-      ),
-    );
+    await childFrame.locator(".kakomonn-reader-correct-feedback").waitFor({
+      state: "hidden",
+    });
     assert.equal(
       (await azureSpeechCalls(page)).filter((call) =>
         call.body.includes("en-US-JennyNeural"),
@@ -631,7 +615,6 @@ async function runCorrectFeedbackCase(context, script) {
       [
         { size: 4, type: "audio/mpeg" },
         { size: 31_796, type: "audio/wav" },
-        { size: 4, type: "audio/mpeg" },
         { size: 4, type: "audio/mpeg" },
       ],
     );
@@ -740,15 +723,18 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
     await markAnswerResult(childFrame, "correct");
     await page.waitForFunction(
       () =>
+        window.__syncMock.attemptCount === 1 &&
+        window.__copiedTexts.length === 1 &&
+        window.__readerPopstateCount >= 1 &&
+        history.state?.entryType === "current",
+    );
+    await page.goForward();
+    await page.waitForFunction(
+      () =>
         document.querySelector("#kakomonn-reader-frame")?.contentWindow
           ?.location.href ===
         "https://chushoks.kakomonn.com/questions/45125",
     );
-    const carriedFeedback = page.locator(
-      "#kakomonn-reader-carried-correct-feedback",
-    );
-    await carriedFeedback.waitFor({ state: "visible" });
-    assert.equal(await carriedFeedback.getAttribute("data-rarity"), "rare");
 
     await childFrame.evaluate((html) => {
       document.body.innerHTML = html;
@@ -761,7 +747,6 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
     await page.waitForFunction(
       () => window.__correctFeedbackRandomCalls.length === 2,
     );
-    assert.equal(await carriedFeedback.getAttribute("data-rarity"), "rare");
 
     await finishManualAudio(page);
     await page.waitForFunction(
@@ -828,6 +813,9 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
     await page.waitForFunction(
       () =>
         window.__syncMock.attemptCount === 1 &&
+        window.__copiedTexts.length === 1 &&
+        window.__readerPopstateCount >= 1 &&
+        history.state?.entryType === "current" &&
         document.querySelector("#kakomonn-reader-frame")?.contentWindow
           ?.location.href ===
           "https://chushoks.kakomonn.com/questions/45124",
@@ -853,6 +841,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
       "https://chushoks.kakomonn.com/questions/45124",
     );
     await finishManualAudio(page);
+    await page.goForward();
     await page.waitForURL((url) =>
       url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
@@ -917,7 +906,7 @@ async function main() {
   });
 
   const script = fs.readFileSync(scriptPath, "utf8");
-  assert.match(script, /^\/\/ @version\s+2\.0\.1\s*$/m);
+  assert.match(script, /^\/\/ @version\s+2\.1\.0\s*$/m);
   assert.match(
     script,
     /^\/\/ @updateURL\s+https:\/\/github\.com\/expgolemclone\/kakomonn\/releases\/latest\/download\/kakomonn-reader\.user\.js\s*$/m,
@@ -938,7 +927,9 @@ async function main() {
   try {
     const context = await browser.newContext({ userAgent: chromeUserAgent });
     const page = await context.newPage();
-    const errors = await preparePage(page, "audio");
+    const errors = await preparePage(page, "audio", {
+      historyDashboard: true,
+    });
     const childFrame = await loadMockQuestion(page, script);
     const initialProblemPresentation = await childFrame.evaluate(() => {
       const problemHeading = document.querySelector(
@@ -977,24 +968,9 @@ async function main() {
       await page.locator("#kakomonn-reader-start").count(),
       0,
     );
-    assert.equal(
-      await page.locator("#kakomonn-reader-next").isVisible(),
-      true,
-    );
-    assert.equal(
-      await page
-        .locator("#kakomonn-reader-next")
-        .getAttribute("aria-keyshortcuts"),
-      "Enter",
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-copy").isVisible(),
-      true,
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-copy").getAttribute("title"),
-      "ショートカット: yy",
-    );
+    assert.equal(await page.locator("#kakomonn-reader-next").count(), 0);
+    assert.equal(await page.locator("#kakomonn-reader-copy").count(), 0);
+    assert.equal(await page.locator("#kakomonn-reader-actions").count(), 0);
     assert.equal(await page.locator("#kakomonn-reader-skip").count(), 0);
     for (const viewport of [
       { width: 320, height: 568 },
@@ -1008,30 +984,15 @@ async function main() {
         const frameElement = document.querySelector(
           "#kakomonn-reader-frame",
         );
-        const actionsElement = document.querySelector(
-          "#kakomonn-reader-actions",
-        );
         const progressElement = document.querySelector(
           "#kakomonn-reader-time-limit",
         );
-        const copyElement = document.querySelector("#kakomonn-reader-copy");
-        const nextElement = document.querySelector("#kakomonn-reader-next");
         const shell = shellElement.getBoundingClientRect();
         const frame = frameElement.getBoundingClientRect();
-        const actions = actionsElement.getBoundingClientRect();
         const progress = progressElement.getBoundingClientRect();
-        const copy = copyElement.getBoundingClientRect();
-        const next = nextElement.getBoundingClientRect();
         const approximatelyEqual = (left, right) =>
           Math.abs(left - right) <= 1;
         return {
-          actionsFullWidth:
-            approximatelyEqual(actions.left, 0) &&
-            approximatelyEqual(actions.right, innerWidth),
-          bottomButtonsEqual: approximatelyEqual(copy.width, next.width),
-          bottomButtonsFill:
-            approximatelyEqual(copy.left, actions.left + 8) &&
-            approximatelyEqual(next.right, actions.right - 8),
           frameFillsShell:
             approximatelyEqual(frame.top, shell.top) &&
             approximatelyEqual(frame.right, shell.right) &&
@@ -1039,10 +1000,11 @@ async function main() {
             approximatelyEqual(frame.left, shell.left) &&
             frame.height > 0,
           noHorizontalOverflow:
-            shellElement.scrollWidth <= shellElement.clientWidth &&
-            actionsElement.scrollWidth <= actionsElement.clientWidth,
+            shellElement.scrollWidth <= shellElement.clientWidth,
           questionStartsAtTop: approximatelyEqual(shell.top, 0),
-          shellFillsAboveActions: approximatelyEqual(shell.bottom, actions.top),
+          shellFillsViewport:
+            approximatelyEqual(shell.right, innerWidth) &&
+            approximatelyEqual(shell.bottom, innerHeight),
           timeBarOverlay:
             approximatelyEqual(progress.top, shell.top) &&
             approximatelyEqual(progress.left, shell.left) &&
@@ -1053,13 +1015,10 @@ async function main() {
       assert.deepEqual(
         readerLayout,
         {
-          actionsFullWidth: true,
-          bottomButtonsEqual: true,
-          bottomButtonsFill: true,
           frameFillsShell: true,
           noHorizontalOverflow: true,
           questionStartsAtTop: true,
-          shellFillsAboveActions: true,
+          shellFillsViewport: true,
           timeBarOverlay: true,
         },
         `${JSON.stringify(viewport)} ${JSON.stringify(readerLayout)}`,
@@ -1226,10 +1185,8 @@ async function main() {
     await page.waitForFunction(
       () => window.__audioPlayCalls >= 1 && window.__audioInstance?.src === "",
     );
-    assert.equal(
-      await page.locator("#kakomonn-reader-next").isDisabled(),
-      true,
-    );
+    assert.equal(await childFrame.locator("#scroll-next").isHidden(), true);
+    assert.equal(await childFrame.locator("#next").isHidden(), true);
     const answerInputs = childFrame.locator("input[name='answer']");
     const displayChoices = childFrame.locator(
       ".problem_detail > ul.list > li",
@@ -1471,14 +1428,6 @@ async function main() {
       ),
     });
     assert.equal(await speechTokenCallCount(page), 1);
-    assert.equal(
-      await page.locator("#kakomonn-reader-copy").innerText(),
-      "回答後にコピー",
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-copy").isDisabled(),
-      true,
-    );
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 0);
 
     await markAnswerResult(childFrame, "incorrect");
@@ -1498,7 +1447,9 @@ async function main() {
     await page.waitForFunction(
       () =>
         window.__syncMock.attemptCount === 1 &&
-        document.querySelector("#kakomonn-reader-next").disabled === false,
+        window.__copiedTexts.length === 1 &&
+        window.__readerPopstateCount >= 1 &&
+        history.state?.entryType === "current",
     );
     assert.deepEqual(
       await childFrame.evaluate(() => ({
@@ -1538,68 +1489,15 @@ async function main() {
       ),
       stateCallsAfterAnswer,
     );
-    assert.equal(
-      await page.locator("#kakomonn-reader-copy").innerText(),
-      "Markdownをコピー",
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-copy").isDisabled(),
-      false,
-    );
-    await page.keyboard.press("y");
-    await page.keyboard.press("y");
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
     assert.equal(
       await page.evaluate(() => window.__copiedTexts[0]),
       expectedCopiedMarkdown,
     );
-    await page.waitForFunction(
-      () => {
-        const copyButton = document.querySelector("#kakomonn-reader-copy");
-        return (
-          copyButton.textContent === "Markdownをコピー" &&
-          copyButton.disabled === false
-        );
-      },
-      null,
-      { timeout: 5_000 },
-    );
-    await page.evaluate(() => {
-      window.__clipboardWriteFails = true;
-    });
-    await page.locator("#kakomonn-reader-copy").click();
-    await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-error-title").innerText(),
-      "クリップボードへコピーできません",
-    );
-    assert.match(
-      await page.locator("#kakomonn-reader-error-detail").innerText(),
-      /^context=clipboard-write/,
-    );
-    assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
-    await page.locator("#kakomonn-reader-error-close").click();
-    await page.evaluate(() => {
-      window.__clipboardWriteFails = false;
-    });
-    await childFrame.evaluate(() => {
-      document
-        .querySelectorAll("#js-commentary-wrap > .item")[1]
-        .querySelector(".text")
-        .remove();
-    });
-    await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-copy").textContent ===
-        "コピー対象を取得不可",
-    );
-    const nextQuestionButton = page.locator("#kakomonn-reader-next");
-    assert.equal(await nextQuestionButton.innerText(), "次の問題へ");
-    assert.equal(await nextQuestionButton.isDisabled(), false);
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
+    await page.waitForTimeout(100);
+    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
     assert.equal(
       await page.evaluate(
         () =>
@@ -1611,17 +1509,7 @@ async function main() {
       ),
       1,
     );
-    assert.equal(
-      await page.evaluate(
-        () =>
-          window.__syncMock.calls.filter(
-            (call) =>
-              call.method === "POST" &&
-              new URL(call.url).pathname === "/v9/attempts",
-          ).length,
-      ),
-      1,
-    );
+    await page.goForward();
     await page.waitForFunction(
       ({ pendingAttemptKey, nextURL }) =>
         window.__getGMValue(pendingAttemptKey) === null &&
@@ -1631,6 +1519,28 @@ async function main() {
         pendingAttemptKey: PENDING_ATTEMPT_KEY,
         nextURL: "https://chushoks.kakomonn.com/questions/45125",
       },
+    );
+    await page.evaluate(() => {
+      window.addEventListener("popstate", (event) => {
+        if (
+          event.state?.owner === "kakomonn-reader" &&
+          event.state.entryType === "current" &&
+          event.state.index === 1
+        ) {
+          window.dispatchEvent(new Event("pagehide"));
+        }
+      });
+    });
+    await page.goBack();
+    await page.waitForURL("https://chushoks.kakomonn.com/dashboard");
+    await page.goForward();
+    await page.waitForFunction(
+      () =>
+        location.href ===
+          "https://chushoks.kakomonn.com/questions/45125" &&
+        history.state?.owner === "kakomonn-reader" &&
+        history.state.entryType === "current" &&
+        history.state.index === 2,
     );
 
     const stateCallsBeforeResume = await page.evaluate(() =>
@@ -1895,8 +1805,8 @@ async function main() {
       0,
     );
     assert.equal(
-      await failedSetupPage.locator("#kakomonn-reader-next").isVisible(),
-      true,
+      await failedSetupPage.locator("#kakomonn-reader-next").count(),
+      0,
     );
     assert.deepEqual(failedSetupErrors, []);
     await failedSetupPage.close();
@@ -1919,8 +1829,8 @@ async function main() {
       0,
     );
     assert.equal(
-      await unsupportedPage.locator("#kakomonn-reader-next").isVisible(),
-      true,
+      await unsupportedPage.locator("#kakomonn-reader-next").count(),
+      0,
     );
     assert.equal(
       await unsupportedPage.evaluate(() => typeof window.Audio),
@@ -1985,7 +1895,15 @@ async function main() {
     assert.equal(await speechTokenCallCount(iosPage), 1);
     await firstAnswer.tap();
     assert.equal(await firstAnswer.isChecked(), true);
+    await iosFrame.getByRole("button", { name: "解答する" }).tap();
     await markAnswerResult(iosFrame, "incorrect");
+    await iosPage.waitForFunction(
+      () =>
+        window.__syncMock.attemptCount === 1 &&
+        window.__copiedTexts.length === 1 &&
+        window.__readerPopstateCount >= 1 &&
+        history.state?.entryType === "current",
+    );
     await iosPage.waitForFunction(
       (url) =>
         window.__syncMock.calls.filter((call) => call.url === url).length === 2,
@@ -2000,7 +1918,11 @@ async function main() {
     );
     assert.equal(await speechTokenCallCount(iosPage), 1);
     await iosPage.evaluate(() => { window.__syncMock.nextAttemptStabilityDaysDelta = 31; });
-    await iosPage.locator("#kakomonn-reader-next").tap();
+    assert.equal(
+      await iosPage.evaluate(() => window.__copiedTexts[0]),
+      expectedCopiedMarkdown,
+    );
+    await iosPage.goForward();
     await iosFrame.waitForURL(
       "https://chushoks.kakomonn.com/questions/45125",
     );

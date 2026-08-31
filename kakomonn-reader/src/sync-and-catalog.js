@@ -200,6 +200,24 @@
     }
   }
 
+  function isAttemptCopyState(value) {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return false;
+    }
+    const keys = Object.keys(value).sort().join(",");
+    if (value.state === "ready") {
+      return (
+        keys === "markdown,state" &&
+        typeof value.markdown === "string" &&
+        value.markdown.length > 0
+      );
+    }
+    return (
+      keys === "state" &&
+      ["required", "completed", "not-required"].includes(value.state)
+    );
+  }
+
   function isPendingAttempt(value) {
     if (
       value === null ||
@@ -210,7 +228,8 @@
       (value.answerResult !== "correct" && value.answerResult !== "incorrect") ||
       !isSitePageURL(value.pageURL) ||
       extractQuestionIdFromURL(value.pageURL) !== value.questionId ||
-      (value.phase !== "queued" && value.phase !== "recorded")
+      (value.phase !== "queued" && value.phase !== "recorded") ||
+      !isAttemptCopyState(value.copy)
     ) {
       return false;
     }
@@ -405,18 +424,42 @@
   }
 
   function updateSyncDependentControls() {
-    actions.setAttribute(
+    shell.setAttribute(
       "aria-busy",
       String(syncInProgress || nextQuestionOperationInProgress)
     );
-    updateNextQuestionButton();
-    updateCopyButton();
     synchronizeTimeLimitPhase();
   }
 
+  let pendingAttemptStoragePromise = Promise.resolve();
+
+  function updatePendingAttempt(operationId, update) {
+    const task = pendingAttemptStoragePromise.then(async () => {
+      if (
+        pendingAttempt === null ||
+        pendingAttempt.operationId !== operationId
+      ) {
+        throw new Error("pending attempt changed");
+      }
+      const updated = update(pendingAttempt);
+      if (!isPendingAttempt(updated)) {
+        throw new Error("invalid pending attempt");
+      }
+      await GM.setValue(PENDING_ATTEMPT_KEY, updated);
+      pendingAttempt = updated;
+      return updated;
+    });
+    pendingAttemptStoragePromise = task.catch(() => {});
+    return task;
+  }
+
   async function clearPendingAttempt() {
-    await GM.deleteValue(PENDING_ATTEMPT_KEY);
-    pendingAttempt = null;
+    const task = pendingAttemptStoragePromise.then(async () => {
+      await GM.deleteValue(PENDING_ATTEMPT_KEY);
+      pendingAttempt = null;
+    });
+    pendingAttemptStoragePromise = task.catch(() => {});
+    return task;
   }
 
   async function savePendingCelebration(celebration) {
@@ -440,12 +483,11 @@
     ) {
       throw new Error("pending attempt changed");
     }
-    const completed = { ...operation, phase: "recorded", nextURL };
-    if (!isPendingAttempt(completed)) {
-      throw new Error("invalid completed attempt");
-    }
-    await GM.setValue(PENDING_ATTEMPT_KEY, completed);
-    pendingAttempt = completed;
+    await updatePendingAttempt(operation.operationId, (current) => ({
+      ...current,
+      phase: "recorded",
+      nextURL,
+    }));
   }
 
   function openSyncSettings() {
@@ -836,7 +878,11 @@
             "sync-refresh",
             "学習記録を同期できません",
             `${syncErrorMessage(failedError)}. 通信状態を確認して再試行してください.`,
-            failedError
+            failedError,
+            {
+              label: "同期を再試行",
+              run: refreshRemoteState,
+            }
           );
         }
         void resumePendingLearningFlow();

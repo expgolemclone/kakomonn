@@ -189,27 +189,16 @@
       resetFrameScrollToTop();
       return true;
     }
-    if (shortcutSequenceKey === "y" && key === "y") {
-      clearShortcutSequence();
-      if (!copyButton.disabled) {
-        copyButton.click();
-      }
-      return true;
-    }
-
     commitPendingShortcut();
     return false;
   }
 
   function handleEnterShortcut() {
     if (getCurrentAnswerResult() === "unknown") {
+      beginAutomaticCopyFromGesture();
       return activateAnswerButton();
     }
-    if (nextQuestionButton.disabled) {
-      return false;
-    }
-    nextQuestionButton.click();
-    return true;
+    return false;
   }
 
   function onReaderKeyDown(event) {
@@ -232,7 +221,7 @@
 
     let handled = completeShortcutSequence(key);
     if (!handled) {
-      if (key === "g" || key === "y") {
+      if (key === "g") {
         startShortcutSequence(key);
         handled = true;
       } else if (event.key === "Enter") {
@@ -271,6 +260,12 @@
       return;
     }
 
+    const answerButton = target.closest("button, input[type='button'], input[type='submit']");
+    if (answerButton === currentQuestionControls()?.answerButton) {
+      beginAutomaticCopyFromGesture();
+      return;
+    }
+
     const link = target.closest("a[href]");
     if (!link || getNextQuestionURL(link) === null) {
       return;
@@ -278,7 +273,6 @@
 
     event.preventDefault();
     event.stopImmediatePropagation();
-    void handleNextQuestion();
   }
 
   function clearFrameState() {
@@ -295,7 +289,7 @@
     }
 
     clearFrameProblemScrollTimers();
-    clearCopyFeedbackTimer();
+    discardAnswerCopyOperation();
     frameMutationObserver?.disconnect();
     frameMutationObserver = null;
     currentPageReadPending = false;
@@ -359,6 +353,7 @@
     frameDocument = nextDocument;
     synchronizeAnswerPresentation(frameDocument);
     applyFrameDarkMode(frameDocument);
+    suppressNextQuestionControls(frameDocument);
     if (getCurrentAnswerResult() === "correct") {
       beginCorrectAnswerFeedback(frameDocument);
     }
@@ -373,8 +368,8 @@
 
     try {
       currentFrameURL = nextURL;
-      if (!shouldLaunchNextQuestionAfterSync) {
-        history.replaceState(null, "", currentFrameURL);
+      if (!synchronizeCurrentHistoryURL()) {
+        return;
       }
     } catch (error) {
       showReaderError(
@@ -386,8 +381,6 @@
       return;
     }
 
-    updateNextQuestionButton();
-    updateCopyButton();
     synchronizeTimeLimitPhase();
     void resumePendingLearningFlow();
 
@@ -398,12 +391,6 @@
     }, FRAME_LOAD_DELAY_MS);
   }
 
-  nextQuestionButton.addEventListener("pointerup", onNextQuestionPointerUp);
-  nextQuestionButton.addEventListener("click", () => {
-    void handleNextQuestion();
-  });
-
-  copyButton.addEventListener("click", copyReadableSections);
   syncSettings.addEventListener("cancel", (event) => {
     event.preventDefault();
   });
@@ -417,7 +404,12 @@
     document.addEventListener("click", activateSpeechFromGesture, true);
   }
   window.addEventListener("focus", handlePageResume);
-  window.addEventListener("pageshow", handlePageResume);
+  window.addEventListener("popstate", handleReaderPopState);
+  window.addEventListener("pagehide", handleReaderPageHide);
+  window.addEventListener("pageshow", () => {
+    handleReaderPageShow();
+    handlePageResume();
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       handlePageResume();

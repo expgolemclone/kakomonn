@@ -38,7 +38,7 @@
 
     html, body {
       width: 100% !important;
-      height: 100% !important;
+      height: 100svh !important;
       margin: 0 !important;
       padding: 0 !important;
       overflow: hidden !important;
@@ -47,8 +47,7 @@
     }
 
     body[data-kakomonn-reader-ui="true"] {
-      display: grid !important;
-      grid-template-rows: minmax(0, 1fr) auto;
+      display: block !important;
     }
 
     #kakomonn-next-question-launcher {
@@ -270,6 +269,8 @@
     #kakomonn-reader-shell {
       position: relative;
       z-index: 2147483000;
+      width: 100%;
+      height: 100%;
       min-width: 0;
       min-height: 0;
       overflow: hidden;
@@ -334,65 +335,6 @@
       inset: 0;
       width: 100%;
       min-height: 100%;
-    }
-
-    #kakomonn-reader-actions {
-      position: relative;
-      z-index: 2147483647;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      align-items: center;
-      gap: var(--kakomonn-reader-control-gap);
-      min-width: 0;
-      padding:
-        var(--kakomonn-reader-control-gutter)
-        max(var(--kakomonn-reader-control-gutter), env(safe-area-inset-right))
-        calc(var(--kakomonn-reader-control-gutter) + env(safe-area-inset-bottom))
-        max(var(--kakomonn-reader-control-gutter), env(safe-area-inset-left));
-      box-sizing: border-box;
-      background: var(--kakomonn-reader-surface);
-      pointer-events: none;
-    }
-
-    #kakomonn-reader-next,
-    #kakomonn-reader-copy {
-      width: 100%;
-      min-width: 0;
-      min-height: 54px;
-      padding: 0 12px;
-      border: 0;
-      border-radius: var(--kakomonn-reader-control-radius);
-      color: var(--kakomonn-reader-text);
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      font-weight: 800;
-      line-height: 1;
-      box-shadow: var(--kakomonn-reader-control-shadow);
-      pointer-events: auto;
-      touch-action: manipulation;
-      -webkit-user-select: none;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    #kakomonn-reader-next {
-      background: var(--kakomonn-reader-primary);
-      font-size: 17px;
-    }
-
-    #kakomonn-reader-copy {
-      background: var(--kakomonn-reader-copy);
-      font-size: 14px;
-    }
-
-    #kakomonn-reader-next:active:not(:disabled),
-    #kakomonn-reader-copy:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
-    #kakomonn-reader-next:disabled,
-    #kakomonn-reader-copy:disabled {
-      background: oklch(0.46 0.01 255 / 0.78);
-      opacity: 0.72;
     }
 
     #kakomonn-reader-sync-settings,
@@ -491,6 +433,7 @@
     }
 
     #kakomonn-reader-sync-settings-save,
+    #kakomonn-reader-error-retry,
     #kakomonn-reader-error-close {
       min-height: 48px;
       padding: 0 16px;
@@ -505,12 +448,14 @@
       color: var(--kakomonn-reader-text);
     }
 
+    #kakomonn-reader-error-retry,
     #kakomonn-reader-error-close {
       background: var(--kakomonn-reader-primary);
       color: var(--kakomonn-reader-text);
     }
 
-    #kakomonn-reader-sync-settings-save:disabled {
+    #kakomonn-reader-sync-settings-save:disabled,
+    #kakomonn-reader-error-retry:disabled {
       opacity: 0.55;
     }
 
@@ -535,10 +480,9 @@
       white-space: normal;
     }
 
-    #kakomonn-reader-next:focus-visible,
-    #kakomonn-reader-copy:focus-visible,
     #kakomonn-reader-sync-token:focus-visible,
     #kakomonn-reader-sync-settings-save:focus-visible,
+    #kakomonn-reader-error-retry:focus-visible,
     #kakomonn-reader-error-close:focus-visible {
       outline: 3px solid var(--kakomonn-reader-focus-ring);
       outline-offset: 2px;

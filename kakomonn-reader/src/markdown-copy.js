@@ -2,6 +2,8 @@
     ...BLOCK_TAG_NAMES,
     "FIGURE",
   ]);
+  let answerCopyOperation = null;
+  let automaticCopyPromise = null;
 
   function normalizeMarkdown(rawMarkdown) {
     return rawMarkdown
@@ -393,97 +395,219 @@
     return { state: "ready", markdown };
   }
 
-  function updateCopyButton() {
-    if (nextQuestionOperationInProgress) {
-      copyButton.textContent = "解答記録を処理中";
-      copyButton.disabled = true;
-      return;
-    }
-
-    if (
-      navigationInProgress ||
-      !frameDocument?.body ||
-      frameDocument.defaultView === null
-    ) {
-      copyButton.textContent = "コピー準備中";
-      copyButton.disabled = true;
-      return;
-    }
-
-    if (copyFeedbackTimer !== null) {
-      copyButton.textContent = "コピー済み";
-      copyButton.disabled = true;
-      return;
-    }
-
-    const copyDocument = buildCopyMarkdown(frameDocument);
-    if (copyDocument.state === "locked") {
-      copyButton.textContent = "回答後にコピー";
-      copyButton.disabled = true;
-      return;
-    }
-    if (copyDocument.state !== "ready") {
-      copyButton.textContent = "コピー対象を取得不可";
-      copyButton.disabled = true;
-      return;
-    }
-
-    copyButton.textContent = "Markdownをコピー";
-    copyButton.disabled = false;
+  function selectedAnswerIsReady() {
+    const controls = currentQuestionControls();
+    return (
+      controls !== null &&
+      controls.answerChoiceControls.filter(isSelectedAnswerChoice).length === 1
+    );
   }
 
-  async function writeCopyMarkdownToClipboard(markdown) {
+  function beginAutomaticCopyFromGesture() {
+    const questionId = currentQuestionId();
+    if (
+      questionId === null ||
+      getCurrentAnswerResult() !== "unknown" ||
+      !selectedAnswerIsReady()
+    ) {
+      return null;
+    }
+    if (answerCopyOperation?.questionId === questionId) {
+      return answerCopyOperation.operationId;
+    }
+
+    if (answerCopyOperation?.rejectMarkdown !== undefined) {
+      answerCopyOperation.rejectMarkdown(
+        new Error("answer copy operation was replaced")
+      );
+    }
+
+    const operation = {
+      operationId: createOperationId(),
+      questionId,
+      resolveMarkdown: null,
+      rejectMarkdown: null,
+      writePromise: null,
+    };
     if (isIPhoneSafari) {
+      try {
+        if (
+          typeof navigator.clipboard !== "object" ||
+          navigator.clipboard === null ||
+          typeof navigator.clipboard.write !== "function" ||
+          typeof ClipboardItem !== "function"
+        ) {
+          throw new Error("Clipboard.write API is unavailable");
+        }
+        const markdownPromise = new Promise((resolve, reject) => {
+          operation.resolveMarkdown = resolve;
+          operation.rejectMarkdown = reject;
+        });
+        const clipboardItem = new ClipboardItem({
+          "text/plain": markdownPromise.then(
+            (markdown) => new Blob([markdown], { type: "text/plain" })
+          ),
+        });
+        operation.writePromise = navigator.clipboard.write([clipboardItem]);
+        void operation.writePromise.catch(() => {});
+      } catch (error) {
+        operation.writePromise = Promise.reject(error);
+        void operation.writePromise.catch(() => {});
+      }
+    }
+    answerCopyOperation = operation;
+    return operation.operationId;
+  }
+
+  function discardAnswerCopyOperation() {
+    if (typeof answerCopyOperation?.rejectMarkdown === "function") {
+      answerCopyOperation.rejectMarkdown(
+        new Error("answer copy operation was cancelled")
+      );
+    }
+    answerCopyOperation = null;
+  }
+
+  async function writeMarkdownToClipboard(markdown, retryFromGesture) {
+    if (!isIPhoneSafari) {
+      const copied = await GM.setClipboard(markdown);
+      if (copied === false) {
+        throw new Error("clipboard write was rejected");
+      }
+      return;
+    }
+
+    if (retryFromGesture) {
       if (
         typeof navigator.clipboard !== "object" ||
         navigator.clipboard === null ||
-        typeof navigator.clipboard.writeText !== "function"
+        typeof navigator.clipboard.write !== "function" ||
+        typeof ClipboardItem !== "function"
       ) {
-        throw new Error("Clipboard API is unavailable");
+        throw new Error("Clipboard.write API is unavailable");
       }
-      await navigator.clipboard.writeText(markdown);
+      const clipboardItem = new ClipboardItem({
+        "text/plain": new Blob([markdown], { type: "text/plain" }),
+      });
+      await navigator.clipboard.write([clipboardItem]);
       return;
     }
 
-    const copied = await GM.setClipboard(markdown);
-    if (copied === false) {
-      throw new Error("clipboard write was rejected");
+    const operation = answerCopyOperation;
+    if (
+      operation === null ||
+      operation.operationId !== pendingAttempt?.operationId ||
+      operation.writePromise === null
+    ) {
+      throw new Error("clipboard write was not started by the answer gesture");
     }
+    operation.resolveMarkdown?.(markdown);
+    operation.resolveMarkdown = null;
+    operation.rejectMarkdown = null;
+    await operation.writePromise;
   }
 
-  async function copyReadableSections() {
-    const copyDocument = buildCopyMarkdown(frameDocument);
-    if (copyDocument.state === "locked") {
-      updateCopyButton();
-      return;
+  function showCopyContentError() {
+    showReaderError(
+      "markdown-content",
+      "Markdownを作成できません",
+      "問題文, 選択肢, 回答, 解説のいずれかを取得できませんでした.",
+      { code: "copy_content_unavailable" },
+      { label: "コピーを再試行", run: retryPendingCopy }
+    );
+  }
+
+  function showClipboardWriteError(error) {
+    showReaderError(
+      "clipboard-write",
+      "クリップボードへコピーできません",
+      "BrowserまたはUserscript managerのclipboard権限を確認してください.",
+      error,
+      { label: "コピーを再試行", run: retryPendingCopy }
+    );
+  }
+
+  function showCopyStorageError(error) {
+    showReaderError(
+      "copy-storage",
+      "Markdownを保存できません",
+      "Userscript storageへコピー待ちのMarkdownを保存できませんでした.",
+      error,
+      { label: "コピーを再試行", run: retryPendingCopy }
+    );
+  }
+
+  async function processPendingAutomaticCopy(retryFromGesture = false) {
+    if (automaticCopyPromise !== null) {
+      return automaticCopyPromise;
     }
-    if (copyDocument.state !== "ready") {
-      showReaderError(
-        "markdown-content",
-        "Markdownを作成できません",
-        "問題文, 選択肢, 回答, 解説のいずれかを取得できませんでした.",
-        { code: "copy_content_unavailable" }
-      );
-      updateCopyButton();
-      return;
+    if (
+      pendingAttempt === null ||
+      !["required", "ready"].includes(pendingAttempt.copy.state)
+    ) {
+      return pendingAttempt?.copy.state === "completed";
     }
 
-    try {
-      await writeCopyMarkdownToClipboard(copyDocument.markdown);
-      copyButton.textContent = "コピー済み";
-      copyButton.disabled = true;
-      clearCopyFeedbackTimer();
-      copyFeedbackTimer = window.setTimeout(() => {
-        copyFeedbackTimer = null;
-        updateCopyButton();
-      }, COPY_FEEDBACK_DURATION_MS);
-    } catch (error) {
-      showReaderError(
-        "clipboard-write",
-        "クリップボードへコピーできません",
-        "BrowserまたはUserscript managerのclipboard権限を確認してください.",
-        error
-      );
-      updateCopyButton();
-    }
+    const operationId = pendingAttempt.operationId;
+    automaticCopyPromise = (async () => {
+      let markdown = pendingAttempt.copy.markdown ?? "";
+      let gestureWritePromise = null;
+      if (pendingAttempt.copy.state === "required") {
+        const copyDocument = buildCopyMarkdown(frameDocument);
+        if (copyDocument.state === "locked") {
+          return false;
+        }
+        if (copyDocument.state !== "ready") {
+          showCopyContentError();
+          return false;
+        }
+        markdown = copyDocument.markdown;
+        if (retryFromGesture && isIPhoneSafari) {
+          gestureWritePromise = writeMarkdownToClipboard(markdown, true);
+          void gestureWritePromise.catch(() => {});
+        }
+        try {
+          await updatePendingAttempt(operationId, (current) => ({
+            ...current,
+            copy: { state: "ready", markdown },
+          }));
+        } catch (error) {
+          showCopyStorageError(error);
+          return false;
+        }
+      }
+
+      try {
+        await (
+          gestureWritePromise ??
+          writeMarkdownToClipboard(markdown, retryFromGesture)
+        );
+      } catch (error) {
+        showClipboardWriteError(error);
+        return false;
+      }
+
+      try {
+        await updatePendingAttempt(operationId, (current) => ({
+          ...current,
+          copy: { state: "completed" },
+        }));
+      } catch (error) {
+        showCopyStorageError(error);
+        return false;
+      }
+      if (answerCopyOperation?.operationId === operationId) {
+        discardAnswerCopyOperation();
+      }
+      await maybePreparePendingDestination();
+      return true;
+    })().finally(() => {
+      automaticCopyPromise = null;
+      updateSyncDependentControls();
+    });
+    return automaticCopyPromise;
+  }
+
+  function retryPendingCopy() {
+    return processPendingAutomaticCopy(true);
   }

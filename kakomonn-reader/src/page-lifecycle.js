@@ -23,11 +23,11 @@
 
     frameChangeTimer = window.setTimeout(() => {
       frameChangeTimer = null;
-      updateNextQuestionButton();
-      updateCopyButton();
+      suppressNextQuestionControls();
       synchronizeTimeLimitPhase();
       checkForNewAnswerResult();
       recordCurrentAnswerIfAvailable();
+      void processPendingAutomaticCopy();
     }, FRAME_CHANGE_DELAY_MS);
   }
 
@@ -83,6 +83,30 @@
     }
 
     return url.href;
+  }
+
+  function suppressNextQuestionControls(sourceDocument = frameDocument) {
+    if (!sourceDocument?.body) {
+      return;
+    }
+
+    for (const candidate of sourceDocument.querySelectorAll(
+      "a[href], button, input[type='button'], input[type='submit']"
+    )) {
+      const isNextControl = candidate.matches("a[href]")
+        ? getNextQuestionURL(candidate) !== null
+        : isNextQuestionLabel(normalizeControlLabel(candidate));
+      if (!isNextControl) {
+        continue;
+      }
+      const control = candidate.closest(".next_ques_btn") ?? candidate;
+      if (!control.hidden) {
+        control.hidden = true;
+      }
+      if (control.getAttribute("aria-hidden") !== "true") {
+        control.setAttribute("aria-hidden", "true");
+      }
+    }
   }
 
   function clearTimeLimit(hide = true) {
@@ -185,10 +209,7 @@
 
     if (expectedPhase === "question") {
       void handleSkipQuestion();
-      return;
     }
-
-    void handleNextQuestion();
   }
 
   function clearFrameProblemScrollTimers() {
@@ -301,13 +322,4 @@
       }, delay);
       frameProblemScrollTimers.push(timer);
     }
-  }
-
-  function clearCopyFeedbackTimer() {
-    if (copyFeedbackTimer === null) {
-      return;
-    }
-
-    clearTimeout(copyFeedbackTimer);
-    copyFeedbackTimer = null;
   }

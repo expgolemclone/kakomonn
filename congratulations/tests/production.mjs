@@ -65,8 +65,9 @@ async function assertProductionCachePolicy() {
 await assertProductionCachePolicy();
 
 const browser = await chromium.launch({ headless: true });
+const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 try {
-  const shell = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const shell = await context.newPage();
   const shellErrors = captureErrors(shell);
   const response = await shell.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
   assert.equal(response?.status(), 200);
@@ -81,7 +82,7 @@ try {
   await shell.close();
 
   for (const experience of manifest.experiences) {
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
     const errors = captureErrors(page);
     await page.addInitScript(() => {
       window.__celebrationMessages = [];
@@ -102,13 +103,18 @@ try {
         (id) => window.__celebrationMessages.some((message) => message.siteId === id),
         experience.id,
       );
-      await page.waitForLoadState("load");
+      await page.waitForLoadState("load").catch((error) => {
+        throw new Error(`${experience.id} did not finish loading`, {
+          cause: error,
+        });
+      });
       assert.deepEqual(errors, []);
     } finally {
       await page.close();
     }
   }
 } finally {
+  await context.close();
   await browser.close();
 }
 console.log("Congratulations production E2E passed for all experiences");

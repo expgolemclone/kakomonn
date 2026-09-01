@@ -3,7 +3,7 @@ const UINT32_RANGE = 0x1_0000_0000;
 function isSafeEntry(entry, id) {
   return (
     typeof entry === "string" &&
-    entry === `experiences/${id}/index.html`
+    entry === `experiences/${id}/`
   );
 }
 

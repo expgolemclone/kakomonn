@@ -3,82 +3,82 @@
     {
       "id": "aperture-lab",
       "label": "Aperture Lab",
-      "entry": "experiences/aperture-lab/index.html"
+      "entry": "experiences/aperture-lab/"
     },
     {
       "id": "conche",
       "label": "Conche",
-      "entry": "experiences/conche/index.html"
+      "entry": "experiences/conche/"
     },
     {
       "id": "driftline-ocean",
       "label": "Driftline Ocean",
-      "entry": "experiences/driftline-ocean/index.html"
+      "entry": "experiences/driftline-ocean/"
     },
     {
       "id": "fathom",
       "label": "Fathom",
-      "entry": "experiences/fathom/index.html"
+      "entry": "experiences/fathom/"
     },
     {
       "id": "formwork-chroma",
       "label": "Chroma",
-      "entry": "experiences/formwork-chroma/index.html"
+      "entry": "experiences/formwork-chroma/"
     },
     {
       "id": "formwork-contour",
       "label": "Contour",
-      "entry": "experiences/formwork-contour/index.html"
+      "entry": "experiences/formwork-contour/"
     },
     {
       "id": "formwork-heliodon",
       "label": "Heliodon",
-      "entry": "experiences/formwork-heliodon/index.html"
+      "entry": "experiences/formwork-heliodon/"
     },
     {
       "id": "formwork-isometria",
       "label": "Isometria",
-      "entry": "experiences/formwork-isometria/index.html"
+      "entry": "experiences/formwork-isometria/"
     },
     {
       "id": "formwork-meridian",
       "label": "Meridian",
-      "entry": "experiences/formwork-meridian/index.html"
+      "entry": "experiences/formwork-meridian/"
     },
     {
       "id": "formwork-nebula",
       "label": "Nebula Drift",
-      "entry": "experiences/formwork-nebula/index.html"
+      "entry": "experiences/formwork-nebula/"
     },
     {
       "id": "formwork-neon",
       "label": "Neon Sprawl",
-      "entry": "experiences/formwork-neon/index.html"
+      "entry": "experiences/formwork-neon/"
     },
     {
       "id": "glyphica",
       "label": "Glyphica",
-      "entry": "experiences/glyphica/index.html"
+      "entry": "experiences/glyphica/"
     },
     {
       "id": "halcyon-ring",
       "label": "Halcyon Ring",
-      "entry": "experiences/halcyon-ring/index.html"
+      "entry": "experiences/halcyon-ring/"
     },
     {
       "id": "halfstep",
       "label": "Halfstep",
-      "entry": "experiences/halfstep/index.html"
+      "entry": "experiences/halfstep/"
     },
     {
       "id": "northbound-ev",
       "label": "Northbound",
-      "entry": "experiences/northbound-ev/index.html"
+      "entry": "experiences/northbound-ev/"
     },
     {
       "id": "perigee-astro",
       "label": "Perigee",
-      "entry": "experiences/perigee-astro/index.html"
+      "entry": "experiences/perigee-astro/"
     }
   ]
 }

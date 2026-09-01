@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @version      2.1.2
+// @version      2.1.3
 // @description  問題文と解説の読み上げ, 解答後の自動Markdown copy, 学習記録の端末間同期とdue card完了時の祝福を提供します.
 // @updateURL    https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @downloadURL  https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
@@ -10,10 +10,10 @@
 // @connect      japaneast.tts.speech.microsoft.com
 // @run-at       document-end
 // @noframes
-// @grant        GM.getValue
+// @grant        GM_getValue
 // @grant        GM.setValue
 // @grant        GM.deleteValue
-// @grant        GM.xmlHttpRequest
+// @grant        GM_xmlhttpRequest
 // @grant        GM.setClipboard
 // @grant        GM_info
 // ==/UserScript==
@@ -68,10 +68,10 @@
     (!isWindowsChrome && !isIPhoneSafari) ||
     typeof GM !== "object" ||
     GM === null ||
-    typeof GM.getValue !== "function" ||
+    typeof GM_getValue !== "function" ||
     typeof GM.setValue !== "function" ||
     typeof GM.deleteValue !== "function" ||
-    typeof GM.xmlHttpRequest !== "function" ||
+    typeof GM_xmlhttpRequest !== "function" ||
     typeof GM.setClipboard !== "function"
   ) {
     return;

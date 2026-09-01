@@ -24,7 +24,7 @@
 npm run open:kakomonn
 ```
 
-Chromeが同じ専用profileで起動済みの場合は, processの起動optionを確認します. 必要なoptionで起動済みなら既存windowへ新しいtabを追加し, そうでなければその専用profileのChromeだけを終了してから起動し直します. 通常利用するChrome profileまたはその配下は指定できません. 完全testもこの専用profileの既存Chrome processを終了するため, test前に専用profileでの作業を保存してください.
+Chromeが同じ専用profileで起動済みの場合は, processの起動optionを確認します. 必要なoptionで起動済みなら既存windowへ新しいtabを追加し, そうでなければその専用profileのChromeだけを終了します. 停止中の専用profileはwindowなしで初期化してから固定URLを開きます. 通常利用するChrome profileまたはその配下は指定できません. 完全testもこの専用profileの既存Chrome processを終了するため, test前に専用profileでの作業を保存してください.
 
 ## iPhone Safari
 

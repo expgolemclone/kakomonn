@@ -428,6 +428,53 @@ async function main() {
     assert.deepEqual(retryLauncher.errors, []);
     await retryLauncher.page.close();
 
+    const stalledLauncher = await context.newPage();
+    const stalledLauncherErrors = [];
+    stalledLauncher.on("pageerror", (error) =>
+      stalledLauncherErrors.push(String(error)),
+    );
+    await stalledLauncher.goto(nextQuestionLauncherURL);
+    await stalledLauncher.clock.install();
+    await installSyncMock(stalledLauncher, {
+      nextQuestionId: "86957",
+    });
+    await stalledLauncher.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+    });
+    await stalledLauncher.addScriptTag({ content: script });
+    await stalledLauncher
+      .locator("#kakomonn-next-question-panel[data-state='loading']")
+      .waitFor();
+    await stalledLauncher.clock.fastForward(60_000);
+    await stalledLauncher
+      .locator("#kakomonn-next-question-panel[data-state='service-error']")
+      .waitFor();
+    assert.equal(
+      await stalledLauncher.locator("#kakomonn-next-question-title").innerText(),
+      "同期に時間がかかっています",
+    );
+    assert.equal(
+      await stalledLauncher.locator("#next-question-status").innerText(),
+      "通信状態を確認してから, もう一度試してください.",
+    );
+    assert.deepEqual(
+      await stalledLauncher.evaluate(() => ({
+        abortedRequestCount: window.__syncMock.abortedRequestCount,
+        callCount: window.__syncMock.calls.length,
+        heldRequestPending: window.__syncMock.releaseHeldRequest !== null,
+      })),
+      {
+        abortedRequestCount: 1,
+        callCount: 1,
+        heldRequestPending: false,
+      },
+    );
+    await stalledLauncher.locator("#next-question-retry").click();
+    await stalledLauncher.clock.runFor(1);
+    await stalledLauncher.waitForURL(nextQuestionURL);
+    assert.deepEqual(stalledLauncherErrors, []);
+    await stalledLauncher.close();
+
     await assertLauncherFailure(context, script, {
       expectedState: "service-error",
       expectedTitle: "問題一覧を同期できません",

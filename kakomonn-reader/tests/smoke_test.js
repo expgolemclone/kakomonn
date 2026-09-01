@@ -447,6 +447,10 @@ async function assertRuntimeRejected(
         window.GM = undefined;
       } else if (missing === "GM_info") {
         window.GM_info = undefined;
+      } else if (missing === "GM_getValue") {
+        window.GM_getValue = undefined;
+      } else if (missing === "GM_xmlhttpRequest") {
+        window.GM_xmlhttpRequest = undefined;
       } else if (missing !== null) {
         delete window.GM[missing];
       }
@@ -2138,10 +2142,10 @@ async function main() {
       { userAgent: chromeUserAgent, scriptHandler: "Userscripts" },
       { userAgent: chromeUserAgent, missingAPI: "GM" },
       { userAgent: chromeUserAgent, missingAPI: "GM_info" },
-      { userAgent: chromeUserAgent, missingAPI: "getValue" },
+      { userAgent: chromeUserAgent, missingAPI: "GM_getValue" },
       { userAgent: chromeUserAgent, missingAPI: "setValue" },
       { userAgent: chromeUserAgent, missingAPI: "deleteValue" },
-      { userAgent: chromeUserAgent, missingAPI: "xmlHttpRequest" },
+      { userAgent: chromeUserAgent, missingAPI: "GM_xmlhttpRequest" },
       { userAgent: chromeUserAgent, missingAPI: "setClipboard" },
     ];
     for (const runtimeCase of rejectedRuntimeCases) {

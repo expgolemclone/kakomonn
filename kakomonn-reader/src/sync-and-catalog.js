@@ -269,37 +269,60 @@
   }
 
   function gmXMLHttpRequest(details) {
-    let tampermonkeyRequest;
-    let rejectRequest = () => {};
+    const requestTimeoutMs = details.timeout ?? SYNC_TIMEOUT_MS;
+    const requestDetails = { ...details };
+    delete requestDetails.timeout;
+    let tampermonkeyRequest = null;
+    let requestTimeout = null;
+    let rejectRequest = () => false;
     const promise = new Promise((resolve, reject) => {
       let settled = false;
       const settleOnce = (callback) => {
         if (settled) {
-          return;
+          return false;
         }
         settled = true;
+        if (requestTimeout !== null) {
+          window.clearTimeout(requestTimeout);
+          requestTimeout = null;
+        }
         callback();
+        return true;
       };
       const resolveOnce = (response) => settleOnce(() => resolve(response));
       const rejectOnce = (code) =>
         settleOnce(() => reject(new SyncRequestError(code)));
       rejectRequest = rejectOnce;
+      requestTimeout = window.setTimeout(() => {
+        if (!rejectOnce("request_timeout")) {
+          return;
+        }
+        try {
+          tampermonkeyRequest?.abort();
+        } catch {
+          // timeout result is already final.
+        }
+      }, requestTimeoutMs);
       try {
-        tampermonkeyRequest = GM.xmlHttpRequest({
-          ...details,
-          timeout: details.timeout ?? SYNC_TIMEOUT_MS,
+        tampermonkeyRequest = GM_xmlhttpRequest({
+          ...requestDetails,
+          onload: resolveOnce,
           onerror: () => rejectOnce("network_error"),
           onabort: () => rejectOnce("request_aborted"),
-          ontimeout: () => rejectOnce("request_timeout"),
         });
-        tampermonkeyRequest.then(resolveOnce, () => rejectOnce("network_error"));
       } catch {
         rejectOnce("network_error");
       }
     });
     promise.abort = () => {
-      rejectRequest("request_aborted");
-      tampermonkeyRequest.abort();
+      if (!rejectRequest("request_aborted")) {
+        return;
+      }
+      try {
+        tampermonkeyRequest?.abort();
+      } catch {
+        // abort result is already final.
+      }
     };
     return promise;
   }
@@ -962,11 +985,9 @@
   async function initializeSync() {
     updateSyncDependentControls();
     try {
-      const [storedToken, storedPendingAttempt, storedCelebration] = await Promise.all([
-        GM.getValue(SYNC_TOKEN_KEY, ""),
-        GM.getValue(PENDING_ATTEMPT_KEY, null),
-        GM.getValue(PENDING_CELEBRATION_KEY, null),
-      ]);
+      const storedToken = GM_getValue(SYNC_TOKEN_KEY, "");
+      const storedPendingAttempt = GM_getValue(PENDING_ATTEMPT_KEY, null);
+      const storedCelebration = GM_getValue(PENDING_CELEBRATION_KEY, null);
       if (typeof storedToken !== "string") {
         await GM.deleteValue(SYNC_TOKEN_KEY);
         syncToken = "";

@@ -22,6 +22,12 @@ export const KAKOMONN_OPEN_URL =
 export { CHROME_AUTOPLAY_ARGUMENT };
 export const CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT =
   "--hide-crash-restore-bubble";
+export const CHROME_NO_STARTUP_WINDOW_ARGUMENT = "--no-startup-window";
+export const CHROME_COLD_START_GRACE_MS = 1_000;
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
 
 function requirePathType(candidatePath, expectedType, stat = statSync) {
   let stats;
@@ -98,7 +104,7 @@ export function resolveKakomonnLaunch({
   };
 }
 
-export function openKakomonn({
+export async function openKakomonn({
   configuration = readKakomonnConfiguration(),
   inspectProfile = inspectDedicatedChrome,
   platform = process.platform,
@@ -106,6 +112,7 @@ export function openKakomonn({
   stat = statSync,
   stopProfile = stopDedicatedChrome,
   systemEnvironment = process.env,
+  waitForColdStart = delay,
 } = {}) {
   const launch = resolveKakomonnLaunch({
     configuration,
@@ -116,13 +123,38 @@ export function openKakomonn({
   const profileState = inspectProfile(launch.userDataDir, {
     systemEnvironment,
   });
+  let requiresColdStart = profileState.processCount === 0;
   if (profileState.processCount > 0 && !profileState.autoplayAllowed) {
     stopProfile(launch.userDataDir, { systemEnvironment });
+    requiresColdStart = true;
   }
-  const browserProcess = spawnProcess(launch.executablePath, launch.arguments, {
+  const spawnOptions = {
     detached: true,
     env: kakomonnFreeEnvironment(systemEnvironment),
     stdio: "ignore",
+  };
+  if (requiresColdStart) {
+    const bootstrapProcess = spawnProcess(
+      launch.executablePath,
+      [
+        ...launch.arguments.slice(0, -1),
+        CHROME_NO_STARTUP_WINDOW_ARGUMENT,
+      ],
+      spawnOptions,
+    );
+    bootstrapProcess.unref();
+    await waitForColdStart(CHROME_COLD_START_GRACE_MS);
+    if (
+      bootstrapProcess.exitCode !== undefined &&
+      bootstrapProcess.exitCode !== null
+    ) {
+      throw new Error(
+        `Google Chrome exited during startup: ${bootstrapProcess.exitCode}`,
+      );
+    }
+  }
+  const browserProcess = spawnProcess(launch.executablePath, launch.arguments, {
+    ...spawnOptions,
   });
   browserProcess.unref();
   return launch;
@@ -131,7 +163,7 @@ export function openKakomonn({
 const scriptPath = process.argv[1] ? path.resolve(process.argv[1]) : null;
 if (scriptPath === fileURLToPath(import.meta.url)) {
   try {
-    openKakomonn();
+    await openKakomonn();
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

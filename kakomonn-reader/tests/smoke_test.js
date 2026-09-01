@@ -245,6 +245,7 @@ async function preparePage(page, speechMode, syncOptions = {}) {
       ![
         "none",
         "audio",
+        "audio-autoplay-blocked",
         "audio-gesture-required",
         "audio-manual",
       ].includes(mode)
@@ -282,6 +283,7 @@ async function preparePage(page, speechMode, syncOptions = {}) {
         },
       },
     });
+    const autoplayBlocked = mode === "audio-autoplay-blocked";
     let gestureRequired = mode === "audio-gesture-required";
     const manualPlayback = mode === "audio-manual";
     window.__audioPauseCalls = 0;
@@ -320,7 +322,7 @@ async function preparePage(page, speechMode, syncOptions = {}) {
         this.paused = false;
         window.__audioPlayCalls += 1;
         if (this.src.startsWith("data:audio/wav")) {
-          if (gestureRequired) {
+          if (autoplayBlocked || gestureRequired) {
             gestureRequired = false;
             return Promise.reject(new Error("mock gesture required"));
           }
@@ -1703,6 +1705,41 @@ async function main() {
     assert.equal(await speechTokenCallCount(gestureRetryPage), 1);
     assert.deepEqual(gestureRetryErrors, []);
     await gestureRetryPage.close();
+
+    const autoplayBlockedPage = await context.newPage();
+    const autoplayBlockedErrors = await preparePage(
+      autoplayBlockedPage,
+      "audio-autoplay-blocked",
+      { historyDashboard: true },
+    );
+    const autoplayBlockedFrame = await loadMockQuestion(
+      autoplayBlockedPage,
+      script,
+    );
+    const autoplayBlockedHistoryLength = await autoplayBlockedPage.evaluate(
+      () => history.length,
+    );
+    await autoplayBlockedPage.waitForFunction(
+      () => window.__audioPlayCalls === 1 && window.__audioInstance?.src === "",
+    );
+    await markAnswerResult(autoplayBlockedFrame, "correct");
+    await autoplayBlockedPage.waitForFunction(
+      (initialHistoryLength) =>
+        window.__syncMock.attemptCount === 1 &&
+        window.__copiedTexts.length === 1 &&
+        window.__readerPopstateCount >= 1 &&
+        history.state?.entryType === "current" &&
+        history.length > initialHistoryLength,
+      autoplayBlockedHistoryLength,
+    );
+    assert.equal(
+      await autoplayBlockedPage
+        .locator("#kakomonn-reader-error-dialog")
+        .getAttribute("open"),
+      null,
+    );
+    assert.deepEqual(autoplayBlockedErrors, []);
+    await autoplayBlockedPage.close();
 
     const delayedSyncPage = await context.newPage();
     const delayedSyncErrors = await preparePage(

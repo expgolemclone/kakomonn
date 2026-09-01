@@ -480,8 +480,7 @@
       await speechInitializationPromise;
     }
     if (!speechEnabled || speechAudio === null) {
-      showSpeechGestureError();
-      return;
+      return false;
     }
 
     speechRunId += 1;

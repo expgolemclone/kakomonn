@@ -86,6 +86,9 @@ function installSyncMockInWindow({
     commitThenFailNextAttempt: false,
     holdNextRequest: false,
     releaseHeldRequest: null,
+    holdSpeechRequestNumber: null,
+    speechRequestCount: 0,
+    releaseHeldSpeechRequest: null,
     clipboardWrites: [],
     nextQuestionId: initialNextQuestionId,
     nextError: initialNextError,
@@ -227,6 +230,7 @@ function installSyncMockInWindow({
         }
         const requestURL = new URL(call.url);
         if (requestURL.origin === expectedSpeechOrigin) {
+          mock.speechRequestCount += 1;
           if (
             call.method !== "POST" ||
             requestURL.pathname !== "/cognitiveservices/v1" ||
@@ -432,16 +436,23 @@ function installSyncMockInWindow({
         respondJSON(404, { error: "not_found" });
       };
 
-      if (mock.holdNextRequest) {
+      const isHeldSpeechRequest =
+        new URL(call.url).origin === expectedSpeechOrigin &&
+        mock.speechRequestCount + 1 === mock.holdSpeechRequestNumber;
+      if (mock.holdNextRequest || isHeldSpeechRequest) {
         mock.holdNextRequest = false;
         releaseHeldRequest = () => {
           if (aborted) {
             return;
           }
           mock.releaseHeldRequest = null;
+          mock.releaseHeldSpeechRequest = null;
           window.setTimeout(executeRequest, 0);
         };
         mock.releaseHeldRequest = releaseHeldRequest;
+        if (isHeldSpeechRequest) {
+          mock.releaseHeldSpeechRequest = releaseHeldRequest;
+        }
       } else {
         window.setTimeout(executeRequest, 0);
       }
@@ -453,6 +464,9 @@ function installSyncMockInWindow({
         mock.abortedRequestCount += 1;
         if (mock.releaseHeldRequest === releaseHeldRequest) {
           mock.releaseHeldRequest = null;
+        }
+        if (mock.releaseHeldSpeechRequest === releaseHeldRequest) {
+          mock.releaseHeldSpeechRequest = null;
         }
         details.onabort(new Error("mock request aborted"));
       };

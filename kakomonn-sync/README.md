@@ -136,4 +136,4 @@ APIは`/v9`だけを提供し, LearningState Durable Objectを唯一のsource of
 
 ## 互換性方針
 
-v1からv8のAPIは提供しません. legacy v4 schemaとschema v2からv9のcard, attempt, catalog, 解答履歴はschema v10へ明示的に移行します. 新規問題の日別件数は, siteと問題IDごとの最初のattempt日時から再集計します. 旧KPIの祝福履歴は破棄し, `dailyKpiCompleted`の祝福履歴を新しく開始します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.
+v1からv8のAPIは提供しません. legacy v4 schemaとschema v2からv10のcard, attempt, catalog, 解答履歴はschema v11へ明示的に移行します. 新規問題の日別件数は, siteと問題IDごとの最初のattempt日時から再集計します. 旧KPIの祝福履歴は破棄し, `dailyKpiCompleted`の祝福履歴を新しく開始します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.

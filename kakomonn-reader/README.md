@@ -9,13 +9,13 @@
 - `q,w,e,r,t`で解答用の選択肢1から5を選びます.
 - `a,s,d,f,g`で表示選択肢1から5の取り消し線を切り替えます.
 - 問題pageを開くたびに, `問題`見出しがpage topへ来る位置まで自動でscrollします. `z`で100px下へ,`x`で100px上へscrollし,`gg`でpage topへ戻ります. 検索欄や計算欄などへ入力中はkeyboard shortcutを無効にします.
-- 正解時は`NORMAL` 88.9%, `RARE` 10%, `SUPER RARE` 1%, `SSR` 0.1%からsecure randomで1種類を選び, tierごとの`That's Right`表示, chime, 英語音声を再生します.
+- 正解時は`NORMAL` 88.9%, `RARE` 10%, `SUPER RARE` 1%, `SSR` 0.1%からsecure randomで1種類を選び, tierごとの`That's Right`表示, chime, 同梱した英語音声を再生します. 不正解の定型音声も同梱し, 正誤feedbackではnetworkを使用しません.
 - WindowsとiPhoneの起動経路は, [`kakomonn-sync`の次の問題を開く手順](../kakomonn-sync/README.md#次の問題を開く)を使用します. bridgeからreaderと問題iframeまでは同じuserscript session内で切り替えます.
 - 解答操作と解答後の処理は[学習記録の同期設定](#学習記録の同期設定)を参照してください.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
 - 問題画面はtopのstatus, KPI, 同期設定, copy button, 次問buttonを表示せず, 問題iframeを画面全体へ広げます. 5分の残り時間は問題iframe上端の4px barへ重ねて表示します.
 - 通常進行のstatusは表示せず, 処理に失敗した場合だけerror内容, context, code, HTTP statusをdialogへ表示します. tokenとresponse bodyは表示しません.
-- 問題catalogは固定の`question/no`範囲を持ちません. 24時間ごとに`/createques`と`/list`から年度listを再発見し, 各listの全paginationにある実在の問題IDを同期します. サイトが同じ構造で新年度を追加する限り, コード変更は不要です.
+- 問題catalogは固定の`question/no`範囲を持ちません. 24時間ごとに`/createques`と`/list`から年度listを再発見し, 各listの全paginationにある実在の問題IDを1回取得します. 取得後はlist集合と各listの先頭, 末尾pageを再取得して件数と境界IDを検証してから同期します. サイトが同じ構造で新年度を追加する限り, コード変更は不要です.
 
 ## ビルド
 
@@ -23,7 +23,7 @@
 python3 build.py
 ```
 
-`src/`にはmetadataとruntime,correct feedback,style,syncとcatalog,次問launcher,UI,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `kakomonn-reader.user.js`を生成します. 通常installでは[Latest Release asset](https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js)をTampermonkeyへ登録してください.
+`src/`にはmetadataとruntime,correct feedback,style,syncとcatalog,次問launcher,UI,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `assets/feedback/`の5音声をbase64 data URLとして埋め込み, 全sourceと音声を含むfingerprintを付けて`kakomonn-reader.user.js`を生成します. 通常installでは[Latest Release asset](https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js)をTampermonkeyへ登録してください.
 
 ## Release
 
@@ -45,7 +45,7 @@ Releaseのtagは`kakomonn-reader-v<version>`,titleは`kakomonn-reader v<version>
 
 ## 動作環境
 
-Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` modeとiPhone Safari + Tampermonkeyだけに対応します. Windows launcherはcold Chromeでは`about:blank`だけを開き, 起動済みChromeから再実行した場合だけ固定`/open`へ遷移します. 両端末ともAzure Speechの`ja-JP-NanamiNeural`を使用し, 短期tokenの取得後はAzureから音声を直接受信します. 同期と問題pageの準備が完了すると, 問題文の自動読み上げを試みます. iPhone Safariが初回の自動再生を拒否した場合は, 最初の画面tapで読み上げを再試行し, 以降の問題は自動で読み上げます. 読み上げにはインターネット接続が必要です.
+Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` modeとiPhone Safari + Tampermonkeyだけに対応します. Windows launcherはcold Chromeでは`about:blank`だけを開き, 起動済みChromeから再実行した場合だけ固定`/open`へ遷移します. 両端末とも問題文と解説にはAzure Speechの`ja-JP-NanamiNeural`を使用し, 短期tokenの取得後はAzureから音声を直接受信します. 長文では現在のchunk再生開始時に次の1chunkを先読みします. 同期と問題pageの準備が完了すると, 問題文の自動読み上げを試みます. iPhone Safariが初回の自動再生を拒否した場合は, 最初の画面tapで読み上げを再試行し, 以降の問題は自動で読み上げます. 問題文と解説の読み上げにはインターネット接続が必要です.
 
 ## 学習記録の同期設定
 

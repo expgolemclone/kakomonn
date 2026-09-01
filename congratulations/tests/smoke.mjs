@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -84,5 +84,36 @@ for (const sourcePath of [
 
 const routerSource = await readFile(resolve(projectRoot, "router.js"), "utf8");
 assert.equal(routerSource.includes("entryUrl.search"), false);
+
+async function filesBelow(directory) {
+  const files = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await filesBelow(path)));
+    } else {
+      files.push(path);
+    }
+  }
+  return files;
+}
+
+for (const path of await filesBelow(resolve(projectRoot, "experiences"))) {
+  if (
+    !path.endsWith(".html") &&
+    !path.endsWith(".css") &&
+    !path.endsWith("main.js")
+  ) {
+    continue;
+  }
+  const source = await readFile(path, "utf8");
+  assert.doesNotMatch(
+    source,
+    /https:\/\/(?:fonts\.(?:googleapis|gstatic)\.com|cdn\.jsdelivr\.net)\//,
+    path,
+  );
+}
+await access(resolve(projectRoot, "dist", "vendor", "gsap", "3.12.5", "gsap.min.js"));
+await access(resolve(projectRoot, "dist", "vendor", "three", "0.160.0", "LICENSE"));
 
 console.log("Congratulations smoke assertions passed for all experiences");

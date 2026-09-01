@@ -54,6 +54,7 @@ async function reset() {
 function rebuildUsageTablesAsV8(storage) {
   storage.sql.exec(`
     DROP INDEX IF EXISTS cards_by_site_due;
+    DROP INDEX IF EXISTS cards_by_site_due_number;
     DROP INDEX IF EXISTS attempts_by_site_attempted_at_operation;
     DROP INDEX IF EXISTS questions_by_site_attempted_number;
 
@@ -233,6 +234,67 @@ describe("LearningState schema", () => {
     });
   });
 
+  it("migrates schema v10 by replacing the due-card index without changing data", async () => {
+    await seedReviewCard("2", 3.5);
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      const cardBefore = state.storage.sql
+        .exec(
+          `SELECT site, question_id, due_ms, stability FROM cards
+           WHERE site = ? AND question_id = '2'`,
+          SITE
+        )
+        .toArray()[0];
+      state.storage.sql.exec(`
+        DROP INDEX cards_by_site_due_number;
+        CREATE INDEX cards_by_site_due ON cards (site, due_ms, question_id);
+        UPDATE schema_metadata SET version = 10 WHERE singleton = 1;
+      `);
+
+      initializeLearningSchema(state.storage, NOW);
+
+      expect(
+        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
+      ).toEqual({ version: 11 });
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT site, question_id, due_ms, stability FROM cards
+             WHERE site = ? AND question_id = '2'`,
+            SITE
+          )
+          .toArray()[0]
+      ).toEqual(cardBefore);
+      expect(
+        state.storage.sql
+          .exec(
+            `SELECT name FROM sqlite_master
+             WHERE type = 'index' AND name LIKE 'cards_by_site_due%'
+             ORDER BY name`
+          )
+          .toArray()
+      ).toEqual([{ name: "cards_by_site_due_number" }]);
+
+      const duePlan = state.storage.sql
+        .exec(
+          `EXPLAIN QUERY PLAN
+           SELECT c.question_id, c.due_ms
+           FROM cards c
+           JOIN questions q
+             ON q.site = c.site AND q.question_id = c.question_id
+           WHERE c.site = ? AND c.due_ms <= ?
+           ORDER BY c.due_ms, CAST(c.question_id AS INTEGER), c.question_id
+           LIMIT 1`,
+          SITE,
+          NOW
+        )
+        .toArray()
+        .map((row) => row.detail)
+        .join(" ");
+      expect(duePlan).toContain("cards_by_site_due_number");
+      expect(duePlan).not.toContain("TEMP B-TREE");
+    });
+  });
+
   it("migrates schema v8 usage data and installs bounded-query indexes", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       rebuildUsageTablesAsV8(state.storage);
@@ -267,7 +329,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 10 });
+      ).toEqual({ version: 11 });
       expect(
         state.storage.sql
           .exec(
@@ -377,7 +439,7 @@ describe("LearningState schema", () => {
       initializeLearningSchema(state.storage, NOW);
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 10 });
+      ).toEqual({ version: 11 });
       expect(
         state.storage.sql
           .exec(
@@ -398,7 +460,7 @@ describe("LearningState schema", () => {
           "attempts_by_site",
           "attempts_by_site_attempted_at_question",
           "attempts_by_site_attempted_at_operation",
-          "cards_by_site_due",
+          "cards_by_site_due_number",
           "cards_by_site_stability",
           "questions_by_site_attempted_number"
         )
@@ -406,7 +468,7 @@ describe("LearningState schema", () => {
         .map((row) => row.name);
       expect(indexes).toEqual([
         "attempts_by_site_attempted_at_operation",
-        "cards_by_site_due",
+        "cards_by_site_due_number",
         "questions_by_site_attempted_number",
       ]);
     });
@@ -436,7 +498,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 10 });
+      ).toEqual({ version: 11 });
       expect(
         state.storage.sql
           .exec(
@@ -457,7 +519,7 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates legacy data to schema v10 without retaining threshold-based fields", async () => {
+  it("migrates legacy data to schema v11 without retaining threshold-based fields", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
         DROP TABLE daily_kpi_achievements;
@@ -534,7 +596,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 10 });
+      ).toEqual({ version: 11 });
       expect(
         state.storage.sql
           .exec("SELECT * FROM daily_kpi_achievements")
@@ -585,7 +647,7 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates schema v2 data to v10 without losing rows", async () => {
+  it("migrates schema v2 data to v11 without losing rows", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
         DROP TABLE daily_kpi_achievements;
@@ -665,7 +727,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 10 });
+      ).toEqual({ version: 11 });
       expect(
         state.storage.sql
           .exec("SELECT * FROM daily_kpi_achievements")
@@ -759,7 +821,7 @@ describe("LearningState schema", () => {
 
       expect(
         state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 10 });
+      ).toEqual({ version: 11 });
       const cursor = state.storage.sql.exec(
         `SELECT stability_days, attempted_question_count,
                 daily_metrics_date, today_attempted_question_count,

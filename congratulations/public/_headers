@@ -7,6 +7,10 @@
   ! Cache-Control
   Cache-Control: public, max-age=31536000, immutable
 
+/vendor/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable
+
 /experiences/conche/_astro/*
   ! Cache-Control
   Cache-Control: public, max-age=31536000, immutable

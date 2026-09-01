@@ -618,6 +618,8 @@
     const questionIds = new Set();
     let totalPages = null;
     let fullPageSize = null;
+    let firstPageQuestionIds = null;
+    let lastPageQuestionIds = null;
 
     const loadPage = async (page) => {
       const pageURL = new URL(listURL);
@@ -657,6 +659,15 @@
         }
         questionIds.add(id);
       }
+      const sortedPageIds = [...pageIds].sort(
+        (left, right) => Number(left) - Number(right)
+      );
+      if (page === 1) {
+        firstPageQuestionIds = sortedPageIds;
+      }
+      if (page === totalPages) {
+        lastPageQuestionIds = sortedPageIds;
+      }
     };
 
     consumePage(await loadPage(1));
@@ -682,10 +693,12 @@
     return {
       totalPages,
       questionIds: [...questionIds].sort((left, right) => Number(left) - Number(right)),
+      firstPageQuestionIds,
+      lastPageQuestionIds,
     };
   }
 
-  async function loadQuestionCatalogSnapshot(loadCatalogDocument) {
+  async function loadCatalogLists(loadCatalogDocument) {
     const createURL = `https://${SITE_ID}/createques`;
     const createDocument = await loadCatalogDocument(createURL);
     const catalogIndexURL = findCatalogIndexURL(createDocument, createURL);
@@ -701,7 +714,13 @@
       throw new SyncRequestError("catalog_error");
     }
 
-    const sortedLists = [...listURLs.entries()].sort(([left], [right]) => left.localeCompare(right));
+    return [...listURLs.entries()].sort(([left], [right]) =>
+      left.localeCompare(right)
+    );
+  }
+
+  async function loadQuestionCatalogSnapshot(loadCatalogDocument) {
+    const sortedLists = await loadCatalogLists(loadCatalogDocument);
     const snapshots = await mapCatalogConcurrently(
       sortedLists,
       async ([listPath, listURL]) => [
@@ -712,22 +731,75 @@
     return new Map(snapshots);
   }
 
-  function sameCatalogSnapshot(left, right) {
-    if (left.size !== right.size) {
-      return false;
-    }
-    for (const [listPath, leftSnapshot] of left) {
-      const rightSnapshot = right.get(listPath);
+  function sameQuestionIds(left, right) {
+    return (
+      left.length === right.length &&
+      left.every((id, index) => id === right[index])
+    );
+  }
+
+  async function validateCatalogListSnapshot(
+    listURL,
+    snapshot,
+    loadCatalogDocument
+  ) {
+    const loadBoundary = async (page) => {
+      const pageURL = new URL(listURL);
+      pageURL.searchParams.set("page", String(page));
+      const pageDocument = await loadCatalogDocument(pageURL.href);
+      const position = catalogPagePosition(pageDocument);
       if (
-        rightSnapshot === undefined ||
-        leftSnapshot.totalPages !== rightSnapshot.totalPages ||
-        leftSnapshot.questionIds.length !== rightSnapshot.questionIds.length ||
-        leftSnapshot.questionIds.some((id, index) => id !== rightSnapshot.questionIds[index])
+        position.currentPage !== page ||
+        position.totalPages !== snapshot.totalPages
       ) {
-        return false;
+        throw new SyncRequestError("catalog_error");
+      }
+      return [...collectQuestionIds(pageDocument, pageURL.href)].sort(
+        (left, right) => Number(left) - Number(right)
+      );
+    };
+
+    const [firstPageQuestionIds, lastPageQuestionIds] =
+      snapshot.totalPages === 1
+        ? await loadBoundary(1).then((ids) => [ids, ids])
+        : await Promise.all([
+            loadBoundary(1),
+            loadBoundary(snapshot.totalPages),
+          ]);
+    const derivedQuestionCount =
+      firstPageQuestionIds.length * (snapshot.totalPages - 1) +
+      lastPageQuestionIds.length;
+    if (
+      derivedQuestionCount !== snapshot.questionIds.length ||
+      !sameQuestionIds(firstPageQuestionIds, snapshot.firstPageQuestionIds) ||
+      !sameQuestionIds(lastPageQuestionIds, snapshot.lastPageQuestionIds)
+    ) {
+      throw new SyncRequestError("catalog_error");
+    }
+  }
+
+  async function validateQuestionCatalogSnapshot(
+    snapshot,
+    loadCatalogDocument
+  ) {
+    const sortedLists = await loadCatalogLists(loadCatalogDocument);
+    if (sortedLists.length !== snapshot.size) {
+      throw new SyncRequestError("catalog_error");
+    }
+    for (const [listPath] of sortedLists) {
+      if (!snapshot.has(listPath)) {
+        throw new SyncRequestError("catalog_error");
       }
     }
-    return true;
+    await mapCatalogConcurrently(
+      sortedLists,
+      async ([listPath, listURL]) =>
+        validateCatalogListSnapshot(
+          listURL,
+          snapshot.get(listPath),
+          loadCatalogDocument
+        )
+    );
   }
 
   async function loadCompleteQuestionCatalog() {
@@ -738,14 +810,11 @@
     );
     const loadCatalogDocument = createCatalogDocumentLoader(controller.signal);
     try {
-      const firstSnapshot = await loadQuestionCatalogSnapshot(loadCatalogDocument);
-      const secondSnapshot = await loadQuestionCatalogSnapshot(loadCatalogDocument);
-      if (!sameCatalogSnapshot(firstSnapshot, secondSnapshot)) {
-        throw new SyncRequestError("catalog_error");
-      }
+      const snapshot = await loadQuestionCatalogSnapshot(loadCatalogDocument);
+      await validateQuestionCatalogSnapshot(snapshot, loadCatalogDocument);
 
       const questionIds = new Set();
-      for (const { questionIds: listQuestionIds } of secondSnapshot.values()) {
+      for (const { questionIds: listQuestionIds } of snapshot.values()) {
         for (const id of listQuestionIds) {
           questionIds.add(id);
         }

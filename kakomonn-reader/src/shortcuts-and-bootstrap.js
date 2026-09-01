@@ -284,15 +284,14 @@
       loadTimer = null;
     }
 
-    if (frameChangeTimer !== null) {
-      clearTimeout(frameChangeTimer);
-      frameChangeTimer = null;
-    }
-
     clearFrameProblemScrollTimers();
     discardAnswerCopyOperation();
     frameMutationObserver?.disconnect();
     frameMutationObserver = null;
+    frameControlObserver?.disconnect();
+    frameControlObserver = null;
+    observedAnswerResult = null;
+    observedCommentary = null;
     currentPageReadPending = false;
     awaitingAnswerResultSpeech = false;
   }

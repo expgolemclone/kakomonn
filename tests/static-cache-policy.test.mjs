@@ -33,6 +33,7 @@ test("congratulations caches stable and content-addressed assets", async () => {
 
   for (const path of [
     "/assets/*",
+    "/vendor/*",
     "/experiences/conche/_astro/*",
     "/experiences/glyphica/_next/static/*",
     "/experiences/halfstep/assets/*",

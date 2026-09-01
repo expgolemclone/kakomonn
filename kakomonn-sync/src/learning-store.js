@@ -292,15 +292,14 @@ function recordCelebration(
   return celebrationFromRow(row);
 }
 
-function learningMetrics(
-  storage,
+function composeLearningMetrics(
   site,
   nowMs,
   storedMetrics,
-  todayStabilityDaysDelta = undefined
+  remaining,
+  todayStabilityDaysDelta
 ) {
   const today = getTokyoDate(new Date(nowMs));
-  const remaining = dueCardsRemaining(storage, site, nowMs);
   const isCurrentDailyMetrics = storedMetrics.dailyMetricsDate === today;
   const todayAttemptCount = isCurrentDailyMetrics
     ? storedMetrics.todayAttemptCount
@@ -320,10 +319,7 @@ function learningMetrics(
     todayNewQuestionCount,
     newQuestionGoal: NEW_QUESTION_GOAL,
     newQuestionsRemaining,
-    todayStabilityDaysDelta:
-      todayStabilityDaysDelta === undefined
-        ? readTodayStabilityDaysDelta(storage, site, today)
-        : todayStabilityDaysDelta,
+    todayStabilityDaysDelta,
     attemptedQuestionCount: storedMetrics.attemptedQuestionCount,
     todayAttemptedQuestionCount:
       isCurrentDailyMetrics
@@ -334,6 +330,17 @@ function learningMetrics(
       todayAttemptCount
     ),
   };
+}
+
+function readLearningMetrics(storage, site, nowMs, storedMetrics) {
+  const today = getTokyoDate(new Date(nowMs));
+  return composeLearningMetrics(
+    site,
+    nowMs,
+    storedMetrics,
+    dueCardsRemaining(storage, site, nowMs),
+    readTodayStabilityDaysDelta(storage, site, today)
+  );
 }
 
 function recordDailyMetrics(
@@ -427,7 +434,8 @@ function selectNextQuestion(storage, site, nowMs, excludeQuestionId) {
        JOIN questions q ON q.site = c.site AND q.question_id = c.question_id
        WHERE c.site = ? AND c.due_ms <= ?
          AND (? IS NULL OR c.question_id <> ?)
-       ORDER BY c.due_ms ASC, q.question_number ASC, c.question_id ASC
+       ORDER BY c.due_ms ASC, CAST(c.question_id AS INTEGER) ASC,
+                c.question_id ASC
        LIMIT 1`,
       site,
       nowMs,
@@ -501,7 +509,7 @@ export class LearningState extends DurableObject {
         const stabilityDays = integerStabilityDays(storedMetrics);
         return attemptResponse(
           existing,
-          learningMetrics(this.ctx.storage, site, nowMs, storedMetrics),
+          readLearningMetrics(this.ctx.storage, site, nowMs, storedMetrics),
           stabilityDays,
           stabilityDays,
           selectNextQuestion(this.ctx.storage, site, nowMs, questionId),
@@ -541,11 +549,18 @@ export class LearningState extends DurableObject {
         stored?.last_attempt_date === today ? 0 : 1;
       const storedMetricsBefore = readStoredLearningMetrics(this.ctx.storage, site);
       const stabilityDaysBefore = integerStabilityDays(storedMetricsBefore);
-      const wasDailyKpiCompleted = learningMetrics(
+      const remainingBefore = dueCardsRemaining(this.ctx.storage, site, nowMs);
+      const previousTodayStabilityDaysDelta = readTodayStabilityDaysDelta(
         this.ctx.storage,
         site,
+        today
+      );
+      const wasDailyKpiCompleted = composeLearningMetrics(
+        site,
         nowMs,
-        storedMetricsBefore
+        storedMetricsBefore,
+        remainingBefore,
+        previousTodayStabilityDaysDelta
       ).dailyKpiCompleted;
       if (schedulingApplied) {
         saveCard(this.ctx.storage, site, questionId, nextCard, today);
@@ -579,11 +594,6 @@ export class LearningState extends DurableObject {
         attemptedQuestionCountDelta
       );
       const stabilityDaysAfter = integerStabilityDays(storedMetricsAfter);
-      const previousTodayStabilityDaysDelta = readTodayStabilityDaysDelta(
-        this.ctx.storage,
-        site,
-        today
-      );
       recordDailyMetrics(
         this.ctx.storage,
         site,
@@ -608,11 +618,15 @@ export class LearningState extends DurableObject {
         previousCardStabilityDays,
         nextCard.stability
       );
-      const metrics = learningMetrics(
-        this.ctx.storage,
+      const wasDueBefore = stored !== undefined && stored.due_ms <= nowMs;
+      const isDueAfter = nextCard.due.getTime() <= nowMs;
+      const remainingAfter =
+        remainingBefore - Number(wasDueBefore) + Number(isDueAfter);
+      const metrics = composeLearningMetrics(
         site,
         nowMs,
         storedMetricsAfter,
+        remainingAfter,
         previousTodayStabilityDaysDelta +
           stabilityDaysAfter -
           stabilityDaysBefore
@@ -671,7 +685,7 @@ export class LearningState extends DurableObject {
       return {
         site,
         today,
-        learningMetrics: learningMetrics(
+        learningMetrics: readLearningMetrics(
           this.ctx.storage,
           site,
           nowMs,

@@ -262,7 +262,7 @@
 
     if (
       answerResultFromDocument(documentNode) === "unknown" ||
-      hasVisibleExplanationLock(getVisibleLines())
+      hasVisibleExplanationLock(documentNode)
     ) {
       return { state: "locked", markdown: "" };
     }

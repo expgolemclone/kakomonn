@@ -9,18 +9,6 @@
       .trim();
   }
 
-  function getVisibleLines() {
-    if (!frameDocument?.body) {
-      return [];
-    }
-
-    return visibleStructuredText(frameDocument.body)
-      .replace(/\u00a0/g, " ")
-      .split(/\r?\n/)
-      .map((line) => line.replace(/[ \t]+/g, " ").trim())
-      .filter(Boolean);
-  }
-
   function compactLine(line) {
     return line.replace(/\s+/g, "").trim();
   }
@@ -341,29 +329,15 @@
     return compactLine(rawText).replace(/[。．]+$/u, "");
   }
 
-  function hasVisibleExplanationLock(lines) {
-    for (let startIndex = 0; startIndex < lines.length; startIndex += 1) {
-      let combinedText = "";
-
-      for (
-        let lineOffset = 0;
-        lineOffset < 3 && startIndex + lineOffset < lines.length;
-        lineOffset += 1
-      ) {
-        combinedText += normalizePageStateText(
-          lines[startIndex + lineOffset]
-        );
-
-        if (combinedText === EXPLANATION_LOCK_TEXT) {
-          return true;
-        }
-
-        if (!EXPLANATION_LOCK_TEXT.startsWith(combinedText)) {
-          break;
-        }
+  function hasVisibleExplanationLock(documentNode) {
+    for (const lock of documentNode.querySelectorAll(
+      "#js-commentary-wrap > .item > .none_text"
+    )) {
+      const text = normalizePageStateText(lock.textContent ?? "");
+      if (text === EXPLANATION_LOCK_TEXT && isVisibleElement(lock)) {
+        return true;
       }
     }
-
     return false;
   }
 

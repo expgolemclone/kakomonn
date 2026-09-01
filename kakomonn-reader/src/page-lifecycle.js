@@ -16,36 +16,68 @@
     speakAnswerResult(answerResult);
   }
 
-  function scheduleFrameChangeCheck() {
-    if (frameChangeTimer !== null) {
-      clearTimeout(frameChangeTimer);
-    }
-
-    frameChangeTimer = window.setTimeout(() => {
-      frameChangeTimer = null;
-      suppressNextQuestionControls();
-      synchronizeTimeLimitPhase();
-      checkForNewAnswerResult();
-      recordCurrentAnswerIfAvailable();
-      void processPendingAutomaticCopy();
-    }, FRAME_CHANGE_DELAY_MS);
+  function processAnswerStateChange() {
+    suppressNextQuestionControls();
+    synchronizeAnswerPresentation();
+    synchronizeTimeLimitPhase();
+    checkForNewAnswerResult();
+    recordCurrentAnswerIfAvailable();
+    void processPendingAutomaticCopy();
   }
 
-  function observeFrameChanges() {
+  function attachAnswerStateObserver() {
+    const answerResult = frameDocument.querySelector("#js-answer-result-box");
+    const commentary = frameDocument.querySelector("#js-commentary-wrap");
+    if (
+      answerResult === observedAnswerResult &&
+      commentary === observedCommentary
+    ) {
+      return answerResult !== null || commentary !== null;
+    }
+
     frameMutationObserver?.disconnect();
-    frameMutationObserver = new MutationObserver(() => {
-      synchronizeAnswerPresentation();
-      if (getCurrentAnswerResult() === "correct") {
-        beginCorrectAnswerFeedback();
-      }
-      scheduleFrameChangeCheck();
-    });
-    frameMutationObserver.observe(frameDocument.body, {
+    if (frameMutationObserver === null) {
+      frameMutationObserver = new MutationObserver(processAnswerStateChange);
+    }
+    observedAnswerResult = answerResult;
+    observedCommentary = commentary;
+    const answerObserverOptions = {
       subtree: true,
       childList: true,
       characterData: true,
       attributes: true,
       attributeFilter: ["class", "style", "hidden", "aria-hidden"],
+    };
+    if (answerResult !== null) {
+      frameMutationObserver.observe(answerResult, answerObserverOptions);
+    }
+    if (commentary !== null) {
+      frameMutationObserver.observe(commentary, answerObserverOptions);
+    }
+    processAnswerStateChange();
+    return answerResult !== null || commentary !== null;
+  }
+
+  function observeFrameChanges() {
+    frameMutationObserver?.disconnect();
+    frameMutationObserver = null;
+    observedAnswerResult = null;
+    observedCommentary = null;
+    frameControlObserver?.disconnect();
+
+    attachAnswerStateObserver();
+
+    frameControlObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const addedNode of mutation.addedNodes) {
+          suppressNextQuestionControlsIn(addedNode);
+        }
+      }
+      attachAnswerStateObserver();
+    });
+    frameControlObserver.observe(frameDocument.body, {
+      subtree: true,
+      childList: true,
     });
   }
 
@@ -85,27 +117,45 @@
     return url.href;
   }
 
+  function suppressNextQuestionControl(candidate) {
+    const isNextControl = candidate.matches("a[href]")
+      ? getNextQuestionURL(candidate) !== null
+      : isNextQuestionLabel(normalizeControlLabel(candidate));
+    if (!isNextControl) {
+      return;
+    }
+
+    const control = candidate.closest(".next_ques_btn") ?? candidate;
+    if (!control.hidden) {
+      control.hidden = true;
+    }
+    if (control.getAttribute("aria-hidden") !== "true") {
+      control.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function suppressNextQuestionControlsIn(rootNode) {
+    if (!(rootNode instanceof frame.contentWindow.Element)) {
+      return;
+    }
+
+    const selector = "a[href], button, input[type='button'], input[type='submit']";
+    if (rootNode.matches(selector)) {
+      suppressNextQuestionControl(rootNode);
+    }
+    for (const candidate of rootNode.querySelectorAll(selector)) {
+      suppressNextQuestionControl(candidate);
+    }
+  }
+
   function suppressNextQuestionControls(sourceDocument = frameDocument) {
     if (!sourceDocument?.body) {
       return;
     }
-
     for (const candidate of sourceDocument.querySelectorAll(
       "a[href], button, input[type='button'], input[type='submit']"
     )) {
-      const isNextControl = candidate.matches("a[href]")
-        ? getNextQuestionURL(candidate) !== null
-        : isNextQuestionLabel(normalizeControlLabel(candidate));
-      if (!isNextControl) {
-        continue;
-      }
-      const control = candidate.closest(".next_ques_btn") ?? candidate;
-      if (!control.hidden) {
-        control.hidden = true;
-      }
-      if (control.getAttribute("aria-hidden") !== "true") {
-        control.setAttribute("aria-hidden", "true");
-      }
+      suppressNextQuestionControl(candidate);
     }
   }
 

@@ -150,8 +150,11 @@
   }
 
   function cancelActiveSpeech() {
-    activeSpeechRequest?.abort();
-    activeSpeechRequest = null;
+    speechChunkSession = null;
+    for (const request of activeSpeechRequests) {
+      request.abort();
+    }
+    activeSpeechRequests.clear();
     clearActiveSpeechAudio();
   }
 
@@ -160,7 +163,7 @@
       await speechAudio.play();
     } catch (error) {
       if (runId === speechRunId) {
-        clearActiveSpeechAudio();
+        cancelActiveSpeech();
         speechEnabled = false;
         currentPageReadPending = true;
         showSpeechGestureError(error);
@@ -184,98 +187,93 @@
     return true;
   }
 
-  function completeSpeechChunks(runId, label) {
-    if (runId !== speechRunId) {
-      return;
+  function prepareSpeechChunk(session, index) {
+    if (index >= session.chunks.length) {
+      return Promise.resolve({ audioData: null, error: null });
+    }
+    const existing = session.prepared.get(index);
+    if (existing !== undefined) {
+      return existing;
     }
 
-    activeSpeechRequest = null;
-  }
-
-  async function speakAzureSpeechChunks(
-    chunks,
-    runId,
-    label,
-    rate,
-    index = 0,
-    locale = JAPANESE_SPEECH_LOCALE,
-    voiceName = JAPANESE_SPEECH_VOICE_NAME
-  ) {
-    if (runId !== speechRunId) {
-      return;
-    }
-
-    if (index >= chunks.length) {
-      completeSpeechChunks(runId, label);
-      return;
-    }
-
-    let audioData;
-    try {
+    const prepared = (async () => {
       const token = await getAzureSpeechToken();
-      if (runId !== speechRunId) {
-        return;
+      if (speechChunkSession !== session || session.runId !== speechRunId) {
+        throw new SyncRequestError("request_aborted");
       }
       const request = requestAzureSpeechAudio(
         token,
-        chunks[index],
-        rate,
-        locale,
-        voiceName
+        session.chunks[index],
+        session.rate,
+        session.locale,
+        session.voiceName
       );
-      activeSpeechRequest = request;
-      audioData = await request;
-      if (activeSpeechRequest === request) {
-        activeSpeechRequest = null;
+      activeSpeechRequests.add(request);
+      try {
+        return await request;
+      } finally {
+        activeSpeechRequests.delete(request);
       }
-    } catch (error) {
-      if (runId === speechRunId && error?.code !== "request_aborted") {
-        activeSpeechRequest = null;
-        showReaderError(
-          "speech-request",
-          "音声を取得できません",
-          `${speechErrorMessage(error)}. 通信状態を確認してください.`,
-          error
-        );
-      }
+    })().then(
+      (audioData) => ({ audioData, error: null }),
+      (error) => ({ audioData: null, error })
+    );
+    session.prepared.set(index, prepared);
+    return prepared;
+  }
+
+  async function playSpeechChunk(session, index) {
+    if (speechChunkSession !== session || session.runId !== speechRunId) {
+      return;
+    }
+    if (index >= session.chunks.length) {
+      speechChunkSession = null;
       return;
     }
 
-    if (runId !== speechRunId) {
+    const result = await prepareSpeechChunk(session, index);
+    session.prepared.delete(index);
+    if (speechChunkSession !== session || session.runId !== speechRunId) {
+      return;
+    }
+    if (result.error !== null) {
+      speechChunkSession = null;
+      if (result.error?.code !== "request_aborted") {
+        showReaderError(
+          "speech-request",
+          "音声を取得できません",
+          `${speechErrorMessage(result.error)}. 通信状態を確認してください.`,
+          result.error
+        );
+      }
       return;
     }
 
     clearActiveSpeechAudio();
     activeSpeechAudioURL = URL.createObjectURL(
-      new Blob([audioData], { type: "audio/mpeg" })
+      new Blob([result.audioData], { type: "audio/mpeg" })
     );
     speechAudio.src = activeSpeechAudioURL;
     speechAudio.onplay = () => {
-      if (runId === speechRunId) {
+      if (speechChunkSession === session && session.runId === speechRunId) {
         speechPaused = false;
+        void prepareSpeechChunk(session, index + 1);
       }
     };
 
     speechAudio.onended = () => {
-      if (runId === speechRunId) {
+      if (speechChunkSession === session && session.runId === speechRunId) {
         clearActiveSpeechAudio();
-        void speakAzureSpeechChunks(
-          chunks,
-          runId,
-          label,
-          rate,
-          index + 1,
-          locale,
-          voiceName
-        );
+        void playSpeechChunk(session, index + 1);
       }
     };
 
     speechAudio.onerror = () => {
-      if (runId !== speechRunId) {
+      if (speechChunkSession !== session || session.runId !== speechRunId) {
         return;
       }
 
+      speechChunkSession = null;
       clearActiveSpeechAudio();
       showReaderError(
         "speech-playback",
@@ -285,7 +283,7 @@
       );
     };
 
-    await playActiveSpeechAudio(runId);
+    await playActiveSpeechAudio(session.runId);
   }
 
   function speakText(
@@ -313,15 +311,17 @@
     speechRunId += 1;
     const runId = speechRunId;
     cancelActiveSpeech();
-    void speakAzureSpeechChunks(
+    const session = {
       chunks,
       runId,
       label,
       rate,
-      0,
       locale,
-      voiceName
-    );
+      voiceName,
+      prepared: new Map(),
+    };
+    speechChunkSession = session;
+    void playSpeechChunk(session, 0);
   }
 
   function writeWaveText(view, offset, value) {
@@ -374,14 +374,18 @@
     return buffer;
   }
 
-  function playCorrectFeedbackAudioBlob(blob, runId, label) {
+  function playFeedbackAudio(source, runId, label) {
     if (speechAudio === null || runId !== speechRunId) {
       return Promise.resolve(false);
     }
 
     clearActiveSpeechAudio();
-    activeSpeechAudioURL = URL.createObjectURL(blob);
-    speechAudio.src = activeSpeechAudioURL;
+    if (typeof source === "string") {
+      speechAudio.src = source;
+    } else {
+      activeSpeechAudioURL = URL.createObjectURL(source);
+      speechAudio.src = activeSpeechAudioURL;
+    }
 
     return new Promise((resolve) => {
       let settled = false;
@@ -453,28 +457,6 @@
     });
   }
 
-  async function requestCorrectFeedbackVoice(runId, variant) {
-    const token = await getAzureSpeechToken();
-    if (runId !== speechRunId) {
-      throw new SyncRequestError("request_aborted");
-    }
-    const request = requestAzureSpeechAudio(
-      token,
-      variant.speechText,
-      variant.speechRate,
-      ENGLISH_SPEECH_LOCALE,
-      ENGLISH_SPEECH_VOICE_NAME
-    );
-    activeSpeechRequest = request;
-    try {
-      return await request;
-    } finally {
-      if (activeSpeechRequest === request) {
-        activeSpeechRequest = null;
-      }
-    }
-  }
-
   async function playCorrectFeedbackSequence(variant) {
     if (speechInitializationPromise !== null) {
       await speechInitializationPromise;
@@ -486,39 +468,17 @@
     speechRunId += 1;
     const runId = speechRunId;
     cancelActiveSpeech();
-    const voiceResultPromise = requestCorrectFeedbackVoice(runId, variant).then(
-      (audioData) => ({ audioData, error: null }),
-      (error) => ({ audioData: null, error })
-    );
-    const chimeCompleted = await playCorrectFeedbackAudioBlob(
+    const chimeCompleted = await playFeedbackAudio(
       new Blob([createCorrectChimeWave(variant)], { type: "audio/wav" }),
       runId,
       "正解音"
     );
     if (!chimeCompleted || runId !== speechRunId) {
-      activeSpeechRequest?.abort();
-      await voiceResultPromise;
       return;
     }
 
-    const voiceResult = await voiceResultPromise;
-    if (runId !== speechRunId) {
-      return;
-    }
-    if (voiceResult.error !== null) {
-      if (voiceResult.error?.code !== "request_aborted") {
-        showReaderError(
-          "correct-feedback-request",
-          "正解feedbackの音声を取得できません",
-          `${speechErrorMessage(voiceResult.error)}. 通信状態を確認してください.`,
-          voiceResult.error
-        );
-      }
-      return;
-    }
-
-    const voiceCompleted = await playCorrectFeedbackAudioBlob(
-      new Blob([voiceResult.audioData], { type: "audio/mpeg" }),
+    const voiceCompleted = await playFeedbackAudio(
+      FEEDBACK_AUDIO_DATA_URLS[variant.id],
       runId,
       variant.speechText
     );
@@ -579,7 +539,22 @@
 
     const label = "不正解";
     awaitingAnswerResultSpeech = false;
-    speakText(`${label}.`, label, ANSWER_RESULT_SPEECH_RATE);
+    void (async () => {
+      if (speechInitializationPromise !== null) {
+        await speechInitializationPromise;
+      }
+      if (!speechEnabled || speechAudio === null) {
+        return;
+      }
+      speechRunId += 1;
+      const runId = speechRunId;
+      cancelActiveSpeech();
+      await playFeedbackAudio(
+        FEEDBACK_AUDIO_DATA_URLS.incorrect,
+        runId,
+        label
+      );
+    })();
   }
 
   function readCurrentPage() {

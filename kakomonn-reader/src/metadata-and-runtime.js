@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @version      2.1.4
+// @version      2.1.5
 // @description  問題文と解説の読み上げ, 解答後の自動Markdown copy, 学習記録の端末間同期とdue card完了時の祝福を提供します.
 // @updateURL    https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @downloadURL  https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
@@ -216,7 +216,6 @@
   const CATALOG_FETCH_CONCURRENCY = 4;
   const SPEECH_TIMEOUT_MS = 30000;
   const FRAME_LOAD_DELAY_MS = 900;
-  const FRAME_CHANGE_DELAY_MS = 700;
   const FRAME_PROBLEM_SCROLL_DELAYS_MS = [0, 120, 600];
   const SHORTCUT_SEQUENCE_TIMEOUT_MS = 400;
   const TIME_LIMIT_MS = 5 * 60 * 1000;
@@ -353,6 +352,13 @@
   const ENGLISH_SPEECH_VOICE_NAME = "en-US-JennyNeural";
   const AZURE_SPEECH_OUTPUT_FORMAT =
     "audio-24khz-48kbitrate-mono-mp3";
+  const FEEDBACK_AUDIO_DATA_URLS = Object.freeze({
+    normal: "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_NORMAL__",
+    rare: "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_RARE__",
+    "super-rare": "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_SUPER_RARE__",
+    ssr: "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_SSR__",
+    incorrect: "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_INCORRECT__",
+  });
   const SILENT_AUDIO_DATA_URL =
     "data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
   const SPEECH_GESTURE_STATUS =
@@ -372,7 +378,8 @@
   let speechInitializationPromise = null;
   let speechInitializationResolve = null;
   let speechRunId = 0;
-  let activeSpeechRequest = null;
+  const activeSpeechRequests = new Set();
+  let speechChunkSession = null;
   let activeSpeechAudioURL = "";
   let activeSpeechPlaybackCancel = null;
   let azureSpeechToken = "";
@@ -385,7 +392,6 @@
     ? "about:blank"
     : location.href;
   let loadTimer = null;
-  let frameChangeTimer = null;
   let timeLimitPhase = null;
   let timeLimitDeadline = 0;
   let timeLimitTimeout = null;
@@ -393,6 +399,9 @@
   let timeLimitSourceDocument = null;
   let frameProblemScrollTimers = [];
   let frameMutationObserver = null;
+  let frameControlObserver = null;
+  let observedAnswerResult = null;
+  let observedCommentary = null;
   let awaitingAnswerResultSpeech = false;
   let navigationInProgress = false;
   let nextQuestionOperationInProgress = false;

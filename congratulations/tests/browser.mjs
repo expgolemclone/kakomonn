@@ -40,8 +40,20 @@ function captureErrors(page, origin) {
   return errors;
 }
 
+async function rejectExternalRequests(page, origin) {
+  await page.route("**/*", async (route) => {
+    const url = route.request().url();
+    if (/^https?:/.test(url) && !url.startsWith(origin)) {
+      await route.abort("blockedbyclient");
+      return;
+    }
+    await route.continue();
+  });
+}
+
 async function verifyShell(browser, origin, experience, selectedIndex) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await rejectExternalRequests(page, origin);
   const errors = captureErrors(page, origin);
   await page.addInitScript((index) => {
     const nativeGetRandomValues = Crypto.prototype.getRandomValues;
@@ -80,6 +92,7 @@ async function verifyShell(browser, origin, experience, selectedIndex) {
 
 async function verifyInvalidParameters(browser, origin) {
   const page = await browser.newPage();
+  await rejectExternalRequests(page, origin);
   const errors = captureErrors(page, origin);
   try {
     await page.goto(`${origin}/?${search}&extra=1`, { waitUntil: "domcontentloaded" });
@@ -95,6 +108,7 @@ async function verifyInvalidParameters(browser, origin) {
 
 async function verifyExperience(browser, origin, experience, viewport) {
   const page = await browser.newPage({ viewport });
+  await rejectExternalRequests(page, origin);
   const errors = captureErrors(page, origin);
   await page.addInitScript(() => {
     window.__celebrationMessages = [];
@@ -140,12 +154,52 @@ async function verifyLocalCachePolicy(origin) {
     immutableResponse.headers.get("cache-control"),
     "public, max-age=31536000, immutable",
   );
+
+  const vendorResponse = await fetch(`${origin}/vendor/gsap/3.12.5/gsap.min.js`);
+  assert.equal(vendorResponse.status, 200);
+  assert.equal(
+    vendorResponse.headers.get("cache-control"),
+    "public, max-age=31536000, immutable",
+  );
+}
+
+async function verifyReadyBeforeImages(browser, origin) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  let releaseImage;
+  const imageReleased = new Promise((resolveRelease) => {
+    releaseImage = resolveRelease;
+  });
+  await page.route("**/formwork-meridian/assets/hero.jpg", async (route) => {
+    await imageReleased;
+    await route.continue();
+  });
+  await page.addInitScript(() => {
+    window.__celebrationReady = false;
+    window.addEventListener("message", (event) => {
+      if (event.data?.type === "kakomonn:celebration-ready") {
+        window.__celebrationReady = true;
+      }
+    });
+  });
+  try {
+    await page.goto(
+      `${origin}/experiences/formwork-meridian/?${search}`,
+      { waitUntil: "domcontentloaded" },
+    );
+    await page.waitForFunction(() => window.__celebrationReady === true);
+    assert.equal(await page.evaluate(() => document.readyState), "interactive");
+  } finally {
+    releaseImage();
+    await page.waitForLoadState("load");
+    await page.close();
+  }
 }
 
 const server = await startStaticServer();
 const browser = await chromium.launch({ headless: true });
 try {
   await verifyLocalCachePolicy(server.origin);
+  await verifyReadyBeforeImages(browser, server.origin);
   for (const [index, experience] of manifest.experiences.entries()) {
     await verifyShell(browser, server.origin, experience, index);
   }

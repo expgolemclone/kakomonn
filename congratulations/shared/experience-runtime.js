@@ -24,8 +24,8 @@ export function announceCelebration(siteId) {
     );
   };
 
-  if (document.readyState !== "complete") {
-    window.addEventListener("load", announce, { once: true });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", announce, { once: true });
     return;
   }
   announce();

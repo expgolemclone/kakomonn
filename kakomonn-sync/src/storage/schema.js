@@ -1,7 +1,7 @@
 import { getTokyoDate, tokyoDateRangeMs } from "../dates.js";
 import { canonicalQuestionIds } from "../contracts.js";
 
-const CURRENT_SCHEMA_VERSION = 10;
+const CURRENT_SCHEMA_VERSION = 11;
 
 function tableDefinition(storage, tableName) {
   return storage.sql
@@ -452,6 +452,15 @@ function migrateSchemaV9ToV10(storage, today) {
   );
 }
 
+function migrateSchemaV10ToV11(storage) {
+  storage.sql.exec(`
+    DROP INDEX IF EXISTS cards_by_site_due;
+    CREATE INDEX cards_by_site_due_number
+      ON cards (site, due_ms, CAST(question_id AS INTEGER), question_id);
+    UPDATE schema_metadata SET version = 11 WHERE singleton = 1;
+  `);
+}
+
 function migrateLegacySchema(storage, today) {
   const { startMs, endMs } = tokyoDateRangeMs(today);
   storage.sql.exec(`
@@ -598,8 +607,9 @@ function installIndexes(storage) {
     "DROP INDEX IF EXISTS attempts_by_site_attempted_at_question"
   );
   storage.sql.exec(`
-    CREATE INDEX IF NOT EXISTS cards_by_site_due
-      ON cards (site, due_ms, question_id);
+    DROP INDEX IF EXISTS cards_by_site_due;
+    CREATE INDEX IF NOT EXISTS cards_by_site_due_number
+      ON cards (site, due_ms, CAST(question_id AS INTEGER), question_id);
     CREATE INDEX IF NOT EXISTS attempts_by_site_attempted_at_operation
       ON attempts (site, attempted_at_ms, operation_id);
     CREATE INDEX IF NOT EXISTS questions_by_site_attempted_number
@@ -646,6 +656,7 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       [7, dueCardMetricTables],
       [8, dueCardMetricTables],
       [9, dueCardMetricTables],
+      [10, currentTables],
       [CURRENT_SCHEMA_VERSION, currentTables],
     ]);
     const legacyTables = [
@@ -722,6 +733,10 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     if (version === 9) {
       migrateSchemaV9ToV10(storage, today);
       version = 10;
+    }
+    if (version === 10) {
+      migrateSchemaV10ToV11(storage);
+      version = 11;
     }
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error("unsupported LearningState schema version");

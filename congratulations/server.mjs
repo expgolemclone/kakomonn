@@ -29,6 +29,7 @@ const mimeTypes = new Map([
 
 const immutablePathPatterns = [
   /^\/assets\//,
+  /^\/vendor\//,
   /^\/experiences\/conche\/_astro\//,
   /^\/experiences\/glyphica\/_next\/static\//,
   /^\/experiences\/halfstep\/assets\//,

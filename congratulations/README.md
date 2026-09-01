@@ -47,6 +47,10 @@ are preserved in each experience's `LICENSE` file.
 The deployed experiences and their snapshot builds also use the following
 open-source projects and resources.
 
+Runtime fonts, GSAP, and Three.js are served from versioned local assets under
+`public/vendor/`. Font and Three.js licenses, plus the GSAP package metadata and
+license reference, are deployed with those assets.
+
 | Purpose | Source repository |
 | --- | --- |
 | Animation runtime | [greensock/GSAP](https://github.com/greensock/GSAP) |

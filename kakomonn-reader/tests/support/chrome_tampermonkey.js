@@ -8,18 +8,25 @@ const {
   readKakomonnConfiguration,
 } = require("../../../scripts/kakomonn-config.cjs");
 const {
+  TAMPERMONKEY_BETA_EXTENSION_ID,
+  waitForDevToolsActivePort,
+} = require("../../../scripts/chrome-devtools.cjs");
+const {
   CHROME_AUTOPLAY_ARGUMENT,
+  CHROME_REMOTE_DEBUGGING_ARGUMENT,
   stopDedicatedChrome,
   stopDedicatedChromePowerShell,
 } = require("../../../scripts/windows-chrome-profile.cjs");
 
 const { chromium } = require("playwright");
 
-const TAMPERMONKEY_EXTENSION_ID = "dhdgffkkebhmkfjojejmpbldmpobfkfo";
+const TAMPERMONKEY_EXTENSION_ID = TAMPERMONKEY_BETA_EXTENSION_ID;
+const LEGACY_TAMPERMONKEY_EXTENSION_ID = "dhdgffkkebhmkfjojejmpbldmpobfkfo";
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SYNC_TOKEN_PATTERN = /^[0-9a-f]{64}$/i;
 const DEFAULT_SYNC_API_ORIGIN =
   "https://kakomonn-sync.kakomonn.workers.dev";
+const CURRENT_QUESTION_URL = "https://chushoks.kakomonn.com/questions/86956";
 const DEFAULT_CHROME_E2E_DIRECTORY_NAME = "kakomonn-chrome-e2e";
 
 function delay(milliseconds) {
@@ -103,11 +110,6 @@ function readChromeUserDataDir({
       "KAKOMONN_CHROME_USER_DATA_DIR must be outside the standard Chrome user data directory",
     );
   }
-  if (!existsSync(userDataDir)) {
-    throw new Error(
-      `The dedicated Chrome E2E user data directory was not found: ${userDataDir}`,
-    );
-  }
   return userDataDir;
 }
 
@@ -150,12 +152,6 @@ function extractSyncTokenCandidates(buffers) {
   return candidates;
 }
 
-function registeredScriptEntriesContainFingerprint(registrations, fingerprint) {
-  return registrations.some((registration) =>
-    JSON.stringify(registration).includes(fingerprint),
-  );
-}
-
 function listProfileDirectories(userDataRoot, {
   existsSync = fs.existsSync,
   readdirSync = fs.readdirSync,
@@ -189,13 +185,18 @@ function discoverTampermonkeyStorageDirectories({
       existsSync,
       readdirSync,
     })) {
-      const storageDirectory = path.join(
-        profileDirectory,
-        "Local Extension Settings",
+      for (const extensionId of [
         TAMPERMONKEY_EXTENSION_ID,
-      );
-      if (existsSync(storageDirectory)) {
-        directories.add(storageDirectory);
+        LEGACY_TAMPERMONKEY_EXTENSION_ID,
+      ]) {
+        const storageDirectory = path.join(
+          profileDirectory,
+          "Local Extension Settings",
+          extensionId,
+        );
+        if (existsSync(storageDirectory)) {
+          directories.add(storageDirectory);
+        }
       }
     }
   }
@@ -370,7 +371,7 @@ function locateTampermonkeyExtension(userDataDir, {
   );
   if (!existsSync(extensionsRoot)) {
     throw new Error(
-      "Tampermonkey must be installed in the dedicated Chrome E2E profile",
+      "Tampermonkey Beta must be installed in the dedicated Chrome E2E profile",
     );
   }
   const extensionIds = readdirSync(extensionsRoot, { withFileTypes: true })
@@ -379,7 +380,7 @@ function locateTampermonkeyExtension(userDataDir, {
     .sort();
   if (!extensionIds.includes(TAMPERMONKEY_EXTENSION_ID)) {
     throw new Error(
-      "Tampermonkey must be installed in the dedicated Chrome E2E profile",
+      "Tampermonkey Beta must be installed in the dedicated Chrome E2E profile",
     );
   }
   const extensionRoot = path.join(extensionsRoot, TAMPERMONKEY_EXTENSION_ID);
@@ -389,17 +390,33 @@ function locateTampermonkeyExtension(userDataDir, {
     .sort((left, right) => right.localeCompare(left, undefined, { numeric: true }));
   if (versions.length === 0) {
     throw new Error(
-      "Tampermonkey must be installed in the dedicated Chrome E2E profile",
+      "Tampermonkey Beta must be installed in the dedicated Chrome E2E profile",
     );
   }
   return path.join(extensionRoot, versions[0]);
+}
+
+async function waitForTampermonkeyExtension(userDataDir, timeoutMs = 60_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      return locateTampermonkeyExtension(userDataDir);
+    } catch (error) {
+      lastError = error;
+      await delay(250);
+    }
+  }
+  throw new Error(
+    `Chrome policy did not install Tampermonkey Beta in the dedicated profile: ${lastError?.message ?? "unknown error"}`,
+  );
 }
 
 function chromeLaunchArguments(userDataDir) {
   return [
     `--user-data-dir=${userDataDir}`,
     CHROME_AUTOPLAY_ARGUMENT,
-    "--remote-debugging-port=0",
+    CHROME_REMOTE_DEBUGGING_ARGUMENT,
     "--start-minimized",
     "--force-device-scale-factor=1",
     "--window-size=1440,900",
@@ -428,25 +445,6 @@ function waitForProcessExit(browserProcess, timeoutMs) {
   });
 }
 
-async function waitForActivePort(activePortPath, browserProcess, timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (fs.existsSync(activePortPath)) {
-      const [port] = fs.readFileSync(activePortPath, "utf8").trim().split(/\r?\n/);
-      if (/^\d+$/.test(port)) {
-        return Number(port);
-      }
-    }
-    if (browserProcess.exitCode !== null) {
-      throw new Error(
-        `Google Chrome exited before remote debugging started: ${browserProcess.exitCode}`,
-      );
-    }
-    await delay(100);
-  }
-  throw new Error("Google Chrome remote debugging did not start");
-}
-
 async function launchDedicatedChrome({
   configuration = readKakomonnConfiguration(),
   systemEnvironment = process.env,
@@ -459,7 +457,7 @@ async function launchDedicatedChrome({
   if (!fs.existsSync(executablePath)) {
     throw new Error(`Google Chrome was not found: ${executablePath}`);
   }
-  locateTampermonkeyExtension(resolvedUserDataDir);
+  fs.mkdirSync(resolvedUserDataDir, { recursive: true });
   stopDedicatedChrome(resolvedUserDataDir, { systemEnvironment });
   const activePortPath = path.join(resolvedUserDataDir, "DevToolsActivePort");
   fs.rmSync(activePortPath, { force: true });
@@ -472,7 +470,30 @@ async function launchDedicatedChrome({
       windowsHide: true,
     },
   );
-  const port = await waitForActivePort(activePortPath, browserProcess);
+  try {
+    const port = await waitForDevToolsActivePort(
+      resolvedUserDataDir,
+      browserProcess,
+    );
+    await waitForTampermonkeyExtension(resolvedUserDataDir);
+    return await connectDedicatedChrome({
+      browserProcess,
+      port,
+      systemEnvironment,
+      userDataDir: resolvedUserDataDir,
+    });
+  } catch (error) {
+    stopDedicatedChrome(resolvedUserDataDir, { systemEnvironment });
+    throw error;
+  }
+}
+
+async function connectDedicatedChrome({
+  browserProcess = null,
+  port,
+  systemEnvironment = process.env,
+  userDataDir,
+}) {
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
   const contexts = browser.contexts();
   assert.equal(contexts.length, 1, "The dedicated Chrome profile must expose one context");
@@ -496,13 +517,19 @@ async function launchDedicatedChrome({
           ]);
         }
       }
-      let exited = await waitForProcessExit(browserProcess, 3_000);
-      if (!exited && !browserProcess.killed) {
+      let exited = browserProcess === null
+        ? false
+        : await waitForProcessExit(browserProcess, 3_000);
+      if (
+        browserProcess !== null &&
+        !exited &&
+        !browserProcess.killed
+      ) {
         browserProcess.kill();
         exited = await waitForProcessExit(browserProcess, 3_000);
       }
       if (!exited) {
-        stopDedicatedChrome(resolvedUserDataDir, { systemEnvironment });
+        stopDedicatedChrome(userDataDir, { systemEnvironment });
       }
     },
   };
@@ -545,6 +572,24 @@ async function readStoredUserscriptState(
   );
 }
 
+async function ensureDynamicContentMode(settingsPage) {
+  const contentMode = settingsPage
+    .locator("select")
+    .filter({ has: settingsPage.locator('option[value="userscripts"]') });
+  await contentMode.waitFor({ state: "visible", timeout: 30_000 });
+  if ((await contentMode.inputValue()) === "userscripts-dynamic") {
+    return;
+  }
+  await contentMode.selectOption("userscripts-dynamic");
+  const securitySection = contentMode.locator("xpath=ancestor::table[1]");
+  const saveButton = securitySection.getByRole("button", {
+    name: /^(保存|Save)$/,
+  });
+  await saveButton.waitFor({ state: "visible", timeout: 10_000 });
+  await saveButton.click();
+  await delay(2_000);
+}
+
 async function updateInstalledUserscript(context, userscriptPath) {
   if (!fs.existsSync(userscriptPath)) {
     throw new Error(`Built userscript was not found: ${userscriptPath}`);
@@ -565,22 +610,6 @@ async function updateInstalledUserscript(context, userscriptPath) {
     `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=settings`,
     { waitUntil: "commit", timeout: 30_000 },
   );
-  const userScriptsPermission = await settingsPage.evaluate(async () => {
-    if (typeof chrome.userScripts === "undefined") {
-      return "disabled";
-    }
-    try {
-      await chrome.userScripts.getScripts();
-      return "enabled";
-    } catch {
-      return "disabled";
-    }
-  });
-  if (userScriptsPermission !== "enabled") {
-    throw new Error(
-      "Tampermonkey requires Allow User Scripts in the dedicated Chrome profile",
-    );
-  }
   const configurationMode = settingsPage
     .locator("select")
     .filter({ has: settingsPage.locator('option[value="50"]') })
@@ -589,33 +618,17 @@ async function updateInstalledUserscript(context, userscriptPath) {
   if ((await configurationMode.inputValue()) !== "100") {
     await configurationMode.selectOption("100");
   }
-  const contentMode = settingsPage
-    .locator("select")
-    .filter({ has: settingsPage.locator('option[value="userscripts-dynamic"]') });
-  await contentMode.waitFor({ state: "visible", timeout: 30_000 });
-  if ((await contentMode.inputValue()) !== "userscripts-dynamic") {
-    await contentMode.selectOption("userscripts-dynamic");
-    const securitySection = contentMode.locator("xpath=ancestor::table[1]");
-    const saveButton = securitySection.getByRole("button", {
-      name: /^(保存|Save)$/,
-    });
-    await saveButton.waitFor({ state: "visible", timeout: 10_000 });
-    await saveButton.click();
-    await delay(2_000);
-  }
+  await ensureDynamicContentMode(settingsPage);
 
   const dashboardPage = await context.newPage();
   await dashboardPage.goto(
     `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=dashboard`,
     { waitUntil: "commit", timeout: 30_000 },
   );
-  await dashboardPage
-    .locator("tr.scripttr")
-    .first()
-    .waitFor({ state: "visible", timeout: 30_000 });
   const scriptRows = dashboardPage
     .locator("tr.scripttr")
     .filter({ hasText: userscriptName });
+  await scriptRows.first().waitFor({ state: "visible", timeout: 30_000 });
   const scriptCount = await scriptRows.count();
   if (scriptCount !== 1) {
     throw new Error(
@@ -731,31 +744,35 @@ async function updateInstalledUserscript(context, userscriptPath) {
     true,
     "Tampermonkey did not enable the current userscript",
   );
-  const registrationDeadline = Date.now() + 60_000;
-  let registrationReady = false;
-  while (!registrationReady && Date.now() < registrationDeadline) {
-    registrationReady = await dashboardPage.evaluate(
-      async ({ expectedFingerprint }) => {
-        const registrations = await chrome.userScripts.getScripts();
-        return registrations.some((registration) =>
-          JSON.stringify(registration).includes(expectedFingerprint),
-        );
-      },
-      { expectedFingerprint: buildFingerprint },
-    );
-    if (!registrationReady) {
-      await delay(250);
-    }
+}
+
+async function launchChromeWithCurrentUserscript({
+  configuration = readKakomonnConfiguration(),
+  systemEnvironment = process.env,
+  userDataDir,
+  userscriptPath,
+}) {
+  const updateChrome = await launchDedicatedChrome({
+    configuration,
+    systemEnvironment,
+    userDataDir,
+  });
+  try {
+    await updateInstalledUserscript(updateChrome.context, userscriptPath);
+  } finally {
+    await updateChrome.close();
   }
-  if (!registrationReady) {
-    throw new Error(
-      "Tampermonkey did not register the current userscript with Chrome",
-    );
-  }
+  return launchDedicatedChrome({
+    configuration,
+    systemEnvironment,
+    userDataDir,
+  });
 }
 
 module.exports = {
+  CURRENT_QUESTION_URL,
   DEFAULT_SYNC_API_ORIGIN,
+  LEGACY_TAMPERMONKEY_EXTENSION_ID,
   SYNC_TOKEN_KEY,
   TAMPERMONKEY_EXTENSION_ID,
   assertTokenShape,
@@ -763,16 +780,17 @@ module.exports = {
   defaultChromeE2EUserDataDir,
   discoverTampermonkeyStorageDirectories,
   chromeLaunchArguments,
+  connectDedicatedChrome,
   extractSyncTokenCandidates,
   updateInstalledUserscript,
   isSameOrDescendantPath,
+  launchChromeWithCurrentUserscript,
   launchDedicatedChrome,
   listProfileDirectories,
   locateTampermonkeyExtension,
   readConfiguredToken,
   readDirectoryBuffers,
   readChromeUserDataDir,
-  registeredScriptEntriesContainFingerprint,
   resolveSyncToken,
   scanStoredSyncTokenCandidates,
   kakomonnFreeEnvironment,

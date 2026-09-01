@@ -1,19 +1,20 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @version      2.1.3
+// @version      2.1.4
 // @description  問題文と解説の読み上げ, 解答後の自動Markdown copy, 学習記録の端末間同期とdue card完了時の祝福を提供します.
 // @updateURL    https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @downloadURL  https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @match        https://*.kakomonn.com/*
+// @match        https://kakomonn-sync.kakomonn.workers.dev/open
 // @connect      kakomonn-sync.kakomonn.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com
 // @run-at       document-end
 // @noframes
-// @grant        GM_getValue
+// @grant        GM.getValue
 // @grant        GM.setValue
 // @grant        GM.deleteValue
-// @grant        GM_xmlhttpRequest
+// @grant        GM.xmlHttpRequest
 // @grant        GM.setClipboard
 // @grant        GM_info
 // ==/UserScript==
@@ -46,7 +47,16 @@
     !/(?:CriOS|FxiOS|EdgiOS|OPiOS)\//.test(userAgent);
   const SYNC_API_URL =
     "https://kakomonn-sync.kakomonn.workers.dev";
+  const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
+  const SYNC_TIMEOUT_MS = 15000;
+  const isReaderBridge =
+    location.origin === SYNC_API_URL &&
+    location.pathname === "/open" &&
+    location.search === "" &&
+    location.hash === "";
   const NEXT_QUESTION_SITE_ID = "chushoks.kakomonn.com";
+  const READER_BRIDGE_TARGET_ATTRIBUTE =
+    "data-kakomonn-reader-bridge-target";
   const isNextQuestionLauncher =
     location.hostname === NEXT_QUESTION_SITE_ID &&
     location.pathname === "/createques" &&
@@ -55,6 +65,142 @@
   let shouldLaunchNextQuestionAfterSync = isNextQuestionLauncher;
   const CONGRATULATIONS_URL =
     "https://kakomonn-congratulations.kakomonn.workers.dev/";
+
+  class SyncRequestError extends Error {
+    constructor(code, status = 0) {
+      super(code);
+      this.name = "SyncRequestError";
+      this.code = code;
+      this.status = status;
+    }
+  }
+
+  function gmXMLHttpRequest(details) {
+    const requestTimeoutMs = details.timeout ?? SYNC_TIMEOUT_MS;
+    const requestDetails = { ...details };
+    delete requestDetails.timeout;
+    let tampermonkeyRequest = null;
+    let requestTimeout = null;
+    let rejectRequest = () => false;
+    const promise = new Promise((resolve, reject) => {
+      let settled = false;
+      const settleOnce = (callback) => {
+        if (settled) {
+          return false;
+        }
+        settled = true;
+        if (requestTimeout !== null) {
+          window.clearTimeout(requestTimeout);
+          requestTimeout = null;
+        }
+        callback();
+        return true;
+      };
+      const resolveOnce = (response) => settleOnce(() => resolve(response));
+      const rejectOnce = (code) =>
+        settleOnce(() => reject(new SyncRequestError(code)));
+      rejectRequest = rejectOnce;
+      requestTimeout = window.setTimeout(() => {
+        if (!rejectOnce("request_timeout")) {
+          return;
+        }
+        try {
+          tampermonkeyRequest?.abort();
+        } catch {
+          // timeout result is already final.
+        }
+      }, requestTimeoutMs);
+      try {
+        requestDetails.onload = resolveOnce;
+        requestDetails.onerror = () => rejectOnce("network_error");
+        requestDetails.onabort = () => rejectOnce("request_aborted");
+        requestDetails.ontimeout = () => rejectOnce("request_timeout");
+        tampermonkeyRequest = GM.xmlHttpRequest(requestDetails);
+      } catch {
+        rejectOnce("network_error");
+      }
+    });
+    promise.abort = () => {
+      if (!rejectRequest("request_aborted")) {
+        return;
+      }
+      try {
+        tampermonkeyRequest?.abort();
+      } catch {
+        // abort result is already final.
+      }
+    };
+    return promise;
+  }
+
+  function isReaderBridgeNextResponse(value) {
+    if (value?.question === null) {
+      return true;
+    }
+    const question = value?.question;
+    if (
+      question === null ||
+      typeof question !== "object" ||
+      !/^\d+$/.test(question.questionId)
+    ) {
+      return false;
+    }
+    try {
+      const url = new URL(question.url);
+      return (
+        url.origin === `https://${NEXT_QUESTION_SITE_ID}` &&
+        url.pathname === `/questions/${question.questionId}` &&
+        url.search === "" &&
+        url.hash === "" &&
+        (question.kind === "review" || question.kind === "new") &&
+        (question.dueMs === null || Number.isSafeInteger(question.dueMs))
+      );
+    } catch {
+      return false;
+    }
+  }
+  if (
+    SCRIPT_HANDLER !== "Tampermonkey" ||
+    (!isWindowsChrome && !isIPhoneSafari) ||
+    typeof GM !== "object" ||
+    GM === null ||
+    typeof GM.getValue !== "function" ||
+    typeof GM.setValue !== "function" ||
+    typeof GM.deleteValue !== "function" ||
+    typeof GM.xmlHttpRequest !== "function" ||
+    typeof GM.setClipboard !== "function"
+  ) {
+    if (isReaderBridge) {
+      document.documentElement.dataset.kakomonnReaderBridgeState = "error";
+    }
+    return;
+  }
+  if (isReaderBridge) {
+    try {
+      const storedToken = await GM.getValue(SYNC_TOKEN_KEY, "");
+      const token = typeof storedToken === "string" ? storedToken.trim() : "";
+      const parameters = new URLSearchParams({ site: NEXT_QUESTION_SITE_ID });
+      const result = await requestSyncResponse(
+        "GET",
+        `/v9/next?${parameters}`,
+        token,
+        isReaderBridgeNextResponse
+      );
+      if (result.question === null) {
+        document.documentElement.dataset.kakomonnReaderBridgeState = "empty";
+        return;
+      }
+      document.documentElement.setAttribute(
+        READER_BRIDGE_TARGET_ATTRIBUTE,
+        result.question.url
+      );
+      document.documentElement.dataset.kakomonnReaderBridgeState = "ready";
+    } catch (error) {
+      document.documentElement.dataset.kakomonnReaderBridgeState =
+        error?.code === "unauthorized" ? "unauthorized" : "error";
+    }
+    return;
+  }
   const SITE_ID = location.hostname.toLowerCase();
   if (
     !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(
@@ -63,24 +209,9 @@
   ) {
     return;
   }
-  if (
-    SCRIPT_HANDLER !== "Tampermonkey" ||
-    (!isWindowsChrome && !isIPhoneSafari) ||
-    typeof GM !== "object" ||
-    GM === null ||
-    typeof GM_getValue !== "function" ||
-    typeof GM.setValue !== "function" ||
-    typeof GM.deleteValue !== "function" ||
-    typeof GM_xmlhttpRequest !== "function" ||
-    typeof GM.setClipboard !== "function"
-  ) {
-    return;
-  }
-  const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
   const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE_ID}.v9.pending-attempt`;
   const PENDING_CELEBRATION_KEY =
     `kakomonn-reader.${SITE_ID}.v9.pending-celebration`;
-  const SYNC_TIMEOUT_MS = 15000;
   const CATALOG_TIMEOUT_MS = 15000;
   const CATALOG_FETCH_CONCURRENCY = 4;
   const SPEECH_TIMEOUT_MS = 30000;

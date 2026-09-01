@@ -18,13 +18,13 @@
 
 ## 普段使いのChrome
 
-次のcommandは, `%LOCALAPPDATA%\kakomonn-chrome-e2e` の専用profileでChromeを起動し, [`kakomonn-sync`の次問launcher](kakomonn-sync/README.md#次の問題を開く)を開きます. command自体はrepository rootの`.env`にある`KAKOMONN_SYNC_TOKEN`を使用しません.
+次のcommandは, `%LOCALAPPDATA%\kakomonn-chrome-e2e` の専用profileでChromeを起動し, [`kakomonn-sync`の次問bridge](kakomonn-sync/README.md#次の問題を開く)を開きます. command自体はrepository rootの`.env`にある`KAKOMONN_SYNC_TOKEN`を使用しません.
 
 ```powershell
 npm run open:kakomonn
 ```
 
-Chromeが同じ専用profileで起動済みの場合は, processの起動optionを確認します. 必要なoptionで起動済みなら既存windowへ新しいtabを追加し, そうでなければその専用profileのChromeだけを終了します. 停止中の専用profileはwindowなしで初期化してから固定URLを開きます. 通常利用するChrome profileまたはその配下は指定できません. 完全testもこの専用profileの既存Chrome processを終了するため, test前に専用profileでの作業を保存してください.
+Chromeが同じ専用profileで起動済みの場合は, processの起動optionを確認します. 必要なoptionで起動済みならTampermonkey Betaを確認して固定`/open`の専用tabを追加し, そうでなければその専用profileのChromeだけを終了します. Chrome停止中の初回commandは`about:blank`だけでbrowserを起動し, application URLを開かず終了します. Chrome起動後に同じcommandをもう一度実行してください. 固定URLをChromeのcold起動引数として渡す経路はありません. 通常利用するChrome profileまたはその配下は指定できません. 完全testもこの専用profileの既存Chrome processを終了するため, test前に専用profileでの作業を保存してください.
 
 ## iPhone Safari
 
@@ -41,12 +41,12 @@ npm ci
 npm run build:kakomonn-reader
 ```
 
-通常利用するChrome profileはlive E2Eに使用しません. 初回だけ専用のuser data directoryでChromeを起動し, そのprofileへTampermonkeyと`kakomonn-reader`を1件ずつinstallして`Allow User Scripts`を有効にしてからChromeを閉じます. userscriptの更新とbrowser操作はtest scriptが行います.
+通常利用するChrome profileはlive E2Eに使用しません. Windows Chromeでは[Tampermonkey Updator v1.1.1以上](https://github.com/expgolemclone/tampermonkey-updator/releases/latest)の`install-windows.ps1`を管理者権限のPowerShellで1回実行し, Tampermonkey Beta 5.6以上と`kakomonn-reader`をmachine policyでprovisioningします. installerは旧stableのTampermonkey policyだけを削除し, 既存browser policyを保持します. test scriptが専用user data directoryの作成, policy installの待機, `Allow User Scripts`の有効化, userscript更新, browser操作を所有します.
 
 ```powershell
-$profileDirectory = Join-Path $env:LOCALAPPDATA 'kakomonn-chrome-e2e'
-$chromeExecutable = Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'
-Start-Process -FilePath $chromeExecutable -ArgumentList "--user-data-dir=$profileDirectory"
+$installer = Join-Path ([IO.Path]::GetTempPath()) 'install-tampermonkey-updator.ps1'
+Invoke-WebRequest 'https://github.com/expgolemclone/tampermonkey-updator/releases/latest/download/install-windows.ps1' -OutFile $installer
+pwsh -NoProfile -File $installer
 ```
 
 `.env.example`を`.env`へcopyし, 専用profileのpathを`KAKOMONN_CHROME_USER_DATA_DIR`へ保存できます. `KAKOMONN_CHROME_EXECUTABLE`を省略した場合は`%ProgramFiles%\Google\Chrome\Application\chrome.exe`, profileを省略した場合は`%LOCALAPPDATA%\kakomonn-chrome-e2e`を使用します. 対応keyは`.env.example`を正本とし, 未対応keyと重複keyは設定errorになります. 空の任意設定は未指定として扱います. test scriptは`.env`の値だけを読み, process環境変数の`KAKOMONN_*`は参照しません.
@@ -61,9 +61,9 @@ KAKOMONN_SYNC_TOKEN=<SYNC_TOKEN>
 npm test
 ```
 
-上記のinstallでPlaywrightと対応するChromiumおよびWebKitも導入します. 完全testはlocal testとsmoke testに続けて, 実サイトE2Eと, 専用profileの最小化Chrome, 実Tampermonkey, 本番同期Workerを使用するlive E2Eを実行します. test scriptは専用profileの既存processの終了から起動, userscript更新, test後の終了までを所有し, Tampermonkeyを`UserScripts API Dynamic`に固定します. 実Chrome上で解答記録を送信し, 本番の解答履歴と定着状態, 外側URLとiframeの次問遷移, 実OS clipboardへのMarkdownコピーまでを検証します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません. 専用profile, Tampermonkey, 本番token, 最新buildのいずれかが欠けている場合は失敗し, live E2Eをskipまたはforce通過させるoptionはありません.
+上記のinstallでPlaywrightと対応するChromiumおよびWebKitも導入します. 完全testはlocal testとsmoke testに続けて, 実サイトE2Eと, 専用profileの最小化Chrome, 実Tampermonkey Beta, 本番同期Workerを使用するlive E2Eを実行します. test scriptは専用profileの既存processの終了から起動, userscript更新, test後の終了までを所有し, Tampermonkey Betaを`UserScripts API Dynamic` modeへ設定します. 実userscript通信を完了したwarm Chromeだけでproduction launcherから本番の固定`/open`を開くread-only E2Eを実行し, 続いて実Chrome上で解答記録を送信します. 本番の解答履歴と定着状態, 外側URLとiframeの次問遷移, 実OS clipboardへのMarkdownコピーまでを検証します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません. 専用profile, Tampermonkey Beta, 本番token, 最新buildのいずれかが欠けている場合は失敗し, live E2Eをskipまたはforce通過させるoptionはありません.
 
-ReaderのTampermonkey metadata, ES2020構文, build fingerprintもこの完全testで検証します. 最後のlive E2Eだけを再実行する場合は`npm run test:kakomonn-live-sync`, Chromiumとmobile相当のPlaywright WebKitを使うsmoke testだけを実行する場合は`npm run test:smoke`を使用します. どちらも完全な完了条件の代替にはなりません.
+ReaderのTampermonkey metadata, ES2020構文, build fingerprintもこの完全testで検証します. prewarmed production launcherのread-only E2Eだけを再実行する場合は`npm run test:kakomonn-live-open`, 解答を含むlive E2Eだけを再実行する場合は`npm run test:kakomonn-live-sync`, Chromiumとmobile相当のPlaywright WebKitを使うsmoke testだけを実行する場合は`npm run test:smoke`を使用します. いずれも完全な完了条件の代替にはなりません.
 
 ## iOS Safari CI
 

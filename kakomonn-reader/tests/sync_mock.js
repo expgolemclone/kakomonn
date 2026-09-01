@@ -137,9 +137,10 @@ function installSyncMockInWindow({
 
   window.__syncMock = mock;
   window.GM_info = { scriptHandler: "Tampermonkey" };
-  window.GM_getValue = (key, defaultValue) =>
-    values.has(key) ? structuredClone(values.get(key)) : defaultValue;
   window.GM = {
+    async getValue(key, defaultValue) {
+      return values.has(key) ? structuredClone(values.get(key)) : defaultValue;
+    },
     async setClipboard(value) {
       if (window.__clipboardWriteFails) throw new Error("mock clipboard write failed");
       mock.clipboardWrites.push(value);
@@ -171,16 +172,17 @@ function installSyncMockInWindow({
       values.delete(key);
     },
   };
-  window.GM_xmlhttpRequest = (details) => {
+  window.GM.xmlHttpRequest = (details) => {
     let aborted = false;
     let releaseHeldRequest = null;
+    const request = {};
       const respondJSON = (status, body) => {
         window.setTimeout(() => {
           if (aborted) {
             return;
           }
           const response = { status, responseText: JSON.stringify(body) };
-          details.onload?.(response);
+          details.onload(response);
         }, 0);
       };
       const respondAudio = () => {
@@ -193,14 +195,14 @@ function installSyncMockInWindow({
             response: new Uint8Array([0x49, 0x44, 0x33, 0x04]).buffer,
             responseHeaders: "content-type: audio/mpeg",
           };
-          details.onload?.(response);
+          details.onload(response);
         }, 0);
       };
       const failRequest = () => {
         if (aborted) {
           return;
         }
-        details.onerror?.({});
+        details.onerror(new Error("mock network error"));
       };
       const contentType = details.headers?.["Content-Type"] ?? "";
       const call = {
@@ -443,19 +445,18 @@ function installSyncMockInWindow({
       } else {
         window.setTimeout(executeRequest, 0);
       }
-      return {
-        abort() {
-          if (aborted) {
-            return;
-          }
-          aborted = true;
-          mock.abortedRequestCount += 1;
-          if (mock.releaseHeldRequest === releaseHeldRequest) {
-            mock.releaseHeldRequest = null;
-          }
-          details.onabort?.({});
-        },
+      request.abort = () => {
+        if (aborted) {
+          return;
+        }
+        aborted = true;
+        mock.abortedRequestCount += 1;
+        if (mock.releaseHeldRequest === releaseHeldRequest) {
+          mock.releaseHeldRequest = null;
+        }
+        details.onabort(new Error("mock request aborted"));
       };
+      return request;
     };
   window.__getGMValue = (key) =>
     values.has(key) ? structuredClone(values.get(key)) : null;

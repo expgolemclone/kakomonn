@@ -179,7 +179,7 @@
 
     let storedToken;
     try {
-      storedToken = GM_getValue(SYNC_TOKEN_KEY, "");
+      storedToken = await GM.getValue(SYNC_TOKEN_KEY, "");
       if (typeof storedToken !== "string") {
         await GM.deleteValue(SYNC_TOKEN_KEY);
         storedToken = "";

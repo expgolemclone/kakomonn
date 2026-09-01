@@ -3,6 +3,7 @@ const path = require("node:path");
 
 const CHROME_AUTOPLAY_ARGUMENT =
   "--autoplay-policy=no-user-gesture-required";
+const CHROME_REMOTE_DEBUGGING_ARGUMENT = "--remote-debugging-port=0";
 
 function isSameOrDescendantPath(parentPath, candidatePath, pathApi = path) {
   const relative = pathApi.relative(parentPath, candidatePath);
@@ -84,7 +85,8 @@ function Get-DedicatedChromeProcesses {
 const inspectDedicatedChromePowerShell = String.raw`
 param(
   [Parameter(Mandatory=$true)][string]$UserDataDir,
-  [Parameter(Mandatory=$true)][string]$AutoplayArgument
+  [Parameter(Mandatory=$true)][string]$AutoplayArgument,
+  [Parameter(Mandatory=$true)][string]$RemoteDebuggingArgument
 )
 $ErrorActionPreference = "Stop"
 ${dedicatedChromeProcessPowerShell}
@@ -99,10 +101,17 @@ $autoplayAllowed =
     $rootProcesses |
       Where-Object { -not $_.CommandLine.Contains($AutoplayArgument) }
   ).Count -eq 0
+$remoteDebuggingEnabled =
+  $rootProcesses.Count -gt 0 -and
+  @(
+    $rootProcesses |
+      Where-Object { -not $_.CommandLine.Contains($RemoteDebuggingArgument) }
+  ).Count -eq 0
 [pscustomobject]@{
   processCount = $processes.Count
   rootProcessCount = $rootProcesses.Count
   autoplayAllowed = $autoplayAllowed
+  remoteDebuggingEnabled = $remoteDebuggingEnabled
 } | ConvertTo-Json -Compress
 `;
 
@@ -183,6 +192,8 @@ function inspectDedicatedChrome(
       userDataDir,
       "-AutoplayArgument",
       CHROME_AUTOPLAY_ARGUMENT,
+      "-RemoteDebuggingArgument",
+      CHROME_REMOTE_DEBUGGING_ARGUMENT,
     ],
     { spawnSyncImpl, systemEnvironment },
   );
@@ -200,13 +211,15 @@ function inspectDedicatedChrome(
     !Number.isSafeInteger(state?.rootProcessCount) ||
     state.rootProcessCount < 0 ||
     state.rootProcessCount > state.processCount ||
-    typeof state?.autoplayAllowed !== "boolean"
+    typeof state?.autoplayAllowed !== "boolean" ||
+    typeof state?.remoteDebuggingEnabled !== "boolean"
   ) {
     throw new Error("Dedicated Chrome process state was invalid");
   }
   return Object.freeze({
     autoplayAllowed: state.autoplayAllowed,
     processCount: state.processCount,
+    remoteDebuggingEnabled: state.remoteDebuggingEnabled,
     rootProcessCount: state.rootProcessCount,
   });
 }
@@ -227,6 +240,7 @@ function stopDedicatedChrome(
 
 module.exports = {
   CHROME_AUTOPLAY_ARGUMENT,
+  CHROME_REMOTE_DEBUGGING_ARGUMENT,
   inspectDedicatedChrome,
   inspectDedicatedChromePowerShell,
   isSameOrDescendantPath,

@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { statSync } from "node:fs";
+import { readFileSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import kakomonnConfig from "./kakomonn-config.cjs";
+import chromeDevTools from "./chrome-devtools.cjs";
 import windowsChromeProfile from "./windows-chrome-profile.cjs";
 
 const {
@@ -11,7 +12,15 @@ const {
   readKakomonnConfiguration,
 } = kakomonnConfig;
 const {
+  TAMPERMONKEY_BETA_EXTENSION_ID,
+  activePortPath,
+  prepareKakomonnPage,
+  readDevToolsActivePort,
+  waitForDevToolsActivePort,
+} = chromeDevTools;
+const {
   CHROME_AUTOPLAY_ARGUMENT,
+  CHROME_REMOTE_DEBUGGING_ARGUMENT,
   inspectDedicatedChrome,
   isSameOrDescendantPath,
   stopDedicatedChrome,
@@ -19,14 +28,31 @@ const {
 
 export const KAKOMONN_OPEN_URL =
   "https://kakomonn-sync.kakomonn.workers.dev/open";
-export { CHROME_AUTOPLAY_ARGUMENT };
+export { CHROME_AUTOPLAY_ARGUMENT, CHROME_REMOTE_DEBUGGING_ARGUMENT };
 export const CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT =
   "--hide-crash-restore-bubble";
-export const CHROME_NO_STARTUP_WINDOW_ARGUMENT = "--no-startup-window";
-export const CHROME_COLD_START_GRACE_MS = 1_000;
+export const CHROME_BOOTSTRAP_URL = "about:blank";
+const READER_METADATA_PATH = fileURLToPath(
+  new URL("../kakomonn-reader/src/metadata-and-runtime.js", import.meta.url),
+);
 
-function delay(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+export function readUserscriptIdentity({ readFile = readFileSync } = {}) {
+  const source = readFile(READER_METADATA_PATH, "utf8");
+  const readDirective = (directive) => {
+    const matches = [
+      ...source.matchAll(new RegExp(`^// @${directive}\\s+(.+)$`, "gm")),
+    ];
+    if (matches.length !== 1 || matches[0][1].trim() === "") {
+      throw new Error(
+        `Reader metadata must contain exactly one @${directive} directive`,
+      );
+    }
+    return matches[0][1].trim();
+  };
+  return Object.freeze({
+    name: readDirective("name"),
+    namespace: readDirective("namespace"),
+  });
 }
 
 function requirePathType(candidatePath, expectedType, stat = statSync) {
@@ -97,7 +123,8 @@ export function resolveKakomonnLaunch({
       `--user-data-dir=${userDataDir}`,
       CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT,
       CHROME_AUTOPLAY_ARGUMENT,
-      KAKOMONN_OPEN_URL,
+      CHROME_REMOTE_DEBUGGING_ARGUMENT,
+      CHROME_BOOTSTRAP_URL,
     ],
     executablePath,
     userDataDir,
@@ -108,11 +135,15 @@ export async function openKakomonn({
   configuration = readKakomonnConfiguration(),
   inspectProfile = inspectDedicatedChrome,
   platform = process.platform,
+  prepareBrowser = prepareKakomonnPage,
+  readDevToolsPort = readDevToolsActivePort,
+  removeFile = rmSync,
   spawnProcess = spawn,
   stat = statSync,
   stopProfile = stopDedicatedChrome,
   systemEnvironment = process.env,
-  waitForColdStart = delay,
+  userscriptIdentity = readUserscriptIdentity(),
+  waitForDevToolsPort = waitForDevToolsActivePort,
 } = {}) {
   const launch = resolveKakomonnLaunch({
     configuration,
@@ -123,48 +154,66 @@ export async function openKakomonn({
   const profileState = inspectProfile(launch.userDataDir, {
     systemEnvironment,
   });
-  let requiresColdStart = profileState.processCount === 0;
-  if (profileState.processCount > 0 && !profileState.autoplayAllowed) {
+  const existingProfileIsCompatible =
+    profileState.processCount > 0 &&
+    profileState.autoplayAllowed &&
+    profileState.remoteDebuggingEnabled;
+  if (profileState.processCount > 0 && !existingProfileIsCompatible) {
     stopProfile(launch.userDataDir, { systemEnvironment });
-    requiresColdStart = true;
   }
-  const spawnOptions = {
-    detached: true,
-    env: kakomonnFreeEnvironment(systemEnvironment),
-    stdio: "ignore",
-  };
-  if (requiresColdStart) {
-    const bootstrapProcess = spawnProcess(
+  const coldStart = !existingProfileIsCompatible;
+  let browserProcess = null;
+  let port;
+  if (coldStart) {
+    removeFile(activePortPath(launch.userDataDir), { force: true });
+    browserProcess = spawnProcess(
       launch.executablePath,
-      [
-        ...launch.arguments.slice(0, -1),
-        CHROME_NO_STARTUP_WINDOW_ARGUMENT,
-      ],
-      spawnOptions,
+      launch.arguments,
+      {
+        detached: true,
+        env: kakomonnFreeEnvironment(systemEnvironment),
+        stdio: "ignore",
+      },
     );
-    bootstrapProcess.unref();
-    await waitForColdStart(CHROME_COLD_START_GRACE_MS);
-    if (
-      bootstrapProcess.exitCode !== undefined &&
-      bootstrapProcess.exitCode !== null &&
-      bootstrapProcess.exitCode !== 0
-    ) {
-      throw new Error(
-        `Google Chrome exited during startup: ${bootstrapProcess.exitCode}`,
-      );
-    }
+    browserProcess.unref();
+    port = await waitForDevToolsPort(
+      launch.userDataDir,
+      browserProcess,
+    );
+    return Object.freeze({
+      ...launch,
+      applicationOpened: false,
+      coldStart: true,
+      devToolsPort: port,
+      targetId: null,
+    });
   }
-  const browserProcess = spawnProcess(launch.executablePath, launch.arguments, {
-    ...spawnOptions,
+  port = readDevToolsPort(launch.userDataDir);
+
+  const prepared = await prepareBrowser(port, {
+    openURL: KAKOMONN_OPEN_URL,
+    target: null,
+    tampermonkeyExtensionId: TAMPERMONKEY_BETA_EXTENSION_ID,
+    userscriptIdentity,
   });
-  browserProcess.unref();
-  return launch;
+  return Object.freeze({
+    ...launch,
+    applicationOpened: true,
+    coldStart: false,
+    devToolsPort: port,
+    targetId: prepared.targetId,
+  });
 }
 
 const scriptPath = process.argv[1] ? path.resolve(process.argv[1]) : null;
 if (scriptPath === fileURLToPath(import.meta.url)) {
   try {
-    await openKakomonn();
+    const result = await openKakomonn();
+    if (!result.applicationOpened) {
+      console.log(
+        "専用Chromeを準備しました. Chromeの起動後に同じcommandをもう一度実行してください.",
+      );
+    }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

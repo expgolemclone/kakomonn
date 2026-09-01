@@ -447,10 +447,6 @@ async function assertRuntimeRejected(
         window.GM = undefined;
       } else if (missing === "GM_info") {
         window.GM_info = undefined;
-      } else if (missing === "GM_getValue") {
-        window.GM_getValue = undefined;
-      } else if (missing === "GM_xmlhttpRequest") {
-        window.GM_xmlhttpRequest = undefined;
       } else if (missing !== null) {
         delete window.GM[missing];
       }
@@ -471,6 +467,119 @@ async function assertRuntimeRejected(
     { calls: 0, clipboardWrites: 0 },
   );
   assert.deepEqual(errors, []);
+  await context.close();
+}
+
+async function assertReaderBridge(browser, script) {
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
+  await context.route(`${SYNC_API_ORIGIN}/open`, (route) =>
+    route.fulfill({
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html lang=\"ja\"><body></body></html>",
+    }),
+  );
+
+  const readyPage = await context.newPage();
+  const readyErrors = [];
+  readyPage.on("pageerror", (error) => readyErrors.push(String(error)));
+  await readyPage.goto(`${SYNC_API_ORIGIN}/open`);
+  await readyPage.evaluate(() => {
+    let releaseGetValue;
+    window.__bridgeGetValueCalls = [];
+    window.__bridgeRequests = [];
+    window.__releaseBridgeGetValue = () => releaseGetValue?.();
+    window.GM_info = { scriptHandler: "Tampermonkey" };
+    window.GM = {
+      getValue(key, defaultValue) {
+        window.__bridgeGetValueCalls.push({ key, defaultValue });
+        return new Promise((resolve) => {
+          releaseGetValue = () => resolve("private-token");
+        });
+      },
+      async setValue() {},
+      async deleteValue() {},
+      xmlHttpRequest(details) {
+        window.__bridgeRequests.push({
+          authorization: details.headers?.Authorization ?? "",
+          method: details.method,
+          url: details.url,
+        });
+        const response = {
+          status: 200,
+          responseText: JSON.stringify({
+            question: {
+              dueMs: null,
+              kind: "new",
+              questionId: "45124",
+              url: "https://chushoks.kakomonn.com/questions/45124",
+            },
+          }),
+        };
+        queueMicrotask(() => details.onload(response));
+        const request = {};
+        request.abort = () => {};
+        return request;
+      },
+      async setClipboard() {},
+    };
+  });
+  await readyPage.addScriptTag({ content: script });
+  assert.equal(
+    await readyPage.locator("html").getAttribute("data-kakomonn-reader-bridge-state"),
+    null,
+  );
+  assert.deepEqual(
+    await readyPage.evaluate(() => window.__bridgeGetValueCalls),
+    [{ key: "kakomonn-reader.sync-token", defaultValue: "" }],
+  );
+  assert.equal(await readyPage.locator("#kakomonn-reader-shell").count(), 0);
+  await readyPage.evaluate(() => window.__releaseBridgeGetValue());
+  await readyPage.waitForFunction(
+    () => document.documentElement.dataset.kakomonnReaderBridgeState === "ready",
+  );
+  assert.equal(
+    await readyPage.locator("html").getAttribute("data-kakomonn-reader-bridge-state"),
+    "ready",
+  );
+  assert.equal(
+    await readyPage.locator("html").getAttribute("data-kakomonn-reader-bridge-target"),
+    "https://chushoks.kakomonn.com/questions/45124",
+  );
+  assert.deepEqual(
+    await readyPage.evaluate(() => window.__bridgeRequests),
+    [{
+      authorization: "Bearer private-token",
+      method: "GET",
+      url: `${SYNC_API_ORIGIN}/v9/next?site=chushoks.kakomonn.com`,
+    }],
+  );
+  assert.equal(await readyPage.locator("#kakomonn-reader-shell").count(), 0);
+  assert.deepEqual(readyErrors, []);
+
+  const errorPage = await context.newPage();
+  const errorErrors = [];
+  errorPage.on("pageerror", (error) => errorErrors.push(String(error)));
+  await errorPage.goto(`${SYNC_API_ORIGIN}/open`);
+  await errorPage.evaluate(() => {
+    window.GM_info = { scriptHandler: "Tampermonkey" };
+    window.GM = {
+      async getValue() {
+        throw new Error("mock storage read failed");
+      },
+      async setValue() {},
+      async deleteValue() {},
+      xmlHttpRequest() {
+        throw new Error("bridge must not make a network request");
+      },
+      async setClipboard() {},
+    };
+  });
+  await errorPage.addScriptTag({ content: script });
+  await errorPage.waitForFunction(
+    () => document.documentElement.dataset.kakomonnReaderBridgeState === "error",
+  );
+  assert.equal(await errorPage.locator("#kakomonn-reader-shell").count(), 0);
+  assert.deepEqual(errorErrors, []);
   await context.close();
 }
 
@@ -1187,6 +1296,7 @@ async function main() {
     headless: true,
   });
   try {
+    await assertReaderBridge(browser, script);
     const context = await browser.newContext({ userAgent: chromeUserAgent });
     const page = await context.newPage();
     const errors = await preparePage(page, "audio", {
@@ -2142,10 +2252,10 @@ async function main() {
       { userAgent: chromeUserAgent, scriptHandler: "Userscripts" },
       { userAgent: chromeUserAgent, missingAPI: "GM" },
       { userAgent: chromeUserAgent, missingAPI: "GM_info" },
-      { userAgent: chromeUserAgent, missingAPI: "GM_getValue" },
+      { userAgent: chromeUserAgent, missingAPI: "getValue" },
       { userAgent: chromeUserAgent, missingAPI: "setValue" },
       { userAgent: chromeUserAgent, missingAPI: "deleteValue" },
-      { userAgent: chromeUserAgent, missingAPI: "GM_xmlhttpRequest" },
+      { userAgent: chromeUserAgent, missingAPI: "xmlHttpRequest" },
       { userAgent: chromeUserAgent, missingAPI: "setClipboard" },
     ];
     for (const runtimeCase of rejectedRuntimeCases) {

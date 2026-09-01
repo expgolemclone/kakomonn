@@ -1,17 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import chromeDevTools from "../scripts/chrome-devtools.cjs";
 import windowsChromeProfile from "../scripts/windows-chrome-profile.cjs";
 import {
   CHROME_AUTOPLAY_ARGUMENT,
-  CHROME_COLD_START_GRACE_MS,
+  CHROME_BOOTSTRAP_URL,
   CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT,
-  CHROME_NO_STARTUP_WINDOW_ARGUMENT,
+  CHROME_REMOTE_DEBUGGING_ARGUMENT,
   KAKOMONN_OPEN_URL,
   openKakomonn,
+  readUserscriptIdentity,
   resolveKakomonnLaunch,
 } from "../scripts/open-kakomonn.mjs";
 
+const {
+  prepareKakomonnPage,
+  readDevToolsActivePort,
+  tampermonkeyReadyExpression,
+  waitForDevToolsActivePort,
+} = chromeDevTools;
 const {
   inspectDedicatedChrome,
   inspectDedicatedChromePowerShell,
@@ -28,9 +36,16 @@ const CHROME_PATH =
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const PROFILE_PATH =
   "C:\\Users\\tester\\AppData\\Local\\kakomonn-chrome-e2e";
+const USERSCRIPT_IDENTITY = Object.freeze({
+  name: "Reader fixture",
+  namespace: "test.reader",
+});
+const TAMPERMONKEY_READY_EXPRESSION =
+  tampermonkeyReadyExpression(USERSCRIPT_IDENTITY);
 const EMPTY_PROFILE_STATE = Object.freeze({
   autoplayAllowed: false,
   processCount: 0,
+  remoteDebuggingEnabled: false,
   rootProcessCount: 0,
 });
 
@@ -46,7 +61,7 @@ function expectedStat(candidatePath) {
   throw error;
 }
 
-test("resolves the dedicated Chrome profile and fixed open URL", () => {
+test("resolves a dedicated Chrome bootstrap that cannot open the application URL", () => {
   const launch = resolveKakomonnLaunch({
     configuration: {},
     platform: "win32",
@@ -59,18 +74,20 @@ test("resolves the dedicated Chrome profile and fixed open URL", () => {
       `--user-data-dir=${PROFILE_PATH}`,
       CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT,
       CHROME_AUTOPLAY_ARGUMENT,
-      KAKOMONN_OPEN_URL,
+      CHROME_REMOTE_DEBUGGING_ARGUMENT,
+      CHROME_BOOTSTRAP_URL,
     ],
     executablePath: CHROME_PATH,
     userDataDir: PROFILE_PATH,
   });
 });
 
-test("warms a cold dedicated Chrome profile before opening the fixed URL", async () => {
+test("starts only the browser when the dedicated profile is cold", async () => {
   const calls = [];
   let unrefCallCount = 0;
   const profileInspections = [];
-  const waits = [];
+  const preparations = [];
+  const removals = [];
   const spawnProcess = (...arguments_) => {
     calls.push(arguments_);
     return {
@@ -88,11 +105,20 @@ test("warms a cold dedicated Chrome profile before opening the fixed URL", async
       return EMPTY_PROFILE_STATE;
     },
     platform: "win32",
+    async prepareBrowser() {
+      preparations.push("unexpected");
+      throw new Error("cold Chrome must not create an application target");
+    },
+    removeFile(filePath, options) {
+      removals.push({ filePath, options });
+    },
     spawnProcess,
     stat: expectedStat,
     systemEnvironment: SYSTEM_ENVIRONMENT,
-    async waitForColdStart(milliseconds) {
-      waits.push(milliseconds);
+    async waitForDevToolsPort(userDataDir, browserProcess) {
+      assert.equal(userDataDir, PROFILE_PATH);
+      assert.equal(browserProcess.exitCode, null);
+      return 9222;
     },
   });
 
@@ -102,15 +128,16 @@ test("warms a cold dedicated Chrome profile before opening the fixed URL", async
       userDataDir: PROFILE_PATH,
     },
   ]);
-  assert.deepEqual(waits, [CHROME_COLD_START_GRACE_MS]);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 1);
   assert.equal(calls[0][0], CHROME_PATH);
   assert.deepEqual(calls[0][1], [
     `--user-data-dir=${PROFILE_PATH}`,
     CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT,
     CHROME_AUTOPLAY_ARGUMENT,
-    CHROME_NO_STARTUP_WINDOW_ARGUMENT,
+    CHROME_REMOTE_DEBUGGING_ARGUMENT,
+    CHROME_BOOTSTRAP_URL,
   ]);
+  assert.equal(calls[0][1].includes(KAKOMONN_OPEN_URL), false);
   assert.deepEqual(calls[0][2], {
     detached: true,
     env: {
@@ -120,35 +147,47 @@ test("warms a cold dedicated Chrome profile before opening the fixed URL", async
     },
     stdio: "ignore",
   });
-  assert.equal(calls[1][0], CHROME_PATH);
-  assert.deepEqual(calls[1][1], [
-    `--user-data-dir=${PROFILE_PATH}`,
-    CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT,
-    CHROME_AUTOPLAY_ARGUMENT,
-    KAKOMONN_OPEN_URL,
-  ]);
-  assert.deepEqual(calls[1][2], calls[0][2]);
-  assert.equal(unrefCallCount, 2);
+  assert.equal(unrefCallCount, 1);
+  assert.deepEqual(removals, [{
+    filePath: `${PROFILE_PATH}\\DevToolsActivePort`,
+    options: { force: true },
+  }]);
+  assert.deepEqual(preparations, []);
   assert.deepEqual(launch, {
-    arguments: calls[1][1],
+    arguments: calls[0][1],
+    applicationOpened: false,
+    coldStart: true,
+    devToolsPort: 9222,
     executablePath: CHROME_PATH,
+    targetId: null,
     userDataDir: PROFILE_PATH,
   });
 });
 
-test("reuses a dedicated Chrome process with automatic playback enabled", async () => {
+test("prepares a new page in an already warm compatible Chrome process", async () => {
   let stopCalled = false;
   let spawnCalled = false;
-  await openKakomonn({
+  let prepared = false;
+  const result = await openKakomonn({
     configuration: {},
     inspectProfile() {
       return {
         autoplayAllowed: true,
         processCount: 8,
+        remoteDebuggingEnabled: true,
         rootProcessCount: 1,
       };
     },
     platform: "win32",
+    async prepareBrowser(port) {
+      assert.equal(port, 9333);
+      prepared = true;
+      return { targetId: "warm-target" };
+    },
+    readDevToolsPort(userDataDir) {
+      assert.equal(userDataDir, PROFILE_PATH);
+      return 9333;
+    },
     spawnProcess() {
       spawnCalled = true;
       return { unref() {} };
@@ -159,11 +198,15 @@ test("reuses a dedicated Chrome process with automatic playback enabled", async 
     },
     systemEnvironment: SYSTEM_ENVIRONMENT,
   });
-  assert.equal(spawnCalled, true);
+  assert.equal(spawnCalled, false);
+  assert.equal(prepared, true);
   assert.equal(stopCalled, false);
+  assert.equal(result.applicationOpened, true);
+  assert.equal(result.coldStart, false);
+  assert.equal(result.targetId, "warm-target");
 });
 
-test("restarts and warms only a dedicated Chrome process missing automatic playback", async () => {
+test("restarts an incompatible Chrome process without opening the application", async () => {
   const operations = [];
   await openKakomonn({
     configuration: {},
@@ -172,10 +215,17 @@ test("restarts and warms only a dedicated Chrome process missing automatic playb
       return {
         autoplayAllowed: false,
         processCount: 8,
+        remoteDebuggingEnabled: false,
         rootProcessCount: 1,
       };
     },
     platform: "win32",
+    async prepareBrowser() {
+      throw new Error("restarted Chrome must stop before app preparation");
+    },
+    removeFile() {
+      operations.push("remove-port");
+    },
     spawnProcess() {
       operations.push("spawn");
       return { exitCode: null, unref() {} };
@@ -187,61 +237,18 @@ test("restarts and warms only a dedicated Chrome process missing automatic playb
       assert.deepEqual(options, { systemEnvironment: SYSTEM_ENVIRONMENT });
     },
     systemEnvironment: SYSTEM_ENVIRONMENT,
-    async waitForColdStart(milliseconds) {
-      operations.push(`wait:${milliseconds}`);
+    async waitForDevToolsPort() {
+      operations.push("wait-port");
+      return 9444;
     },
   });
   assert.deepEqual(operations, [
     "inspect",
     "stop",
+    "remove-port",
     "spawn",
-    `wait:${CHROME_COLD_START_GRACE_MS}`,
-    "spawn",
+    "wait-port",
   ]);
-});
-
-test("opens the URL when cold Chrome exits successfully during startup", async () => {
-  const calls = [];
-  await openKakomonn({
-    configuration: {},
-    inspectProfile: () => EMPTY_PROFILE_STATE,
-    platform: "win32",
-    spawnProcess(...arguments_) {
-      calls.push(arguments_);
-      return {
-        exitCode: calls.length === 1 ? 0 : null,
-        unref() {},
-      };
-    },
-    stat: expectedStat,
-    systemEnvironment: SYSTEM_ENVIRONMENT,
-    async waitForColdStart() {},
-  });
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0][1].at(-1), CHROME_NO_STARTUP_WINDOW_ARGUMENT);
-  assert.equal(calls[1][1].at(-1), KAKOMONN_OPEN_URL);
-});
-
-test("does not open the URL when cold Chrome exits unsuccessfully during startup", async () => {
-  const calls = [];
-  await assert.rejects(
-    () =>
-      openKakomonn({
-        configuration: {},
-        inspectProfile: () => EMPTY_PROFILE_STATE,
-        platform: "win32",
-        spawnProcess(...arguments_) {
-          calls.push(arguments_);
-          return { exitCode: 9, unref() {} };
-        },
-        stat: expectedStat,
-        systemEnvironment: SYSTEM_ENVIRONMENT,
-        async waitForColdStart() {},
-      }),
-    /Google Chrome exited during startup: 9/,
-  );
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0][1].at(-1), CHROME_NO_STARTUP_WINDOW_ARGUMENT);
 });
 
 test("does not launch when a required dedicated Chrome restart fails", async () => {
@@ -253,6 +260,7 @@ test("does not launch when a required dedicated Chrome restart fails", async () 
         inspectProfile: () => ({
           autoplayAllowed: false,
           processCount: 1,
+          remoteDebuggingEnabled: false,
           rootProcessCount: 1,
         }),
         platform: "win32",
@@ -316,7 +324,8 @@ test("uses configured Chrome paths", () => {
 
   assert.equal(launch.executablePath, configuredChrome);
   assert.equal(launch.userDataDir, configuredProfile);
-  assert.equal(launch.arguments.at(-1), KAKOMONN_OPEN_URL);
+  assert.equal(launch.arguments.at(-1), CHROME_BOOTSTRAP_URL);
+  assert.equal(launch.arguments.includes(KAKOMONN_OPEN_URL), false);
 });
 
 test("rejects unsupported platforms and missing system paths", () => {
@@ -433,6 +442,7 @@ test("inspects the exact Chrome profile through a sanitized PowerShell call", ()
         stdout: JSON.stringify({
           autoplayAllowed: true,
           processCount: 7,
+          remoteDebuggingEnabled: true,
           rootProcessCount: 1,
         }),
       };
@@ -442,6 +452,7 @@ test("inspects the exact Chrome profile through a sanitized PowerShell call", ()
   assert.deepEqual(state, {
     autoplayAllowed: true,
     processCount: 7,
+    remoteDebuggingEnabled: true,
     rootProcessCount: 1,
   });
   assert.equal(calls.length, 1);
@@ -449,11 +460,13 @@ test("inspects the exact Chrome profile through a sanitized PowerShell call", ()
     calls[0].executable,
     "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
   );
-  assert.deepEqual(calls[0].args.slice(-4), [
+  assert.deepEqual(calls[0].args.slice(-6), [
     "-UserDataDir",
     PROFILE_PATH,
     "-AutoplayArgument",
     CHROME_AUTOPLAY_ARGUMENT,
+    "-RemoteDebuggingArgument",
+    CHROME_REMOTE_DEBUGGING_ARGUMENT,
   ]);
   assert.equal(
     Object.keys(calls[0].options.env).some((key) =>
@@ -468,4 +481,198 @@ test("matches normalized Chrome profile paths in PowerShell", () => {
   assert.match(stopDedicatedChromePowerShell, /Get-DedicatedChromeProcesses/);
   assert.match(stopDedicatedChromePowerShell, /Dedicated Chrome processes did not exit/);
   assert.doesNotMatch(stopDedicatedChromePowerShell, /taskkill/i);
+});
+
+test("reads and validates the exact dedicated Chrome DevTools port", () => {
+  assert.equal(
+    readDevToolsActivePort(PROFILE_PATH, {
+      existsSync: () => true,
+      readFileSync: () => "49152\n/browser-id\n",
+    }),
+    49152,
+  );
+  assert.throws(
+    () => readDevToolsActivePort(PROFILE_PATH, { existsSync: () => false }),
+    /is not ready/,
+  );
+  assert.throws(
+    () => readDevToolsActivePort(PROFILE_PATH, {
+      existsSync: () => true,
+      readFileSync: () => "not-a-port\n",
+    }),
+    /is invalid/,
+  );
+});
+
+test("reads the launcher userscript identity from the canonical metadata", () => {
+  assert.deepEqual(
+    readUserscriptIdentity({
+      readFile: () => [
+        "// ==UserScript==",
+        "// @name         Reader fixture",
+        "// @namespace    test.reader",
+        "// ==/UserScript==",
+      ].join("\n"),
+    }),
+    USERSCRIPT_IDENTITY,
+  );
+  assert.throws(
+    () => readUserscriptIdentity({ readFile: () => "// @name duplicate\n" }),
+    /exactly one @namespace/,
+  );
+});
+
+test("does not continue when cold Chrome exits before DevTools is ready", async () => {
+  await assert.rejects(
+    waitForDevToolsActivePort(
+      PROFILE_PATH,
+      { exitCode: 9 },
+      { delayImpl: async () => {}, timeoutMs: 1 },
+    ),
+    /exited before remote debugging started: 9/,
+  );
+});
+
+test("prewarms Tampermonkey before creating the fixed application target", async () => {
+  const operations = [];
+  let currentURL = "about:blank";
+  const session = {
+    close() {
+      operations.push("disconnect");
+    },
+    async command(method, params) {
+      operations.push({ method, params });
+      if (method === "Runtime.evaluate") {
+        if (params.expression !== TAMPERMONKEY_READY_EXPRESSION) {
+          return {
+            result: {
+              value: { href: currentURL, readyState: "complete" },
+            },
+          };
+        }
+        return {
+          result: { value: { error: null, scriptCount: 1 } },
+        };
+      }
+      if (method === "Page.navigate") {
+        currentURL = params.url;
+      }
+      return {};
+    },
+    async waitForEvent(method) {
+      operations.push({ event: method });
+    },
+  };
+  const result = await prepareKakomonnPage(9222, {
+    async closeTarget(port, targetId) {
+      operations.push({ closeTarget: targetId, port });
+    },
+    async connectSession(webSocketDebuggerUrl) {
+      assert.equal(webSocketDebuggerUrl, "ws://prepared-target");
+      return session;
+    },
+    async createTarget(port, url) {
+      operations.push({ createTarget: url, port });
+      return {
+        id: "application-target",
+        type: "page",
+        url,
+        webSocketDebuggerUrl: "ws://application-target",
+      };
+    },
+    openURL: KAKOMONN_OPEN_URL,
+    target: {
+      id: "prepared-target",
+      type: "page",
+      url: CHROME_BOOTSTRAP_URL,
+      webSocketDebuggerUrl: "ws://prepared-target",
+    },
+    tampermonkeyExtensionId: "tampermonkey-beta",
+    userscriptIdentity: USERSCRIPT_IDENTITY,
+  });
+  assert.deepEqual(result, { port: 9222, targetId: "application-target" });
+  const navigations = operations.filter(
+    (operation) => operation?.method === "Page.navigate",
+  );
+  assert.deepEqual(
+    navigations.map((operation) => operation.params.url),
+    [
+      "chrome-extension://tampermonkey-beta/options.html#nav=settings",
+    ],
+  );
+  const evaluationIndex = operations.findIndex(
+    (operation) =>
+      operation?.method === "Runtime.evaluate" &&
+      operation.params.expression === TAMPERMONKEY_READY_EXPRESSION,
+  );
+  assert.equal(evaluationIndex > operations.indexOf(navigations[0]), true);
+  const applicationTargetIndex = operations.findIndex(
+    (operation) => operation?.createTarget === KAKOMONN_OPEN_URL,
+  );
+  assert.equal(evaluationIndex < applicationTargetIndex, true);
+  assert.deepEqual(operations[applicationTargetIndex + 1], {
+    closeTarget: "prepared-target",
+    port: 9222,
+  });
+  assert.match(TAMPERMONKEY_READY_EXPRESSION, /chrome\.storage\.local\.get/);
+  assert.equal(operations.at(-1), "disconnect");
+});
+
+test("closes the bootstrap target without opening the app when Tampermonkey is not ready", async () => {
+  const navigations = [];
+  const closedTargets = [];
+  let currentURL = "about:blank";
+  await assert.rejects(
+    prepareKakomonnPage(9222, {
+      async closeTarget(port, targetId) {
+        closedTargets.push({ port, targetId });
+      },
+      async connectSession() {
+        return {
+          close() {},
+          async command(method, params) {
+            if (method === "Page.navigate") {
+              navigations.push(params.url);
+              currentURL = params.url;
+              return {};
+            }
+            if (method === "Runtime.evaluate") {
+              if (params.expression !== TAMPERMONKEY_READY_EXPRESSION) {
+                return {
+                  result: {
+                    value: { href: currentURL, readyState: "complete" },
+                  },
+                };
+              }
+              return {
+                result: {
+                  value: {
+                    error: "The userscript is not ready",
+                    scriptCount: 0,
+                  },
+                },
+              };
+            }
+            return {};
+          },
+          async waitForEvent() {},
+        };
+      },
+      async createTarget() {
+        return {
+          id: "failed-target",
+          type: "page",
+          webSocketDebuggerUrl: "ws://failed-target",
+        };
+      },
+      openURL: KAKOMONN_OPEN_URL,
+      tampermonkeyExtensionId: "tampermonkey-beta",
+      userscriptIdentity: USERSCRIPT_IDENTITY,
+    }),
+    /transport is not ready/,
+  );
+  assert.deepEqual(navigations, [
+    "chrome-extension://tampermonkey-beta/options.html#nav=settings",
+  ]);
+  assert.deepEqual(closedTargets, [{ port: 9222, targetId: "failed-target" }]);
 });

@@ -160,8 +160,13 @@ test("makes live Chrome and production sync the final npm test gates", () => {
     "npm run test:local",
     "npm run test:smoke",
     "npm run test:kakomonn-live-site",
+    "npm run test:kakomonn-live-open",
     "npm run test:kakomonn-live-sync",
   ]);
+  assert.match(
+    packageJson.scripts["test:kakomonn-live-open"],
+    /node --use-system-ca kakomonn-reader\/tests\/live_open_e2e_test\.js$/,
+  );
   assert.match(
     packageJson.scripts["test:kakomonn-live-sync"],
     /node --use-system-ca kakomonn-reader\/tests\/live_sync_e2e_test\.js$/,

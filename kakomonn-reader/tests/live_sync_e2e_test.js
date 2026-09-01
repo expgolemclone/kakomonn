@@ -7,8 +7,9 @@ const {
 } = require("../../scripts/kakomonn-config.cjs");
 
 const {
-  updateInstalledUserscript,
-  launchDedicatedChrome,
+  CURRENT_QUESTION_URL,
+  DEFAULT_SYNC_API_ORIGIN,
+  launchChromeWithCurrentUserscript,
   readChromeUserDataDir,
   resolveSyncToken,
 } = require("./support/chrome_tampermonkey");
@@ -19,9 +20,6 @@ const userscriptPath = path.resolve(
   "kakomonn-reader.user.js",
 );
 const repositoryEnvPath = path.resolve(__dirname, "..", "..", ".env");
-const syncApiOrigin =
-  "https://kakomonn-sync.kakomonn.workers.dev";
-const currentQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const correctAnswerText = "輸入の減少は、GDPを増加させる。";
 const chromeViewport = { height: 900, width: 1440 };
 const chromeViewportTolerancePx = 1;
@@ -129,7 +127,7 @@ function assertSyncState(state) {
 
 async function requestSyncState(token) {
   const query = new URLSearchParams({ site: "chushoks.kakomonn.com" });
-  const response = await fetch(`${syncApiOrigin}/v9/state?${query}`, {
+  const response = await fetch(`${DEFAULT_SYNC_API_ORIGIN}/v9/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
@@ -223,8 +221,8 @@ async function configureSyncToken(
       const state = await readReaderState(page);
       return state.actionsPresent === false &&
         state.buildFingerprint !== null &&
-        state.outerURL === currentQuestionUrl &&
-        state.frameURL === currentQuestionUrl
+        state.outerURL === CURRENT_QUESTION_URL &&
+        state.frameURL === CURRENT_QUESTION_URL
         ? state
         : null;
     },
@@ -232,8 +230,8 @@ async function configureSyncToken(
   );
   await delay(2_000);
   const connectionState = await readReaderState(page);
-  assert.equal(ready.outerURL, currentQuestionUrl);
-  assert.equal(ready.frameURL, currentQuestionUrl);
+  assert.equal(ready.outerURL, CURRENT_QUESTION_URL);
+  assert.equal(ready.frameURL, CURRENT_QUESTION_URL);
   assertRuntimeIdentity(ready, expectedBuildFingerprint);
 
   if (connectionState.settingsOpen) {
@@ -273,8 +271,8 @@ async function waitForAutomaticQuestionSpeech(page, expectedBuildFingerprint) {
       const state = await readReaderState(page);
       if (
         state.actionsPresent ||
-        state.outerURL !== currentQuestionUrl ||
-        state.frameURL !== currentQuestionUrl ||
+        state.outerURL !== CURRENT_QUESTION_URL ||
+        state.frameURL !== CURRENT_QUESTION_URL ||
         state.settingsOpen !== false
       ) {
         return null;
@@ -434,7 +432,7 @@ async function waitForAutomaticTransition(page) {
     const state = await readReaderState(page);
     if (
       state.outerURL !== state.frameURL ||
-      state.outerURL === currentQuestionUrl ||
+      state.outerURL === CURRENT_QUESTION_URL ||
       state.answerResult !== "unknown" ||
       !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
         state.outerURL,
@@ -529,12 +527,15 @@ async function main() {
   });
   const expectedBuildFingerprint = readExpectedBuildFingerprint();
   const baseline = await requestSyncState(token);
-  const chrome = await launchDedicatedChrome({ configuration, userDataDir });
+  const chrome = await launchChromeWithCurrentUserscript({
+    configuration,
+    userDataDir,
+    userscriptPath,
+  });
   let page = null;
   try {
-    await updateInstalledUserscript(chrome.context, userscriptPath);
     page = await chrome.context.newPage();
-    await page.goto(currentQuestionUrl, {
+    await page.goto(CURRENT_QUESTION_URL, {
       waitUntil: "domcontentloaded",
       timeout: 60_000,
     });
@@ -550,7 +551,7 @@ async function main() {
     await completeStoredDestinationIfAvailable(page);
     await page.close();
     page = await chrome.context.newPage();
-    await page.goto(currentQuestionUrl, {
+    await page.goto(CURRENT_QUESTION_URL, {
       waitUntil: "domcontentloaded",
       timeout: 60_000,
     });
@@ -595,7 +596,7 @@ async function main() {
     }
     console.log(
       JSON.stringify({
-        browser: "Google Chrome with Tampermonkey",
+        browser: "Google Chrome with Tampermonkey Beta",
         buildFingerprint: expectedBuildFingerprint,
         frameUrl,
         navigation: navigationResult.kind,
@@ -619,8 +620,11 @@ async function main() {
 
 module.exports = {
   assertRuntimeIdentity,
+  configureSyncToken,
   extractBuildFingerprint,
+  readReaderState,
   resizeToExactViewport,
+  waitUntil,
 };
 
 if (require.main === module) {

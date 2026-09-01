@@ -8,6 +8,7 @@ const {
 } = require("./live_sync_e2e_test");
 const {
   SYNC_TOKEN_KEY,
+  LEGACY_TAMPERMONKEY_EXTENSION_ID,
   TAMPERMONKEY_EXTENSION_ID,
   chromeLaunchArguments,
   discoverTampermonkeyStorageDirectories,
@@ -16,7 +17,6 @@ const {
   locateTampermonkeyExtension,
   readConfiguredToken,
   readChromeUserDataDir,
-  registeredScriptEntriesContainFingerprint,
   resolveSyncToken,
   stopDedicatedChrome,
   stopDedicatedChromePowerShell,
@@ -99,21 +99,6 @@ test("extracts exactly one generated build fingerprint", () => {
   );
 });
 
-test("detects the current build in Chrome userscript registrations", () => {
-  const registrations = [
-    { id: "other", js: [{ code: "const value = 1;" }] },
-    { id: "reader", js: [{ code: `const BUILD_FINGERPRINT = "${fingerprint}";` }] },
-  ];
-  assert.equal(
-    registeredScriptEntriesContainFingerprint(registrations, fingerprint),
-    true,
-  );
-  assert.equal(
-    registeredScriptEntriesContainFingerprint(registrations, "b".repeat(64)),
-    false,
-  );
-});
-
 test("reads only the token supplied by the repository env configuration", () => {
   const envToken = "b".repeat(64);
   assert.deepEqual(
@@ -178,18 +163,21 @@ test("discovers token storage only in dedicated and standard Chrome profiles", (
   assert.deepEqual(roots, [dedicated, standard]);
   assert.deepEqual(
     directories,
-    [dedicated, standard].map((root) =>
-      path.win32.join(
-        root,
-        "Default",
-        "Local Extension Settings",
-        TAMPERMONKEY_EXTENSION_ID,
+    [dedicated, standard].flatMap((root) =>
+      [TAMPERMONKEY_EXTENSION_ID, LEGACY_TAMPERMONKEY_EXTENSION_ID].map(
+        (extensionId) =>
+          path.win32.join(
+            root,
+            "Default",
+            "Local Extension Settings",
+            extensionId,
+          ),
       ),
     ),
   );
 });
 
-test("locates Tampermonkey when the dedicated profile has other extensions", () => {
+test("locates Tampermonkey Beta when the dedicated profile has other extensions", () => {
   const userDataDir = "C:\\profiles\\kakomonn-chrome-e2e";
   const extensionsRoot = path.win32.join(
     userDataDir,
@@ -207,9 +195,9 @@ test("locates Tampermonkey when the dedicated profile has other extensions", () 
       readdirSync: (directory) =>
         directory === extensionsRoot
           ? [entry(TAMPERMONKEY_EXTENSION_ID), entry("other-extension")]
-          : [entry("5.4.1_0")],
+          : [entry("5.6.6239_0")],
     }),
-    path.win32.join(tampermonkeyRoot, "5.4.1_0"),
+    path.win32.join(tampermonkeyRoot, "5.6.6239_0"),
   );
   assert.throws(() =>
     locateTampermonkeyExtension(userDataDir, {
@@ -217,7 +205,7 @@ test("locates Tampermonkey when the dedicated profile has other extensions", () 
       readdirSync: (directory) =>
         directory === extensionsRoot
           ? [entry("other-extension")]
-          : [entry("5.4.1_0")],
+          : [entry("5.6.6239_0")],
     }),
   );
 });
@@ -436,6 +424,11 @@ test("launches the dedicated Chrome profile minimized", () => {
   assert.equal(args.some((argument) => argument.startsWith("--load-extension")), false);
   assert.equal(
     args.some((argument) => argument.startsWith("--disable-extensions-except")),
+    false,
+  );
+  assert.equal(args.at(-1), "about:blank");
+  assert.equal(
+    args.includes("https://kakomonn-sync.kakomonn.workers.dev/open"),
     false,
   );
   assert.doesNotMatch(stopDedicatedChromePowerShell, /UIAutomation|許可/);

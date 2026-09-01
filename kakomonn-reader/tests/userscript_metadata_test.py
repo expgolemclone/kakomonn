@@ -20,6 +20,7 @@ MATCH_PATTERN = re.compile(
 )
 EXPECTED_MATCH_VALUES = {
     "https://*.kakomonn.com/*",
+    "https://kakomonn-sync.kakomonn.workers.dev/open",
 }
 
 # https://www.tampermonkey.net/documentation.php#meta:script

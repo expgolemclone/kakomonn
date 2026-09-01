@@ -194,11 +194,12 @@
   }
 
   function handleEnterShortcut() {
-    if (getCurrentAnswerResult() === "unknown") {
+    const answerResult = getCurrentAnswerResult();
+    if (answerResult === "unknown") {
       beginAutomaticCopyFromGesture();
       return activateAnswerButton();
     }
-    return false;
+    return answerResult === "incorrect" && requestIncorrectAnswerAdvance();
   }
 
   function onReaderKeyDown(event) {

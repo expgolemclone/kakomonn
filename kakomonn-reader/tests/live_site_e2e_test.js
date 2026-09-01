@@ -257,7 +257,7 @@ async function advanceToNextQuestion(
   navigationMode,
 ) {
   await dismissReaderErrorForTest(page);
-  if (navigationMode === "forward") {
+  if (navigationMode === "enter") {
     await page.waitForFunction(
       (previousLength) =>
         window.__syncMock.attemptCount === 1 &&
@@ -266,7 +266,7 @@ async function advanceToNextQuestion(
       historyLengthBefore,
       { timeout: 15_000 },
     );
-    await page.goForward();
+    await page.keyboard.press("Enter");
   } else {
     assert.equal(navigationMode, "automatic");
   }
@@ -619,7 +619,7 @@ async function runCase(
       );
     }
     const navigationMode =
-      expectedResultClass === "is-correct" ? "automatic" : "forward";
+      expectedResultClass === "is-correct" ? "automatic" : "enter";
     await advanceToNextQuestion(
       page,
       frame,
@@ -784,7 +784,7 @@ async function runRandomNavigationCase(browser, script) {
         /^\/questions\/next\/\d+$/,
       );
     }
-    const navigationMode = isCorrect ? "automatic" : "forward";
+    const navigationMode = isCorrect ? "automatic" : "enter";
     await advanceToNextQuestion(
       page,
       frame,

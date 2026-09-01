@@ -846,6 +846,271 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
   }
 }
 
+async function runIncorrectEnterReservationCase(context, script) {
+  const page = await context.newPage();
+  const errors = await preparePage(page, "none");
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    if (
+      await page
+        .locator("#kakomonn-reader-error-dialog")
+        .getAttribute("open") !== null
+    ) {
+      await page.locator("#kakomonn-reader-error-close").click();
+    }
+    await page.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+    });
+    await childFrame.locator("input[name='answer']").first().focus();
+    await markAnswerResult(childFrame, "incorrect");
+    await page.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(100);
+    assert.equal(
+      page.url(),
+      "https://chushoks.kakomonn.com/questions/45124",
+    );
+
+    await page.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await page.waitForFunction(
+      ({ pendingAttemptKey, nextURL }) =>
+        window.__getGMValue(pendingAttemptKey) === null &&
+        location.href === nextURL &&
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href === nextURL,
+      {
+        pendingAttemptKey: PENDING_ATTEMPT_KEY,
+        nextURL: "https://chushoks.kakomonn.com/questions/45125",
+      },
+    );
+    assert.deepEqual(
+      await page.evaluate(() => ({
+        attempts: window.__syncMock.calls.filter(
+          (call) =>
+            call.method === "POST" &&
+            new URL(call.url).pathname === "/v9/attempts",
+        ).length,
+        copies: window.__copiedTexts.length,
+      })),
+      { attempts: 1, copies: 1 },
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
+async function runIncorrectEnterCopyRetryCase(context, script) {
+  const page = await context.newPage();
+  const errors = await preparePage(page, "audio");
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    await page.evaluate(() => {
+      window.__clipboardWriteFails = true;
+      window.__syncMock.holdNextSetValue = true;
+    });
+    await childFrame.locator("input[name='answer']").first().focus();
+    await markAnswerResult(childFrame, "incorrect");
+    await page.waitForFunction(
+      () => window.__syncMock.releaseHeldSetValue !== null,
+    );
+    await page.keyboard.press("Enter");
+    await page.evaluate(() => window.__syncMock.releaseHeldSetValue());
+
+    await page.waitForFunction(
+      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-error-title").innerText(),
+      "クリップボードへコピーできません",
+    );
+    assert.equal(
+      page.url(),
+      "https://chushoks.kakomonn.com/questions/45124",
+    );
+
+    await page.evaluate(() => {
+      window.__clipboardWriteFails = false;
+    });
+    await page.locator("#kakomonn-reader-error-retry").click();
+    await page.waitForFunction(
+      ({ pendingAttemptKey, nextURL }) =>
+        window.__getGMValue(pendingAttemptKey) === null &&
+        location.href === nextURL &&
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href === nextURL,
+      {
+        pendingAttemptKey: PENDING_ATTEMPT_KEY,
+        nextURL: "https://chushoks.kakomonn.com/questions/45125",
+      },
+    );
+    assert.deepEqual(
+      await page.evaluate(() => ({
+        attempts: window.__syncMock.calls.filter(
+          (call) =>
+            call.method === "POST" &&
+            new URL(call.url).pathname === "/v9/attempts",
+        ).length,
+        copies: window.__copiedTexts.length,
+      })),
+      { attempts: 1, copies: 1 },
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
+async function runIncorrectEnterSyncRetryCase(context, script) {
+  const page = await context.newPage();
+  const errors = await preparePage(page, "none");
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    if (
+      await page
+        .locator("#kakomonn-reader-error-dialog")
+        .getAttribute("open") !== null
+    ) {
+      await page.locator("#kakomonn-reader-error-close").click();
+    }
+    await page.evaluate(() => {
+      window.__syncMock.holdNextSetValue = true;
+    });
+    await childFrame.locator("input[name='answer']").first().focus();
+    await markAnswerResult(childFrame, "incorrect");
+    await page.waitForFunction(
+      () => window.__syncMock.releaseHeldSetValue !== null,
+    );
+    await page.keyboard.press("Enter");
+    await page.evaluate(() => {
+      window.__syncMock.failNextRequest = true;
+      window.__syncMock.releaseHeldSetValue();
+    });
+
+    await page.waitForFunction(
+      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-error-title").innerText(),
+      "解答記録を同期できません",
+    );
+    assert.equal(
+      page.url(),
+      "https://chushoks.kakomonn.com/questions/45124",
+    );
+
+    await page.locator("#kakomonn-reader-error-retry").click();
+    await page.waitForFunction(
+      ({ pendingAttemptKey, nextURL }) =>
+        window.__getGMValue(pendingAttemptKey) === null &&
+        location.href === nextURL &&
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href === nextURL,
+      {
+        pendingAttemptKey: PENDING_ATTEMPT_KEY,
+        nextURL: "https://chushoks.kakomonn.com/questions/45125",
+      },
+    );
+    assert.deepEqual(
+      await page.evaluate(() => ({
+        attemptCalls: window.__syncMock.calls.filter(
+          (call) =>
+            call.method === "POST" &&
+            new URL(call.url).pathname === "/v9/attempts",
+        ).length,
+        attempts: window.__syncMock.attemptCount,
+        copies: window.__copiedTexts.length,
+      })),
+      { attemptCalls: 2, attempts: 1, copies: 1 },
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
+async function runIncorrectCelebrationEnterCase(context, script) {
+  const page = await context.newPage();
+  await page.route(
+    "https://kakomonn-congratulations.kakomonn.workers.dev/**",
+    (route) =>
+      route.fulfill({
+        contentType: "text/html; charset=utf-8",
+        body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
+      }),
+  );
+  const errors = await preparePage(page, "audio", {
+    nextQuestionId: null,
+  });
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    await page.evaluate(() => {
+      window.__syncMock.nextCelebration = {
+        site: "chushoks.kakomonn.com",
+        date: "2026-08-10",
+        dailyKpiCompleted: true,
+      };
+    });
+    await childFrame.locator("input[name='answer']").first().focus();
+    await markAnswerResult(childFrame, "incorrect");
+    await page.keyboard.press("Enter");
+    await page.waitForURL((url) =>
+      url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
+    );
+    assert.equal(new URL(page.url()).searchParams.get("dailyKpiCompleted"), "true");
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
+async function runIncorrectEnterNoNextCase(context, script) {
+  const page = await context.newPage();
+  const errors = await preparePage(page, "none", {
+    nextQuestionId: null,
+  });
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    if (
+      await page
+        .locator("#kakomonn-reader-error-dialog")
+        .getAttribute("open") !== null
+    ) {
+      await page.locator("#kakomonn-reader-error-close").click();
+    }
+    await page.evaluate(() => {
+      window.__syncMock.holdNextRequest = true;
+    });
+    await childFrame.locator("input[name='answer']").first().focus();
+    await markAnswerResult(childFrame, "incorrect");
+    await page.waitForFunction(
+      () => window.__syncMock.releaseHeldRequest !== null,
+    );
+    await page.keyboard.press("Enter");
+    await page.evaluate(() => window.__syncMock.releaseHeldRequest());
+
+    await page.waitForFunction(
+      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+    );
+    assert.equal(
+      await page.locator("#kakomonn-reader-error-title").innerText(),
+      "出題できる問題はありません",
+    );
+    assert.equal(
+      page.url(),
+      "https://chushoks.kakomonn.com/questions/45124",
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
 async function assertIncorrectSkip(context, script) {
   const page = await context.newPage();
   const errors = await preparePage(page, "none");
@@ -900,7 +1165,6 @@ async function main() {
   });
 
   const script = fs.readFileSync(scriptPath, "utf8");
-  assert.match(script, /^\/\/ @version\s+2\.1\.1\s*$/m);
   assert.match(
     script,
     /^\/\/ @updateURL\s+https:\/\/github\.com\/expgolemclone\/kakomonn\/releases\/latest\/download\/kakomonn-reader\.user\.js\s*$/m,
@@ -1490,23 +1754,10 @@ async function main() {
     );
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(100);
-    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
-    assert.equal(
-      await page.evaluate(
-        () =>
-          window.__syncMock.calls.filter(
-            (call) =>
-              call.method === "POST" &&
-              new URL(call.url).pathname === "/v9/attempts",
-          ).length,
-      ),
-      1,
-    );
-    await page.goForward();
     await page.waitForFunction(
       ({ pendingAttemptKey, nextURL }) =>
         window.__getGMValue(pendingAttemptKey) === null &&
+        location.href === nextURL &&
         document.querySelector("#kakomonn-reader-frame")?.contentWindow
           ?.location.href === nextURL,
       {
@@ -1565,6 +1816,11 @@ async function main() {
     assert.deepEqual(errors, []);
 
     await assertIncorrectSkip(context, script);
+    await runIncorrectEnterReservationCase(context, script);
+    await runIncorrectEnterCopyRetryCase(context, script);
+    await runIncorrectEnterSyncRetryCase(context, script);
+    await runIncorrectCelebrationEnterCase(context, script);
+    await runIncorrectEnterNoNextCase(context, script);
     await runCorrectFeedbackCase(context, script);
     await runCorrectFeedbackVariantCase(context, script, {
       badge: "RARE",

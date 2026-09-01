@@ -81,6 +81,7 @@
   let historyPreparation = null;
   let activatingFutureHistoryState = null;
   let preparedDestinationOperationId = null;
+  let incorrectAdvanceRequested = false;
   let noNextQuestionOperationId = null;
 
   function isReaderHistoryState(value) {
@@ -280,6 +281,7 @@
   function navigateToScheduledQuestion(nextURL) {
     if (!isScheduledQuestionURL(nextURL)) {
       navigationInProgress = false;
+      clearIncorrectAdvanceRequest();
       showReaderError(
         "next-question-url",
         "次の問題を開けません",
@@ -298,6 +300,7 @@
       return true;
     } catch (error) {
       navigationInProgress = false;
+      clearIncorrectAdvanceRequest();
       showReaderError(
         "next-question-navigation",
         "次の問題へ移動できません",
@@ -331,6 +334,7 @@
       synchronizeCurrentHistoryURL();
       activatingFutureHistoryState = null;
       preparedDestinationOperationId = null;
+      clearIncorrectAdvanceRequest();
       await clearPendingAttempt();
       return true;
     })();
@@ -389,6 +393,7 @@
       stopSpeech();
       await clearPendingAttempt();
       await clearPendingCelebration();
+      clearIncorrectAdvanceRequest();
       readerHistorySession.mode = "celebration";
       saveReaderHistorySession();
       location.replace(congratulationsURL(celebration));
@@ -400,6 +405,7 @@
       readerHistorySession.mode = "active";
       saveReaderHistorySession();
       navigationInProgress = false;
+      clearIncorrectAdvanceRequest();
       showReaderError(
         "celebration-navigation",
         "祝福pageを開けません",
@@ -418,6 +424,8 @@
       pendingAttempt.phase !== "recorded" ||
       pendingCelebration === null
     ) {
+      navigationInProgress = false;
+      clearIncorrectAdvanceRequest();
       showReaderError(
         "celebration-history",
         "祝福pageを開けません",
@@ -441,6 +449,8 @@
       pendingAttempt.copy.state !== "completed" ||
       pendingAttempt.nextURL !== location.href
     ) {
+      navigationInProgress = false;
+      clearIncorrectAdvanceRequest();
       showReaderError(
         "question-history",
         "次の問題を開けません",
@@ -519,6 +529,50 @@
     }
   }
 
+  function clearIncorrectAdvanceRequest() {
+    incorrectAdvanceRequested = false;
+  }
+
+  function activateRequestedIncorrectDestination() {
+    if (
+      !incorrectAdvanceRequested ||
+      navigationInProgress ||
+      pendingAttempt === null ||
+      pendingAttempt.answerResult !== "incorrect" ||
+      pendingAttempt.phase !== "recorded" ||
+      preparedDestinationOperationId !== pendingAttempt.operationId
+    ) {
+      return false;
+    }
+
+    navigationInProgress = true;
+    updateSyncDependentControls();
+    history.forward();
+    return true;
+  }
+
+  function requestIncorrectAnswerAdvance() {
+    if (getCurrentAnswerResult() !== "incorrect") {
+      return false;
+    }
+
+    incorrectAdvanceRequested = true;
+    if (!activateRequestedIncorrectDestination()) {
+      void maybePreparePendingDestination();
+    }
+    return true;
+  }
+
+  async function preparePendingFutureEntry(entryType, operation) {
+    const prepared = await prepareFutureHistoryEntry(entryType, operation);
+    if (!prepared) {
+      clearIncorrectAdvanceRequest();
+      return false;
+    }
+    activateRequestedIncorrectDestination();
+    return true;
+  }
+
   async function maybePreparePendingDestination() {
     if (
       pendingAttempt === null ||
@@ -544,7 +598,7 @@
       return navigateToScheduledQuestion(pendingAttempt.nextURL);
     }
     if (pendingAttempt.nextURL !== null) {
-      return prepareFutureHistoryEntry("future-question", pendingAttempt);
+      return preparePendingFutureEntry("future-question", pendingAttempt);
     }
     if (pendingCelebration !== null) {
       if (pendingAttempt.answerResult === "correct") {
@@ -554,8 +608,9 @@
           "達成情報は保持されています. ページを再読み込みしてください."
         );
       }
-      return prepareFutureHistoryEntry("future-celebration", pendingAttempt);
+      return preparePendingFutureEntry("future-celebration", pendingAttempt);
     }
+    clearIncorrectAdvanceRequest();
     if (noNextQuestionOperationId !== pendingAttempt.operationId) {
       noNextQuestionOperationId = pendingAttempt.operationId;
       showReaderError(

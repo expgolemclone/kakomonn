@@ -526,7 +526,9 @@ async function finishManualAudio(page) {
 async function runCorrectFeedbackCase(context, script) {
   const page = await context.newPage();
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const errors = await preparePage(page, "audio-manual");
+  const errors = await preparePage(page, "audio-manual", {
+    nextQuestionId: null,
+  });
   await installCorrectFeedbackRandom(page, [111]);
   const childFrame = await loadMockQuestion(page, script);
   try {
@@ -582,9 +584,7 @@ async function runCorrectFeedbackCase(context, script) {
     await page.waitForFunction(
       () =>
         window.__syncMock.attemptCount === 1 &&
-        window.__copiedTexts.length === 1 &&
-        window.__readerPopstateCount >= 1 &&
-        history.state?.entryType === "current",
+        window.__copiedTexts.length === 1,
     );
     assert.equal(
       await childFrame.evaluate(() => location.href),
@@ -727,12 +727,6 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
       () =>
         window.__syncMock.attemptCount === 1 &&
         window.__copiedTexts.length === 1 &&
-        window.__readerPopstateCount >= 1 &&
-        history.state?.entryType === "current",
-    );
-    await page.goForward();
-    await page.waitForFunction(
-      () =>
         document.querySelector("#kakomonn-reader-frame")?.contentWindow
           ?.location.href ===
         "https://chushoks.kakomonn.com/questions/45125",
@@ -816,7 +810,6 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
       () =>
         window.__syncMock.attemptCount === 1 &&
         window.__copiedTexts.length === 1 &&
-        window.__readerPopstateCount >= 1 &&
         history.state?.entryType === "current" &&
         document.querySelector("#kakomonn-reader-frame")?.contentWindow
           ?.location.href ===
@@ -843,7 +836,6 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
       "https://chushoks.kakomonn.com/questions/45124",
     );
     await finishManualAudio(page);
-    await page.goForward();
     await page.waitForURL((url) =>
       url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
@@ -908,7 +900,7 @@ async function main() {
   });
 
   const script = fs.readFileSync(scriptPath, "utf8");
-  assert.match(script, /^\/\/ @version\s+2\.1\.0\s*$/m);
+  assert.match(script, /^\/\/ @version\s+2\.1\.1\s*$/m);
   assert.match(
     script,
     /^\/\/ @updateURL\s+https:\/\/github\.com\/expgolemclone\/kakomonn\/releases\/latest\/download\/kakomonn-reader\.user\.js\s*$/m,
@@ -1724,12 +1716,18 @@ async function main() {
     );
     await markAnswerResult(autoplayBlockedFrame, "correct");
     await autoplayBlockedPage.waitForFunction(
-      (initialHistoryLength) =>
+      (pendingAttemptKey) =>
         window.__syncMock.attemptCount === 1 &&
         window.__copiedTexts.length === 1 &&
-        window.__readerPopstateCount >= 1 &&
+        location.href === "https://chushoks.kakomonn.com/questions/45125" &&
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href === "https://chushoks.kakomonn.com/questions/45125" &&
         history.state?.entryType === "current" &&
-        history.length > initialHistoryLength,
+        window.__getGMValue(pendingAttemptKey) === null,
+      PENDING_ATTEMPT_KEY,
+    );
+    assert.equal(
+      await autoplayBlockedPage.evaluate(() => history.length),
       autoplayBlockedHistoryLength,
     );
     assert.equal(

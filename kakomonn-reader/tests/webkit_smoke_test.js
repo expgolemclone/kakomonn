@@ -897,12 +897,13 @@ async function main() {
     );
     await correctPage.evaluate(() => window.__syncMock.releaseHeldRequest());
     await correctPage.waitForFunction(
-      () =>
+      (expectedURL) =>
         window.__copiedTexts.length === 1 &&
-        window.__readerPopstateCount >= 1 &&
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow
+          ?.location.href === expectedURL &&
         history.state?.entryType === "current",
+      nextQuestionURL,
     );
-    await correctPage.goForward();
     await correctFrame.waitForURL(nextQuestionURL);
     assert.deepEqual(correctPageErrors, []);
     await correctPage.close();

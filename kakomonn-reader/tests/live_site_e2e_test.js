@@ -248,25 +248,28 @@ async function submitAnswer(page, frame, answerText, inputMethod = "click") {
   return historyLengthBefore;
 }
 
-async function forwardToNextQuestion(
+async function advanceToNextQuestion(
   page,
   frame,
+  initialFrameUrl,
   expectedNextUrl,
   historyLengthBefore,
+  navigationMode,
 ) {
-  const initialFrameUrl = await frame
-    .locator("body")
-    .evaluate(() => location.href);
   await dismissReaderErrorForTest(page);
-  await page.waitForFunction(
-    (previousLength) =>
-      window.__syncMock.attemptCount === 1 &&
-      history.length > previousLength &&
-      history.state?.entryType === "current",
-    historyLengthBefore,
-    { timeout: 15_000 },
-  );
-  await page.goForward();
+  if (navigationMode === "forward") {
+    await page.waitForFunction(
+      (previousLength) =>
+        window.__syncMock.attemptCount === 1 &&
+        history.length > previousLength &&
+        history.state?.entryType === "current",
+      historyLengthBefore,
+      { timeout: 15_000 },
+    );
+    await page.goForward();
+  } else {
+    assert.equal(navigationMode, "automatic");
+  }
   await page.waitForFunction(
     (expectedUrl) =>
       location.href === expectedUrl &&
@@ -609,17 +612,25 @@ async function runCase(
         : "rgb(232, 146, 146)",
     );
 
-    assert.equal(
-      await frame.locator("body").evaluate(() => location.href),
-      fixedQuestionUrl,
-    );
-    await forwardToNextQuestion(
+    if (expectedResultClass === "is-wrong") {
+      assert.equal(
+        await frame.locator("body").evaluate(() => location.href),
+        fixedQuestionUrl,
+      );
+    }
+    const navigationMode =
+      expectedResultClass === "is-correct" ? "automatic" : "forward";
+    await advanceToNextQuestion(
       page,
       frame,
+      fixedQuestionUrl,
       fixedNextQuestionUrl,
       historyLengthBefore,
+      navigationMode,
     );
-    console.log(JSON.stringify({ phase: "next-forward", answerText }));
+    console.log(
+      JSON.stringify({ phase: "next-navigation-complete", answerText, navigationMode }),
+    );
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.filter(
@@ -773,11 +784,14 @@ async function runRandomNavigationCase(browser, script) {
         /^\/questions\/next\/\d+$/,
       );
     }
-    await forwardToNextQuestion(
+    const navigationMode = isCorrect ? "automatic" : "forward";
+    await advanceToNextQuestion(
       page,
       frame,
+      initialFrameUrl,
       randomScheduledQuestionUrl,
       historyLengthBefore,
+      navigationMode,
     );
     assert.notEqual(
       await frame.locator("body").evaluate(() => location.href),
@@ -817,7 +831,7 @@ async function runRandomNavigationCase(browser, script) {
         initialQuestion,
         nextQuestion,
         nextQuestionUrl,
-        navigation: "Browser forward",
+        navigationMode,
         isCorrect,
         status: "passed",
       }),

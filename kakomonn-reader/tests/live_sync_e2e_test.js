@@ -562,16 +562,6 @@ async function main() {
     assert.notEqual(automaticSpeechState, null);
     assert.equal(automaticSpeechState.topControlsPresent, false);
     await submitCorrectAnswer(page);
-    await waitUntil("the prepared Browser forward entry", async () => {
-      const state = await readReaderState(page);
-      return (
-        state.answerResult === "correct" &&
-        state.errorOpen === false &&
-        state.historyEntryType === "current" &&
-        state.historyLength > automaticSpeechState.historyLength
-      );
-    });
-    await page.goForward();
     const navigationResult = await waitForAutomaticTransition(page);
     let finalState;
     let synchronizedReaderState = null;

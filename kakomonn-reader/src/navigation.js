@@ -374,30 +374,18 @@
     return url.href;
   }
 
-  async function activateFutureCelebration(state) {
-    if (
-      pendingAttempt === null ||
-      pendingAttempt.operationId !== state.operationId ||
-      pendingAttempt.phase !== "recorded" ||
-      pendingCelebration === null
-    ) {
-      showReaderError(
-        "celebration-history",
-        "祝福pageを開けません",
-        "Browser historyと保存済みの達成情報が一致しません.",
-        { code: "history_state_mismatch" }
-      );
-      history.back();
-      return false;
-    }
+  async function transitionToPendingCelebration(historyIndex, failureDetail) {
     const celebration = pendingCelebration;
     const operation = pendingAttempt;
     navigationInProgress = true;
-    readerHistorySession.currentIndex = state.index;
+    readerHistorySession.currentIndex = historyIndex;
     readerHistorySession.mode = "active";
     saveReaderHistorySession();
     updateSyncDependentControls();
     try {
+      while (correctFeedbackPromise !== null) {
+        await correctFeedbackPromise;
+      }
       stopSpeech();
       await clearPendingAttempt();
       await clearPendingCelebration();
@@ -415,12 +403,34 @@
       showReaderError(
         "celebration-navigation",
         "祝福pageを開けません",
-        "達成情報は保持されています. Browser forwardを再試行してください.",
+        failureDetail,
         error
       );
       updateSyncDependentControls();
       return false;
     }
+  }
+
+  async function activateFutureCelebration(state) {
+    if (
+      pendingAttempt === null ||
+      pendingAttempt.operationId !== state.operationId ||
+      pendingAttempt.phase !== "recorded" ||
+      pendingCelebration === null
+    ) {
+      showReaderError(
+        "celebration-history",
+        "祝福pageを開けません",
+        "Browser historyと保存済みの達成情報が一致しません.",
+        { code: "history_state_mismatch" }
+      );
+      history.back();
+      return false;
+    }
+    return transitionToPendingCelebration(
+      state.index,
+      "達成情報は保持されています. Browser forwardを再試行してください."
+    );
   }
 
   async function activateFutureQuestion(state) {
@@ -522,6 +532,12 @@
       return false;
     }
     if (
+      pendingAttempt.answerResult === "correct" &&
+      pendingAttempt.nextURL !== null
+    ) {
+      return navigateToScheduledQuestion(pendingAttempt.nextURL);
+    }
+    if (
       pendingAttempt.copy.state === "not-required" &&
       pendingAttempt.nextURL !== null
     ) {
@@ -531,6 +547,13 @@
       return prepareFutureHistoryEntry("future-question", pendingAttempt);
     }
     if (pendingCelebration !== null) {
+      if (pendingAttempt.answerResult === "correct") {
+        const currentState = ensureCurrentReaderHistory();
+        return transitionToPendingCelebration(
+          currentState.index,
+          "達成情報は保持されています. ページを再読み込みしてください."
+        );
+      }
       return prepareFutureHistoryEntry("future-celebration", pendingAttempt);
     }
     if (noNextQuestionOperationId !== pendingAttempt.operationId) {

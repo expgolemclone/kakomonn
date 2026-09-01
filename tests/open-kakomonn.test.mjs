@@ -200,7 +200,29 @@ test("restarts and warms only a dedicated Chrome process missing automatic playb
   ]);
 });
 
-test("does not open the URL when cold Chrome exits during startup", async () => {
+test("opens the URL when cold Chrome exits successfully during startup", async () => {
+  const calls = [];
+  await openKakomonn({
+    configuration: {},
+    inspectProfile: () => EMPTY_PROFILE_STATE,
+    platform: "win32",
+    spawnProcess(...arguments_) {
+      calls.push(arguments_);
+      return {
+        exitCode: calls.length === 1 ? 0 : null,
+        unref() {},
+      };
+    },
+    stat: expectedStat,
+    systemEnvironment: SYSTEM_ENVIRONMENT,
+    async waitForColdStart() {},
+  });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0][1].at(-1), CHROME_NO_STARTUP_WINDOW_ARGUMENT);
+  assert.equal(calls[1][1].at(-1), KAKOMONN_OPEN_URL);
+});
+
+test("does not open the URL when cold Chrome exits unsuccessfully during startup", async () => {
   const calls = [];
   await assert.rejects(
     () =>

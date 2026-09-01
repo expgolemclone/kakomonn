@@ -146,7 +146,8 @@ export async function openKakomonn({
     await waitForColdStart(CHROME_COLD_START_GRACE_MS);
     if (
       bootstrapProcess.exitCode !== undefined &&
-      bootstrapProcess.exitCode !== null
+      bootstrapProcess.exitCode !== null &&
+      bootstrapProcess.exitCode !== 0
     ) {
       throw new Error(
         `Google Chrome exited during startup: ${bootstrapProcess.exitCode}`,

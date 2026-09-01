@@ -5,18 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#090b12">
     <meta name="robots" content="noindex, nofollow">
-    <meta name="kakomonn-next-question-url" content="https://chushoks.kakomonn.com/createques#kakomonn-next">
     <title>次の問題を開く</title>
     <link rel="stylesheet" href="/styles.css">
     <script defer src="/open.js"></script>
   </head>
   <body>
+    <main id="open-bridge" class="open-bridge" aria-labelledby="open-status-title">
+      <section class="panel open-panel">
+        <p class="eyebrow">KAKOMONN</p>
+        <h1 id="open-status-title">Readerを準備しています</h1>
+        <p id="open-status-message" class="message" role="status" aria-live="polite">
+          準備が完了すると, 次の問題へ移動します.
+        </p>
+      </section>
+    </main>
     <dialog id="open-error" aria-labelledby="open-error-title" aria-describedby="open-error-message open-error-detail">
       <p class="eyebrow">OPEN ERROR</p>
-      <h1 id="open-error-title">次の問題を開けません</h1>
-      <p id="open-error-message">接続先の設定が不正です.</p>
+      <h1 id="open-error-title"></h1>
+      <p id="open-error-message"></p>
       <code id="open-error-detail"></code>
-      <p><a href="/">dashboardへ戻る</a></p>
+      <div class="dialog-actions open-dialog-actions">
+        <button id="open-error-reload" class="primary-button" type="button">再読み込み</button>
+        <a href="/">dashboardへ戻る</a>
+      </div>
     </dialog>
   </body>
 </html>

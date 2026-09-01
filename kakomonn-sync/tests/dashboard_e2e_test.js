@@ -350,6 +350,7 @@ async function assertOpenBridge(browser) {
     { tokenValue: token, siteValue: site },
   );
   let dashboardRequestCount = 0;
+  let readerRequestCount = 0;
   await context.route("https://dashboard.test/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/app.js") {
@@ -377,19 +378,45 @@ async function assertOpenBridge(browser) {
       contentType: "text/html; charset=utf-8",
     });
   });
-  await context.route("https://chushoks.kakomonn.com/**", (route) =>
-    route.fulfill({
+  await context.route("https://chushoks.kakomonn.com/**", (route) => {
+    readerRequestCount += 1;
+    return route.fulfill({
       body: "<!doctype html><html lang=\"ja\"><title>reader</title><body>reader</body></html>",
       contentType: "text/html; charset=utf-8",
-    }),
-  );
+    });
+  });
 
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
   try {
     await page.goto("https://dashboard.test/open");
-    await page.waitForURL("https://chushoks.kakomonn.com/createques#kakomonn-next");
+    assert.equal(page.url(), "https://dashboard.test/open");
+    assert.equal(readerRequestCount, 0);
+    assert.equal(
+      await page.locator("#open-status-title").innerText(),
+      "Readerを準備しています",
+    );
+    const layout = await page.evaluate(() => {
+      const panel = document.querySelector("#open-bridge .open-panel").getBoundingClientRect();
+      return {
+        panelLeft: panel.left,
+        panelRight: panel.right,
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+      };
+    });
+    assert.equal(layout.scrollWidth <= layout.viewportWidth, true, JSON.stringify(layout));
+    assert.equal(layout.panelLeft >= 0, true, JSON.stringify(layout));
+    assert.equal(layout.panelRight <= layout.viewportWidth, true, JSON.stringify(layout));
+
+    await page.evaluate(() => {
+      document.documentElement.dataset.kakomonnReaderBridgeTarget =
+        "https://chushoks.kakomonn.com/questions/45124";
+      document.documentElement.dataset.kakomonnReaderBridgeState = "ready";
+    });
+    await page.waitForURL("https://chushoks.kakomonn.com/questions/45124");
+    assert.equal(readerRequestCount, 1);
     assert.equal(dashboardRequestCount, 0);
 
     await page.goBack();
@@ -400,6 +427,87 @@ async function assertOpenBridge(browser) {
     assert.equal(await page.locator("#dashboard").isVisible(), true);
     assert.equal(await page.locator("#daily-kpi-completed").innerText(), "達成");
     assert.equal(dashboardRequestCount, 1);
+
+    const unavailablePage = await context.newPage();
+    unavailablePage.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
+    await unavailablePage.goto("https://dashboard.test/open");
+    await unavailablePage.evaluate(() => {
+      document.documentElement.dataset.kakomonnReaderBridgeState = "error";
+    });
+    await unavailablePage.locator("#open-error").waitFor({ state: "visible" });
+    assert.equal(
+      await unavailablePage.locator("#open-error-title").innerText(),
+      "Readerを起動できません",
+    );
+    assert.equal(
+      await unavailablePage.locator("#open-error-message").innerText(),
+      "Tampermonkeyと過去問readerが有効か確認して, ページを再読み込みしてください.",
+    );
+    assert.match(
+      await unavailablePage.locator("#open-error-detail").innerText(),
+      /code=reader_unavailable$/,
+    );
+    const reloadButton = unavailablePage.locator("#open-error-reload");
+    await reloadButton.focus();
+    assert.equal(
+      await unavailablePage.evaluate(() => document.activeElement?.id),
+      "open-error-reload",
+    );
+    assert.equal((await reloadButton.boundingBox()).height >= 44, true);
+    assert.equal(
+      (await unavailablePage.getByRole("link", { name: "dashboardへ戻る" }).boundingBox()).height >= 44,
+      true,
+    );
+    await unavailablePage.close();
+
+    for (const bridgeFailure of [
+      {
+        code: "invalid_url",
+        state: "ready",
+        title: "次の問題を開けません",
+      },
+      {
+        code: "no_next_question",
+        state: "empty",
+        title: "今解く問題はありません",
+      },
+      {
+        code: "sync_unauthorized",
+        state: "unauthorized",
+        title: "同期tokenを確認してください",
+      },
+    ]) {
+      const failurePage = await context.newPage();
+      failurePage.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
+      await failurePage.goto("https://dashboard.test/open");
+      await failurePage.evaluate((state) => {
+        document.documentElement.dataset.kakomonnReaderBridgeState = state;
+      }, bridgeFailure.state);
+      await failurePage.locator("#open-error").waitFor({ state: "visible" });
+      assert.equal(
+        await failurePage.locator("#open-error-title").innerText(),
+        bridgeFailure.title,
+      );
+      assert.match(
+        await failurePage.locator("#open-error-detail").innerText(),
+        new RegExp(`code=${bridgeFailure.code}$`),
+      );
+      assert.equal(readerRequestCount, 1);
+      await failurePage.close();
+    }
+
+    const timeoutPage = await context.newPage();
+    timeoutPage.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
+    await timeoutPage.clock.install();
+    await timeoutPage.goto("https://dashboard.test/open");
+    await timeoutPage.clock.fastForward(15_000);
+    await timeoutPage.locator("#open-error").waitFor({ state: "visible" });
+    assert.match(
+      await timeoutPage.locator("#open-error-detail").innerText(),
+      /code=reader_ready_timeout$/,
+    );
+    assert.equal(readerRequestCount, 1);
+    await timeoutPage.close();
     assert.deepEqual(errors, []);
   } finally {
     await context.close();

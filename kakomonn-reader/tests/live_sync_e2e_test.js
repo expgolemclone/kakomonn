@@ -403,16 +403,15 @@ async function submitCorrectAnswer(page) {
     .getByRole("button", { name: "解答する", exact: true })
     .click();
 
-  await waitUntil("the real site correct result", async () =>
-    evaluate(
-      page,
-      `() => document
-        .querySelector("#kakomonn-reader-frame")
-        .contentDocument
-        .querySelector("#js-answer-result-box")
-        ?.classList.contains("is-correct") === true`,
-    ),
-  );
+  await waitUntil("the real site correct result or automatic transition", async () => {
+    const state = await readReaderState(page);
+    if (state.answerResult === "incorrect") {
+      throw new Error("The selected real-site answer was marked incorrect");
+    }
+    return state.answerResult === "correct" ||
+      state.outerURL !== CURRENT_QUESTION_URL ||
+      state.frameURL !== CURRENT_QUESTION_URL;
+  });
 }
 
 async function waitForAutomaticTransition(page) {

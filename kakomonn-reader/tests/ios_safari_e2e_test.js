@@ -552,7 +552,6 @@ async function waitForElementText(
 }
 
 async function clickWebElementNatively(driver, selector, index = 0) {
-  await driver.calibrateNativeWebTap();
   const elements = await driver.$$(selector);
   assert.equal(
     index < elements.length,
@@ -562,6 +561,23 @@ async function clickWebElementNatively(driver, selector, index = 0) {
   const element = elements[index];
   await element.click();
   return element;
+}
+
+async function readNativeWebTapViewport(driver) {
+  return driver.execute(() => {
+    const visualViewport = window.visualViewport;
+    return {
+      innerHeight: window.innerHeight,
+      innerWidth: window.innerWidth,
+      isScrolledToTop:
+        document.documentElement.scrollTop === 0 && document.body.scrollTop === 0,
+      visualViewportHeight: visualViewport?.height ?? window.innerHeight,
+      visualViewportOffsetLeft: visualViewport?.offsetLeft ?? 0,
+      visualViewportOffsetTop: visualViewport?.offsetTop ?? 0,
+      visualViewportScale: visualViewport?.scale ?? 1,
+      visualViewportWidth: visualViewport?.width ?? window.innerWidth,
+    };
+  });
 }
 
 async function prepareSafariInitialPage(driver) {
@@ -849,6 +865,9 @@ async function runTest() {
 
     await prepareSafariInitialPage(driver);
     await waitForElement(driver, "#send_exam_btn");
+    // A modal dialog occupies the browser top layer and would intercept the
+    // temporary DOM overlay Appium uses to fit its native-tap coordinates.
+    await driver.calibrateNativeWebTap();
     const browserIdentity = await driver.execute(() => ({
       clipboardWrite: typeof navigator.clipboard?.write,
       secureContext: window.isSecureContext,
@@ -1077,16 +1096,30 @@ async function runTest() {
       JSON.stringify(syncSettingsLayout),
     );
 
-    const calibratedSyncTokenInput = await clickWebElementNatively(
+    const syncSettingsViewport = await readNativeWebTapViewport(driver);
+    const syncTokenInput = await clickWebElementNatively(
       driver,
       "#kakomonn-reader-sync-token",
     );
-    await calibratedSyncTokenInput.setValue("test-sync-token");
+    await syncTokenInput.setValue("test-sync-token");
     assert.equal(
       await driver.execute(
         () => document.querySelector("#kakomonn-reader-sync-token").value,
       ),
       "test-sync-token",
+    );
+    await driver.execute(() => document.activeElement?.blur());
+    await driver.waitUntil(
+      () =>
+        readNativeWebTapViewport(driver).then(
+          (viewport) =>
+            JSON.stringify(viewport) === JSON.stringify(syncSettingsViewport),
+        ),
+      {
+        interval: 250,
+        timeout: 10_000,
+        timeoutMsg: "Safari did not restore the pre-keyboard viewport",
+      },
     );
     await waitForElement(
       driver,

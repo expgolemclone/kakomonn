@@ -1086,17 +1086,21 @@ async function runTest() {
     assert.deepEqual(readerDiagnostics, { errors: [], rejections: [] });
 
     await driver.navigateTo(nextQuestionOpenURL);
+    await waitForElement(driver, "#open-bridge");
+    await installReader(driver, script);
     await driver.waitUntil(
       () =>
         driver
           .getUrl()
-          .then((url) => url === nextQuestionLauncherURL),
+          .then((url) => url === nextQuestionURL),
       {
         interval: 250,
-        timeout: 60_000,
-        timeoutMsg: "The production /open URL did not reach the launcher",
+        timeout: 30_000,
+        timeoutMsg: "The production /open bridge did not open the next question",
       },
     );
+
+    await driver.navigateTo(nextQuestionLauncherURL);
     await driver.execute(() => {
       window.__launcherDocumentSentinel = "same-document";
     });

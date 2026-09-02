@@ -771,13 +771,53 @@ async function readExplanationContents(driver) {
       ),
     )
   ).map(normalizeContent);
+  const explanationSegments = await driver.execute(() => {
+    const nonReadableSelector =
+      "script, style, noscript, template, [hidden], [aria-hidden='true'], [inert]";
+    const visibleTextSegments = (root) => {
+      const segments = [];
+      const visit = (node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          segments.push(node.nodeValue ?? "");
+          return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE || node.tagName === "IMG") {
+          return;
+        }
+        const style = getComputedStyle(node);
+        if (
+          node.matches(nonReadableSelector) ||
+          style.display === "none" ||
+          style.visibility === "hidden" ||
+          style.visibility === "collapse" ||
+          style.contentVisibility === "hidden" ||
+          style.opacity === "0"
+        ) {
+          return;
+        }
+        for (const child of node.childNodes) {
+          visit(child);
+        }
+      };
+      visit(root);
+      return segments;
+    };
+    return Array.from(
+      document.querySelectorAll("#js-commentary-wrap > .item > .text"),
+      visibleTextSegments,
+    );
+  });
   const explanationImageURLs = await driver.execute(() =>
     Array.from(
       document.querySelectorAll("#js-commentary-wrap > .item .text img[src]"),
       (image) => image.src,
     ),
   );
-  return { explanationContents, explanationImageURLs };
+  return {
+    explanationContents,
+    explanationImageURLs,
+    explanationSegments,
+  };
 }
 
 async function captureFailureArtifacts(driver, error) {
@@ -945,7 +985,11 @@ async function runTest() {
     assert.deepEqual(questionImageURLs, MARKDOWN_QUESTION_IMAGE_URLS);
 
     await submitAnswer(driver, MARKDOWN_INCORRECT_ANSWER_TEXT);
-    const { explanationContents, explanationImageURLs } =
+    const {
+      explanationContents,
+      explanationImageURLs,
+      explanationSegments,
+    } =
       await readExplanationContents(driver);
     for (
       let index = 0;
@@ -982,7 +1026,8 @@ async function runTest() {
       answerSummary: MARKDOWN_INCORRECT_ANSWER_SUMMARY,
       choices,
       copiedMarkdown,
-      explanationContents,
+      explanationContents: [],
+      explanationSegments,
       questionText,
     });
     assert.deepEqual(

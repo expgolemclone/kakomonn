@@ -48,6 +48,7 @@ function assertMarkdownCopy({
   choices,
   copiedMarkdown,
   explanationContents,
+  explanationSegments = [],
   questionText,
 }) {
   assert.equal(
@@ -80,6 +81,22 @@ function assertMarkdownCopy({
       compactMarkdown.includes(explanationContent.replace(/\s+/g, "")),
       true,
     );
+  }
+  for (const segments of explanationSegments) {
+    let searchIndex = 0;
+    for (const segment of segments) {
+      const expectedSegment = segment.replace(/\s+/g, "");
+      if (expectedSegment.length === 0) {
+        continue;
+      }
+      const segmentIndex = compactMarkdown.indexOf(expectedSegment, searchIndex);
+      assert.notEqual(
+        segmentIndex,
+        -1,
+        `Copied Markdown omitted an explanation segment: ${expectedSegment}`,
+      );
+      searchIndex = segmentIndex + expectedSegment.length;
+    }
   }
 
   const expectedImageURLs = [

@@ -753,7 +753,19 @@ async function runCorrectFeedbackCase(context, script) {
         window.__audioInstance?.src.startsWith("data:audio/mpeg;base64,") &&
         typeof window.__audioInstance?.onended === "function",
     );
-    assert.equal((await azureSpeechCalls(page)).length, 1);
+    const speechCalls = await azureSpeechCalls(page);
+    assert.equal(speechCalls.length, 2);
+    assert.equal(
+      speechCalls[1].body,
+      expectedSpeechSSML("111", "+70%"),
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        window.__audioBlobs.length === 3 &&
+        window.__audioInstance?.src.startsWith("blob:") &&
+        typeof window.__audioInstance?.onended === "function",
+    );
     await finishManualAudio(page);
     await childFrame.locator(".kakomonn-reader-correct-feedback").waitFor({
       state: "hidden",
@@ -769,8 +781,128 @@ async function runCorrectFeedbackCase(context, script) {
       [
         { size: 4, type: "audio/mpeg" },
         { size: 31_796, type: "audio/wav" },
+        { size: 4, type: "audio/mpeg" },
       ],
     );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
+async function runRestoredCorrectFeedbackKpiCase(context, script) {
+  const page = await context.newPage();
+  const errors = await preparePage(page, "audio-manual", {
+    nextQuestionId: null,
+    pendingAttempt: {
+      operationId: "a".repeat(32),
+      questionId: "45124",
+      phase: "recorded",
+      pageURL: "https://chushoks.kakomonn.com/questions/45124",
+      answerResult: "correct",
+      copy: { state: "completed" },
+      site: "chushoks.kakomonn.com",
+      nextURL: null,
+      kpiQuestionsRemaining: 42,
+    },
+  });
+  await installCorrectFeedbackRandom(page, [111]);
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    await page.waitForFunction(
+      () =>
+        window.__audioPlayCalls >= 2 &&
+        typeof window.__audioInstance?.onended === "function",
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(() => window.__audioInstance?.src === "");
+
+    await markAnswerResult(childFrame, "correct");
+    await page.waitForFunction(
+      () =>
+        window.__audioBlobs.length === 2 &&
+        window.__audioInstance?.src.startsWith("blob:") &&
+        typeof window.__audioInstance?.onended === "function",
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        window.__audioBlobs.length === 2 &&
+        window.__audioInstance?.src.startsWith("data:audio/mpeg;base64,") &&
+        typeof window.__audioInstance?.onended === "function",
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        window.__audioBlobs.length === 3 &&
+        window.__audioInstance?.src.startsWith("blob:") &&
+        typeof window.__audioInstance?.onended === "function",
+    );
+    const speechCalls = await azureSpeechCalls(page);
+    assert.equal(speechCalls.length, 2);
+    assert.equal(speechCalls[1].body, expectedSpeechSSML("42", "+70%"));
+    assert.equal(
+      await page.evaluate(() => window.__syncMock.attemptCount),
+      0,
+    );
+    await finishManualAudio(page);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
+async function runCorrectFeedbackSyncRetryCase(context, script) {
+  const page = await context.newPage();
+  const errors = await preparePage(page, "audio-manual", {
+    nextQuestionId: null,
+  });
+  await installCorrectFeedbackRandom(page, [111]);
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    await page.waitForFunction(
+      () =>
+        window.__audioPlayCalls >= 2 &&
+        typeof window.__audioInstance?.onended === "function",
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(() => window.__audioInstance?.src === "");
+    await page.evaluate(() => {
+      window.__syncMock.commitThenFailNextAttempt = true;
+    });
+
+    await markAnswerResult(childFrame, "correct");
+    await page.locator("#kakomonn-reader-error-retry").waitFor({
+      state: "visible",
+    });
+    await page.waitForFunction(
+      () =>
+        window.__audioBlobs.length === 2 &&
+        window.__audioInstance?.src.startsWith("blob:"),
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () => window.__audioInstance?.src.startsWith("data:audio/mpeg;base64,"),
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(() => window.__audioInstance?.src === "");
+    assert.equal((await azureSpeechCalls(page)).length, 1);
+
+    await page.locator("#kakomonn-reader-error-retry").click();
+    await page.waitForFunction(
+      () =>
+        window.__audioBlobs.length === 3 &&
+        window.__audioInstance?.src.startsWith("blob:") &&
+        typeof window.__audioInstance?.onended === "function",
+    );
+    const speechCalls = await azureSpeechCalls(page);
+    assert.equal(speechCalls.length, 2);
+    assert.equal(speechCalls[1].body, expectedSpeechSSML("111", "+70%"));
+    assert.equal(
+      await page.evaluate(() => window.__syncMock.attemptCount),
+      1,
+    );
+    await finishManualAudio(page);
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
@@ -801,8 +933,16 @@ async function runSpeechLookaheadCase(context, script) {
     await markAnswerResult(childFrame, "correct");
     await page.waitForFunction(
       () =>
-        window.__syncMock.abortedRequestCount === 1 &&
-        window.__syncMock.releaseHeldSpeechRequest === null,
+        window.__audioBlobs.length >= 2 &&
+        window.__audioInstance?.src.startsWith("blob:"),
+    );
+    assert.deepEqual(
+      await page.evaluate(() => ({
+        abortedRequestCount: window.__syncMock.abortedRequestCount,
+        releaseHeldSpeechRequest:
+          window.__syncMock.releaseHeldSpeechRequest !== null,
+      })),
+      { abortedRequestCount: 1, releaseHeldSpeechRequest: false },
     );
     assert.deepEqual(errors, []);
   } finally {
@@ -966,7 +1106,11 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
 
     await feedback.waitFor({ state: "hidden" });
     const speechCalls = await azureSpeechCalls(page);
-    assert.equal(speechCalls.length, 1);
+    assert.equal(speechCalls.length, 2);
+    assert.equal(
+      speechCalls[1].body,
+      expectedSpeechSSML("111", "+70%"),
+    );
     assert.equal(
       speechCalls.some((call) => call.body.includes("en-US-JennyNeural")),
       false,
@@ -976,6 +1120,7 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
       [
         { size: 4, type: "audio/mpeg" },
         { size: expected.waveSize, type: "audio/wav" },
+        { size: 4, type: "audio/mpeg" },
       ],
     );
     assert.deepEqual(
@@ -1034,6 +1179,21 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
     );
     await finishManualAudio(page);
 
+    await page.waitForFunction(
+      () =>
+        window.__audioBlobs.length === 3 &&
+        window.__audioInstance?.src.startsWith("blob:") &&
+        typeof window.__audioInstance?.onended === "function",
+    );
+    await finishManualAudio(page);
+
+    await page.waitForFunction(
+      () =>
+        window.__audioBlobs.length === 4 &&
+        window.__audioInstance?.src.startsWith("blob:") &&
+        typeof window.__audioInstance?.onended === "function",
+    );
+
     const queuedFeedback = childFrame.locator(
       '.kakomonn-reader-correct-feedback[data-rarity="ssr"]',
     );
@@ -1047,14 +1207,25 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
     await finishManualAudio(page);
     await page.waitForFunction(
       () =>
-        window.__audioBlobs.length === 3 &&
+        window.__audioBlobs.length === 4 &&
         window.__audioInstance?.src.startsWith("data:audio/mpeg;base64,") &&
+        typeof window.__audioInstance?.onended === "function",
+    );
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        window.__audioBlobs.length === 5 &&
+        window.__audioInstance?.src.startsWith("blob:") &&
         typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
     await page.waitForFunction(
       () => window.__audioInstance?.src === "",
     );
+    const speechCalls = await azureSpeechCalls(page);
+    assert.equal(speechCalls.length, 3);
+    assert.equal(speechCalls[1].body, expectedSpeechSSML("111", "+70%"));
+    assert.equal(speechCalls[2].body, expectedSpeechSSML("110", "+70%"));
     assert.deepEqual(
       await page.evaluate(() => window.__correctFeedbackRandomCalls),
       [11, 0],
@@ -1125,6 +1296,16 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
       page.url(),
       "https://chushoks.kakomonn.com/questions/45124",
     );
+    await finishManualAudio(page);
+    await page.waitForFunction(
+      () =>
+        window.__audioBlobs.length === 3 &&
+        window.__audioInstance?.src.startsWith("blob:") &&
+        typeof window.__audioInstance?.onended === "function",
+    );
+    const speechCalls = await azureSpeechCalls(page);
+    assert.equal(speechCalls.length, 2);
+    assert.equal(speechCalls[1].body, expectedSpeechSSML("0", "+70%"));
     await finishManualAudio(page);
     await page.waitForURL((url) =>
       url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
@@ -1924,9 +2105,14 @@ async function main() {
       .locator("body")
       .evaluate(() => window.scrollY);
     await page.keyboard.type("qwert asdfg n gg yy xz ");
+    await page.keyboard.press("Shift+H");
     assert.equal(
       await shortcutTextInput.inputValue(),
-      "qwert asdfg n gg yy xz ",
+      "qwert asdfg n gg yy xz H",
+    );
+    assert.equal(
+      page.url(),
+      "https://chushoks.kakomonn.com/questions/45124",
     );
     assert.equal(await answerInputs.first().isChecked(), true);
     assert.equal(await displayChoices.first().evaluate((choice) =>
@@ -2059,7 +2245,29 @@ async function main() {
         }
       });
     });
-    await page.goBack();
+    await page.keyboard.press("h");
+    assert.equal(
+      page.url(),
+      "https://chushoks.kakomonn.com/questions/45125",
+    );
+    await childFrame.locator("body").evaluate((body) => {
+      for (const init of [
+        { key: "H", repeat: true, shiftKey: true },
+        { ctrlKey: true, key: "H", shiftKey: true },
+      ]) {
+        body.dispatchEvent(new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          ...init,
+        }));
+      }
+    });
+    assert.equal(
+      page.url(),
+      "https://chushoks.kakomonn.com/questions/45125",
+    );
+    await page.locator("#kakomonn-reader-frame").focus();
+    await page.keyboard.press("Shift+H");
     await page.waitForURL("https://chushoks.kakomonn.com/dashboard");
     await page.goForward();
     await page.waitForFunction(
@@ -2109,6 +2317,8 @@ async function main() {
     await runContinuousMutationCase(context, script);
     await runSpeechLookaheadCase(context, script);
     await runCorrectFeedbackCase(context, script);
+    await runRestoredCorrectFeedbackKpiCase(context, script);
+    await runCorrectFeedbackSyncRetryCase(context, script);
     await runCorrectFeedbackVariantCase(context, script, {
       badge: "RARE",
       displayText: "Nice! That's Right!!",

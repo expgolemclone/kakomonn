@@ -11,6 +11,7 @@ async function loadSelectionApi() {
   vm.runInContext(
     `${source}\n` +
       `globalThis.__correctFeedbackTest = {\n` +
+      `  calculateKpiQuestionsRemaining,\n` +
       `  chooseCorrectFeedbackVariant,\n` +
       `  randomIntegerBelow,\n` +
       `  variants: CORRECT_FEEDBACK_VARIANTS,\n` +
@@ -20,6 +21,32 @@ async function loadSelectionApi() {
   );
   return context.__correctFeedbackTest;
 }
+
+test("combines due and new question work into one KPI number", async () => {
+  const { calculateKpiQuestionsRemaining } = await loadSelectionApi();
+  assert.equal(
+    calculateKpiQuestionsRemaining({
+      dueCardsRemaining: 12,
+      newQuestionsRemaining: 99,
+    }),
+    111,
+  );
+  assert.equal(
+    calculateKpiQuestionsRemaining({
+      dueCardsRemaining: 0,
+      newQuestionsRemaining: 0,
+    }),
+    0,
+  );
+  assert.throws(
+    () =>
+      calculateKpiQuestionsRemaining({
+        dueCardsRemaining: Number.MAX_SAFE_INTEGER,
+        newQuestionsRemaining: 1,
+      }),
+    /KPI questions remaining is invalid/,
+  );
+});
 
 function queuedCrypto(values) {
   const queue = [...values];

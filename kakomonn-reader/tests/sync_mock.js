@@ -221,6 +221,11 @@ function installSyncMockInWindow({
               : details.data,
       };
       mock.calls.push(call);
+      const isSpeechRequest =
+        new URL(call.url).origin === expectedSpeechOrigin;
+      if (isSpeechRequest) {
+        mock.speechRequestCount += 1;
+      }
 
       const executeRequest = () => {
         if (mock.failNextRequest) {
@@ -230,7 +235,6 @@ function installSyncMockInWindow({
         }
         const requestURL = new URL(call.url);
         if (requestURL.origin === expectedSpeechOrigin) {
-          mock.speechRequestCount += 1;
           if (
             call.method !== "POST" ||
             requestURL.pathname !== "/cognitiveservices/v1" ||
@@ -437,8 +441,8 @@ function installSyncMockInWindow({
       };
 
       const isHeldSpeechRequest =
-        new URL(call.url).origin === expectedSpeechOrigin &&
-        mock.speechRequestCount + 1 === mock.holdSpeechRequestNumber;
+        isSpeechRequest &&
+        mock.speechRequestCount === mock.holdSpeechRequestNumber;
       if (mock.holdNextRequest || isHeldSpeechRequest) {
         mock.holdNextRequest = false;
         releaseHeldRequest = () => {

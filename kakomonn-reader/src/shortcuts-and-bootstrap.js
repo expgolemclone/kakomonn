@@ -204,12 +204,13 @@
 
   function onReaderKeyDown(event) {
     const key = event.key.toLowerCase();
+    const browserBackShortcut = event.shiftKey && key === "h";
     const scrollDirection = key === "z" ? 1 : key === "x" ? -1 : 0;
     if (
       event.altKey ||
       event.ctrlKey ||
       event.metaKey ||
-      event.shiftKey ||
+      (event.shiftKey && !browserBackShortcut) ||
       event.isComposing ||
       syncSettings.open ||
       errorDialog.open ||
@@ -220,7 +221,14 @@
       return;
     }
 
-    let handled = completeShortcutSequence(key);
+    let handled = false;
+    if (browserBackShortcut) {
+      clearShortcutSequence();
+      history.back();
+      handled = true;
+    } else {
+      handled = completeShortcutSequence(key);
+    }
     if (!handled) {
       if (key === "g") {
         startShortcutSequence(key);
@@ -249,7 +257,9 @@
       return;
     }
 
-    activateSpeechFromGesture();
+    if (!browserBackShortcut) {
+      activateSpeechFromGesture();
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
   }

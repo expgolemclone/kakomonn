@@ -225,12 +225,21 @@
       return false;
     }
     if (value.phase === "queued") {
-      return value.nextURL === undefined;
+      return (
+        value.nextURL === undefined &&
+        value.kpiQuestionsRemaining === undefined
+      );
     }
-    return (
+    const validNextURL =
       value.nextURL === null ||
-      (typeof value.nextURL === "string" && isScheduledQuestionURL(value.nextURL))
-    );
+      (typeof value.nextURL === "string" &&
+        isScheduledQuestionURL(value.nextURL));
+    const validKpiQuestionsRemaining =
+      value.answerResult === "correct"
+        ? Number.isSafeInteger(value.kpiQuestionsRemaining) &&
+          value.kpiQuestionsRemaining >= 0
+        : value.kpiQuestionsRemaining === undefined;
+    return validNextURL && validKpiQuestionsRemaining;
   }
 
   function isPendingCelebration(value) {
@@ -430,19 +439,40 @@
     pendingCelebration = null;
   }
 
-  async function markPendingAttemptRecorded(operation, nextURL) {
+  async function markPendingAttemptRecorded(
+    operation,
+    nextURL,
+    kpiQuestionsRemaining
+  ) {
     if (
       pendingAttempt === null ||
       pendingAttempt.operationId !== operation.operationId ||
-      (nextURL !== null && !isScheduledQuestionURL(nextURL))
+      (nextURL !== null && !isScheduledQuestionURL(nextURL)) ||
+      (operation.answerResult === "correct" &&
+        (!Number.isSafeInteger(kpiQuestionsRemaining) ||
+          kpiQuestionsRemaining < 0)) ||
+      (operation.answerResult === "incorrect" &&
+        kpiQuestionsRemaining !== undefined)
     ) {
       throw new Error("pending attempt changed");
     }
-    await updatePendingAttempt(operation.operationId, (current) => ({
-      ...current,
-      phase: "recorded",
-      nextURL,
-    }));
+    const updated = await updatePendingAttempt(
+      operation.operationId,
+      (current) => ({
+        ...current,
+        phase: "recorded",
+        nextURL,
+        ...(operation.answerResult === "correct"
+          ? { kpiQuestionsRemaining }
+          : {}),
+      })
+    );
+    if (updated.answerResult === "correct") {
+      resolveCorrectFeedbackKpi(
+        updated.questionId,
+        updated.kpiQuestionsRemaining
+      );
+    }
   }
 
   function openSyncSettings() {
@@ -974,6 +1004,15 @@
       pendingAttempt = null;
     } else {
       pendingAttempt = storedAttempt;
+      if (
+        pendingAttempt?.phase === "recorded" &&
+        pendingAttempt.answerResult === "correct"
+      ) {
+        resolveCorrectFeedbackKpi(
+          pendingAttempt.questionId,
+          pendingAttempt.kpiQuestionsRemaining
+        );
+      }
     }
     if (storedCelebration !== null && !isPendingCelebration(storedCelebration)) {
       await GM.deleteValue(PENDING_CELEBRATION_KEY);

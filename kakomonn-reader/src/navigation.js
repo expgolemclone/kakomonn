@@ -678,8 +678,16 @@
         }
 
         const nextQuestion = result.nextQuestion;
+        const kpiQuestionsRemaining =
+          operation.answerResult === "correct"
+            ? calculateKpiQuestionsRemaining(result.learningMetrics)
+            : undefined;
         syncReady = true;
-        await markPendingAttemptRecorded(operation, nextQuestion?.url ?? null);
+        await markPendingAttemptRecorded(
+          operation,
+          nextQuestion?.url ?? null,
+          kpiQuestionsRemaining
+        );
         return true;
       } catch (error) {
         if (error?.code === "unauthorized") {

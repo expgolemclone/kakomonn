@@ -10,7 +10,6 @@
       label: "NORMAL",
       displayText: "That's Right!!",
       speechText: "That's right!",
-      speechRate: 1.1,
       chime: Object.freeze({
         duration: 0.72,
         gain: 0.34,
@@ -25,7 +24,6 @@
       label: "RARE",
       displayText: "Nice! That's Right!!",
       speechText: "Nice! That's right!",
-      speechRate: 1.1,
       chime: Object.freeze({
         duration: 0.74,
         gain: 0.3,
@@ -41,7 +39,6 @@
       label: "SUPER RARE",
       displayText: "Amazing! That's Right!!",
       speechText: "Amazing! That's right!",
-      speechRate: 1.1,
       chime: Object.freeze({
         duration: 0.86,
         gain: 0.27,
@@ -58,7 +55,6 @@
       label: "SSR",
       displayText: "Legendary! That's Right!!",
       speechText: "Legendary! That's right!",
-      speechRate: 1.1,
       chime: Object.freeze({
         duration: 1.02,
         gain: 0.23,
@@ -328,8 +324,58 @@
   `;
 
   const correctFeedbackDocuments = new WeakSet();
+  const correctFeedbackKpiResolvers = new Map();
   let correctFeedbackPromise = null;
   let correctFeedbackRemovalTimer = null;
+
+  function calculateKpiQuestionsRemaining(metrics) {
+    const remaining =
+      metrics.dueCardsRemaining + metrics.newQuestionsRemaining;
+    if (!Number.isSafeInteger(remaining) || remaining < 0) {
+      throw new TypeError("KPI questions remaining is invalid.");
+    }
+    return remaining;
+  }
+
+  function waitForCorrectFeedbackKpi(questionId) {
+    if (!/^\d+$/.test(questionId ?? "")) {
+      return Promise.reject(
+        new TypeError("Correct feedback question ID is invalid.")
+      );
+    }
+    if (
+      pendingAttempt?.phase === "recorded" &&
+      pendingAttempt.answerResult === "correct" &&
+      pendingAttempt.questionId === questionId
+    ) {
+      return Promise.resolve(pendingAttempt.kpiQuestionsRemaining);
+    }
+    return new Promise((resolve) => {
+      const resolvers = correctFeedbackKpiResolvers.get(questionId) ?? [];
+      resolvers.push(resolve);
+      correctFeedbackKpiResolvers.set(questionId, resolvers);
+    });
+  }
+
+  function resolveCorrectFeedbackKpi(questionId, remaining) {
+    if (
+      !/^\d+$/.test(questionId ?? "") ||
+      !Number.isSafeInteger(remaining) ||
+      remaining < 0
+    ) {
+      throw new TypeError("Correct feedback KPI result is invalid.");
+    }
+    const resolvers = correctFeedbackKpiResolvers.get(questionId);
+    if (resolvers === undefined || resolvers.length === 0) {
+      return false;
+    }
+    const resolve = resolvers.shift();
+    if (resolvers.length === 0) {
+      correctFeedbackKpiResolvers.delete(questionId);
+    }
+    resolve(remaining);
+    return true;
+  }
 
   function randomIntegerBelow(limit, cryptoSource = globalThis.crypto) {
     if (

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @version      2.1.5
+// @version      2.2.0
 // @description  問題文と解説の読み上げ, 解答後の自動Markdown copy, 学習記録の端末間同期とdue card完了時の祝福を提供します.
 // @updateURL    https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @downloadURL  https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
@@ -348,8 +348,6 @@
     "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
   const JAPANESE_SPEECH_LOCALE = "ja-JP";
   const JAPANESE_SPEECH_VOICE_NAME = "ja-JP-NanamiNeural";
-  const ENGLISH_SPEECH_LOCALE = "en-US";
-  const ENGLISH_SPEECH_VOICE_NAME = "en-US-JennyNeural";
   const AZURE_SPEECH_OUTPUT_FORMAT =
     "audio-24khz-48kbitrate-mono-mp3";
   const FEEDBACK_AUDIO_DATA_URLS = Object.freeze({

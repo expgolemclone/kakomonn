@@ -457,7 +457,30 @@
     });
   }
 
-  async function playCorrectFeedbackSequence(variant) {
+  async function prepareCorrectFeedbackKpiAudio(remainingPromise, runId) {
+    const remaining = await remainingPromise;
+    if (runId !== speechRunId) {
+      return null;
+    }
+    const token = await getAzureSpeechToken();
+    if (runId !== speechRunId) {
+      return null;
+    }
+    const text = String(remaining);
+    const request = requestAzureSpeechAudio(
+      token,
+      text,
+      ANSWER_RESULT_SPEECH_RATE
+    );
+    activeSpeechRequests.add(request);
+    try {
+      return { audioData: await request, text };
+    } finally {
+      activeSpeechRequests.delete(request);
+    }
+  }
+
+  async function playCorrectFeedbackSequence(variant, remainingPromise) {
     if (speechInitializationPromise !== null) {
       await speechInitializationPromise;
     }
@@ -468,6 +491,13 @@
     speechRunId += 1;
     const runId = speechRunId;
     cancelActiveSpeech();
+    const preparedKpiAudioPromise = prepareCorrectFeedbackKpiAudio(
+      remainingPromise,
+      runId
+    ).then(
+      (prepared) => ({ error: null, prepared }),
+      (error) => ({ error, prepared: null })
+    );
     const chimeCompleted = await playFeedbackAudio(
       new Blob([createCorrectChimeWave(variant)], { type: "audio/wav" }),
       runId,
@@ -482,7 +512,22 @@
       runId,
       variant.speechText
     );
-    return voiceCompleted && runId === speechRunId;
+    if (!voiceCompleted || runId !== speechRunId) {
+      return false;
+    }
+
+    const kpiAudio = await preparedKpiAudioPromise;
+    if (kpiAudio.error !== null) {
+      throw kpiAudio.error;
+    }
+    if (kpiAudio.prepared === null || runId !== speechRunId) {
+      return false;
+    }
+    return playFeedbackAudio(
+      new Blob([kpiAudio.prepared.audioData], { type: "audio/mpeg" }),
+      runId,
+      kpiAudio.prepared.text
+    );
   }
 
   function beginCorrectAnswerFeedback(sourceDocument = frameDocument) {
@@ -497,6 +542,7 @@
     correctFeedbackDocuments.add(sourceDocument);
     awaitingAnswerResultSpeech = false;
     const variant = chooseCorrectFeedbackVariant();
+    const remainingPromise = waitForCorrectFeedbackKpi(currentQuestionId());
 
     const previousFeedback = correctFeedbackPromise ?? Promise.resolve();
     const scheduledFeedback = previousFeedback.then(async () => {
@@ -506,7 +552,7 @@
       });
       try {
         await Promise.all([
-          playCorrectFeedbackSequence(variant),
+          playCorrectFeedbackSequence(variant, remainingPromise),
           minimumDuration,
         ]);
       } catch (error) {

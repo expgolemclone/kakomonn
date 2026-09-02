@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$BaseUrl = "https://kakomonn-sync.kakomonn.workers.dev/v9",
+    [string]$BaseUrl = "https://kakomonn-sync.kakomonn.workers.dev/v10",
     [string]$Site
 )
 
@@ -111,17 +111,6 @@ function Get-StateContractErrors {
             $metrics.newQuestionsRemaining -ne [Math]::Max(0, 100 - [long]$metrics.todayNewQuestionCount)
         ) {
             $errors.Add("learningMetrics.newQuestionsRemaining must match todayNewQuestionCount")
-        }
-        if (
-            (Test-Property $metrics "dailyKpiCompleted") -and
-            $metrics.dailyKpiCompleted -is [bool] -and
-            (Test-Property $metrics "dueCardsCompleted") -and
-            $metrics.dueCardsCompleted -is [bool] -and
-            (Test-Property $metrics "newQuestionsRemaining") -and
-            (Test-SafeInteger $metrics.newQuestionsRemaining -NonNegative) -and
-            $metrics.dailyKpiCompleted -ne ($metrics.dueCardsCompleted -and $metrics.newQuestionsRemaining -eq 0)
-        ) {
-            $errors.Add("learningMetrics.dailyKpiCompleted must match both KPI components")
         }
         if (-not (Test-Property $metrics "todayStabilityDaysDelta") -or -not (Test-SafeInteger $metrics.todayStabilityDaysDelta)) {
             $errors.Add("learningMetrics.todayStabilityDaysDelta must be a safe integer")
@@ -295,7 +284,7 @@ function Show-ResponseSummary {
 
 try {
     $sitesResponse = Invoke-DiagnosticRequest "/sites"
-    Show-ResponseSummary "GET /v9/sites" $sitesResponse
+    Show-ResponseSummary "GET /v10/sites" $sitesResponse
 
     if ($sitesResponse.Status -ne 200) {
         Write-Host ""
@@ -332,7 +321,7 @@ try {
 
         $encodedSite = [Uri]::EscapeDataString([string]$currentSite)
         $stateResponse = Invoke-DiagnosticRequest "/state?site=$encodedSite"
-        Show-ResponseSummary "GET /v9/state" $stateResponse
+        Show-ResponseSummary "GET /v10/state" $stateResponse
 
         if ($stateResponse.Status -ne 200) {
             Write-Host "STATE CONTRACT: NOT TESTED, HTTP status is not 200."
@@ -359,8 +348,8 @@ try {
         }
 
         if ($null -eq $stateResponse.Json.catalog) {
-            Write-Host "CATALOG: null. The reader will crawl the question catalog and POST /v9/questions."
-            Write-Host "NOTE: this script does not POST /v9/questions because that mutates production state."
+            Write-Host "CATALOG: null. The reader will crawl the question catalog and POST /v10/questions."
+            Write-Host "NOTE: this script does not POST /v10/questions because that mutates production state."
         }
         else {
             $nowMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
@@ -368,8 +357,8 @@ try {
             $ageHours = [Math]::Round($ageMs / 3600000.0, 2)
             Write-Host "CATALOG AGE HOURS: $ageHours"
             if ($ageMs -lt 0 -or $ageMs -ge 86400000) {
-                Write-Host "CATALOG REFRESH: YES. The reader will crawl the catalog and POST /v9/questions."
-                Write-Host "NOTE: if the browser error happens here, inspect the POST /v9/questions response in DevTools."
+                Write-Host "CATALOG REFRESH: YES. The reader will crawl the catalog and POST /v10/questions."
+                Write-Host "NOTE: if the browser error happens here, inspect the POST /v10/questions response in DevTools."
             }
             else {
                 Write-Host "CATALOG REFRESH: NO"
@@ -377,7 +366,7 @@ try {
         }
 
         $nextResponse = Invoke-DiagnosticRequest "/next?site=$encodedSite"
-        Show-ResponseSummary "GET /v9/next" $nextResponse
+        Show-ResponseSummary "GET /v10/next" $nextResponse
         if ($nextResponse.Status -eq 200 -and $null -ne $nextResponse.Json) {
             $nextErrors = @(Get-NextContractErrors $nextResponse.Json ([string]$currentSite))
             if ($nextErrors.Count -eq 0) {
@@ -404,7 +393,7 @@ try {
     }
 
     Write-Host "RESULT: non-mutating production endpoints satisfy the reader contract."
-    Write-Host "If the reader still shows invalid_response, the remaining likely path is POST /v9/questions or POST /v9/attempts."
+    Write-Host "If the reader still shows invalid_response, the remaining likely path is POST /v10/questions or POST /v10/attempts."
 }
 finally {
     $headers.Authorization = ""

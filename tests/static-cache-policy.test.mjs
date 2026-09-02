@@ -22,7 +22,7 @@ test("sync static assets are stored for revalidation", async () => {
 
 test("sync invokes the Worker only for APIs and disables persistent telemetry", async () => {
   const config = await jsonFile("kakomonn-sync/wrangler.jsonc");
-  assert.deepEqual(config.assets.run_worker_first, ["/v9/*"]);
+  assert.deepEqual(config.assets.run_worker_first, ["/v10/*"]);
   assert.deepEqual(config.observability, { enabled: false });
 });
 

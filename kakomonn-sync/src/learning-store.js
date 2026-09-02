@@ -264,6 +264,20 @@ function readCelebrationForOperation(storage, operationId) {
   );
 }
 
+function hasDailyKpiAchievement(storage, site, date) {
+  return (
+    storage.sql
+      .exec(
+        `SELECT 1 AS achieved
+         FROM daily_kpi_achievements
+         WHERE site = ? AND date = ?`,
+        site,
+        date
+      )
+      .toArray()[0] !== undefined
+  );
+}
+
 function recordCelebration(
   storage,
   site,
@@ -297,7 +311,8 @@ function composeLearningMetrics(
   nowMs,
   storedMetrics,
   remaining,
-  todayStabilityDaysDelta
+  todayStabilityDaysDelta,
+  previouslyCompleted = false
 ) {
   const today = getTokyoDate(new Date(nowMs));
   const isCurrentDailyMetrics = storedMetrics.dailyMetricsDate === today;
@@ -313,7 +328,8 @@ function composeLearningMetrics(
   );
   return {
     stabilityDays: integerStabilityDays(storedMetrics),
-    dailyKpiCompleted: remaining === 0 && newQuestionsRemaining === 0,
+    dailyKpiCompleted:
+      previouslyCompleted || (remaining === 0 && newQuestionsRemaining === 0),
     dueCardsCompleted: remaining === 0,
     dueCardsRemaining: remaining,
     todayNewQuestionCount,
@@ -339,7 +355,8 @@ function readLearningMetrics(storage, site, nowMs, storedMetrics) {
     nowMs,
     storedMetrics,
     dueCardsRemaining(storage, site, nowMs),
-    readTodayStabilityDaysDelta(storage, site, today)
+    readTodayStabilityDaysDelta(storage, site, today),
+    hasDailyKpiAchievement(storage, site, today)
   );
 }
 
@@ -555,12 +572,18 @@ export class LearningState extends DurableObject {
         site,
         today
       );
+      const previouslyCompleted = hasDailyKpiAchievement(
+        this.ctx.storage,
+        site,
+        today
+      );
       const wasDailyKpiCompleted = composeLearningMetrics(
         site,
         nowMs,
         storedMetricsBefore,
         remainingBefore,
-        previousTodayStabilityDaysDelta
+        previousTodayStabilityDaysDelta,
+        previouslyCompleted
       ).dailyKpiCompleted;
       if (schedulingApplied) {
         saveCard(this.ctx.storage, site, questionId, nextCard, today);
@@ -629,7 +652,8 @@ export class LearningState extends DurableObject {
         remainingAfter,
         previousTodayStabilityDaysDelta +
           stabilityDaysAfter -
-          stabilityDaysBefore
+          stabilityDaysBefore,
+        previouslyCompleted
       );
       const celebration = recordCelebration(
         this.ctx.storage,

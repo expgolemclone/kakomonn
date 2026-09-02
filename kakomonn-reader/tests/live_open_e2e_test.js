@@ -27,7 +27,7 @@ const site = "chushoks.kakomonn.com";
 
 async function readLearningMetrics(token) {
   const query = new URLSearchParams({ site });
-  const response = await fetch(`${DEFAULT_SYNC_API_ORIGIN}/v9/state?${query}`, {
+  const response = await fetch(`${DEFAULT_SYNC_API_ORIGIN}/v10/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });

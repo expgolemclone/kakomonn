@@ -998,7 +998,7 @@ describe("learning metrics", () => {
     });
   });
 
-  it("returns the v9 attempt contract for correct and incorrect answers", async () => {
+  it("returns the v10 attempt contract for correct and incorrect answers", async () => {
     const correct = await stub().recordAttempt(
       SITE,
       "1",
@@ -1593,6 +1593,13 @@ describe("daily KPI celebrations", () => {
     expect(first).toHaveProperty("celebration");
 
     await seedReviewCard("2", 30, NOW + 500);
+    await expect(stub().getState(SITE, NOW + 500)).resolves.toMatchObject({
+      learningMetrics: {
+        dailyKpiCompleted: true,
+        dueCardsCompleted: false,
+        dueCardsRemaining: 1,
+      },
+    });
 
     const repeated = await stub().recordAttempt(
       SITE,
@@ -1601,6 +1608,7 @@ describe("daily KPI celebrations", () => {
       "correct",
       NOW + 1000
     );
+    expect(repeated.learningMetrics.dailyKpiCompleted).toBe(true);
     expect(repeated.learningMetrics.dueCardsCompleted).toBe(true);
     expect(repeated).not.toHaveProperty("celebration");
   });
@@ -1839,9 +1847,9 @@ describe("daily raw details", () => {
   });
 });
 
-describe("v9 HTTP contract", () => {
+describe("v10 HTTP contract", () => {
   it("does not expose older API versions", async () => {
-    for (const version of ["v3", "v4", "v5", "v6", "v7", "v8"]) {
+    for (const version of ["v3", "v4", "v5", "v6", "v7", "v8", "v9"]) {
       const response = await SELF.fetch(
         `https://example.test/${version}/state?site=${SITE}`,
         { headers: AUTHORIZATION }
@@ -1852,8 +1860,8 @@ describe("v9 HTTP contract", () => {
 
   it("requires the configured bearer token", async () => {
     for (const url of [
-      "https://example.test/v9/sites",
-      `https://example.test/v9/daily-details?site=${SITE}&date=2026-08-10`,
+      "https://example.test/v10/sites",
+      `https://example.test/v10/daily-details?site=${SITE}&date=2026-08-10`,
     ]) {
       const missing = await SELF.fetch(url);
       const incorrect = await SELF.fetch(url, {
@@ -1865,12 +1873,12 @@ describe("v9 HTTP contract", () => {
   });
 
   it("lists sites and returns state and history", async () => {
-    const sites = await SELF.fetch("https://example.test/v9/sites", {
+    const sites = await SELF.fetch("https://example.test/v10/sites", {
       headers: AUTHORIZATION,
     });
     await expect(sites.json()).resolves.toEqual({ sites: [SITE] });
 
-    const state = await SELF.fetch(`https://example.test/v9/state?site=${SITE}`, {
+    const state = await SELF.fetch(`https://example.test/v10/state?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(state.status).toBe(200);
@@ -1901,7 +1909,7 @@ describe("v9 HTTP contract", () => {
     expect(stateBody.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
     const history = await SELF.fetch(
-      `https://example.test/v9/history?site=${SITE}&days=7`,
+      `https://example.test/v10/history?site=${SITE}&days=7`,
       { headers: AUTHORIZATION }
     );
     expect(history.status).toBe(200);
@@ -1917,7 +1925,7 @@ describe("v9 HTTP contract", () => {
     });
 
     const details = await SELF.fetch(
-      `https://example.test/v9/daily-details?site=${SITE}&date=2026-08-10`,
+      `https://example.test/v10/daily-details?site=${SITE}&date=2026-08-10`,
       { headers: AUTHORIZATION }
     );
     expect(details.status).toBe(200);
@@ -1931,7 +1939,7 @@ describe("v9 HTTP contract", () => {
 
   it("returns all dashboard reads through one endpoint", async () => {
     const response = await SELF.fetch(
-      `https://example.test/v9/dashboard?site=${SITE}`,
+      `https://example.test/v10/dashboard?site=${SITE}`,
       { headers: AUTHORIZATION }
     );
     expect(response.status).toBe(200);
@@ -1945,7 +1953,7 @@ describe("v9 HTTP contract", () => {
     expect(dashboardBody.history.days).toHaveLength(31);
 
     const selectedDefault = await SELF.fetch(
-      "https://example.test/v9/dashboard",
+      "https://example.test/v10/dashboard",
       { headers: AUTHORIZATION }
     );
     await expect(selectedDefault.json()).resolves.toMatchObject({
@@ -1955,7 +1963,7 @@ describe("v9 HTTP contract", () => {
 
     for (const search of ["site=invalid.example", `site=${SITE}&site=${SITE}`, "extra=true"]) {
       const invalid = await SELF.fetch(
-        `https://example.test/v9/dashboard?${search}`,
+        `https://example.test/v10/dashboard?${search}`,
         { headers: AUTHORIZATION }
       );
       expect(invalid.status).toBe(400);
@@ -1964,7 +1972,7 @@ describe("v9 HTTP contract", () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec("DELETE FROM catalog_metadata");
     });
-    const empty = await SELF.fetch("https://example.test/v9/dashboard", {
+    const empty = await SELF.fetch("https://example.test/v10/dashboard", {
       headers: AUTHORIZATION,
     });
     await expect(empty.json()).resolves.toEqual({
@@ -1984,7 +1992,7 @@ describe("v9 HTTP contract", () => {
       `site=${SITE}&date=2026-08-10&extra=true`,
     ]) {
       const response = await SELF.fetch(
-        `https://example.test/v9/daily-details?${search}`,
+        `https://example.test/v10/daily-details?${search}`,
         { headers: AUTHORIZATION }
       );
       expect(response.status).toBe(400);
@@ -1992,7 +2000,7 @@ describe("v9 HTTP contract", () => {
   });
 
   it("replaces the catalog and serves the canonical next URL", async () => {
-    const replace = await SELF.fetch("https://example.test/v9/questions", {
+    const replace = await SELF.fetch("https://example.test/v10/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2003,7 +2011,7 @@ describe("v9 HTTP contract", () => {
     });
     expect(replace.status).toBe(200);
 
-    const next = await SELF.fetch(`https://example.test/v9/next?site=${SITE}`, {
+    const next = await SELF.fetch(`https://example.test/v10/next?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     await expect(next.json()).resolves.toEqual({
@@ -2015,7 +2023,7 @@ describe("v9 HTTP contract", () => {
       },
     });
 
-    const conflict = await SELF.fetch("https://example.test/v9/questions", {
+    const conflict = await SELF.fetch("https://example.test/v10/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2033,7 +2041,7 @@ describe("v9 HTTP contract", () => {
       { site: SITE, questionIds: ["1"], expectedGeneration: -1 },
       { site: SITE, questionIds: ["1"] },
     ]) {
-      const invalid = await SELF.fetch("https://example.test/v9/questions", {
+      const invalid = await SELF.fetch("https://example.test/v10/questions", {
         method: "POST",
         headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -2043,7 +2051,7 @@ describe("v9 HTTP contract", () => {
   });
 
   it("rejects unknown questions and non-canonical attempt fields", async () => {
-    const unknown = await SELF.fetch("https://example.test/v9/attempts", {
+    const unknown = await SELF.fetch("https://example.test/v10/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2056,7 +2064,7 @@ describe("v9 HTTP contract", () => {
     expect(unknown.status).toBe(409);
     await expect(unknown.json()).resolves.toEqual({ error: "unknown_question" });
 
-    const extra = await SELF.fetch("https://example.test/v9/attempts", {
+    const extra = await SELF.fetch("https://example.test/v10/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2069,7 +2077,7 @@ describe("v9 HTTP contract", () => {
     });
     expect(extra.status).toBe(400);
 
-    const legacyKey = await SELF.fetch("https://example.test/v9/attempts", {
+    const legacyKey = await SELF.fetch("https://example.test/v10/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2082,8 +2090,8 @@ describe("v9 HTTP contract", () => {
     expect(legacyKey.status).toBe(400);
   });
 
-  it("returns the exact v9 attempt contract", async () => {
-    const response = await SELF.fetch("https://example.test/v9/attempts", {
+  it("returns the exact v10 attempt contract", async () => {
+    const response = await SELF.fetch("https://example.test/v10/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2136,7 +2144,7 @@ describe("v9 HTTP contract", () => {
       operationId: operationId(22),
       answerResult: "correct",
     };
-    const response = await SELF.fetch("https://example.test/v9/attempts", {
+    const response = await SELF.fetch("https://example.test/v10/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -2154,7 +2162,7 @@ describe("v9 HTTP contract", () => {
       dailyKpiCompleted: true,
     });
 
-    const retry = await SELF.fetch("https://example.test/v9/attempts", {
+    const retry = await SELF.fetch("https://example.test/v10/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -2171,7 +2179,7 @@ describe("v9 HTTP contract", () => {
       state.storage.sql.exec("DELETE FROM catalog_metadata WHERE site = ?", SITE);
     });
     const response = await SELF.fetch(
-      `https://example.test/v9/next?site=${SITE}`,
+      `https://example.test/v10/next?site=${SITE}`,
       { headers: AUTHORIZATION }
     );
     expect(response.status).toBe(409);

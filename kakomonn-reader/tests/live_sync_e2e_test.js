@@ -98,10 +98,6 @@ function assertSyncState(state) {
     metrics.newQuestionsRemaining,
     Math.max(0, metrics.newQuestionGoal - metrics.todayNewQuestionCount),
   );
-  assert.equal(
-    metrics.dailyKpiCompleted,
-    metrics.dueCardsCompleted && metrics.newQuestionsRemaining === 0,
-  );
   assert.equal(Number.isSafeInteger(metrics.todayStabilityDaysDelta), true);
   assert.equal(Number.isSafeInteger(metrics.attemptedQuestionCount), true);
   assert.equal(metrics.attemptedQuestionCount >= 0, true);
@@ -127,7 +123,7 @@ function assertSyncState(state) {
 
 async function requestSyncState(token) {
   const query = new URLSearchParams({ site: "chushoks.kakomonn.com" });
-  const response = await fetch(`${DEFAULT_SYNC_API_ORIGIN}/v9/state?${query}`, {
+  const response = await fetch(`${DEFAULT_SYNC_API_ORIGIN}/v10/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });

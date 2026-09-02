@@ -258,19 +258,19 @@ function installSyncMockInWindow({
         const pathname = requestURL.pathname;
         if (
           call.method === "GET" &&
-          pathname === "/v9/state" &&
+          pathname === "/v10/state" &&
           requestURL.searchParams.get("site") === expectedSite
         ) {
           respondJSON(200, syncState());
           return;
         }
-        if (call.method === "POST" && pathname === "/v9/speech-token") {
+        if (call.method === "POST" && pathname === "/v10/speech-token") {
           respondJSON(200, { token: expectedSpeechToken, expiresInSeconds: 600 });
           return;
         }
         if (
           call.method === "GET" &&
-          pathname === "/v9/next" &&
+          pathname === "/v10/next" &&
           requestURL.searchParams.get("site") === expectedSite &&
           requestURL.searchParams.getAll("site").length === 1 &&
           requestURL.searchParams.getAll("excludeQuestionId").length <= 1
@@ -293,7 +293,7 @@ function installSyncMockInWindow({
           });
           return;
         }
-        if (call.method === "POST" && pathname === "/v9/questions") {
+        if (call.method === "POST" && pathname === "/v10/questions") {
           if (mock.conflictNextCatalogUpdate) {
             mock.conflictNextCatalogUpdate = false;
             mock.catalogUpdatedAtMs = Date.now();
@@ -329,7 +329,7 @@ function installSyncMockInWindow({
           });
           return;
         }
-        if (call.method === "POST" && pathname === "/v9/attempts") {
+        if (call.method === "POST" && pathname === "/v10/attempts") {
           const operationId = call.body?.operationId;
           const questionId = call.body?.questionId;
           const answerResult = call.body?.answerResult;

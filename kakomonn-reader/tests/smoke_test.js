@@ -595,7 +595,7 @@ async function assertReaderBridge(browser, script) {
     [{
       authorization: "Bearer private-token",
       method: "GET",
-      url: `${SYNC_API_ORIGIN}/v9/next?site=chushoks.kakomonn.com`,
+      url: `${SYNC_API_ORIGIN}/v10/next?site=chushoks.kakomonn.com`,
     }],
   );
   assert.equal(await readyPage.locator("#kakomonn-reader-shell").count(), 0);
@@ -666,7 +666,7 @@ async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v9/speech-token",
+        (call) => new URL(call.url).pathname === "/v10/speech-token",
       ).length,
   );
 }
@@ -972,7 +972,7 @@ async function runCatalogBoundaryValidationCase(context, script, mismatch) {
       assert.equal(
         await page.evaluate(() =>
           window.__syncMock.calls.some(
-            (call) => new URL(call.url).pathname === "/v9/questions",
+            (call) => new URL(call.url).pathname === "/v10/questions",
           ),
         ),
         false,
@@ -980,12 +980,12 @@ async function runCatalogBoundaryValidationCase(context, script, mismatch) {
     } else {
       await page.waitForFunction(() =>
         window.__syncMock.calls.some(
-          (call) => new URL(call.url).pathname === "/v9/questions",
+          (call) => new URL(call.url).pathname === "/v10/questions",
         ),
       );
       const update = await page.evaluate(() =>
         window.__syncMock.calls.find(
-          (call) => new URL(call.url).pathname === "/v9/questions",
+          (call) => new URL(call.url).pathname === "/v10/questions",
         ),
       );
       assert.deepEqual(update.body.questionIds, ["1", "2", "3", "4", "5"]);
@@ -1248,9 +1248,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
         body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
       }),
   );
-  const errors = await preparePage(page, "audio-manual", {
-    nextQuestionId: null,
-  });
+  const errors = await preparePage(page, "audio-manual");
   await installCorrectFeedbackRandom(page, [111]);
   const childFrame = await loadMockQuestion(page, script);
   try {
@@ -1366,7 +1364,7 @@ async function runIncorrectEnterReservationCase(context, script) {
         attempts: window.__syncMock.calls.filter(
           (call) =>
             call.method === "POST" &&
-            new URL(call.url).pathname === "/v9/attempts",
+            new URL(call.url).pathname === "/v10/attempts",
         ).length,
         copies: window.__copiedTexts.length,
       })),
@@ -1427,7 +1425,7 @@ async function runIncorrectEnterCopyRetryCase(context, script) {
         attempts: window.__syncMock.calls.filter(
           (call) =>
             call.method === "POST" &&
-            new URL(call.url).pathname === "/v9/attempts",
+            new URL(call.url).pathname === "/v10/attempts",
         ).length,
         copies: window.__copiedTexts.length,
       })),
@@ -1494,7 +1492,7 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
         attemptCalls: window.__syncMock.calls.filter(
           (call) =>
             call.method === "POST" &&
-            new URL(call.url).pathname === "/v9/attempts",
+            new URL(call.url).pathname === "/v10/attempts",
         ).length,
         attempts: window.__syncMock.attemptCount,
         copies: window.__copiedTexts.length,
@@ -1517,9 +1515,7 @@ async function runIncorrectCelebrationEnterCase(context, script) {
         body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
       }),
   );
-  const errors = await preparePage(page, "audio", {
-    nextQuestionId: null,
-  });
+  const errors = await preparePage(page, "audio");
   const childFrame = await loadMockQuestion(page, script);
   try {
     await page.evaluate(() => {
@@ -1532,6 +1528,35 @@ async function runIncorrectCelebrationEnterCase(context, script) {
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
     await page.keyboard.press("Enter");
+    await page.waitForURL((url) =>
+      url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
+    );
+    assert.equal(new URL(page.url()).searchParams.get("dailyKpiCompleted"), "true");
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
+async function runOrphanedCelebrationRecoveryCase(context, script) {
+  const page = await context.newPage();
+  await page.route(
+    "https://kakomonn-congratulations.kakomonn.workers.dev/**",
+    (route) =>
+      route.fulfill({
+        contentType: "text/html; charset=utf-8",
+        body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
+      }),
+  );
+  const errors = await preparePage(page, "none", {
+    pendingCelebration: {
+      site: "chushoks.kakomonn.com",
+      date: "2026-08-10",
+      dailyKpiCompleted: true,
+    },
+  });
+  try {
+    await page.addScriptTag({ content: script });
     await page.waitForURL((url) =>
       url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
@@ -1592,7 +1617,7 @@ async function assertIncorrectSkip(context, script) {
     await page.waitForFunction(
       () =>
         window.__syncMock.calls.some(
-          (call) => new URL(call.url).pathname === "/v9/state",
+          (call) => new URL(call.url).pathname === "/v10/state",
         ) && document.querySelector("#kakomonn-reader-sync-settings")?.open === false,
     );
     if (await page.locator("#kakomonn-reader-error-dialog").getAttribute("open") !== null) {
@@ -1609,10 +1634,10 @@ async function assertIncorrectSkip(context, script) {
     );
     const calls = await page.evaluate(() => ({
       attempts: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v9/attempts",
+        (call) => new URL(call.url).pathname === "/v10/attempts",
       ),
       next: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v9/next",
+        (call) => new URL(call.url).pathname === "/v10/next",
       ),
     }));
     assert.equal(calls.attempts.length, 1);
@@ -2140,7 +2165,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v9/attempts",
+              new URL(call.url).pathname === "/v10/attempts",
           ).length,
       ),
       0,
@@ -2205,7 +2230,7 @@ async function main() {
 
     const stateCallsAfterAnswer = await page.evaluate(() =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v9/state",
+        (call) => new URL(call.url).pathname === "/v10/state",
       ).length,
     );
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -2213,7 +2238,7 @@ async function main() {
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v9/state",
+          (call) => new URL(call.url).pathname === "/v10/state",
         ).length,
       ),
       stateCallsAfterAnswer,
@@ -2283,7 +2308,7 @@ async function main() {
 
     const stateCallsBeforeResume = await page.evaluate(() =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v9/state",
+        (call) => new URL(call.url).pathname === "/v10/state",
       ).length,
     );
     await page.evaluate(() => {
@@ -2299,7 +2324,7 @@ async function main() {
     assert.equal(
       await page.evaluate(() =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v9/state",
+          (call) => new URL(call.url).pathname === "/v10/state",
         ).length,
       ),
       stateCallsBeforeResume,
@@ -2313,6 +2338,7 @@ async function main() {
     await runIncorrectEnterCopyRetryCase(context, script);
     await runIncorrectEnterSyncRetryCase(context, script);
     await runIncorrectCelebrationEnterCase(context, script);
+    await runOrphanedCelebrationRecoveryCase(context, script);
     await runIncorrectEnterNoNextCase(context, script);
     await runCatalogBoundaryValidationCase(context, script, false);
     await runCatalogBoundaryValidationCase(context, script, true);
@@ -2710,7 +2736,7 @@ async function main() {
     );
     const iosStateCallsBeforeResume = await iosPage.evaluate(() =>
       window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v9/state",
+        (call) => new URL(call.url).pathname === "/v10/state",
       ).length,
     );
     await iosPage.evaluate(() => {
@@ -2726,7 +2752,7 @@ async function main() {
     assert.equal(
       await iosPage.evaluate(() =>
         window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v9/state",
+          (call) => new URL(call.url).pathname === "/v10/state",
         ).length,
       ),
       iosStateCallsBeforeResume,
@@ -2738,7 +2764,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v9/attempts",
+              new URL(call.url).pathname === "/v10/attempts",
           ).length,
       ),
       1,

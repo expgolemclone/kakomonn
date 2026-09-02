@@ -14,6 +14,8 @@ export { LearningState, issueSpeechToken };
 export * from "./fsrs.js";
 export { initializeLearningSchema } from "./learning-store.js";
 
+const API_PREFIX = "/v10";
+
 export async function handleRequest(request, env, fetcher = fetch) {
   const url = new URL(request.url);
   const routes = new Map([
@@ -27,10 +29,10 @@ export async function handleRequest(request, env, fetcher = fetch) {
     ["/questions", ["POST"]],
     ["/speech-token", ["POST"]],
   ]);
-  if (!url.pathname.startsWith("/v9/")) {
+  if (!url.pathname.startsWith(`${API_PREFIX}/`)) {
     return errorResponse("not_found", 404);
   }
-  const route = url.pathname.slice(3);
+  const route = url.pathname.slice(API_PREFIX.length);
   const expectedMethods = routes.get(route);
   if (expectedMethods === undefined) {
     return errorResponse("not_found", 404);

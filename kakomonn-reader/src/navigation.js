@@ -399,8 +399,10 @@
       location.replace(congratulationsURL(celebration));
       return true;
     } catch (error) {
-      await GM.setValue(PENDING_ATTEMPT_KEY, operation);
-      pendingAttempt = operation;
+      if (operation !== null) {
+        await GM.setValue(PENDING_ATTEMPT_KEY, operation);
+        pendingAttempt = operation;
+      }
       await savePendingCelebration(celebration);
       readerHistorySession.mode = "active";
       saveReaderHistorySession();
@@ -575,15 +577,41 @@
 
   async function maybePreparePendingDestination() {
     if (
-      pendingAttempt === null ||
-      pendingAttempt.phase !== "recorded" ||
       !syncReady ||
       syncInProgress ||
       navigationInProgress ||
-      nextQuestionOperationInProgress ||
+      nextQuestionOperationInProgress
+    ) {
+      return false;
+    }
+    if (pendingAttempt === null) {
+      if (pendingCelebration === null) {
+        return false;
+      }
+      const currentState = ensureCurrentReaderHistory();
+      return transitionToPendingCelebration(
+        currentState.index,
+        "達成情報は保持されています. ページを再読み込みしてください."
+      );
+    }
+    if (
+      pendingAttempt.phase !== "recorded" ||
       !["completed", "not-required"].includes(pendingAttempt.copy.state)
     ) {
       return false;
+    }
+    if (pendingCelebration !== null) {
+      if (
+        pendingAttempt.answerResult === "correct" ||
+        pendingAttempt.copy.state === "not-required"
+      ) {
+        const currentState = ensureCurrentReaderHistory();
+        return transitionToPendingCelebration(
+          currentState.index,
+          "達成情報は保持されています. ページを再読み込みしてください."
+        );
+      }
+      return preparePendingFutureEntry("future-celebration", pendingAttempt);
     }
     if (
       pendingAttempt.answerResult === "correct" &&
@@ -599,16 +627,6 @@
     }
     if (pendingAttempt.nextURL !== null) {
       return preparePendingFutureEntry("future-question", pendingAttempt);
-    }
-    if (pendingCelebration !== null) {
-      if (pendingAttempt.answerResult === "correct") {
-        const currentState = ensureCurrentReaderHistory();
-        return transitionToPendingCelebration(
-          currentState.index,
-          "達成情報は保持されています. ページを再読み込みしてください."
-        );
-      }
-      return preparePendingFutureEntry("future-celebration", pendingAttempt);
     }
     clearIncorrectAdvanceRequest();
     if (noNextQuestionOperationId !== pendingAttempt.operationId) {

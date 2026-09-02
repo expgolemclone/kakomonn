@@ -64,8 +64,8 @@ function dashboardFixture(requestedSite) {
       learningMetrics: {
         stabilityDays: requestedSite === site ? 9912 : 2999,
         dailyKpiCompleted: requestedSite === site,
-        dueCardsCompleted: requestedSite === site,
-        dueCardsRemaining: requestedSite === site ? 0 : 12,
+        dueCardsCompleted: false,
+        dueCardsRemaining: requestedSite === site ? 5 : 12,
         todayNewQuestionCount: requestedSite === site ? 100 : 30,
         newQuestionGoal: 100,
         newQuestionsRemaining: requestedSite === site ? 0 : 70,
@@ -162,7 +162,7 @@ async function installApiMock(page) {
         if (headers.get("Authorization") !== `Bearer ${tokenValue}`) {
           return respond(401, { error: "unauthorized" });
         }
-        if (url.pathname === "/v9/dashboard") {
+        if (url.pathname === "/v10/dashboard") {
           const requestedSite = [siteValue, otherSiteValue].includes(url.searchParams.get("site"))
             ? url.searchParams.get("site")
             : siteValue;
@@ -171,7 +171,7 @@ async function installApiMock(page) {
           }
           return respond(200, dashboardBySite[requestedSite]);
         }
-        if (url.pathname === "/v9/daily-details") {
+        if (url.pathname === "/v10/daily-details") {
           const requestedSite = url.searchParams.get("site");
           const date = url.searchParams.get("date");
           if (date === window.__delayedDetailDate) {
@@ -216,7 +216,7 @@ async function assertDashboard(page) {
   assert.equal(await page.locator("#daily-kpi-completed").innerText(), "達成");
   assert.equal(await page.locator("#daily-kpi-completed").getAttribute("data-completed"), "true");
   assert.deepEqual(await page.locator(".primary-kpi-remaining > span").allInnerTexts(), ["dueCardsRemaining", "newQuestionsRemaining"]);
-  assert.equal(await page.locator("#due-cards-remaining").innerText(), "0");
+  assert.equal(await page.locator("#due-cards-remaining").innerText(), "5");
   assert.equal(await page.locator("#new-questions-remaining").innerText(), "0");
   assert.equal(await page.locator("#today-stability-days-delta").innerText(), "+104");
   assert.equal(await page.locator("#stability-days").innerText(), "9,912");
@@ -271,9 +271,9 @@ async function assertDashboard(page) {
   assert.equal(text.includes("祝福"), false);
   assert.equal(await page.locator(".primary-kpi-card").innerText().then((value) => value.includes("解いた問題数")), false);
   const calls = await page.evaluate(() => window.__apiCalls);
-  assert.equal(calls.some((call) => !call.pathname.startsWith("/v9/")), false);
-  assert.equal(calls.filter((call) => call.pathname === "/v9/dashboard").length, 1);
-  assert.equal(calls.filter((call) => ["/v9/sites", "/v9/state", "/v9/history"].includes(call.pathname)).length, 0);
+  assert.equal(calls.some((call) => !call.pathname.startsWith("/v10/")), false);
+  assert.equal(calls.filter((call) => call.pathname === "/v10/dashboard").length, 1);
+  assert.equal(calls.filter((call) => ["/v10/sites", "/v10/state", "/v10/history"].includes(call.pathname)).length, 0);
   assert.deepEqual(errors, []);
 
   await page.locator('[data-chart-date="2026-08-10"]').click();
@@ -335,7 +335,7 @@ async function assertDashboard(page) {
   await page.locator("#refresh-button").click();
   await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "更新日 2026-08-10");
   const finalCalls = await page.evaluate(() => window.__apiCalls);
-  const finalDashboardCall = finalCalls.filter((call) => call.pathname === "/v9/dashboard").at(-1);
+  const finalDashboardCall = finalCalls.filter((call) => call.pathname === "/v10/dashboard").at(-1);
   assert.equal(finalDashboardCall.authorization, `Bearer ${token}`);
 }
 
@@ -365,7 +365,7 @@ async function assertOpenBridge(browser) {
       await route.fulfill({ body: stylesSource, contentType: "text/css; charset=utf-8" });
       return;
     }
-    if (url.pathname === "/v9/dashboard") {
+    if (url.pathname === "/v10/dashboard") {
       dashboardRequestCount += 1;
       await route.fulfill({
         body: JSON.stringify(dashboardFixture(site)),

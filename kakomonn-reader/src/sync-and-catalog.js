@@ -15,8 +15,6 @@
       Number.isSafeInteger(metrics.newQuestionsRemaining) &&
       metrics.newQuestionsRemaining ===
         Math.max(0, metrics.newQuestionGoal - metrics.todayNewQuestionCount) &&
-      metrics.dailyKpiCompleted ===
-        (metrics.dueCardsCompleted && metrics.newQuestionsRemaining === 0) &&
       Number.isSafeInteger(metrics.todayStabilityDaysDelta) &&
       Number.isSafeInteger(metrics.attemptedQuestionCount) &&
       metrics.attemptedQuestionCount >= 0 &&
@@ -293,13 +291,13 @@
 
   function requestSyncState(token) {
     const parameters = new URLSearchParams({ site: SITE_ID });
-    return requestSyncResponse("GET", `/v9/state?${parameters}`, token, isSyncState);
+    return requestSyncResponse("GET", `/v10/state?${parameters}`, token, isSyncState);
   }
 
   function requestAttemptResult(token, operation) {
     return requestSyncResponse(
       "POST",
-      "/v9/attempts",
+      "/v10/attempts",
       token,
       isAttemptResponse,
       {
@@ -316,11 +314,11 @@
     if (excludeQuestionId !== null) {
       parameters.set("excludeQuestionId", excludeQuestionId);
     }
-    return requestSyncResponse("GET", `/v9/next?${parameters}`, token, isNextResponse);
+    return requestSyncResponse("GET", `/v10/next?${parameters}`, token, isNextResponse);
   }
 
   function requestCatalogUpdate(token, questionIds, expectedGeneration) {
-    return requestSyncResponse("POST", "/v9/questions", token, isCatalogResponse, {
+    return requestSyncResponse("POST", "/v10/questions", token, isCatalogResponse, {
       site: SITE_ID,
       questionIds,
       expectedGeneration,
@@ -328,7 +326,7 @@
   }
 
   function requestSpeechTokenResult(token) {
-    return requestSyncResponse("POST", "/v9/speech-token", token, isSpeechTokenResponse);
+    return requestSyncResponse("POST", "/v10/speech-token", token, isSpeechTokenResponse);
   }
 
   function clearAzureSpeechToken() {

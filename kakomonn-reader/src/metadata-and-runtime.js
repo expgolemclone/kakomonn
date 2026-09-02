@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @version      2.2.0
-// @description  問題文と解説の読み上げ, 解答後の自動Markdown copy, 学習記録の端末間同期とdue card完了時の祝福を提供します.
+// @version      2.2.1
+// @description  問題文と解説の読み上げ, 解答後の自動Markdown copy, 学習記録の端末間同期とdaily KPI達成時の祝福を提供します.
 // @updateURL    https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @downloadURL  https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @match        https://*.kakomonn.com/*
@@ -182,7 +182,7 @@
       const parameters = new URLSearchParams({ site: NEXT_QUESTION_SITE_ID });
       const result = await requestSyncResponse(
         "GET",
-        `/v9/next?${parameters}`,
+        `/v10/next?${parameters}`,
         token,
         isReaderBridgeNextResponse
       );

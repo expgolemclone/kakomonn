@@ -386,7 +386,7 @@ async function main() {
           {
             authorization: "Bearer test-sync-token",
             method: "GET",
-            url: `${SYNC_API_ORIGIN}/v9/next?site=chushoks.kakomonn.com`,
+            url: `${SYNC_API_ORIGIN}/v10/next?site=chushoks.kakomonn.com`,
           },
         ],
       );
@@ -644,7 +644,7 @@ async function main() {
       });
     }, fixtureBody);
     await page.waitForFunction(
-      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v9/state"),
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v10/state"),
     );
     await page.waitForTimeout(1_000);
     await page.evaluate(() => {
@@ -827,7 +827,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v9/attempts",
+              new URL(call.url).pathname === "/v10/attempts",
           ).length,
       ),
       1,
@@ -877,7 +877,7 @@ async function main() {
       document.body.innerHTML = html;
     }, fixtureBody);
     await correctPage.waitForFunction(
-      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v9/state"),
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v10/state"),
     );
     await correctPage.waitForTimeout(1_000);
     await correctPage.evaluate(() => {

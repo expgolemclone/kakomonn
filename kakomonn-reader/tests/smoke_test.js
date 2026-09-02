@@ -107,10 +107,12 @@ const mockBody = `
       これは改行後の問題文です.
     </div>
     <div class="zoomin">
-      <img
-        src="https://cdn.example.test/question.png"
-        alt="問題文の画像"
-      >
+      <a href="https://cdn.example.test/question.png">
+        <img
+          src="https://cdn.example.test/question.png"
+          alt="問題文の画像"
+        >
+      </a>
     </div>
     <ul class="list">
       <li><div>選択肢1</div></li>

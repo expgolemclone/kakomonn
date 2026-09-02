@@ -153,10 +153,53 @@
     return `\n\n${markdownRows.join("\n")}\n\n`;
   }
 
+  function imageOnlyLinkURL(element) {
+    const NodeConstructor = element.ownerDocument.defaultView.Node;
+    let imageElement = null;
+    let containsOtherContent = false;
+
+    function inspect(node) {
+      if (containsOtherContent) {
+        return;
+      }
+      if (node.nodeType === NodeConstructor.TEXT_NODE) {
+        containsOtherContent = /\S/.test(node.nodeValue ?? "");
+        return;
+      }
+      if (node.nodeType !== NodeConstructor.ELEMENT_NODE) {
+        return;
+      }
+      if (isHiddenFromRendering(node)) {
+        return;
+      }
+      if (node.tagName === "IMG") {
+        if (imageElement !== null) {
+          containsOtherContent = true;
+          return;
+        }
+        imageElement = node;
+        return;
+      }
+      for (const child of Array.from(node.childNodes)) {
+        inspect(child);
+      }
+    }
+
+    for (const child of Array.from(element.childNodes)) {
+      inspect(child);
+    }
+    return containsOtherContent || imageElement === null
+      ? ""
+      : markdownURL(imageElement, "src");
+  }
+
   function renderMarkdownLink(element, state) {
     const content = normalizeMarkdown(renderMarkdownChildren(element, state));
     const targetURL = markdownURL(element, "href");
     if (!content || !targetURL) {
+      return content;
+    }
+    if (imageOnlyLinkURL(element) === targetURL) {
       return content;
     }
     return `[${content}](${targetURL})`;

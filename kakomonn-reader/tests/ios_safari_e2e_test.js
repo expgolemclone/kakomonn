@@ -760,11 +760,17 @@ async function readExplanationContents(driver) {
     "#js-commentary-wrap > .item > .text",
   );
   assert.equal(explanationElements.length, 3);
-  const explanationContents = [];
   for (const explanation of explanationElements) {
     await explanation.waitForDisplayed({ timeout: 30_000 });
-    explanationContents.push(normalizeContent(await explanation.getText()));
   }
+  const explanationContents = (
+    await driver.execute(() =>
+      Array.from(
+        document.querySelectorAll("#js-commentary-wrap > .item > .text"),
+        (element) => element.innerText,
+      ),
+    )
+  ).map(normalizeContent);
   const explanationImageURLs = await driver.execute(() =>
     Array.from(
       document.querySelectorAll("#js-commentary-wrap > .item .text img[src]"),

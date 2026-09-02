@@ -819,7 +819,7 @@ async function main() {
       ).length - 1,
       1,
     );
-    await page.goForward();
+    await page.evaluate(() => history.forward());
     await childFrame.waitForURL(nextQuestionURL);
     assert.equal(
       await page.evaluate(

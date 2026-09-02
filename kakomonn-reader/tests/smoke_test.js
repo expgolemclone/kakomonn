@@ -2296,7 +2296,7 @@ async function main() {
     await page.locator("#kakomonn-reader-frame").focus();
     await page.keyboard.press("Shift+H");
     await page.waitForURL("https://chushoks.kakomonn.com/dashboard");
-    await page.goForward();
+    await page.evaluate(() => history.forward());
     await page.waitForFunction(
       () =>
         location.href ===
@@ -2730,7 +2730,7 @@ async function main() {
       await iosPage.evaluate(() => window.__copiedTexts[0]),
       expectedCopiedMarkdown,
     );
-    await iosPage.goForward();
+    await iosPage.evaluate(() => history.forward());
     await iosFrame.waitForURL(
       "https://chushoks.kakomonn.com/questions/45125",
     );

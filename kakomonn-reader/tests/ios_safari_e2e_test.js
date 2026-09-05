@@ -708,13 +708,31 @@ async function installReader(driver, script, syncOptions = {}) {
       timeoutMsg: "The question iframe did not reach document-end",
     },
   );
-  const readerFrame = await driver.$("#kakomonn-reader-frame");
-  await driver.switchToFrame(readerFrame);
-  try {
-    await driver.execute(`${script}\n//# sourceURL=${readerSourceURL}`);
-  } finally {
-    await driver.switchToTopFrame();
-  }
+  await driver.execute(
+    (source, sourceURL) => {
+      const frameWindow = document.querySelector(
+        "#kakomonn-reader-frame",
+      ).contentWindow;
+      frameWindow.eval(`${source}\n//# sourceURL=${sourceURL}`);
+    },
+    script,
+    readerSourceURL,
+  );
+  await driver.waitUntil(
+    () =>
+      driver.execute(
+        () =>
+          document
+            .querySelector("#kakomonn-reader-frame")
+            ?.contentDocument?.getElementById("kakomonn-reader-dark-mode") !==
+          null,
+      ),
+    {
+      interval: 100,
+      timeout: 30_000,
+      timeoutMsg: "The question iframe did not initialize the Reader",
+    },
+  );
 }
 
 async function readQuestionContent(driver) {

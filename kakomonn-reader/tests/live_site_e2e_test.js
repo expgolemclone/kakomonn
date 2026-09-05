@@ -8,6 +8,9 @@ const {
 } = require("../../scripts/kakomonn-config.cjs");
 const { installSyncMock } = require("./sync_mock");
 const {
+  installReaderInChildFrames,
+} = require("./support/frame_reader");
+const {
   assertMarkdownCopy,
   MARKDOWN_CHOICES,
   MARKDOWN_INCORRECT_ANSWER_SUMMARY,
@@ -111,6 +114,7 @@ function collectSameOriginPaths(html, pageURL, pattern, allowSearch = false) {
 }
 
 async function injectReader(page, script) {
+  await installReaderInChildFrames(page, script);
   await page.evaluate(
     ({ source, sourceURL }) => {
       Object.defineProperty(window, "Audio", {

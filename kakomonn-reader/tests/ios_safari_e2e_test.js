@@ -687,6 +687,34 @@ async function installReader(driver, script, syncOptions = {}) {
     `(${installSyncMockInWindow.toString()})(${JSON.stringify(syncConfiguration)});`,
   );
   await driver.execute(`${script}\n//# sourceURL=${readerSourceURL}`);
+
+  const currentURL = new URL(await driver.getUrl());
+  if (!/^\/questions\/(?:next\/)?\d+$/.test(currentURL.pathname)) {
+    return;
+  }
+
+  await driver.waitUntil(
+    () =>
+      driver.execute(() => {
+        const frame = document.querySelector("#kakomonn-reader-frame");
+        return (
+          frame?.contentDocument?.readyState !== "loading" &&
+          frame?.contentWindow?.location.href === location.href
+        );
+      }),
+    {
+      interval: 100,
+      timeout: 30_000,
+      timeoutMsg: "The question iframe did not reach document-end",
+    },
+  );
+  const readerFrame = await driver.$("#kakomonn-reader-frame");
+  await driver.switchToFrame(readerFrame);
+  try {
+    await driver.execute(`${script}\n//# sourceURL=${readerSourceURL}`);
+  } finally {
+    await driver.switchToTopFrame();
+  }
 }
 
 async function readQuestionContent(driver) {

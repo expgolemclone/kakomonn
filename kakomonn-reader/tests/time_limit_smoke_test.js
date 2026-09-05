@@ -11,6 +11,9 @@ const {
   installSyncMockInWindow,
   PENDING_ATTEMPT_KEY,
 } = require("./sync_mock.js");
+const {
+  installReaderInChildFrames,
+} = require("./support/frame_reader.js");
 
 const projectRoot = resolve(__dirname, "..", "..");
 const scriptPath = resolve(
@@ -64,6 +67,7 @@ async function preparePage(browser, script) {
     installSyncMockInWindow,
     createSyncMockConfiguration({ configured: true, nextQuestionId: "101" })
   );
+  await installReaderInChildFrames(page, script);
   await page.addScriptTag({ content: script });
   await page.locator("#kakomonn-reader-time-limit").waitFor({
     state: "visible",

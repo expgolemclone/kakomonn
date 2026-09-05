@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @version      2.2.2
+// @version      2.2.3
 // @description  問題文と解説の読み上げ, 解答後の自動Markdown copy, 学習記録の端末間同期とdaily KPI達成時の祝福を提供します.
 // @updateURL    https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @downloadURL  https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
@@ -10,7 +10,6 @@
 // @connect      kakomonn-sync.kakomonn.workers.dev
 // @connect      japaneast.tts.speech.microsoft.com
 // @run-at       document-end
-// @noframes
 // @grant        GM.getValue
 // @grant        GM.setValue
 // @grant        GM.deleteValue
@@ -22,7 +21,16 @@
 (async () => {
   "use strict";
 
+  const READER_FRAME_READY_MESSAGE_TYPE =
+    "kakomonn-reader:frame-ready";
   if (window.top !== window.self) {
+    window.parent.postMessage(
+      {
+        href: location.href,
+        type: READER_FRAME_READY_MESSAGE_TYPE,
+      },
+      location.origin
+    );
     return;
   }
 

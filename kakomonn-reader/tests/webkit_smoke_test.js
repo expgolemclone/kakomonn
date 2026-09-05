@@ -12,11 +12,15 @@ const {
   installSyncMock,
   SYNC_API_ORIGIN,
 } = require("./sync_mock");
+const {
+  installReaderInChildFrames,
+} = require("./support/frame_reader");
 
 const projectRoot = path.resolve(__dirname, "..");
 const defaultScriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const currentQuestionURL = "https://chushoks.kakomonn.com/questions/86956";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
+const reportedQuestionIds = ["48443", "45047"];
 const nextQuestionLauncherURL =
   "https://chushoks.kakomonn.com/createques#kakomonn-next";
 const iosUserAgent =
@@ -302,6 +306,232 @@ async function assertLauncherRequiresSettings(
   }
 }
 
+async function assertEarlyFrameReadyNavigation(browser, script) {
+  const context = await browser.newContext({
+    userAgent: iosUserAgent,
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 3,
+    hasTouch: true,
+    isMobile: true,
+  });
+
+  try {
+    for (const questionId of reportedQuestionIds) {
+      const questionURL =
+        `https://chushoks.kakomonn.com/questions/${questionId}`;
+      const slowResourceURL =
+        `https://cdn.example.test/slow-frame-${questionId}.png`;
+      const page = await context.newPage();
+      const pageErrors = [];
+      let releaseSlowResource = null;
+      let slowResourceRequested = false;
+      page.on("pageerror", (error) => pageErrors.push(String(error)));
+      await page.route(slowResourceURL, async (route) => {
+        slowResourceRequested = true;
+        await new Promise((resolve) => {
+          releaseSlowResource = resolve;
+        });
+        await route.abort("aborted").catch(() => {});
+      });
+      await page.route("https://chushoks.kakomonn.com/**", (route) => {
+        const request = route.request();
+        const isChildNavigation = request.frame().parentFrame() !== null;
+        const body =
+          isChildNavigation && request.url() === questionURL
+            ? `<!doctype html><html><head>` +
+              `<meta charset="utf-8">` +
+              `<meta name="viewport" content="width=device-width">` +
+              `</head><body>${fixtureBody}` +
+              `<img id="slow-frame-resource" src="${slowResourceURL}">` +
+              `</body></html>`
+            : `<!doctype html><html><head>` +
+              `<meta charset="utf-8">` +
+              `<meta name="viewport" content="width=device-width">` +
+              `</head><body></body></html>`;
+        return route.fulfill({
+          body,
+          contentType: "text/html; charset=utf-8",
+          status: 200,
+        });
+      });
+
+      try {
+        await page.goto(questionURL, { waitUntil: "domcontentloaded" });
+        await page.evaluate(() => {
+          Object.defineProperty(window, "Audio", {
+            configurable: true,
+            value: undefined,
+          });
+          window.__copiedTexts = [];
+          Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: {
+              async write(items) {
+                const blob = await items[0].getType("text/plain");
+                window.__copiedTexts.push(await blob.text());
+              },
+            },
+          });
+        });
+        await installSyncMock(page, { nextQuestionId: "86957" });
+        await page.addScriptTag({ content: script });
+        await page.locator("#kakomonn-reader-frame").waitFor({
+          state: "attached",
+        });
+        const questionFrame = page.frames().find(
+          (candidate) =>
+            candidate !== page.mainFrame() && candidate.url() === questionURL,
+        );
+        assert.notEqual(questionFrame, undefined);
+        await questionFrame.waitForLoadState("domcontentloaded");
+        assert.equal(slowResourceRequested, true);
+        assert.equal(
+          await questionFrame.evaluate(() => document.readyState),
+          "interactive",
+        );
+        assert.equal(
+          await questionFrame.locator("#kakomonn-reader-dark-mode").count(),
+          0,
+        );
+
+        if (questionId === reportedQuestionIds[0]) {
+          await page.evaluate((href) => {
+            window.postMessage(
+              { href, type: "kakomonn-reader:frame-ready" },
+              location.origin,
+            );
+            const frame = document.querySelector("#kakomonn-reader-frame");
+            window.dispatchEvent(new MessageEvent("message", {
+              data: { href, type: "kakomonn-reader:frame-ready" },
+              origin: "https://invalid.example",
+              source: frame.contentWindow,
+            }));
+          }, questionURL);
+          await questionFrame.evaluate((href) => {
+            window.parent.postMessage(
+              {
+                extra: true,
+                href,
+                type: "kakomonn-reader:frame-ready",
+              },
+              location.origin,
+            );
+            window.parent.postMessage(
+              {
+                href: `${location.origin}/questions/99999`,
+                type: "kakomonn-reader:frame-ready",
+              },
+              location.origin,
+            );
+          }, questionURL);
+          await page.waitForTimeout(100);
+          assert.equal(
+            await questionFrame.locator("#kakomonn-reader-dark-mode").count(),
+            0,
+          );
+        }
+
+        await questionFrame.addScriptTag({ content: script });
+        await questionFrame.locator("#kakomonn-reader-dark-mode").waitFor({
+          state: "attached",
+        });
+        assert.equal(
+          await questionFrame.evaluate(() => document.readyState),
+          "interactive",
+        );
+        await page.waitForFunction(
+          () =>
+            window.__syncMock.calls.some(
+              (call) => new URL(call.url).pathname === "/v10/state",
+            ),
+        );
+        await page.waitForFunction(
+          () =>
+            document.querySelector("#kakomonn-reader-error-dialog")?.open ===
+            true,
+        );
+        assert.equal(
+          await page.locator("#kakomonn-reader-error-title").innerText(),
+          "読み上げを利用できません",
+        );
+        await page.evaluate(() => {
+          const dialog = document.querySelector(
+            "#kakomonn-reader-error-dialog",
+          );
+          if (dialog?.open) {
+            dialog.close();
+          }
+        });
+        await questionFrame.locator("label").first().tap();
+        await questionFrame.locator(".problem_detail button").tap();
+        await questionFrame.evaluate(() => {
+          document
+            .querySelector("#js-answer-result-box")
+            .classList.add("is-correct");
+          for (const lock of document.querySelectorAll(
+            "#js-commentary-wrap > .item > .none_text",
+          )) {
+            lock.hidden = true;
+          }
+          for (const explanation of document.querySelectorAll(
+            "#js-commentary-wrap > .item > .text",
+          )) {
+            explanation.hidden = false;
+          }
+        });
+        try {
+          await page.waitForFunction(
+            (expectedURL) =>
+              document.querySelector("#kakomonn-reader-frame")?.contentWindow
+                ?.location.href === expectedURL,
+            nextQuestionURL,
+          );
+        } catch (error) {
+          error.readerDiagnostics = await page.evaluate(() => ({
+            calls: window.__syncMock.calls.map((call) => ({
+              body: call.body,
+              method: call.method,
+              path: new URL(call.url).pathname,
+            })),
+            copiedTextCount: window.__copiedTexts.length,
+            errorDialog: {
+              code: document.querySelector("#kakomonn-reader-error-code")
+                ?.textContent,
+              open: document.querySelector("#kakomonn-reader-error-dialog")
+                ?.open,
+              title: document.querySelector("#kakomonn-reader-error-title")
+                ?.textContent,
+            },
+            frameURL: document.querySelector("#kakomonn-reader-frame")
+              ?.contentWindow?.location.href,
+            resultClass: document
+              .querySelector("#kakomonn-reader-frame")
+              ?.contentDocument?.querySelector("#js-answer-result-box")
+              ?.className,
+          }));
+          throw error;
+        }
+        const attemptCalls = await page.evaluate(() =>
+          window.__syncMock.calls.filter(
+            (call) =>
+              call.method === "POST" &&
+              new URL(call.url).pathname === "/v10/attempts",
+          ),
+        );
+        assert.equal(attemptCalls.length, 1);
+        assert.equal(attemptCalls[0].body.questionId, questionId);
+        assert.equal(attemptCalls[0].body.answerResult, "correct");
+        assert.deepEqual(pageErrors, []);
+      } finally {
+        releaseSlowResource?.();
+        await page.close();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 async function main() {
   const configuredScriptPath =
     kakomonnConfiguration.KAKOMONN_READER_SCRIPT_PATH;
@@ -329,6 +559,7 @@ async function main() {
       hasTouch: true,
       isMobile: true,
     });
+    await installReaderInChildFrames(context, script);
     await context.route(`${SYNC_API_ORIGIN}/**`, (route) => route.abort());
     await context.route("https://chushoks.kakomonn.com/**", (route) =>
       route.fulfill({
@@ -961,6 +1192,7 @@ async function main() {
     assert.deepEqual(correctPageErrors, []);
     await correctPage.close();
     await context.close();
+    await assertEarlyFrameReadyNavigation(browser, script);
   } finally {
     await browser.close();
   }

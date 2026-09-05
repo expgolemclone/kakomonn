@@ -392,6 +392,36 @@
     processCurrentPageSpeech();
   }
 
+  function onReaderFrameReady(event) {
+    const message = event.data;
+    if (
+      event.origin !== location.origin ||
+      event.source !== frame.contentWindow ||
+      message === null ||
+      typeof message !== "object" ||
+      Array.isArray(message) ||
+      Object.keys(message).sort().join(",") !== "href,type" ||
+      message.type !== READER_FRAME_READY_MESSAGE_TYPE ||
+      typeof message.href !== "string" ||
+      !isSitePageURL(message.href)
+    ) {
+      return;
+    }
+
+    try {
+      if (
+        frame.contentWindow.location.href !== message.href ||
+        frame.contentDocument?.readyState === "loading"
+      ) {
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    bindFrameDocument();
+  }
+
   syncSettings.addEventListener("cancel", (event) => {
     event.preventDefault();
   });
@@ -399,7 +429,7 @@
     event.preventDefault();
     void saveSyncSettings();
   });
-  frame.addEventListener("load", bindFrameDocument);
+  window.addEventListener("message", onReaderFrameReady);
   document.addEventListener("keydown", onReaderKeyDown, true);
   if (speechSupported) {
     document.addEventListener("click", activateSpeechFromGesture, true);
@@ -423,22 +453,4 @@
     enterReaderUI();
   }
 
-  // iframeのloadがキャッシュ等で先に完了していた場合にも対応します.
-  try {
-    if (
-      !shouldLaunchNextQuestionAfterSync &&
-      frame.contentDocument?.readyState === "complete" &&
-      (frame.contentWindow.location.href !== "about:blank" ||
-        frame.src === "about:blank")
-    ) {
-      bindFrameDocument();
-    }
-  } catch (error) {
-    showReaderError(
-      "initial-frame-access",
-      "問題pageへアクセスできません",
-      "問題pageを再読み込みしてください.",
-      error
-    );
-  }
 })();

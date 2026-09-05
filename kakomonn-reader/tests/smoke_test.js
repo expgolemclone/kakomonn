@@ -13,6 +13,9 @@ const {
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,
 } = require("./sync_mock");
+const {
+  installReaderInChildFrames,
+} = require("./support/frame_reader");
 
 const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
@@ -413,6 +416,7 @@ async function preparePage(page, speechMode, syncOptions = {}) {
 }
 
 async function loadMockQuestion(page, script, body = mockBody) {
+  await installReaderInChildFrames(page, script);
   await page.addScriptTag({ content: script });
   await page.waitForSelector("#kakomonn-reader-frame");
 

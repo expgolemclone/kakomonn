@@ -148,6 +148,7 @@ def validate(script_path: Path) -> None:
 
     run_at = require_single_value(metadata, "run-at")
     assert run_at in RUN_AT_VALUES, f"unsupported Tampermonkey @run-at value: {run_at}"
+    assert "noframes" not in metadata, "reader must run in its question iframe"
 
     grant_values = metadata.get("grant", [])
     assert grant_values, "at least one @grant directive is required"

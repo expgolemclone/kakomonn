@@ -654,7 +654,12 @@ async function prepareSafariInitialPage(driver) {
   }
 }
 
-async function installReader(driver, script, syncOptions = {}) {
+async function installReaderInCurrentDocument(
+  driver,
+  script,
+  syncOptions,
+) {
+  const documentURL = new URL(await driver.getUrl());
   await driver.execute(() => {
     localStorage.clear();
     Object.defineProperty(window, "Audio", {
@@ -722,9 +727,8 @@ async function installReader(driver, script, syncOptions = {}) {
   );
   await driver.execute(`${script}\n//# sourceURL=${readerSourceURL}`);
 
-  const currentURL = new URL(await driver.getUrl());
-  if (!/^\/questions\/(?:next\/)?\d+$/.test(currentURL.pathname)) {
-    return;
+  if (!/^\/questions\/(?:next\/)?\d+$/.test(documentURL.pathname)) {
+    return documentURL;
   }
 
   await driver.waitUntil(
@@ -758,6 +762,28 @@ async function installReader(driver, script, syncOptions = {}) {
       timeoutMsg: "The question iframe did not initialize the Reader",
     },
   );
+  return documentURL;
+}
+
+async function installReader(driver, script, syncOptions = {}) {
+  const documentURL = await installReaderInCurrentDocument(
+    driver,
+    script,
+    syncOptions,
+  );
+  if (documentURL.href !== nextQuestionOpenURL) {
+    return;
+  }
+
+  await driver.waitUntil(
+    () => driver.getUrl().then((url) => url === nextQuestionURL),
+    {
+      interval: 100,
+      timeout: 30_000,
+      timeoutMsg: "The production /open bridge did not navigate",
+    },
+  );
+  await installReaderInCurrentDocument(driver, script, syncOptions);
 }
 
 async function readQuestionContent(driver) {

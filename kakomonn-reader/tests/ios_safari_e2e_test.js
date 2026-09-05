@@ -685,6 +685,41 @@ async function installReader(driver, script, syncOptions = {}) {
   await driver.execute(
     `(${installSyncMockInWindow.toString()})(${JSON.stringify(syncConfiguration)});`,
   );
+  await driver.execute(
+    (source, sourceURL) => {
+      const injectedDocuments = new WeakSet();
+      window.__kakomonnReaderFrameInstaller = window.setInterval(() => {
+        const frame = document.querySelector("#kakomonn-reader-frame");
+        if (frame === null) {
+          return;
+        }
+
+        const frameDocument = frame.contentDocument;
+        const frameWindow = frame.contentWindow;
+        if (
+          frameDocument === null ||
+          frameWindow === null ||
+          frameDocument.readyState === "loading" ||
+          injectedDocuments.has(frameDocument)
+        ) {
+          return;
+        }
+
+        const frameURL = new URL(frameWindow.location.href);
+        if (
+          frameURL.href === "about:blank" ||
+          !frameURL.hostname.endsWith(".kakomonn.com")
+        ) {
+          return;
+        }
+
+        injectedDocuments.add(frameDocument);
+        frameWindow.eval(`${source}\n//# sourceURL=${sourceURL}`);
+      }, 25);
+    },
+    script,
+    readerSourceURL,
+  );
   await driver.execute(`${script}\n//# sourceURL=${readerSourceURL}`);
 
   const currentURL = new URL(await driver.getUrl());
@@ -707,16 +742,6 @@ async function installReader(driver, script, syncOptions = {}) {
       timeout: 30_000,
       timeoutMsg: "The question iframe did not reach document-end",
     },
-  );
-  await driver.execute(
-    (source, sourceURL) => {
-      const frameWindow = document.querySelector(
-        "#kakomonn-reader-frame",
-      ).contentWindow;
-      frameWindow.eval(`${source}\n//# sourceURL=${sourceURL}`);
-    },
-    script,
-    readerSourceURL,
   );
   await driver.waitUntil(
     () =>
@@ -1270,6 +1295,11 @@ async function runTest() {
       documentSentinel: window.__launcherDocumentSentinel,
       frameURL: document.querySelector("#kakomonn-reader-frame")?.contentWindow
         ?.location.href,
+      frameInitialized:
+        document
+          .querySelector("#kakomonn-reader-frame")
+          ?.contentDocument?.getElementById("kakomonn-reader-dark-mode") !==
+        null,
       readerControlsVisible:
         document.querySelector("#kakomonn-reader-controls") !== null,
       settingsButtonVisible:
@@ -1278,6 +1308,7 @@ async function runTest() {
     assert.deepEqual(launcherTransition, {
       documentSentinel: "same-document",
       frameURL: nextQuestionURL,
+      frameInitialized: true,
       readerControlsVisible: false,
       settingsButtonVisible: false,
     });

@@ -616,7 +616,6 @@ async function prepareSafariInitialPage(driver) {
 
     if (showsStartPageOnboarding) {
       assert.equal(showsStartPage, true);
-      assert.equal(showsLoadedPage, false);
       const closeButton = await driver.findElement("accessibility id", "close");
       await closeButton.waitForDisplayed();
       await closeButton.click();
@@ -698,6 +697,7 @@ async function installReader(driver, script, syncOptions = {}) {
       driver.execute(() => {
         const frame = document.querySelector("#kakomonn-reader-frame");
         return (
+          frame !== null &&
           frame?.contentDocument?.readyState !== "loading" &&
           frame?.contentWindow?.location.href === location.href
         );

@@ -25,7 +25,7 @@ const repositoryEnvPath = path.resolve(__dirname, "..", "..", ".env");
 const openURL = `${DEFAULT_SYNC_API_ORIGIN}/open`;
 const site = "chushoks.kakomonn.com";
 
-async function readLearningMetrics(token) {
+async function readLearningState(token) {
   const query = new URLSearchParams({ site });
   const response = await fetch(`${DEFAULT_SYNC_API_ORIGIN}/v10/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -34,7 +34,39 @@ async function readLearningMetrics(token) {
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.site, site);
-  return body.learningMetrics;
+  assert.match(body.today, /^\d{4}-\d{2}-\d{2}$/);
+  return body;
+}
+
+function nextCalendarDate(date) {
+  const nextDate = new Date(`${date}T00:00:00Z`);
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+  return nextDate.toISOString().slice(0, 10);
+}
+
+async function readLearningActivity(token, date) {
+  const query = new URLSearchParams({ date, site });
+  const response = await fetch(
+    `${DEFAULT_SYNC_API_ORIGIN}/v10/daily-details?${query}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(15_000),
+    },
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.site, site);
+  assert.equal(body.date, date);
+  return body.tables;
+}
+
+async function readLearningActivities(token, dates) {
+  return Promise.all(
+    dates.map(async (date) => ({
+      activity: await readLearningActivity(token, date),
+      date,
+    })),
+  );
 }
 
 async function main() {
@@ -52,7 +84,15 @@ async function main() {
   });
   const userscript = fs.readFileSync(userscriptPath, "utf8");
   const expectedBuildFingerprint = extractBuildFingerprint(userscript);
-  const baselineMetrics = await readLearningMetrics(token);
+  const baselineState = await readLearningState(token);
+  const observedDates = [
+    baselineState.today,
+    nextCalendarDate(baselineState.today),
+  ];
+  const baselineActivities = await readLearningActivities(
+    token,
+    observedDates,
+  );
 
   const setupChrome = await launchChromeWithCurrentUserscript({
     configuration,
@@ -130,11 +170,17 @@ async function main() {
     assert.equal(outcome.state.settingsOpen, false);
     assert.equal(outcome.state.topControlsPresent, false);
 
-    const finalMetrics = await readLearningMetrics(token);
+    const finalState = await readLearningState(token);
+    assert.equal(
+      observedDates.includes(finalState.today),
+      true,
+      "prewarmed open exceeded its observed learning dates",
+    );
+    const finalActivities = await readLearningActivities(token, observedDates);
     assert.deepEqual(
-      finalMetrics,
-      baselineMetrics,
-      "prewarmed open must not mutate learning metrics",
+      finalActivities,
+      baselineActivities,
+      "prewarmed open must not record learning activity",
     );
     console.log(JSON.stringify({
       browser: "Google Chrome with Tampermonkey Beta",

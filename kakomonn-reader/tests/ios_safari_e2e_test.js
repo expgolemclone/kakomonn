@@ -1147,6 +1147,7 @@ async function runTest() {
     );
 
     await driver.navigateTo(nextQuestionLauncherURL);
+    await driver.calibrateNativeWebTap();
     await driver.execute(() => {
       window.__launcherDocumentSentinel = "same-document";
     });

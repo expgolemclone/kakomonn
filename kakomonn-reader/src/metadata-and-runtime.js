@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @version      2.2.1
+// @version      2.2.2
 // @description  問題文と解説の読み上げ, 解答後の自動Markdown copy, 学習記録の端末間同期とdaily KPI達成時の祝福を提供します.
 // @updateURL    https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @downloadURL  https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
@@ -48,6 +48,8 @@
   const SYNC_API_URL =
     "https://kakomonn-sync.kakomonn.workers.dev";
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
+  const LAUNCH_HANDOFF_KEY = "kakomonn-reader.v10.launch-handoff";
+  const LAUNCH_HANDOFF_MAX_AGE_MS = 60000;
   const SYNC_TIMEOUT_MS = 15000;
   const isReaderBridge =
     location.origin === SYNC_API_URL &&
@@ -67,11 +69,12 @@
     "https://kakomonn-congratulations.kakomonn.workers.dev/";
 
   class SyncRequestError extends Error {
-    constructor(code, status = 0) {
+    constructor(code, status = 0, responseBody = null) {
       super(code);
       this.name = "SyncRequestError";
       this.code = code;
       this.status = status;
+      this.responseBody = responseBody;
     }
   }
 
@@ -134,6 +137,13 @@
   }
 
   function isReaderBridgeNextResponse(value) {
+    if (
+      value?.state === null ||
+      typeof value?.state !== "object" ||
+      value.state.site !== NEXT_QUESTION_SITE_ID
+    ) {
+      return false;
+    }
     if (value?.question === null) {
       return true;
     }
@@ -190,6 +200,11 @@
         document.documentElement.dataset.kakomonnReaderBridgeState = "empty";
         return;
       }
+      await GM.setValue(LAUNCH_HANDOFF_KEY, {
+        createdAtMs: Date.now(),
+        questionURL: result.question.url,
+        state: result.state,
+      });
       document.documentElement.setAttribute(
         READER_BRIDGE_TARGET_ATTRIBUTE,
         result.question.url
@@ -215,7 +230,6 @@
   const CATALOG_TIMEOUT_MS = 15000;
   const CATALOG_FETCH_CONCURRENCY = 4;
   const SPEECH_TIMEOUT_MS = 30000;
-  const FRAME_LOAD_DELAY_MS = 900;
   const FRAME_PROBLEM_SCROLL_DELAYS_MS = [0, 120, 600];
   const SHORTCUT_SEQUENCE_TIMEOUT_MS = 400;
   const TIME_LIMIT_MS = 5 * 60 * 1000;
@@ -389,7 +403,6 @@
   let currentFrameURL = shouldLaunchNextQuestionAfterSync
     ? "about:blank"
     : location.href;
-  let loadTimer = null;
   let timeLimitPhase = null;
   let timeLimitDeadline = 0;
   let timeLimitTimeout = null;
@@ -407,6 +420,11 @@
   let syncReady = false;
   let syncInProgress = false;
   let syncPromise = null;
+  let catalogReady = false;
+  let catalogInProgress = false;
+  let catalogPromise = null;
+  let currentSyncState = null;
+  let launcherSyncState = null;
   let pendingAttempt = null;
   let pendingAttemptTransitionPromise = null;
   let pendingCelebration = null;

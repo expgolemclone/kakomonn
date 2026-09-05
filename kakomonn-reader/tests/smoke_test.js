@@ -233,7 +233,7 @@ async function preparePage(page, speechMode, syncOptions = {}) {
   catalogRequestsByErrors.set(errors, catalogRequests);
   page.on("pageerror", (error) => errors.push(String(error)));
 
-  await page.route("https://chushoks.kakomonn.com/**", (route) => {
+  await page.route("https://chushoks.kakomonn.com/**", async (route) => {
     const url = new URL(route.request().url());
     const catalogKey = `${url.pathname}${url.search}`;
     if (catalogFixture !== null && url.pathname === "/createques") {
@@ -253,16 +253,19 @@ async function preparePage(page, speechMode, syncOptions = {}) {
     if (catalogFixture !== null && url.pathname === "/list1/1") {
       catalogRequests.push(catalogKey);
       const pageNumber = Number(url.searchParams.get("page"));
-      const requestCount = catalogRequests.filter(
-        (request) => request === catalogKey,
-      ).length;
+      if (pageNumber === 3 && catalogFixture.holdLastPage) {
+        catalogFixture.onLastPage?.();
+        await new Promise((resolve) => {
+          catalogFixture.releaseLastPage = resolve;
+        });
+      }
       const pageIds =
         pageNumber === 1
           ? ["1", "2"]
           : pageNumber === 2
             ? ["3", "4"]
-            : catalogFixture.mismatchLastBoundary && requestCount === 2
-              ? ["6"]
+            : catalogFixture.duplicateQuestion
+              ? ["4"]
               : ["5"];
       return route.fulfill({
         contentType: "text/html; charset=utf-8",
@@ -447,7 +450,11 @@ async function loadMockQuestion(page, script, body = mockBody) {
       window.__readerPopstateCount += 1;
     });
   });
-  await page.waitForTimeout(900);
+  await childFrame.waitForFunction(
+    () =>
+      document.documentElement.dataset.kakomonnReaderPhase === "question" &&
+      document.querySelector("#kakomonn-reader-dark-mode") !== null,
+  );
   return childFrame;
 }
 
@@ -531,6 +538,7 @@ async function assertReaderBridge(browser, script) {
   await readyPage.evaluate(() => {
     let releaseGetValue;
     window.__bridgeGetValueCalls = [];
+    window.__bridgeSetValueCalls = [];
     window.__bridgeRequests = [];
     window.__releaseBridgeGetValue = () => releaseGetValue?.();
     window.GM_info = { scriptHandler: "Tampermonkey" };
@@ -541,7 +549,9 @@ async function assertReaderBridge(browser, script) {
           releaseGetValue = () => resolve("private-token");
         });
       },
-      async setValue() {},
+      async setValue(key, value) {
+        window.__bridgeSetValueCalls.push({ key, value });
+      },
       async deleteValue() {},
       xmlHttpRequest(details) {
         window.__bridgeRequests.push({
@@ -552,6 +562,28 @@ async function assertReaderBridge(browser, script) {
         const response = {
           status: 200,
           responseText: JSON.stringify({
+            state: {
+              site: "chushoks.kakomonn.com",
+              today: "2026-08-13",
+              learningMetrics: {
+                stabilityDays: 0,
+                dailyKpiCompleted: false,
+                dueCardsCompleted: true,
+                dueCardsRemaining: 0,
+                todayNewQuestionCount: 0,
+                newQuestionGoal: 100,
+                newQuestionsRemaining: 100,
+                todayStabilityDaysDelta: 0,
+                attemptedQuestionCount: 0,
+                todayAttemptedQuestionCount: 0,
+                todayCorrectRatePercent: null,
+              },
+              catalog: {
+                questionCount: 1,
+                updatedAtMs: Date.now(),
+                generation: 1,
+              },
+            },
             question: {
               dueMs: null,
               kind: "new",
@@ -590,6 +622,14 @@ async function assertReaderBridge(browser, script) {
     await readyPage.locator("html").getAttribute("data-kakomonn-reader-bridge-target"),
     "https://chushoks.kakomonn.com/questions/45124",
   );
+  const handoff = await readyPage.evaluate(() => window.__bridgeSetValueCalls);
+  assert.equal(handoff.length, 1);
+  assert.equal(handoff[0].key, "kakomonn-reader.v10.launch-handoff");
+  assert.equal(
+    handoff[0].value.questionURL,
+    "https://chushoks.kakomonn.com/questions/45124",
+  );
+  assert.equal(handoff[0].value.state.site, "chushoks.kakomonn.com");
   assert.deepEqual(
     await readyPage.evaluate(() => window.__bridgeRequests),
     [{
@@ -952,22 +992,24 @@ async function runSpeechLookaheadCase(context, script) {
   }
 }
 
-async function runCatalogBoundaryValidationCase(context, script, mismatch) {
+async function runCatalogSinglePassValidationCase(context, script, mismatch) {
   const page = await context.newPage();
-  const errors = await preparePage(page, "none", {
-    catalogFixture: { mismatchLastBoundary: mismatch },
+  const errors = await preparePage(page, "audio", {
+    catalogFixture: { duplicateQuestion: mismatch },
     catalogQuestionCount: null,
     catalogGeneration: 0,
   });
   await loadMockQuestion(page, script);
   try {
     if (mismatch) {
-      await page.locator("#kakomonn-reader-error-dialog").waitFor({
-        state: "visible",
-      });
+      await page.waitForFunction(
+        () =>
+          document.querySelector("#kakomonn-reader-error-title")?.textContent ===
+          "問題一覧を同期できません",
+      );
       assert.equal(
         await page.locator("#kakomonn-reader-error-title").innerText(),
-        "学習記録を同期できません",
+        "問題一覧を同期できません",
       );
       assert.equal(
         await page.evaluate(() =>
@@ -996,13 +1038,67 @@ async function runCatalogBoundaryValidationCase(context, script, mismatch) {
       "/list1/1?page=1",
       "/list1/1?page=2",
       "/list1/1?page=3",
-      "/createques",
-      "/list",
-      "/list1/1?page=1",
-      "/list1/1?page=3",
     ]);
     assert.deepEqual([...errors], []);
   } finally {
+    await page.close();
+  }
+}
+
+async function runCatalogDoesNotBlockSpeechCase(context, script) {
+  const page = await context.newPage();
+  let markLastPageStarted;
+  const lastPageStarted = new Promise((resolve) => {
+    markLastPageStarted = resolve;
+  });
+  const catalogFixture = {
+    holdLastPage: true,
+    onLastPage: markLastPageStarted,
+    releaseLastPage: null,
+  };
+  const errors = await preparePage(page, "audio", {
+    catalogFixture,
+    catalogQuestionCount: null,
+    catalogGeneration: 0,
+  });
+  try {
+    await loadMockQuestion(page, script);
+    let lastPageTimeout;
+    try {
+      await Promise.race([
+        lastPageStarted,
+        new Promise((_, reject) => {
+          lastPageTimeout = setTimeout(
+            () => reject(new Error("catalog last page request did not start")),
+            5_000,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(lastPageTimeout);
+    }
+    await page.waitForFunction(
+      () => window.__syncMock.speechRequestCount === 1,
+    );
+    assert.equal(typeof catalogFixture.releaseLastPage, "function");
+    assert.equal(
+      await page.evaluate(() =>
+        window.__syncMock.calls.some(
+          (call) => new URL(call.url).pathname === "/v10/questions",
+        ),
+      ),
+      false,
+    );
+    catalogFixture.releaseLastPage();
+    catalogFixture.releaseLastPage = null;
+    await page.waitForFunction(() =>
+      window.__syncMock.calls.some(
+        (call) => new URL(call.url).pathname === "/v10/questions",
+      ),
+    );
+    assert.deepEqual([...errors], []);
+  } finally {
+    catalogFixture.releaseLastPage?.();
     await page.close();
   }
 }
@@ -1688,6 +1784,12 @@ async function main() {
       historyDashboard: true,
     });
     const childFrame = await loadMockQuestion(page, script);
+    await childFrame.waitForFunction(() => {
+      const heading = document.querySelector(
+        ".sect_problem > .ttl_box03 > h2.main",
+      );
+      return heading !== null && Math.abs(heading.getBoundingClientRect().top) <= 1;
+    });
     const initialProblemPresentation = await childFrame.evaluate(() => {
       const problemHeading = document.querySelector(
         ".sect_problem > .ttl_box03 > h2.main",
@@ -2340,8 +2442,9 @@ async function main() {
     await runIncorrectCelebrationEnterCase(context, script);
     await runOrphanedCelebrationRecoveryCase(context, script);
     await runIncorrectEnterNoNextCase(context, script);
-    await runCatalogBoundaryValidationCase(context, script, false);
-    await runCatalogBoundaryValidationCase(context, script, true);
+    await runCatalogSinglePassValidationCase(context, script, false);
+    await runCatalogSinglePassValidationCase(context, script, true);
+    await runCatalogDoesNotBlockSpeechCase(context, script);
     await runContinuousMutationCase(context, script);
     await runSpeechLookaheadCase(context, script);
     await runCorrectFeedbackCase(context, script);
@@ -2632,7 +2735,7 @@ async function main() {
       unsupportedPage,
       "none",
     );
-    await unsupportedPage.addScriptTag({ content: script });
+    await loadMockQuestion(unsupportedPage, script);
     await unsupportedPage.waitForFunction(
       () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
     );

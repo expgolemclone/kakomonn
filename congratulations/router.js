@@ -66,6 +66,7 @@ try {
   };
   window.addEventListener("message", handleReady);
 
+  frame.hidden = false;
   frame.src = entryUrl.href;
 } catch (error) {
   renderError(error);

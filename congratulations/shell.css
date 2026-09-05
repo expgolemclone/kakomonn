@@ -23,6 +23,7 @@ main {
   min-height: 100vh;
   min-height: 100svh;
   place-items: center;
+  position: relative;
 }
 
 #celebration-frame {
@@ -38,6 +39,11 @@ main {
   margin: 0;
   padding: 2rem;
   text-align: center;
+}
+
+#loading {
+  position: absolute;
+  z-index: 1;
 }
 
 #error-panel h1 {

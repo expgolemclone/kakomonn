@@ -74,6 +74,7 @@
         }
       }
       attachAnswerStateObserver();
+      processCurrentPageSpeech();
     });
     frameControlObserver.observe(frameDocument.body, {
       subtree: true,

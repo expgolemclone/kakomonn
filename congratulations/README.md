@@ -10,6 +10,12 @@ achievement parameters so static experience documents share one browser cache
 entry. An experience opened directly accepts the same query string. Invalid or
 incomplete celebration data is rejected.
 
+The shell reveals the selected iframe as soon as navigation starts and keeps a
+small loading status over it until the experience announces readiness. The
+Perigee particle field initializes after the first paint, pauses while the page
+is hidden, renders at no more than 30 fps, caps DPR at 1.5, and uses half of its
+previous mobile particle count.
+
 Deployable experience snapshots live in `experiences/` and are listed in
 `celebrations.json`. The locally cloned design references in `upstreams/` are
 ignored by the parent repository and are not part of the production build.

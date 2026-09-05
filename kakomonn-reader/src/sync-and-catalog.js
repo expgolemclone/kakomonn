@@ -129,6 +129,7 @@
     return (
       value !== null &&
       typeof value === "object" &&
+      isSyncState(value.state) &&
       isNextQuestion(value.question)
     );
   }
@@ -143,8 +144,34 @@
       Number.isSafeInteger(value.updatedAtMs) &&
       value.updatedAtMs > 0 &&
       Number.isSafeInteger(value.generation) &&
-      value.generation > 0
+      value.generation > 0 &&
+      isNextQuestion(value.question)
     );
+  }
+
+  function isCatalogConflictResponse(value) {
+    return (
+      value !== null &&
+      typeof value === "object" &&
+      value.error === "catalog_conflict" &&
+      Number.isSafeInteger(value.currentGeneration) &&
+      value.currentGeneration > 0 &&
+      isCatalogResponse({ ...value.catalog, question: value.question })
+    );
+  }
+
+  function isLaunchHandoff(value) {
+    if (
+      value === null ||
+      typeof value !== "object" ||
+      !Number.isSafeInteger(value.createdAtMs) ||
+      value.questionURL !== location.href ||
+      !isSyncState(value.state)
+    ) {
+      return false;
+    }
+    const ageMs = Date.now() - value.createdAtMs;
+    return ageMs >= 0 && ageMs <= LAUNCH_HANDOFF_MAX_AGE_MS;
   }
 
   function isSpeechTokenResponse(value) {
@@ -285,7 +312,8 @@
     }
     throw new SyncRequestError(
       typeof responseBody?.error === "string" ? responseBody.error : "request_failed",
-      response.status
+      response.status,
+      responseBody
     );
   }
 
@@ -474,7 +502,7 @@
   }
 
   function openSyncSettings() {
-    if (syncInProgress || nextQuestionOperationInProgress) {
+    if (syncInProgress || catalogInProgress || nextQuestionOperationInProgress) {
       return;
     }
     clearShortcutSequence();
@@ -646,8 +674,6 @@
     const questionIds = new Set();
     let totalPages = null;
     let fullPageSize = null;
-    let firstPageQuestionIds = null;
-    let lastPageQuestionIds = null;
 
     const loadPage = async (page) => {
       const pageURL = new URL(listURL);
@@ -687,15 +713,6 @@
         }
         questionIds.add(id);
       }
-      const sortedPageIds = [...pageIds].sort(
-        (left, right) => Number(left) - Number(right)
-      );
-      if (page === 1) {
-        firstPageQuestionIds = sortedPageIds;
-      }
-      if (page === totalPages) {
-        lastPageQuestionIds = sortedPageIds;
-      }
     };
 
     consumePage(await loadPage(1));
@@ -721,8 +738,6 @@
     return {
       totalPages,
       questionIds: [...questionIds].sort((left, right) => Number(left) - Number(right)),
-      firstPageQuestionIds,
-      lastPageQuestionIds,
     };
   }
 
@@ -759,77 +774,6 @@
     return new Map(snapshots);
   }
 
-  function sameQuestionIds(left, right) {
-    return (
-      left.length === right.length &&
-      left.every((id, index) => id === right[index])
-    );
-  }
-
-  async function validateCatalogListSnapshot(
-    listURL,
-    snapshot,
-    loadCatalogDocument
-  ) {
-    const loadBoundary = async (page) => {
-      const pageURL = new URL(listURL);
-      pageURL.searchParams.set("page", String(page));
-      const pageDocument = await loadCatalogDocument(pageURL.href);
-      const position = catalogPagePosition(pageDocument);
-      if (
-        position.currentPage !== page ||
-        position.totalPages !== snapshot.totalPages
-      ) {
-        throw new SyncRequestError("catalog_error");
-      }
-      return [...collectQuestionIds(pageDocument, pageURL.href)].sort(
-        (left, right) => Number(left) - Number(right)
-      );
-    };
-
-    const [firstPageQuestionIds, lastPageQuestionIds] =
-      snapshot.totalPages === 1
-        ? await loadBoundary(1).then((ids) => [ids, ids])
-        : await Promise.all([
-            loadBoundary(1),
-            loadBoundary(snapshot.totalPages),
-          ]);
-    const derivedQuestionCount =
-      firstPageQuestionIds.length * (snapshot.totalPages - 1) +
-      lastPageQuestionIds.length;
-    if (
-      derivedQuestionCount !== snapshot.questionIds.length ||
-      !sameQuestionIds(firstPageQuestionIds, snapshot.firstPageQuestionIds) ||
-      !sameQuestionIds(lastPageQuestionIds, snapshot.lastPageQuestionIds)
-    ) {
-      throw new SyncRequestError("catalog_error");
-    }
-  }
-
-  async function validateQuestionCatalogSnapshot(
-    snapshot,
-    loadCatalogDocument
-  ) {
-    const sortedLists = await loadCatalogLists(loadCatalogDocument);
-    if (sortedLists.length !== snapshot.size) {
-      throw new SyncRequestError("catalog_error");
-    }
-    for (const [listPath] of sortedLists) {
-      if (!snapshot.has(listPath)) {
-        throw new SyncRequestError("catalog_error");
-      }
-    }
-    await mapCatalogConcurrently(
-      sortedLists,
-      async ([listPath, listURL]) =>
-        validateCatalogListSnapshot(
-          listURL,
-          snapshot.get(listPath),
-          loadCatalogDocument
-        )
-    );
-  }
-
   async function loadCompleteQuestionCatalog() {
     const controller = new AbortController();
     const timeout = window.setTimeout(
@@ -839,7 +783,6 @@
     const loadCatalogDocument = createCatalogDocumentLoader(controller.signal);
     try {
       const snapshot = await loadQuestionCatalogSnapshot(loadCatalogDocument);
-      await validateQuestionCatalogSnapshot(snapshot, loadCatalogDocument);
 
       const questionIds = new Set();
       for (const { questionIds: listQuestionIds } of snapshot.values()) {
@@ -859,38 +802,94 @@
     }
   }
 
-  async function ensureQuestionCatalog(token, state) {
-    const maxAgeMs = 24 * 60 * 60 * 1000;
-    if (
-      state.catalog !== null &&
-      Date.now() - state.catalog.updatedAtMs >= 0 &&
-      Date.now() - state.catalog.updatedAtMs < maxAgeMs
-    ) {
-      return state;
+  function isCatalogFresh(catalog) {
+    const ageMs = Date.now() - (catalog?.updatedAtMs ?? 0);
+    return catalog !== null && ageMs >= 0 && ageMs < 24 * 60 * 60 * 1000;
+  }
+
+  function applySyncState(state) {
+    currentSyncState = state;
+    syncReady = true;
+    catalogReady = isCatalogFresh(state.catalog);
+  }
+
+  function applyCatalogResult(catalog) {
+    if (currentSyncState !== null) {
+      currentSyncState = {
+        ...currentSyncState,
+        catalog: {
+          questionCount: catalog.questionCount,
+          updatedAtMs: catalog.updatedAtMs,
+          generation: catalog.generation,
+        },
+      };
     }
-    const questionIds = await loadCompleteQuestionCatalog();
-    const expectedGeneration = state.catalog?.generation ?? 0;
-    try {
-      const catalog = await requestCatalogUpdate(
-        token,
-        questionIds,
-        expectedGeneration
-      );
-      return { ...state, catalog };
-    } catch (error) {
-      if (error?.code !== "catalog_conflict") {
-        throw error;
-      }
-      const currentState = await requestSyncState(token);
-      if (
-        currentState.catalog === null ||
-        Date.now() - currentState.catalog.updatedAtMs < 0 ||
-        Date.now() - currentState.catalog.updatedAtMs >= maxAgeMs
-      ) {
-        throw new SyncRequestError("catalog_error");
-      }
-      return currentState;
+    catalogReady = true;
+  }
+
+  async function refreshQuestionCatalog(token, state = currentSyncState) {
+    if (state === null || token !== syncToken) {
+      return false;
     }
+    if (isCatalogFresh(state.catalog)) {
+      catalogReady = true;
+      return true;
+    }
+    if (catalogPromise !== null) {
+      return catalogPromise;
+    }
+    catalogReady = false;
+    catalogInProgress = true;
+    updateSyncDependentControls();
+    catalogPromise = (async () => {
+      let failedError = null;
+      try {
+        const questionIds = await loadCompleteQuestionCatalog();
+        const catalog = await requestCatalogUpdate(
+          token,
+          questionIds,
+          state.catalog?.generation ?? 0
+        );
+        if (token !== syncToken) {
+          return false;
+        }
+        applyCatalogResult(catalog);
+        return true;
+      } catch (error) {
+        if (
+          error?.code === "catalog_conflict" &&
+          isCatalogConflictResponse(error.responseBody) &&
+          isCatalogFresh(error.responseBody.catalog) &&
+          token === syncToken
+        ) {
+          applyCatalogResult(error.responseBody.catalog);
+          return true;
+        }
+        if (token === syncToken) {
+          catalogReady = false;
+          failedError = error;
+        }
+        return false;
+      } finally {
+        catalogInProgress = false;
+        catalogPromise = null;
+        updateSyncDependentControls();
+        if (failedError !== null) {
+          showReaderError(
+            "catalog-refresh",
+            "問題一覧を同期できません",
+            `${syncErrorMessage(failedError)}. 解答記録は端末に保持されます.`,
+            failedError,
+            {
+              label: "問題一覧を再同期",
+              run: () => refreshQuestionCatalog(syncToken),
+            }
+          );
+        }
+        void resumePendingLearningFlow();
+      }
+    })();
+    return catalogPromise;
   }
 
   async function refreshRemoteState() {
@@ -902,6 +901,8 @@
     }
     if (!syncToken) {
       syncReady = false;
+      catalogReady = false;
+      currentSyncState = null;
       openSyncSettings();
       updateSyncDependentControls();
       return false;
@@ -911,12 +912,14 @@
       syncInProgress = true;
       updateSyncDependentControls();
       try {
-        let state = await requestSyncState(syncToken);
-        state = await ensureQuestionCatalog(syncToken, state);
-        syncReady = true;
+        const state = await requestSyncState(syncToken);
+        applySyncState(state);
+        void refreshQuestionCatalog(syncToken, state);
         return true;
       } catch (error) {
         syncReady = false;
+        catalogReady = false;
+        currentSyncState = null;
         failedError = error;
         return false;
       } finally {
@@ -950,7 +953,7 @@
       syncSettingsError.textContent = "同期トークンを入力してください.";
       return;
     }
-    if (syncPromise !== null || nextQuestionOperationInProgress) {
+    if (syncPromise !== null || catalogPromise !== null || nextQuestionOperationInProgress) {
       syncSettingsError.textContent = "同期処理の完了を待ってください.";
       return;
     }
@@ -961,25 +964,31 @@
     updateSyncDependentControls();
     syncPromise = (async () => {
       try {
-        let state = await requestSyncState(candidateToken);
-        state = await ensureQuestionCatalog(candidateToken, state);
         const nextQuestionResult = shouldLaunchNextQuestionAfterSync
           ? await requestNextQuestion(candidateToken)
           : null;
+        const state = nextQuestionResult?.state ??
+          await requestSyncState(candidateToken);
         await GM.setValue(SYNC_TOKEN_KEY, candidateToken);
         syncToken = candidateToken;
         clearAzureSpeechToken();
-        syncReady = true;
+        applySyncState(state);
+        void refreshQuestionCatalog(candidateToken, state);
         syncSettings.close();
         syncTokenInput.value = "";
         if (nextQuestionResult?.question === null) {
           showNoNextQuestionLauncher();
         } else if (nextQuestionResult?.question !== undefined) {
-          openScheduledQuestionInReader(nextQuestionResult.question.url);
+          openScheduledQuestionInReader(
+            nextQuestionResult.question.url,
+            nextQuestionResult.state
+          );
         }
         return true;
       } catch (error) {
         syncReady = false;
+        catalogReady = false;
+        currentSyncState = null;
         syncSettingsError.textContent =
           `${syncErrorMessage(error)}. ${readerErrorDetail(error, "sync-token")}`;
         return false;
@@ -1023,12 +1032,16 @@
   async function initializeSync() {
     updateSyncDependentControls();
     try {
-      const [storedToken, storedPendingAttempt, storedCelebration] =
+      const [storedToken, storedPendingAttempt, storedCelebration, storedHandoff] =
         await Promise.all([
           GM.getValue(SYNC_TOKEN_KEY, ""),
           GM.getValue(PENDING_ATTEMPT_KEY, null),
           GM.getValue(PENDING_CELEBRATION_KEY, null),
+          GM.getValue(LAUNCH_HANDOFF_KEY, null),
         ]);
+      if (storedHandoff !== null) {
+        await GM.deleteValue(LAUNCH_HANDOFF_KEY);
+      }
       if (typeof storedToken !== "string") {
         await GM.deleteValue(SYNC_TOKEN_KEY);
         syncToken = "";
@@ -1039,13 +1052,32 @@
       await restorePendingState(storedPendingAttempt, storedCelebration);
       if (!syncToken) {
         syncReady = false;
+        catalogReady = false;
+        currentSyncState = null;
         openSyncSettings();
         updateSyncDependentControls();
+        return;
+      }
+      const initialState =
+        launcherSyncState !== null && isSyncState(launcherSyncState)
+          ? launcherSyncState
+          : isLaunchHandoff(storedHandoff)
+            ? storedHandoff.state
+            : null;
+      launcherSyncState = null;
+      if (initialState !== null) {
+        applySyncState(initialState);
+        updateSyncDependentControls();
+        void refreshQuestionCatalog(syncToken, initialState);
+        void resumePendingLearningFlow();
+        processCurrentPageSpeech();
         return;
       }
       await refreshRemoteState();
     } catch (error) {
       syncReady = false;
+      catalogReady = false;
+      currentSyncState = null;
       showReaderError(
         "sync-storage",
         "同期設定を読み込めません",

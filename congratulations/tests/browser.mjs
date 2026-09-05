@@ -106,6 +106,46 @@ async function verifyInvalidParameters(browser, origin) {
   }
 }
 
+async function verifyFrameVisibleBeforeReady(browser, origin) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  let releaseRuntime;
+  const runtimeReleased = new Promise((resolve) => {
+    releaseRuntime = resolve;
+  });
+  await rejectExternalRequests(page, origin);
+  await page.route("**/shared/experience-runtime.js", async (route) => {
+    await runtimeReleased;
+    await route.continue();
+  });
+  await page.addInitScript(() => {
+    const nativeGetRandomValues = Crypto.prototype.getRandomValues;
+    Object.defineProperty(Crypto.prototype, "getRandomValues", {
+      configurable: true,
+      value(values) {
+        if (values instanceof Uint32Array && values.length === 1) {
+          values[0] = 0;
+          return values;
+        }
+        return nativeGetRandomValues.call(this, values);
+      },
+    });
+  });
+  try {
+    await page.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(
+      () => document.querySelector("#celebration-frame")?.src !== "",
+    );
+    assert.equal(await page.locator("#celebration-frame").isVisible(), true);
+    assert.equal(await page.locator("#loading").isVisible(), true);
+    assert.equal(await page.locator("html").getAttribute("data-state"), "loading");
+    releaseRuntime();
+    await page.waitForSelector('html[data-state="ready"]');
+  } finally {
+    releaseRuntime();
+    await page.close();
+  }
+}
+
 async function verifyExperience(browser, origin, experience, viewport) {
   const page = await browser.newPage({ viewport });
   await rejectExternalRequests(page, origin);
@@ -200,6 +240,7 @@ const browser = await chromium.launch({ headless: true });
 try {
   await verifyLocalCachePolicy(server.origin);
   await verifyReadyBeforeImages(browser, server.origin);
+  await verifyFrameVisibleBeforeReady(browser, server.origin);
   for (const [index, experience] of manifest.experiences.entries()) {
     await verifyShell(browser, server.origin, experience, index);
   }

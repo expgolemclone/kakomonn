@@ -15,7 +15,7 @@
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
 - 問題画面はtopのstatus, KPI, 同期設定, copy button, 次問buttonを表示せず, 問題iframeを画面全体へ広げます. 5分の残り時間は問題iframe上端の4px barへ重ねて表示します.
 - 通常進行のstatusは表示せず, 処理に失敗した場合だけerror内容, context, code, HTTP statusをdialogへ表示します. tokenとresponse bodyは表示しません.
-- 問題catalogは固定の`question/no`範囲を持ちません. 24時間ごとに`/createques`と`/list`から年度listを再発見し, 各listの全paginationにある実在の問題IDを1回取得します. 取得後はlist集合と各listの先頭, 末尾pageを再取得して件数と境界IDを検証してから同期します. サイトが同じ構造で新年度を追加する限り, コード変更は不要です.
+- 問題catalogは固定の`question/no`範囲を持ちません. 24時間ごとに`/createques`と`/list`から年度listを再発見し, 各listの全paginationにある実在の問題IDを1回取得します. 各pageの位置, 件数, 重複を同じ1巡内で検証して同期します. catalog更新はreader起動と読み上げを待たせず, 解答送信またはskipまでに完了させます. サイトが同じ構造で新年度を追加する限り, コード変更は不要です.
 
 ## ビルド
 
@@ -53,7 +53,7 @@ Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` mode
 
 同期tokenが未保存または認証失敗の場合だけ, 入力dialogが開きます. Win11とiPhoneへ, Worker Secretの`SYNC_TOKEN`と同じ値を入力してください. tokenは各userscript managerの専用storageへ保存され, 対象siteの`localStorage`には保存されません. 接続済みのreaderには設定buttonを表示しません.
 
-remote stateはreader sessionの開始時に取得します. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
+remote stateはreader sessionの開始時に取得します. launcherから開いた場合は`/v10/next`が返したstateを引き継ぐため, 追加の`/v10/state`は呼びません. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
 
 未解答時の`Enter`は解答を実行します. 正解と不正解のどちらでも, 正誤表示時に解答記録を同期し, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でclipboardへ自動copyします. `n`または問題時間切れによるskipではcopyしません. 同期またはcopyに失敗した場合は同じ解説pageへ留まり, error dialogの`同期を再試行`または`コピーを再試行`から再開します. 同じ操作の再送は二重加算されません. 同期とcopyの成功後, 正解時は保存responseで取得済みの次問へ自動で移動します. 不正解時の`Enter`は次問への移動を予約し, 同期またはcopyの処理中に押した場合も処理完了後に移動します. Browser forwardでも移動できます. どの遷移も追加のWorker通信は行いません. 解説時間切れでは移動しません. Browser backまたは`Shift+H`では解答済みのReader履歴を飛ばしてdashboardへ戻り, dashboardからBrowser forwardすると最新の問題へ復帰します.
 

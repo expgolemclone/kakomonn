@@ -471,7 +471,7 @@ const STATUS = { live: ['BRIGHT', 'st-live'], slew: ['ARRIVING', 'st-slew'], idl
 
 /* ---------------------------------------------------------
    Signature technique — the deep-space particle starfield
-   ~72k stars, additive Points, scroll + pointer parallax,
+   up to 72k stars, additive Points, scroll + pointer parallax,
    per-star twinkle, slow drift. Guarded dynamic import so a
    CDN miss keeps the CSS fallback. Skipped under reduced motion.
    --------------------------------------------------------- */
@@ -482,13 +482,18 @@ function webglOK() {
   } catch (e) { return false; }
 }
 
-if (!reduce && webglOK()) {
+const STARFIELD_DPR_CAP = 1.5;
+const STARFIELD_MOBILE_PARTICLE_COUNT = 21000;
+const STARFIELD_DESKTOP_PARTICLE_COUNT = 72000;
+const STARFIELD_FRAME_INTERVAL_MS = 1000 / 30;
+
+function initStarfield() {
   import('three').then(THREE => {
     const canvas = document.querySelector('.sky');
     if (!canvas) return;
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, STARFIELD_DPR_CAP));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x000000, 0);
 
@@ -496,8 +501,10 @@ if (!reduce && webglOK()) {
     const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 1, 3200);
     camera.position.set(0, 0, 700);
 
-    // geometry — ~72k stars in a deep box volume
-    const COUNT = window.innerWidth < 640 ? 42000 : 72000;
+    // geometry — mobile uses fewer stars to protect frame time
+    const COUNT = window.innerWidth < 640
+      ? STARFIELD_MOBILE_PARTICLE_COUNT
+      : STARFIELD_DESKTOP_PARTICLE_COUNT;
     const positions = new Float32Array(COUNT * 3);
     const colors = new Float32Array(COUNT * 3);
     const scales = new Float32Array(COUNT);
@@ -529,7 +536,7 @@ if (!reduce && webglOK()) {
     const uniforms = {
       uTime: { value: 0 },
       uSize: { value: 7.2 },
-      uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) },
+      uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, STARFIELD_DPR_CAP) },
     };
     const material = new THREE.ShaderMaterial({
       uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -568,8 +575,14 @@ if (!reduce && webglOK()) {
     window.addEventListener('scroll', () => { scrollY = window.scrollY; }, { passive: true });
 
     const clock = new THREE.Clock();
-    let raf = null, running = false;
-    const render = () => {
+    let raf = null, running = false, lastFrameAt = 0;
+    const render = (frameAt) => {
+      if (!running) return;
+      if (frameAt - lastFrameAt < STARFIELD_FRAME_INTERVAL_MS) {
+        raf = requestAnimationFrame(render);
+        return;
+      }
+      lastFrameAt = frameAt - ((frameAt - lastFrameAt) % STARFIELD_FRAME_INTERVAL_MS);
       const t = clock.getElapsedTime();
       uniforms.uTime.value = t;
       pointer.x = lerp(pointer.x, pointer.tx, 0.04);
@@ -583,14 +596,21 @@ if (!reduce && webglOK()) {
       renderer.render(scene, camera);
       raf = requestAnimationFrame(render);
     };
-    const start = () => { if (!running) { running = true; clock.start(); raf = requestAnimationFrame(render); } };
+    const start = () => {
+      if (!running && !document.hidden) {
+        running = true;
+        lastFrameAt = 0;
+        clock.start();
+        raf = requestAnimationFrame(render);
+      }
+    };
     const halt = () => { running = false; if (raf) cancelAnimationFrame(raf); raf = null; };
 
     const onResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
-      uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio || 1, 2);
+      uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio || 1, STARFIELD_DPR_CAP);
       renderer.setPixelRatio(uniforms.uPixelRatio.value);
     };
     window.addEventListener('resize', onResize, { passive: true });
@@ -601,3 +621,19 @@ if (!reduce && webglOK()) {
     start();
   }).catch(() => { /* CDN unavailable — CSS starfield fallback stays */ });
 }
+
+let starfieldScheduled = false;
+let starfieldStarted = false;
+function scheduleStarfield() {
+  if (starfieldScheduled || starfieldStarted || document.hidden || reduce || !webglOK()) return;
+  starfieldScheduled = true;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    starfieldScheduled = false;
+    if (document.hidden) return;
+    starfieldStarted = true;
+    document.removeEventListener('visibilitychange', scheduleStarfield);
+    initStarfield();
+  }));
+}
+document.addEventListener('visibilitychange', scheduleStarfield);
+scheduleStarfield();

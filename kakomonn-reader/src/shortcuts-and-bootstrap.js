@@ -289,11 +289,6 @@
   function clearFrameState() {
     clearShortcutSequence();
     clearTimeLimit();
-    if (loadTimer !== null) {
-      clearTimeout(loadTimer);
-      loadTimer = null;
-    }
-
     clearFrameProblemScrollTimers();
     discardAnswerCopyOperation();
     frameMutationObserver?.disconnect();
@@ -393,12 +388,8 @@
 
     synchronizeTimeLimitPhase();
     void resumePendingLearningFlow();
-
-    loadTimer = window.setTimeout(() => {
-      loadTimer = null;
-      currentPageReadPending = true;
-      processCurrentPageSpeech();
-    }, FRAME_LOAD_DELAY_MS);
+    currentPageReadPending = true;
+    processCurrentPageSpeech();
   }
 
   syncSettings.addEventListener("cancel", (event) => {

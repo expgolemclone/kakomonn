@@ -425,6 +425,12 @@ async function main() {
       await retryLauncher.page.locator("#kakomonn-reader-shell").count(),
       1,
     );
+    assert.deepEqual(
+      await retryLauncher.page.evaluate(() =>
+        window.__syncMock.calls.map((call) => new URL(call.url).pathname),
+      ),
+      ["/v10/next", "/v10/next"],
+    );
     assert.deepEqual(retryLauncher.errors, []);
     await retryLauncher.page.close();
 

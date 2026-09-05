@@ -154,8 +154,9 @@
     }
   }
 
-  function openScheduledQuestionInReader(questionURL) {
+  function openScheduledQuestionInReader(questionURL, state = null) {
     shouldLaunchNextQuestionAfterSync = false;
+    launcherSyncState = state;
     enterReaderUI();
     return navigateToScheduledQuestion(questionURL);
   }
@@ -209,7 +210,7 @@
         showNoNextQuestionLauncher();
         return;
       }
-      openScheduledQuestionInReader(result.question.url);
+      openScheduledQuestionInReader(result.question.url, result.state);
     } catch (error) {
       if (error?.code === "unauthorized") {
         requireSyncSettings("同期トークンを確認してください");

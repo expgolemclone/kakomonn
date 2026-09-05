@@ -21,6 +21,7 @@
     return (
       unansweredQuestionReady &&
       syncReady &&
+      catalogReady &&
       !syncInProgress &&
       !nextQuestionOperationInProgress &&
       !navigationInProgress &&
@@ -356,14 +357,14 @@
 
   async function resumePendingLearningFlow() {
     await completePendingAttemptNavigation();
-    if (pendingAttempt?.phase === "queued") {
-      showReaderError(
-        "attempt-sync",
-        "解答記録を同期できません",
-        "解答記録は保持されています. 通信状態を確認して再試行してください.",
-        { code: "attempt_pending" },
-        { label: "同期を再試行", run: submitPendingAttempt }
-      );
+    if (
+      pendingAttempt?.phase === "queued" &&
+      syncReady &&
+      catalogReady &&
+      !syncInProgress &&
+      !nextQuestionOperationInProgress
+    ) {
+      await submitPendingAttempt();
     }
     await processPendingAutomaticCopy();
     await maybePreparePendingDestination();
@@ -675,6 +676,14 @@
       await maybePreparePendingDestination();
       return true;
     }
+    if (!syncReady) {
+      void refreshRemoteState();
+      return false;
+    }
+    if (!catalogReady) {
+      void refreshQuestionCatalog(syncToken);
+      return false;
+    }
 
     nextQuestionOperationInProgress = true;
     const operation = pendingAttempt;
@@ -825,6 +834,10 @@
       await refreshRemoteState();
       return false;
     }
+    if (!catalogReady) {
+      await refreshQuestionCatalog(syncToken);
+      return false;
+    }
     if (pendingAttempt !== null) {
       if (pendingAttempt.phase === "queued") {
         await submitPendingAttempt();
@@ -912,6 +925,13 @@
       return;
     }
 
+    if (
+      getCurrentAnswerResult() === "unknown" &&
+      extractQuestionText() === ""
+    ) {
+      return;
+    }
+
     if (!speechSupported) {
       currentPageReadPending = false;
       showReaderError(
@@ -934,16 +954,6 @@
 
   function activateSpeechFromGesture() {
     // 自動再生が拒否された場合は,ユーザー操作内で同じ読み上げ経路を再試行します.
-    if (
-      !speechEnabled &&
-      !speechInitializationInProgress &&
-      !currentPageReadPending &&
-      loadTimer !== null
-    ) {
-      window.clearTimeout(loadTimer);
-      loadTimer = null;
-      currentPageReadPending = true;
-    }
     if (!speechEnabled && currentPageReadPending) {
       startSpeechForCurrentPage();
     }

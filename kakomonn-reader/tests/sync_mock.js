@@ -281,6 +281,7 @@ function installSyncMockInWindow({
           }
           const questionId = mock.nextQuestionId;
           respondJSON(200, {
+            state: syncState(),
             question:
               questionId === null
                 ? null
@@ -299,7 +300,25 @@ function installSyncMockInWindow({
             mock.catalogUpdatedAtMs = Date.now();
             mock.catalogQuestionCount = call.body?.questionIds?.length ?? 1;
             mock.catalogGeneration += 1;
-            respondJSON(409, { error: "catalog_conflict" });
+            respondJSON(409, {
+              error: "catalog_conflict",
+              currentGeneration: mock.catalogGeneration,
+              catalog: {
+                site: expectedSite,
+                questionCount: mock.catalogQuestionCount,
+                updatedAtMs: mock.catalogUpdatedAtMs,
+                generation: mock.catalogGeneration,
+              },
+              question:
+                mock.nextQuestionId === null
+                  ? null
+                  : {
+                      questionId: mock.nextQuestionId,
+                      url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
+                      kind: "new",
+                      dueMs: null,
+                    },
+            });
             return;
           }
           if (
@@ -315,7 +334,28 @@ function installSyncMockInWindow({
             return;
           }
           if (call.body.expectedGeneration !== mock.catalogGeneration) {
-            respondJSON(409, { error: "catalog_conflict" });
+            respondJSON(409, {
+              error: "catalog_conflict",
+              currentGeneration: mock.catalogGeneration,
+              catalog:
+                mock.catalogQuestionCount === null
+                  ? null
+                  : {
+                      site: expectedSite,
+                      questionCount: mock.catalogQuestionCount,
+                      updatedAtMs: mock.catalogUpdatedAtMs,
+                      generation: mock.catalogGeneration,
+                    },
+              question:
+                mock.catalogQuestionCount === null || mock.nextQuestionId === null
+                  ? null
+                  : {
+                      questionId: mock.nextQuestionId,
+                      url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
+                      kind: "new",
+                      dueMs: null,
+                    },
+            });
             return;
           }
           mock.catalogUpdatedAtMs = Date.now();
@@ -326,6 +366,15 @@ function installSyncMockInWindow({
             questionCount: call.body.questionIds.length,
             updatedAtMs: mock.catalogUpdatedAtMs,
             generation: mock.catalogGeneration,
+            question:
+              mock.nextQuestionId === null
+                ? null
+                : {
+                    questionId: mock.nextQuestionId,
+                    url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
+                    kind: "new",
+                    dueMs: null,
+                  },
           });
           return;
         }

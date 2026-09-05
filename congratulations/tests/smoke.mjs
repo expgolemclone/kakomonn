@@ -84,6 +84,21 @@ for (const sourcePath of [
 
 const routerSource = await readFile(resolve(projectRoot, "router.js"), "utf8");
 assert.equal(routerSource.includes("entryUrl.search"), false);
+assert.ok(
+  routerSource.indexOf("frame.hidden = false") <
+    routerSource.indexOf("frame.src = entryUrl.href"),
+);
+
+const perigeeSource = await readFile(
+  resolve(projectRoot, "experiences", "perigee-astro", "main.js"),
+  "utf8",
+);
+assert.match(perigeeSource, /const STARFIELD_DPR_CAP = 1\.5;/);
+assert.match(perigeeSource, /const STARFIELD_MOBILE_PARTICLE_COUNT = 21000;/);
+assert.match(perigeeSource, /const STARFIELD_FRAME_INTERVAL_MS = 1000 \/ 30;/);
+assert.match(perigeeSource, /requestAnimationFrame\(\(\) => requestAnimationFrame\(\(\) => \{/);
+assert.match(perigeeSource, /if \(document\.hidden\) return;/);
+assert.match(perigeeSource, /!running && !document\.hidden/);
 
 async function filesBelow(directory) {
   const files = [];

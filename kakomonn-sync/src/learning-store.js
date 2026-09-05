@@ -421,15 +421,7 @@ function attemptResponse(
       resultingStabilityDays,
     },
     learningMetrics: metrics,
-    nextQuestion:
-      nextQuestion.questionId === null
-        ? null
-        : {
-            questionId: nextQuestion.questionId,
-            url: `https://${row.site}/questions/${nextQuestion.questionId}`,
-            kind: nextQuestion.kind,
-            dueMs: nextQuestion.dueMs,
-          },
+    nextQuestion: nextQuestionResponse(row.site, nextQuestion),
   };
   if (celebration !== undefined) {
     response.celebration = celebration;
@@ -437,13 +429,18 @@ function attemptResponse(
   return response;
 }
 
-function selectNextQuestion(storage, site, nowMs, excludeQuestionId) {
-  const catalog = storage.sql
-    .exec("SELECT question_count FROM catalog_metadata WHERE site = ?", site)
-    .toArray()[0];
-  if (catalog === undefined) {
-    return { error: "catalog_missing" };
-  }
+function nextQuestionResponse(site, nextQuestion) {
+  return nextQuestion.questionId === null
+    ? null
+    : {
+        questionId: nextQuestion.questionId,
+        url: `https://${site}/questions/${nextQuestion.questionId}`,
+        kind: nextQuestion.kind,
+        dueMs: nextQuestion.dueMs,
+      };
+}
+
+function selectNextQuestionFromCatalog(storage, site, nowMs, excludeQuestionId) {
   const due = storage.sql
     .exec(
       `SELECT c.question_id, c.due_ms
@@ -480,6 +477,72 @@ function selectNextQuestion(storage, site, nowMs, excludeQuestionId) {
     return { questionId: unseen.question_id, kind: "new", dueMs: null };
   }
   return { questionId: null, kind: "none", dueMs: null };
+}
+
+function selectNextQuestion(storage, site, nowMs, excludeQuestionId) {
+  const catalog = storage.sql
+    .exec("SELECT 1 FROM catalog_metadata WHERE site = ?", site)
+    .toArray()[0];
+  if (catalog === undefined) {
+    return { error: "catalog_missing" };
+  }
+  return selectNextQuestionFromCatalog(
+    storage,
+    site,
+    nowMs,
+    excludeQuestionId
+  );
+}
+
+function emptyStoredLearningMetrics(today) {
+  return {
+    stabilityDays: 0,
+    attemptedQuestionCount: 0,
+    dailyMetricsDate: today,
+    todayAttemptedQuestionCount: 0,
+    todayAttemptCount: 0,
+    todayCorrectAttemptCount: 0,
+    todayNewQuestionCount: 0,
+  };
+}
+
+function learningStateFromCatalog(storage, site, nowMs, catalog) {
+  const today = getTokyoDate(new Date(nowMs));
+  const storedMetrics =
+    catalog === undefined
+      ? emptyStoredLearningMetrics(today)
+      : readStoredLearningMetrics(storage, site);
+  return {
+    site,
+    today,
+    learningMetrics: readLearningMetrics(
+      storage,
+      site,
+      nowMs,
+      storedMetrics
+    ),
+    catalog:
+      catalog === undefined
+        ? null
+        : {
+            questionCount: catalog.question_count,
+            updatedAtMs: catalog.updated_at_ms,
+            generation: catalog.generation,
+          },
+  };
+}
+
+function catalogResultWithNextQuestion(storage, site, nowMs, catalog) {
+  return {
+    site,
+    questionCount: catalog.questionCount,
+    updatedAtMs: catalog.updatedAtMs,
+    generation: catalog.generation,
+    question: nextQuestionResponse(
+      site,
+      selectNextQuestionFromCatalog(storage, site, nowMs, null)
+    ),
+  };
 }
 
 function assertAttempt(site, questionId, operationId, result) {
@@ -676,7 +739,12 @@ export class LearningState extends DurableObject {
         metrics,
         stabilityDaysBefore,
         stabilityDaysAfter,
-        selectNextQuestion(this.ctx.storage, site, nowMs, questionId),
+        selectNextQuestionFromCatalog(
+          this.ctx.storage,
+          site,
+          nowMs,
+          questionId
+        ),
         celebration
       );
     });
@@ -687,43 +755,13 @@ export class LearningState extends DurableObject {
       throw new TypeError("invalid state request");
     }
     return this.ctx.storage.transactionSync(() => {
-      const today = getTokyoDate(new Date(nowMs));
       const catalog = this.ctx.storage.sql
         .exec(
           "SELECT question_count, updated_at_ms, generation FROM catalog_metadata WHERE site = ?",
           site
         )
         .toArray()[0];
-      const storedMetrics =
-        catalog === undefined
-          ? {
-              stabilityDays: 0,
-              attemptedQuestionCount: 0,
-              dailyMetricsDate: today,
-              todayAttemptedQuestionCount: 0,
-              todayAttemptCount: 0,
-              todayCorrectAttemptCount: 0,
-              todayNewQuestionCount: 0,
-            }
-          : readStoredLearningMetrics(this.ctx.storage, site);
-      return {
-        site,
-        today,
-        learningMetrics: readLearningMetrics(
-          this.ctx.storage,
-          site,
-          nowMs,
-          storedMetrics
-        ),
-        catalog:
-          catalog === undefined
-            ? null
-            : {
-                questionCount: catalog.question_count,
-                updatedAtMs: catalog.updated_at_ms,
-                generation: catalog.generation,
-              },
-      };
+      return learningStateFromCatalog(this.ctx.storage, site, nowMs, catalog);
     });
   }
 
@@ -838,6 +876,40 @@ export class LearningState extends DurableObject {
     );
   }
 
+  getNextState(site, nowMs = Date.now(), excludeQuestionId = null) {
+    if (
+      !isSite(site) ||
+      !Number.isSafeInteger(nowMs) ||
+      (excludeQuestionId !== null &&
+        (typeof excludeQuestionId !== "string" || !QUESTION_ID_PATTERN.test(excludeQuestionId)))
+    ) {
+      throw new TypeError("invalid next state request");
+    }
+    return this.ctx.storage.transactionSync(() => {
+      const catalog = this.ctx.storage.sql
+        .exec(
+          "SELECT question_count, updated_at_ms, generation FROM catalog_metadata WHERE site = ?",
+          site
+        )
+        .toArray()[0];
+      if (catalog === undefined) {
+        return { error: "catalog_missing" };
+      }
+      return {
+        state: learningStateFromCatalog(this.ctx.storage, site, nowMs, catalog),
+        question: nextQuestionResponse(
+          site,
+          selectNextQuestionFromCatalog(
+            this.ctx.storage,
+            site,
+            nowMs,
+            excludeQuestionId
+          )
+        ),
+      };
+    });
+  }
+
   replaceCatalog(site, questionIds, expectedGeneration, nowMs = Date.now()) {
     if (
       !isSite(site) ||
@@ -858,14 +930,38 @@ export class LearningState extends DurableObject {
       const questionIdsJSON = JSON.stringify(canonicalIds);
       const metadata = this.ctx.storage.sql
         .exec(
-          `SELECT question_count, generation, question_ids_json
+          `SELECT question_count, updated_at_ms, generation, question_ids_json
            FROM catalog_metadata WHERE site = ?`,
           site
         )
         .toArray()[0];
       const currentGeneration = metadata?.generation ?? 0;
       if (currentGeneration !== expectedGeneration) {
-        return { error: "catalog_conflict", currentGeneration };
+        return {
+          error: "catalog_conflict",
+          currentGeneration,
+          catalog:
+            metadata === undefined
+              ? null
+              : {
+                  site,
+                  questionCount: metadata.question_count,
+                  updatedAtMs: metadata.updated_at_ms,
+                  generation: metadata.generation,
+                },
+          question:
+            metadata === undefined
+              ? null
+              : nextQuestionResponse(
+                  site,
+                  selectNextQuestionFromCatalog(
+                    this.ctx.storage,
+                    site,
+                    nowMs,
+                    null
+                  )
+                ),
+        };
       }
       if (metadata?.question_ids_json === questionIdsJSON) {
         this.ctx.storage.sql.exec(
@@ -873,12 +969,11 @@ export class LearningState extends DurableObject {
           nowMs,
           site
         );
-        return {
-          site,
+        return catalogResultWithNextQuestion(this.ctx.storage, site, nowMs, {
           questionCount: metadata.question_count,
           updatedAtMs: nowMs,
           generation: currentGeneration,
-        };
+        });
       }
       const storedMetricsBefore =
         metadata === undefined
@@ -929,12 +1024,11 @@ export class LearningState extends DurableObject {
           questionIdsJSON,
           site
         );
-        return {
-          site,
+        return catalogResultWithNextQuestion(this.ctx.storage, site, nowMs, {
           questionCount: metadata.question_count,
           updatedAtMs: nowMs,
           generation: currentGeneration,
-        };
+        });
       }
       const generation = currentGeneration + 1;
       this.ctx.storage.sql.exec(
@@ -973,12 +1067,11 @@ export class LearningState extends DurableObject {
         stabilityDaysBefore,
         stabilityDaysAfter
       );
-      return {
-        site,
+      return catalogResultWithNextQuestion(this.ctx.storage, site, nowMs, {
         questionCount: canonicalIds.length,
         updatedAtMs: nowMs,
         generation,
-      };
+      });
     });
   }
 

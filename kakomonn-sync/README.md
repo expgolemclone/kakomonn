@@ -73,8 +73,8 @@ APIは`/v10`だけを提供し, LearningState Durable Objectを唯一のsource o
 - `GET /v10/history?site=<host>&days=<1-31>`は, 日本時間の日別historyを返します.
 - `GET /v10/daily-details?site=<host>&date=<YYYY-MM-DD>`は, 指定した日本時間の日付に対応する`stability_history`と`attempts`の全raw rowを返します.
 - `POST /v10/attempts`は, `site`, `questionId`, `operationId`, `answerResult`だけを受け取り, `learningMetrics`と解答保存後の`nextQuestion`を返します. `attempt`には`answerResult`, `attemptedAtMs`, card単位の`previousCardStabilityDays`と`resultingCardStabilityDays`, 集計値の`previousStabilityDays`と`resultingStabilityDays`を含めます. 同じ操作の再送は重複記録せず, 異なるpayloadで同じ操作IDを使用した場合は拒否します.
-- `GET /v10/next`は, FSRSに基づく次の問題を返します.
-- `POST /v10/questions`は, siteの問題catalogを世代番号付きで置き換えます.
+- `GET /v10/next`は, FSRSに基づく次の問題と同時点の`state`を1回のDurable Object RPCで返します.
+- `POST /v10/questions`は, siteの問題catalogを世代番号付きで置き換え, 更新後の次の問題を返します. 世代競合時は現在のcatalogと次の問題を返します.
 - `POST /v10/speech-token`は, 有効期間600秒のAzure Speech tokenを返します.
 
 ### learningMetrics contract

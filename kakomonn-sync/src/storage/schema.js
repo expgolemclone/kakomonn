@@ -3,10 +3,13 @@ import { canonicalQuestionIds } from "../contracts.js";
 
 const CURRENT_SCHEMA_VERSION = 11;
 
-function tableDefinition(storage, tableName) {
-  return storage.sql
-    .exec("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", tableName)
-    .toArray()[0]?.sql;
+function tableNames(storage) {
+  return new Set(
+    storage.sql
+      .exec("SELECT name FROM sqlite_master WHERE type = 'table'")
+      .toArray()
+      .map((row) => row.name)
+  );
 }
 
 function createCurrentTables(storage) {
@@ -622,8 +625,6 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     throw new TypeError("invalid schema initialization time");
   }
   storage.transactionSync(() => {
-    const today = getTokyoDate(new Date(nowMs));
-    const { startMs, endMs } = tokyoDateRangeMs(today);
     const versionedCoreTables = [
       "attempts",
       "cards",
@@ -667,8 +668,8 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       "mastery_history",
       "questions",
     ];
-    const hasSchemaMetadata =
-      tableDefinition(storage, "schema_metadata") !== undefined;
+    const existingTables = tableNames(storage);
+    const hasSchemaMetadata = existingTables.has("schema_metadata");
     let version;
     if (hasSchemaMetadata) {
       version = storage.sql
@@ -678,7 +679,7 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       if (requiredTables === undefined) {
         throw new Error("unsupported LearningState schema version");
       }
-      if (requiredTables.some((name) => tableDefinition(storage, name) === undefined)) {
+      if (requiredTables.some((name) => !existingTables.has(name))) {
         throw new Error("incomplete LearningState schema");
       }
       if (version === CURRENT_SCHEMA_VERSION) {
@@ -686,20 +687,26 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       }
     } else {
       const existingSchemaV3 = schemaV3Tables.filter(
-        (name) => tableDefinition(storage, name) !== undefined
+        (name) => existingTables.has(name)
       );
       const existingLegacy = legacyTables.filter(
-        (name) => tableDefinition(storage, name) !== undefined
+        (name) => existingTables.has(name)
       );
       if (existingSchemaV3.length === 0 && existingLegacy.length === 0) {
         createCurrentTables(storage);
         version = CURRENT_SCHEMA_VERSION;
       } else if (existingLegacy.length === legacyTables.length) {
-        migrateLegacySchema(storage, today);
-        version = 8;
+        version = "legacy";
       } else {
         throw new Error("incomplete LearningState schema");
       }
+    }
+
+    const today = getTokyoDate(new Date(nowMs));
+    const { startMs, endMs } = tokyoDateRangeMs(today);
+    if (version === "legacy") {
+      migrateLegacySchema(storage, today);
+      version = 8;
     }
 
     if (version === 2) {
@@ -741,7 +748,8 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error("unsupported LearningState schema version");
     }
-    if (currentTables.some((name) => tableDefinition(storage, name) === undefined)) {
+    const migratedTables = tableNames(storage);
+    if (currentTables.some((name) => !migratedTables.has(name))) {
       throw new Error("incomplete LearningState schema");
     }
     installIndexes(storage);

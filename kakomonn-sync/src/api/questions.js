@@ -36,7 +36,7 @@ export async function handleQuestions(request, env) {
     body.expectedGeneration
   );
   if (result?.error === "catalog_conflict") {
-    return errorResponse("catalog_conflict", 409);
+    return jsonResponse(result, 409);
   }
   return jsonResponse(result);
 }

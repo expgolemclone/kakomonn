@@ -22,7 +22,7 @@ export async function handleNext(url, env) {
   ) {
     return errorResponse("invalid_request", 400);
   }
-  const next = await getLearningStateStub(env).nextQuestion(
+  const next = await getLearningStateStub(env).getNextState(
     site,
     Date.now(),
     excludeQuestionId
@@ -30,15 +30,5 @@ export async function handleNext(url, env) {
   if (next?.error === "catalog_missing") {
     return errorResponse("catalog_missing", 409);
   }
-  return jsonResponse({
-    question:
-      next.questionId === null
-        ? null
-        : {
-            questionId: next.questionId,
-            url: `https://${site}/questions/${next.questionId}`,
-            kind: next.kind,
-            dueMs: next.dueMs,
-          },
-  });
+  return jsonResponse(next);
 }

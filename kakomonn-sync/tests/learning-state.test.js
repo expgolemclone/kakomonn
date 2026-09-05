@@ -217,6 +217,40 @@ async function seedTodayNewQuestionCount(
 beforeEach(reset);
 
 describe("LearningState schema", () => {
+  it("checks the current schema with two SQL statements", () => {
+    const statements = [];
+    const currentTables = [
+      "attempts",
+      "cards",
+      "catalog_metadata",
+      "questions",
+      "schema_metadata",
+      "stability_history",
+      "daily_kpi_achievements",
+      "learning_metrics",
+    ];
+    const storage = {
+      transactionSync(callback) {
+        return callback();
+      },
+      sql: {
+        exec(statement) {
+          statements.push(statement);
+          const rows = statement.includes("sqlite_master")
+            ? currentTables.map((name) => ({ name }))
+            : [{ version: 11 }];
+          return { toArray: () => rows };
+        },
+      },
+    };
+
+    initializeLearningSchema(storage, NOW);
+
+    expect(statements).toHaveLength(2);
+    expect(statements[0]).toContain("sqlite_master");
+    expect(statements[1]).toContain("SELECT version");
+  });
+
   it("returns immediately for the current schema version", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       initializeLearningSchema(state.storage, NOW);
@@ -898,6 +932,12 @@ describe("learning metrics", () => {
       questionCount: 4,
       updatedAtMs: NOW + 1000,
       generation: 1,
+      question: {
+        questionId: "1",
+        url: `https://${SITE}/questions/1`,
+        kind: "new",
+        dueMs: null,
+      },
     });
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual(
@@ -926,6 +966,12 @@ describe("learning metrics", () => {
       questionCount: 10_000,
       updatedAtMs: NOW + 1000,
       generation: 2,
+      question: {
+        questionId: "1",
+        url: `https://${SITE}/questions/1`,
+        kind: "new",
+        dueMs: null,
+      },
     });
 
     await runInRawDurableObject(stub(), (_instance, state) => {
@@ -948,6 +994,12 @@ describe("learning metrics", () => {
       questionCount: 10_000,
       updatedAtMs: NOW + 1500,
       generation: 2,
+      question: {
+        questionId: "1",
+        url: `https://${SITE}/questions/1`,
+        kind: "new",
+        dueMs: null,
+      },
     });
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual(
@@ -970,6 +1022,12 @@ describe("learning metrics", () => {
       questionCount: 10_000,
       updatedAtMs: NOW + 2000,
       generation: 3,
+      question: {
+        questionId: "5001",
+        url: `https://${SITE}/questions/5001`,
+        kind: "new",
+        dueMs: null,
+      },
     });
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(
@@ -2014,14 +2072,23 @@ describe("v10 HTTP contract", () => {
     const next = await SELF.fetch(`https://example.test/v10/next?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
-    await expect(next.json()).resolves.toEqual({
+    const nextBody = await next.json();
+    expect(nextBody).toMatchObject({
       question: {
         questionId: "44614",
         url: `https://${SITE}/questions/44614`,
         kind: "new",
         dueMs: null,
       },
+      state: {
+        site: SITE,
+        catalog: {
+          questionCount: 2,
+          generation: 2,
+        },
+      },
     });
+    expect(nextBody.state.learningMetrics.newQuestionGoal).toBe(100);
 
     const conflict = await SELF.fetch("https://example.test/v10/questions", {
       method: "POST",
@@ -2033,7 +2100,21 @@ describe("v10 HTTP contract", () => {
       }),
     });
     expect(conflict.status).toBe(409);
-    await expect(conflict.json()).resolves.toEqual({ error: "catalog_conflict" });
+    await expect(conflict.json()).resolves.toMatchObject({
+      error: "catalog_conflict",
+      currentGeneration: 2,
+      catalog: {
+        site: SITE,
+        questionCount: 2,
+        generation: 2,
+      },
+      question: {
+        questionId: "44614",
+        url: `https://${SITE}/questions/44614`,
+        kind: "new",
+        dueMs: null,
+      },
+    });
 
     for (const body of [
       { site: SITE, questionIds: [], expectedGeneration: 2 },

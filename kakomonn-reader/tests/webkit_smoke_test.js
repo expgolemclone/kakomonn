@@ -442,7 +442,7 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
         await page.waitForFunction(
           () =>
             window.__syncMock.calls.some(
-              (call) => new URL(call.url).pathname === "/v10/state",
+              (call) => new URL(call.url).pathname === "/v11/state",
             ),
         );
         await page.waitForFunction(
@@ -515,7 +515,7 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v10/attempts",
+              new URL(call.url).pathname === "/v11/attempts",
           ),
         );
         assert.equal(attemptCalls.length, 1);
@@ -617,7 +617,7 @@ async function main() {
           {
             authorization: "Bearer test-sync-token",
             method: "GET",
-            url: `${SYNC_API_ORIGIN}/v10/next?site=chushoks.kakomonn.com`,
+            url: `${SYNC_API_ORIGIN}/v11/next?site=chushoks.kakomonn.com`,
           },
         ],
       );
@@ -660,7 +660,7 @@ async function main() {
       await retryLauncher.page.evaluate(() =>
         window.__syncMock.calls.map((call) => new URL(call.url).pathname),
       ),
-      ["/v10/next", "/v10/next"],
+      ["/v11/next", "/v11/next"],
     );
     assert.deepEqual(retryLauncher.errors, []);
     await retryLauncher.page.close();
@@ -881,7 +881,7 @@ async function main() {
       });
     }, fixtureBody);
     await page.waitForFunction(
-      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v10/state"),
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/state"),
     );
     await page.waitForTimeout(1_000);
     await page.evaluate(() => {
@@ -1064,7 +1064,7 @@ async function main() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v10/attempts",
+              new URL(call.url).pathname === "/v11/attempts",
           ).length,
       ),
       1,
@@ -1114,7 +1114,7 @@ async function main() {
       document.body.innerHTML = html;
     }, fixtureBody);
     await correctPage.waitForFunction(
-      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v10/state"),
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/state"),
     );
     await correctPage.waitForTimeout(1_000);
     await correctPage.evaluate(() => {

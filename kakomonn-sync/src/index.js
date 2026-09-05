@@ -14,7 +14,7 @@ export { LearningState, issueSpeechToken };
 export * from "./fsrs.js";
 export { initializeLearningSchema } from "./learning-store.js";
 
-const API_PREFIX = "/v10";
+const API_PREFIX = "/v11";
 
 export async function handleRequest(request, env, fetcher = fetch) {
   const url = new URL(request.url);

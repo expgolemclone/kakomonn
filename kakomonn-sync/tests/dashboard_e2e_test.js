@@ -66,9 +66,9 @@ function dashboardFixture(requestedSite) {
         dailyKpiCompleted: requestedSite === site,
         dueCardsCompleted: false,
         dueCardsRemaining: requestedSite === site ? 5 : 12,
-        todayNewQuestionCount: requestedSite === site ? 100 : 30,
-        newQuestionGoal: 100,
-        newQuestionsRemaining: requestedSite === site ? 0 : 70,
+        todayNewQuestionCount: requestedSite === site ? 50 : 30,
+        newQuestionGoal: 50,
+        newQuestionsRemaining: requestedSite === site ? 0 : 20,
         todayStabilityDaysDelta: requestedSite === site ? 104 : 21,
         attemptedQuestionCount: requestedSite === site ? 640 : 100,
         todayAttemptedQuestionCount: requestedSite === site ? 28 : 4,
@@ -162,7 +162,7 @@ async function installApiMock(page) {
         if (headers.get("Authorization") !== `Bearer ${tokenValue}`) {
           return respond(401, { error: "unauthorized" });
         }
-        if (url.pathname === "/v10/dashboard") {
+        if (url.pathname === "/v11/dashboard") {
           const requestedSite = [siteValue, otherSiteValue].includes(url.searchParams.get("site"))
             ? url.searchParams.get("site")
             : siteValue;
@@ -171,7 +171,7 @@ async function installApiMock(page) {
           }
           return respond(200, dashboardBySite[requestedSite]);
         }
-        if (url.pathname === "/v10/daily-details") {
+        if (url.pathname === "/v11/daily-details") {
           const requestedSite = url.searchParams.get("site");
           const date = url.searchParams.get("date");
           if (date === window.__delayedDetailDate) {
@@ -271,9 +271,9 @@ async function assertDashboard(page) {
   assert.equal(text.includes("祝福"), false);
   assert.equal(await page.locator(".primary-kpi-card").innerText().then((value) => value.includes("解いた問題数")), false);
   const calls = await page.evaluate(() => window.__apiCalls);
-  assert.equal(calls.some((call) => !call.pathname.startsWith("/v10/")), false);
-  assert.equal(calls.filter((call) => call.pathname === "/v10/dashboard").length, 1);
-  assert.equal(calls.filter((call) => ["/v10/sites", "/v10/state", "/v10/history"].includes(call.pathname)).length, 0);
+  assert.equal(calls.some((call) => !call.pathname.startsWith("/v11/")), false);
+  assert.equal(calls.filter((call) => call.pathname === "/v11/dashboard").length, 1);
+  assert.equal(calls.filter((call) => ["/v11/sites", "/v11/state", "/v11/history"].includes(call.pathname)).length, 0);
   assert.deepEqual(errors, []);
 
   await page.locator('[data-chart-date="2026-08-10"]').click();
@@ -311,7 +311,7 @@ async function assertDashboard(page) {
   await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+21");
   assert.equal(await page.locator("#daily-kpi-completed").innerText(), "未達成");
   assert.equal(await page.locator("#due-cards-remaining").innerText(), "12");
-  assert.equal(await page.locator("#new-questions-remaining").innerText(), "70");
+  assert.equal(await page.locator("#new-questions-remaining").innerText(), "20");
   assert.equal(await page.locator("#today-correct-rate-percent").innerText(), "--");
   assert.equal(await page.locator("#today-correct-rate-percent-unit").isHidden(), true);
   await page.locator("#site-select").selectOption(site);
@@ -335,7 +335,7 @@ async function assertDashboard(page) {
   await page.locator("#refresh-button").click();
   await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "更新日 2026-08-10");
   const finalCalls = await page.evaluate(() => window.__apiCalls);
-  const finalDashboardCall = finalCalls.filter((call) => call.pathname === "/v10/dashboard").at(-1);
+  const finalDashboardCall = finalCalls.filter((call) => call.pathname === "/v11/dashboard").at(-1);
   assert.equal(finalDashboardCall.authorization, `Bearer ${token}`);
 }
 
@@ -365,7 +365,7 @@ async function assertOpenBridge(browser) {
       await route.fulfill({ body: stylesSource, contentType: "text/css; charset=utf-8" });
       return;
     }
-    if (url.pathname === "/v10/dashboard") {
+    if (url.pathname === "/v11/dashboard") {
       dashboardRequestCount += 1;
       await route.fulfill({
         body: JSON.stringify(dashboardFixture(site)),

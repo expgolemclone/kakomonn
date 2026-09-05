@@ -1056,7 +1056,7 @@ describe("learning metrics", () => {
     });
   });
 
-  it("returns the v10 attempt contract for correct and incorrect answers", async () => {
+  it("returns the v11 attempt contract for correct and incorrect answers", async () => {
     const correct = await stub().recordAttempt(
       SITE,
       "1",
@@ -1471,8 +1471,17 @@ describe("attempt idempotency and attempted question totals", () => {
 });
 
 describe("daily KPI celebrations", () => {
-  it("counts the first answer regardless of correctness and celebrates question 100", async () => {
-    await seedTodayNewQuestionCount(99);
+  it("counts the first answer regardless of correctness and celebrates question 50", async () => {
+    await seedTodayNewQuestionCount(49);
+
+    await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
+      learningMetrics: {
+        dailyKpiCompleted: false,
+        todayNewQuestionCount: 49,
+        newQuestionGoal: 50,
+        newQuestionsRemaining: 1,
+      },
+    });
 
     const result = await stub().recordAttempt(
       SITE,
@@ -1486,8 +1495,8 @@ describe("daily KPI celebrations", () => {
       dailyKpiCompleted: true,
       dueCardsCompleted: true,
       dueCardsRemaining: 0,
-      todayNewQuestionCount: 100,
-      newQuestionGoal: 100,
+      todayNewQuestionCount: 50,
+      newQuestionGoal: 50,
       newQuestionsRemaining: 0,
     });
     expect(result.celebration).toEqual({
@@ -1503,13 +1512,13 @@ describe("daily KPI celebrations", () => {
       "correct",
       NOW + 1
     );
-    expect(repeated.learningMetrics.todayNewQuestionCount).toBe(100);
+    expect(repeated.learningMetrics.todayNewQuestionCount).toBe(50);
     expect(repeated).not.toHaveProperty("celebration");
   });
 
   it("isolates the daily new-question goal by site", async () => {
     await stub().replaceCatalog(OTHER_SITE, ["1"], 0, NOW);
-    await seedTodayNewQuestionCount(99, "2026-08-10", OTHER_SITE);
+    await seedTodayNewQuestionCount(49, "2026-08-10", OTHER_SITE);
 
     const otherResult = await stub().recordAttempt(
       OTHER_SITE,
@@ -1524,13 +1533,13 @@ describe("daily KPI celebrations", () => {
       learningMetrics: {
         dailyKpiCompleted: false,
         todayNewQuestionCount: 0,
-        newQuestionsRemaining: 100,
+        newQuestionsRemaining: 50,
       },
     });
   });
 
   it("does not celebrate when the daily KPI was already complete", async () => {
-    await seedTodayNewQuestionCount(100);
+    await seedTodayNewQuestionCount(50);
 
     const result = await stub().recordAttempt(
       SITE,
@@ -1540,7 +1549,12 @@ describe("daily KPI celebrations", () => {
       NOW
     );
 
-    expect(result.learningMetrics.dailyKpiCompleted).toBe(true);
+    expect(result.learningMetrics).toMatchObject({
+      dailyKpiCompleted: true,
+      todayNewQuestionCount: 51,
+      newQuestionGoal: 50,
+      newQuestionsRemaining: 0,
+    });
     expect(result).not.toHaveProperty("celebration");
   });
 
@@ -1584,7 +1598,7 @@ describe("daily KPI celebrations", () => {
   });
 
   it("returns one celebration when the final due card is answered", async () => {
-    await seedTodayNewQuestionCount(100);
+    await seedTodayNewQuestionCount(50);
     await seedReviewCard("1", 30);
     await seedReviewCard("2", 30);
     const partial = await stub().recordAttempt(
@@ -1596,6 +1610,7 @@ describe("daily KPI celebrations", () => {
     );
     expect(partial.learningMetrics.dueCardsCompleted).toBe(false);
     expect(partial.learningMetrics.dueCardsRemaining).toBe(1);
+    expect(partial.learningMetrics.dailyKpiCompleted).toBe(false);
     expect(partial).not.toHaveProperty("celebration");
 
     const first = await stub().recordAttempt(
@@ -1639,7 +1654,7 @@ describe("daily KPI celebrations", () => {
   });
 
   it("does not celebrate a second completion on the same site and Tokyo date", async () => {
-    await seedTodayNewQuestionCount(100);
+    await seedTodayNewQuestionCount(50);
     await seedReviewCard("1", 30);
     const first = await stub().recordAttempt(
       SITE,
@@ -1672,7 +1687,7 @@ describe("daily KPI celebrations", () => {
   });
 
   it("allows another celebration on the next Tokyo date", async () => {
-    await seedTodayNewQuestionCount(100);
+    await seedTodayNewQuestionCount(50);
     await seedReviewCard("1", 30);
     const first = await stub().recordAttempt(
       SITE,
@@ -1682,7 +1697,7 @@ describe("daily KPI celebrations", () => {
       NOW
     );
     await seedReviewCard("2", 30, NOW + DAY_MS);
-    await seedTodayNewQuestionCount(100, "2026-08-11");
+    await seedTodayNewQuestionCount(50, "2026-08-11");
     const nextDay = await stub().recordAttempt(
       SITE,
       "2",
@@ -1905,9 +1920,9 @@ describe("daily raw details", () => {
   });
 });
 
-describe("v10 HTTP contract", () => {
+describe("v11 HTTP contract", () => {
   it("does not expose older API versions", async () => {
-    for (const version of ["v3", "v4", "v5", "v6", "v7", "v8", "v9"]) {
+    for (const version of ["v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"]) {
       const response = await SELF.fetch(
         `https://example.test/${version}/state?site=${SITE}`,
         { headers: AUTHORIZATION }
@@ -1918,8 +1933,8 @@ describe("v10 HTTP contract", () => {
 
   it("requires the configured bearer token", async () => {
     for (const url of [
-      "https://example.test/v10/sites",
-      `https://example.test/v10/daily-details?site=${SITE}&date=2026-08-10`,
+      "https://example.test/v11/sites",
+      `https://example.test/v11/daily-details?site=${SITE}&date=2026-08-10`,
     ]) {
       const missing = await SELF.fetch(url);
       const incorrect = await SELF.fetch(url, {
@@ -1931,12 +1946,12 @@ describe("v10 HTTP contract", () => {
   });
 
   it("lists sites and returns state and history", async () => {
-    const sites = await SELF.fetch("https://example.test/v10/sites", {
+    const sites = await SELF.fetch("https://example.test/v11/sites", {
       headers: AUTHORIZATION,
     });
     await expect(sites.json()).resolves.toEqual({ sites: [SITE] });
 
-    const state = await SELF.fetch(`https://example.test/v10/state?site=${SITE}`, {
+    const state = await SELF.fetch(`https://example.test/v11/state?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(state.status).toBe(200);
@@ -1955,8 +1970,8 @@ describe("v10 HTTP contract", () => {
         dueCardsCompleted: true,
         dueCardsRemaining: 0,
         todayNewQuestionCount: 0,
-        newQuestionGoal: 100,
-        newQuestionsRemaining: 100,
+        newQuestionGoal: 50,
+        newQuestionsRemaining: 50,
         todayStabilityDaysDelta: 0,
         attemptedQuestionCount: 0,
         todayAttemptedQuestionCount: 0,
@@ -1967,7 +1982,7 @@ describe("v10 HTTP contract", () => {
     expect(stateBody.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
     const history = await SELF.fetch(
-      `https://example.test/v10/history?site=${SITE}&days=7`,
+      `https://example.test/v11/history?site=${SITE}&days=7`,
       { headers: AUTHORIZATION }
     );
     expect(history.status).toBe(200);
@@ -1983,7 +1998,7 @@ describe("v10 HTTP contract", () => {
     });
 
     const details = await SELF.fetch(
-      `https://example.test/v10/daily-details?site=${SITE}&date=2026-08-10`,
+      `https://example.test/v11/daily-details?site=${SITE}&date=2026-08-10`,
       { headers: AUTHORIZATION }
     );
     expect(details.status).toBe(200);
@@ -1997,7 +2012,7 @@ describe("v10 HTTP contract", () => {
 
   it("returns all dashboard reads through one endpoint", async () => {
     const response = await SELF.fetch(
-      `https://example.test/v10/dashboard?site=${SITE}`,
+      `https://example.test/v11/dashboard?site=${SITE}`,
       { headers: AUTHORIZATION }
     );
     expect(response.status).toBe(200);
@@ -2011,7 +2026,7 @@ describe("v10 HTTP contract", () => {
     expect(dashboardBody.history.days).toHaveLength(31);
 
     const selectedDefault = await SELF.fetch(
-      "https://example.test/v10/dashboard",
+      "https://example.test/v11/dashboard",
       { headers: AUTHORIZATION }
     );
     await expect(selectedDefault.json()).resolves.toMatchObject({
@@ -2021,7 +2036,7 @@ describe("v10 HTTP contract", () => {
 
     for (const search of ["site=invalid.example", `site=${SITE}&site=${SITE}`, "extra=true"]) {
       const invalid = await SELF.fetch(
-        `https://example.test/v10/dashboard?${search}`,
+        `https://example.test/v11/dashboard?${search}`,
         { headers: AUTHORIZATION }
       );
       expect(invalid.status).toBe(400);
@@ -2030,7 +2045,7 @@ describe("v10 HTTP contract", () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec("DELETE FROM catalog_metadata");
     });
-    const empty = await SELF.fetch("https://example.test/v10/dashboard", {
+    const empty = await SELF.fetch("https://example.test/v11/dashboard", {
       headers: AUTHORIZATION,
     });
     await expect(empty.json()).resolves.toEqual({
@@ -2050,7 +2065,7 @@ describe("v10 HTTP contract", () => {
       `site=${SITE}&date=2026-08-10&extra=true`,
     ]) {
       const response = await SELF.fetch(
-        `https://example.test/v10/daily-details?${search}`,
+        `https://example.test/v11/daily-details?${search}`,
         { headers: AUTHORIZATION }
       );
       expect(response.status).toBe(400);
@@ -2058,7 +2073,7 @@ describe("v10 HTTP contract", () => {
   });
 
   it("replaces the catalog and serves the canonical next URL", async () => {
-    const replace = await SELF.fetch("https://example.test/v10/questions", {
+    const replace = await SELF.fetch("https://example.test/v11/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2069,7 +2084,7 @@ describe("v10 HTTP contract", () => {
     });
     expect(replace.status).toBe(200);
 
-    const next = await SELF.fetch(`https://example.test/v10/next?site=${SITE}`, {
+    const next = await SELF.fetch(`https://example.test/v11/next?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     const nextBody = await next.json();
@@ -2088,9 +2103,9 @@ describe("v10 HTTP contract", () => {
         },
       },
     });
-    expect(nextBody.state.learningMetrics.newQuestionGoal).toBe(100);
+    expect(nextBody.state.learningMetrics.newQuestionGoal).toBe(50);
 
-    const conflict = await SELF.fetch("https://example.test/v10/questions", {
+    const conflict = await SELF.fetch("https://example.test/v11/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2122,7 +2137,7 @@ describe("v10 HTTP contract", () => {
       { site: SITE, questionIds: ["1"], expectedGeneration: -1 },
       { site: SITE, questionIds: ["1"] },
     ]) {
-      const invalid = await SELF.fetch("https://example.test/v10/questions", {
+      const invalid = await SELF.fetch("https://example.test/v11/questions", {
         method: "POST",
         headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -2132,7 +2147,7 @@ describe("v10 HTTP contract", () => {
   });
 
   it("rejects unknown questions and non-canonical attempt fields", async () => {
-    const unknown = await SELF.fetch("https://example.test/v10/attempts", {
+    const unknown = await SELF.fetch("https://example.test/v11/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2145,7 +2160,7 @@ describe("v10 HTTP contract", () => {
     expect(unknown.status).toBe(409);
     await expect(unknown.json()).resolves.toEqual({ error: "unknown_question" });
 
-    const extra = await SELF.fetch("https://example.test/v10/attempts", {
+    const extra = await SELF.fetch("https://example.test/v11/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2158,7 +2173,7 @@ describe("v10 HTTP contract", () => {
     });
     expect(extra.status).toBe(400);
 
-    const legacyKey = await SELF.fetch("https://example.test/v10/attempts", {
+    const legacyKey = await SELF.fetch("https://example.test/v11/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2171,8 +2186,8 @@ describe("v10 HTTP contract", () => {
     expect(legacyKey.status).toBe(400);
   });
 
-  it("returns the exact v10 attempt contract", async () => {
-    const response = await SELF.fetch("https://example.test/v10/attempts", {
+  it("returns the exact v11 attempt contract", async () => {
+    const response = await SELF.fetch("https://example.test/v11/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2199,8 +2214,8 @@ describe("v10 HTTP contract", () => {
         dueCardsCompleted: true,
         dueCardsRemaining: 0,
         todayNewQuestionCount: 1,
-        newQuestionGoal: 100,
-        newQuestionsRemaining: 99,
+        newQuestionGoal: 50,
+        newQuestionsRemaining: 49,
         todayStabilityDaysDelta: expect.any(Number),
         attemptedQuestionCount: 1,
         todayAttemptedQuestionCount: 1,
@@ -2217,7 +2232,7 @@ describe("v10 HTTP contract", () => {
 
   it("returns and replays the exact primary KPI celebration contract", async () => {
     await seedReviewCard("1", 30);
-    await seedTodayNewQuestionCount(100, getTokyoDate(new Date()));
+    await seedTodayNewQuestionCount(50, getTokyoDate(new Date()));
 
     const body = {
       site: SITE,
@@ -2225,7 +2240,7 @@ describe("v10 HTTP contract", () => {
       operationId: operationId(22),
       answerResult: "correct",
     };
-    const response = await SELF.fetch("https://example.test/v10/attempts", {
+    const response = await SELF.fetch("https://example.test/v11/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -2243,7 +2258,7 @@ describe("v10 HTTP contract", () => {
       dailyKpiCompleted: true,
     });
 
-    const retry = await SELF.fetch("https://example.test/v10/attempts", {
+    const retry = await SELF.fetch("https://example.test/v11/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -2260,7 +2275,7 @@ describe("v10 HTTP contract", () => {
       state.storage.sql.exec("DELETE FROM catalog_metadata WHERE site = ?", SITE);
     });
     const response = await SELF.fetch(
-      `https://example.test/v10/next?site=${SITE}`,
+      `https://example.test/v11/next?site=${SITE}`,
       { headers: AUTHORIZATION }
     );
     expect(response.status).toBe(409);

@@ -103,18 +103,18 @@ test("production /open serves the repository dashboard bridge", async () => {
   assert.equal(sha256(actual), sha256(expected));
 });
 
-test("production serves only the authenticated v10 API backed by LearningState", async () => {
-  const unauthorized = await fetch(new URL("/v10/sites", productionOrigin));
+test("production serves only the authenticated v11 API backed by LearningState", async () => {
+  const unauthorized = await fetch(new URL("/v11/sites", productionOrigin));
   assert.equal(unauthorized.status, 401);
   assert.equal(unauthorized.headers.get("cache-control"), "no-store");
   assert.deepEqual(await unauthorized.json(), { error: "unauthorized" });
 
-  for (const version of ["v3", "v4", "v5", "v6", "v7", "v8", "v9"]) {
+  for (const version of ["v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"]) {
     const removed = await authorizedGet(`/${version}/sites`);
     assert.equal(removed.status, 404, `/${version}/sites must be removed`);
   }
 
-  const sitesResponse = await authorizedGet("/v10/sites");
+  const sitesResponse = await authorizedGet("/v11/sites");
   assert.equal(sitesResponse.status, 200);
   const sitesBody = await sitesResponse.json();
   assert.equal(Array.isArray(sitesBody.sites), true);
@@ -126,7 +126,7 @@ test("production serves only the authenticated v10 API backed by LearningState",
 
   const site = sitesBody.sites[0];
   const dashboardResponse = await authorizedGet(
-    `/v10/dashboard?${new URLSearchParams({ site })}`,
+    `/v11/dashboard?${new URLSearchParams({ site })}`,
   );
   assert.equal(dashboardResponse.status, 200);
   const dashboardBody = await dashboardResponse.json();
@@ -142,7 +142,7 @@ test("production serves only the authenticated v10 API backed by LearningState",
   assert.equal(dashboardBody.history.site, site);
   assert.equal(dashboardBody.history.days.length, 31);
 
-  const stateResponse = await authorizedGet(`/v10/state?${new URLSearchParams({ site })}`);
+  const stateResponse = await authorizedGet(`/v11/state?${new URLSearchParams({ site })}`);
   assert.equal(stateResponse.status, 200);
   const stateBody = await stateResponse.json();
   assert.deepEqual(Object.keys(stateBody).sort(), [
@@ -175,7 +175,7 @@ test("production serves only the authenticated v10 API backed by LearningState",
   assert.equal(metrics.dueCardsCompleted, metrics.dueCardsRemaining === 0);
   assert.equal(Number.isSafeInteger(metrics.todayNewQuestionCount), true);
   assert.equal(metrics.todayNewQuestionCount >= 0, true);
-  assert.equal(metrics.newQuestionGoal, 100);
+  assert.equal(metrics.newQuestionGoal, 50);
   assert.equal(
     metrics.newQuestionsRemaining,
     Math.max(0, metrics.newQuestionGoal - metrics.todayNewQuestionCount),
@@ -203,7 +203,7 @@ test("production serves only the authenticated v10 API backed by LearningState",
   );
 
   const historyResponse = await authorizedGet(
-    `/v10/history?${new URLSearchParams({ site, days: "7" })}`,
+    `/v11/history?${new URLSearchParams({ site, days: "7" })}`,
   );
   assert.equal(historyResponse.status, 200);
   const historyBody = await historyResponse.json();
@@ -229,7 +229,7 @@ test("production serves only the authenticated v10 API backed by LearningState",
   );
 
   const detailsResponse = await authorizedGet(
-    `/v10/daily-details?${new URLSearchParams({ site, date: historyBody.today })}`,
+    `/v11/daily-details?${new URLSearchParams({ site, date: historyBody.today })}`,
   );
   assert.equal(detailsResponse.status, 200);
   const detailsBody = await detailsResponse.json();
@@ -269,12 +269,12 @@ test("production serves only the authenticated v10 API backed by LearningState",
 });
 
 test("production issues Azure speech tokens with the configured key", async () => {
-  const unauthorized = await fetch(new URL("/v10/speech-token", productionOrigin), {
+  const unauthorized = await fetch(new URL("/v11/speech-token", productionOrigin), {
     method: "POST",
   });
   assert.equal(unauthorized.status, 401);
 
-  const response = await fetch(new URL("/v10/speech-token", productionOrigin), {
+  const response = await fetch(new URL("/v11/speech-token", productionOrigin), {
     method: "POST",
     headers: { Authorization: `Bearer ${syncToken()}` },
   });

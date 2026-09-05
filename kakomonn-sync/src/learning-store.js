@@ -21,7 +21,7 @@ import { initializeLearningSchema } from "./storage/schema.js";
 export { initializeLearningSchema } from "./storage/schema.js";
 
 export const LEARNING_STATE_OBJECT_NAME = "primary";
-export const NEW_QUESTION_GOAL = 100;
+export const NEW_QUESTION_GOAL = 50;
 export { OPERATION_ID_PATTERN, QUESTION_ID_PATTERN } from "./contracts.js";
 
 function rowToCard(row) {

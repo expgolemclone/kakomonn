@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         過去問reader＋連続自動読み上げ
 // @namespace    local.kakomonn.reader
-// @version      2.2.3
+// @version      2.2.4
 // @description  問題文と解説の読み上げ, 解答後の自動Markdown copy, 学習記録の端末間同期とdaily KPI達成時の祝福を提供します.
 // @updateURL    https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
 // @downloadURL  https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js
@@ -56,7 +56,7 @@
   const SYNC_API_URL =
     "https://kakomonn-sync.kakomonn.workers.dev";
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
-  const LAUNCH_HANDOFF_KEY = "kakomonn-reader.v10.launch-handoff";
+  const LAUNCH_HANDOFF_KEY = "kakomonn-reader.v11.launch-handoff";
   const LAUNCH_HANDOFF_MAX_AGE_MS = 60000;
   const SYNC_TIMEOUT_MS = 15000;
   const isReaderBridge =
@@ -200,7 +200,7 @@
       const parameters = new URLSearchParams({ site: NEXT_QUESTION_SITE_ID });
       const result = await requestSyncResponse(
         "GET",
-        `/v10/next?${parameters}`,
+        `/v11/next?${parameters}`,
         token,
         isReaderBridgeNextResponse
       );

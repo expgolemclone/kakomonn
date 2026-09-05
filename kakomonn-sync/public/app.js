@@ -55,7 +55,7 @@ function validCorrectRatePercent(value) {
   return value === null || (Number.isSafeInteger(value) && value >= 0 && value <= 100);
 }
 function validLearningMetrics(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value) && Number.isSafeInteger(value.stabilityDays) && value.stabilityDays >= 0 && typeof value.dailyKpiCompleted === "boolean" && typeof value.dueCardsCompleted === "boolean" && Number.isSafeInteger(value.dueCardsRemaining) && value.dueCardsRemaining >= 0 && value.dueCardsCompleted === (value.dueCardsRemaining === 0) && Number.isSafeInteger(value.todayNewQuestionCount) && value.todayNewQuestionCount >= 0 && value.newQuestionGoal === 100 && Number.isSafeInteger(value.newQuestionsRemaining) && value.newQuestionsRemaining === Math.max(0, value.newQuestionGoal - value.todayNewQuestionCount) && Number.isSafeInteger(value.todayStabilityDaysDelta) && Number.isSafeInteger(value.attemptedQuestionCount) && value.attemptedQuestionCount >= 0 && Number.isSafeInteger(value.todayAttemptedQuestionCount) && value.todayAttemptedQuestionCount >= 0 && validCorrectRatePercent(value.todayCorrectRatePercent);
+  return value !== null && typeof value === "object" && !Array.isArray(value) && Number.isSafeInteger(value.stabilityDays) && value.stabilityDays >= 0 && typeof value.dailyKpiCompleted === "boolean" && typeof value.dueCardsCompleted === "boolean" && Number.isSafeInteger(value.dueCardsRemaining) && value.dueCardsRemaining >= 0 && value.dueCardsCompleted === (value.dueCardsRemaining === 0) && Number.isSafeInteger(value.todayNewQuestionCount) && value.todayNewQuestionCount >= 0 && Number.isSafeInteger(value.newQuestionGoal) && value.newQuestionGoal > 0 && Number.isSafeInteger(value.newQuestionsRemaining) && value.newQuestionsRemaining === Math.max(0, value.newQuestionGoal - value.todayNewQuestionCount) && Number.isSafeInteger(value.todayStabilityDaysDelta) && Number.isSafeInteger(value.attemptedQuestionCount) && value.attemptedQuestionCount >= 0 && Number.isSafeInteger(value.todayAttemptedQuestionCount) && value.todayAttemptedQuestionCount >= 0 && validCorrectRatePercent(value.todayCorrectRatePercent);
 }
 function validState(value, site) {
   return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && validLearningMetrics(value.learningMetrics);
@@ -354,7 +354,7 @@ async function loadDailyDetails(date, { focusChart = false } = {}) {
   if (focusChart) el.stabilityChart.querySelector(`[data-chart-date="${date}"]`)?.focus();
   let details;
   try {
-    details = await requestJSON(`/v10/daily-details?${new URLSearchParams({ site, date })}`, token);
+    details = await requestJSON(`/v11/daily-details?${new URLSearchParams({ site, date })}`, token);
     if (!validDailyDetails(details, site, date)) throw new DashboardError("invalid_response");
   } catch (error) {
     if (generation !== detailGeneration || site !== state.site || token !== state.token || date !== state.selectedDate) return false;
@@ -406,7 +406,7 @@ async function fetchDashboardData(site, token) {
   const parameters = new URLSearchParams();
   if (site !== null) parameters.set("site", site);
   const suffix = parameters.size === 0 ? "" : `?${parameters}`;
-  const data = await requestJSON(`/v10/dashboard${suffix}`, token);
+  const data = await requestJSON(`/v11/dashboard${suffix}`, token);
   if (!validDashboard(data)) throw new DashboardError("invalid_response");
   return data;
 }

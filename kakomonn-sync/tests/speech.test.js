@@ -4,11 +4,11 @@ import { issueSpeechToken } from "../src/speech.js";
 
 const AUTHORIZATION = { Authorization: "Bearer test-sync-token" };
 
-describe("v10 speech token", () => {
+describe("v11 speech token", () => {
   it("exchanges the shared secret for a short-lived Azure token", async () => {
     let upstreamCall = null;
     const response = await handleRequest(
-      new Request("https://example.test/v10/speech-token", {
+      new Request("https://example.test/v11/speech-token", {
         method: "POST",
         headers: AUTHORIZATION,
       }),
@@ -79,7 +79,7 @@ describe("v10 speech token", () => {
 
   it("requires POST for the speech token route", async () => {
     const response = await handleRequest(
-      new Request("https://example.test/v10/speech-token", {
+      new Request("https://example.test/v11/speech-token", {
         headers: AUTHORIZATION,
       }),
       { SYNC_TOKEN: "test-sync-token" }

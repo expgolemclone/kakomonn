@@ -1166,7 +1166,7 @@ async function runTest() {
           window.__syncMock.calls.filter(
             (call) =>
               call.method === "POST" &&
-              new URL(call.url).pathname === "/v10/attempts",
+              new URL(call.url).pathname === "/v11/attempts",
           ).length,
       ),
       1,

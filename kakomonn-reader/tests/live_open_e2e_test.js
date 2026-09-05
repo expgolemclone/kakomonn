@@ -27,7 +27,7 @@ const site = "chushoks.kakomonn.com";
 
 async function readLearningState(token) {
   const query = new URLSearchParams({ site });
-  const response = await fetch(`${DEFAULT_SYNC_API_ORIGIN}/v10/state?${query}`, {
+  const response = await fetch(`${DEFAULT_SYNC_API_ORIGIN}/v11/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
@@ -47,7 +47,7 @@ function nextCalendarDate(date) {
 async function readLearningActivity(token, date) {
   const query = new URLSearchParams({ date, site });
   const response = await fetch(
-    `${DEFAULT_SYNC_API_ORIGIN}/v10/daily-details?${query}`,
+    `${DEFAULT_SYNC_API_ORIGIN}/v11/daily-details?${query}`,
     {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(15_000),

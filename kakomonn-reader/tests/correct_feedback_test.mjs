@@ -27,9 +27,9 @@ test("combines due and new question work into one KPI number", async () => {
   assert.equal(
     calculateKpiQuestionsRemaining({
       dueCardsRemaining: 12,
-      newQuestionsRemaining: 99,
+      newQuestionsRemaining: 49,
     }),
-    111,
+    61,
   );
   assert.equal(
     calculateKpiQuestionsRemaining({

@@ -53,7 +53,7 @@ Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` mode
 
 同期tokenが未保存または認証失敗の場合だけ, 入力dialogが開きます. Win11とiPhoneへ, Worker Secretの`SYNC_TOKEN`と同じ値を入力してください. tokenは各userscript managerの専用storageへ保存され, 対象siteの`localStorage`には保存されません. 接続済みのreaderには設定buttonを表示しません.
 
-remote stateはreader sessionの開始時に取得します. launcherから開いた場合は`/v10/next`が返したstateを引き継ぐため, 追加の`/v10/state`は呼びません. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
+remote stateはreader sessionの開始時に取得します. launcherから開いた場合は`/v11/next`が返したstateを引き継ぐため, 追加の`/v11/state`は呼びません. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
 
 未解答時の`Enter`は解答を実行します. 正解と不正解のどちらでも, 正誤表示時に解答記録を同期し, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でclipboardへ自動copyします. `n`または問題時間切れによるskipではcopyしません. 同期またはcopyに失敗した場合は同じ解説pageへ留まり, error dialogの`同期を再試行`または`コピーを再試行`から再開します. 同じ操作の再送は二重加算されません. 同期とcopyの成功後, 正解時は保存responseで取得済みの次問へ自動で移動します. 不正解時の`Enter`は次問への移動を予約し, 同期またはcopyの処理中に押した場合も処理完了後に移動します. Browser forwardでも移動できます. どの遷移も追加のWorker通信は行いません. 解説時間切れでは移動しません. Browser backまたは`Shift+H`では解答済みのReader履歴を飛ばしてdashboardへ戻り, dashboardからBrowser forwardすると最新の問題へ復帰します.
 

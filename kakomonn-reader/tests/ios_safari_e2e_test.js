@@ -1148,6 +1148,7 @@ async function runTest() {
 
     await driver.navigateTo(nextQuestionLauncherURL);
     await driver.calibrateNativeWebTap();
+    const launcherViewport = await readNativeWebTapViewport(driver);
     await driver.execute(() => {
       window.__launcherDocumentSentinel = "same-document";
     });
@@ -1156,6 +1157,32 @@ async function runTest() {
     await waitForElement(
       driver,
       "#kakomonn-reader-sync-token",
+    );
+    // The dialog intentionally focuses the input. Restore the calibrated
+    // viewport before validating a real tap on that input.
+    await driver.waitUntil(
+      () =>
+        driver.execute(
+          () => document.activeElement?.id === "kakomonn-reader-sync-token",
+        ),
+      {
+        interval: 100,
+        timeout: 10_000,
+        timeoutMsg: "The sync token input did not receive initial focus",
+      },
+    );
+    await driver.execute(() => document.activeElement.blur());
+    await driver.waitUntil(
+      () =>
+        readNativeWebTapViewport(driver).then(
+          (viewport) =>
+            JSON.stringify(viewport) === JSON.stringify(launcherViewport),
+        ),
+      {
+        interval: 250,
+        timeout: 10_000,
+        timeoutMsg: "Safari did not restore the calibrated launcher viewport",
+      },
     );
     const syncSettingsLayout = await driver.execute(() => {
       const settings = document.querySelector(

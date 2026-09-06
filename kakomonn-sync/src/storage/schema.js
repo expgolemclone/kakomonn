@@ -604,13 +604,35 @@ function migrateLegacySchema(storage, today) {
   }
 }
 
-function installIndexes(storage) {
-  storage.sql.exec("DROP INDEX IF EXISTS attempts_by_site");
-  storage.sql.exec(
-    "DROP INDEX IF EXISTS attempts_by_site_attempted_at_question"
-  );
+const CANONICAL_INDEX_NAMES = new Set([
+  "attempts_by_site_attempted_at_operation",
+  "cards_by_site_due_number",
+  "questions_by_site_attempted_number",
+]);
+
+function quotedIdentifier(identifier) {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+function ensureCanonicalIndexes(storage) {
+  const managedIndexes = storage.sql
+    .exec(
+      `SELECT name
+       FROM sqlite_master
+       WHERE type = 'index'
+         AND tbl_name IN ('attempts', 'cards', 'questions')
+         AND name NOT LIKE 'sqlite_%'`
+    )
+    .toArray();
+  for (const { name } of managedIndexes) {
+    if (typeof name !== "string" || !CANONICAL_INDEX_NAMES.has(name)) {
+      if (typeof name !== "string") {
+        throw new Error("invalid LearningState index name");
+      }
+      storage.sql.exec(`DROP INDEX IF EXISTS ${quotedIdentifier(name)}`);
+    }
+  }
   storage.sql.exec(`
-    DROP INDEX IF EXISTS cards_by_site_due;
     CREATE INDEX IF NOT EXISTS cards_by_site_due_number
       ON cards (site, due_ms, CAST(question_id AS INTEGER), question_id);
     CREATE INDEX IF NOT EXISTS attempts_by_site_attempted_at_operation
@@ -683,6 +705,7 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
         throw new Error("incomplete LearningState schema");
       }
       if (version === CURRENT_SCHEMA_VERSION) {
+        ensureCanonicalIndexes(storage);
         return;
       }
     } else {
@@ -752,6 +775,6 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     if (currentTables.some((name) => !migratedTables.has(name))) {
       throw new Error("incomplete LearningState schema");
     }
-    installIndexes(storage);
+    ensureCanonicalIndexes(storage);
   });
 }

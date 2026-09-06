@@ -1,3 +1,4 @@
+export function installReaderStyles(correctFeedbackCSS) {
   const style = document.createElement("style");
   style.textContent = `
     :root {
@@ -35,7 +36,7 @@
       --kakomonn-reader-control-shadow:
         0 6px 22px oklch(0.04 0.01 255 / 0.34);
     }
-
+  
     html, body {
       width: 100% !important;
       height: 100svh !important;
@@ -45,11 +46,11 @@
       background: var(--kakomonn-reader-canvas) !important;
       color: var(--kakomonn-reader-text) !important;
     }
-
+  
     body[data-kakomonn-reader-ui="true"] {
       display: block !important;
     }
-
+  
     #kakomonn-next-question-launcher {
       min-height: 100svh;
       height: 100%;
@@ -78,7 +79,7 @@
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
-
+  
     #kakomonn-next-question-panel {
       --kakomonn-launcher-accent: var(--kakomonn-reader-primary);
       container-type: inline-size;
@@ -95,15 +96,15 @@
         inset 0 1px 0 oklch(0.97 0.006 255 / 0.06);
       backdrop-filter: blur(20px);
     }
-
+  
     #kakomonn-next-question-panel[data-state="service-error"] {
       --kakomonn-launcher-accent: var(--kakomonn-reader-error);
     }
-
+  
     #kakomonn-next-question-panel[data-state="empty"] {
       --kakomonn-launcher-accent: var(--kakomonn-reader-p-green-500);
     }
-
+  
     #kakomonn-next-question-brand {
       display: flex;
       align-items: center;
@@ -113,7 +114,7 @@
       font-weight: 750;
       letter-spacing: 0.16em;
     }
-
+  
     #kakomonn-next-question-brand::before {
       width: 10px;
       height: 10px;
@@ -122,12 +123,12 @@
       box-shadow: 0 0 18px var(--kakomonn-launcher-accent);
       content: "";
     }
-
+  
     #kakomonn-next-question-content {
       display: grid;
       gap: 14px;
     }
-
+  
     #kakomonn-next-question-indicator {
       position: relative;
       width: 52px;
@@ -139,14 +140,14 @@
       background: oklch(0.25 0.025 255 / 0.78);
       color: var(--kakomonn-launcher-accent);
     }
-
+  
     #kakomonn-next-question-indicator::before,
     #kakomonn-next-question-indicator::after {
       position: absolute;
       box-sizing: border-box;
       content: "";
     }
-
+  
     [data-state="loading"] #kakomonn-next-question-indicator::before {
       width: 24px;
       height: 24px;
@@ -155,7 +156,7 @@
       border-radius: 50%;
       animation: kakomonn-launcher-spin 900ms linear infinite;
     }
-
+  
     [data-state="service-error"]
       #kakomonn-next-question-indicator::before {
       width: 4px;
@@ -164,7 +165,7 @@
       background: currentColor;
       transform: translateY(-4px);
     }
-
+  
     [data-state="service-error"]
       #kakomonn-next-question-indicator::after {
       width: 4px;
@@ -173,7 +174,7 @@
       background: currentColor;
       transform: translateY(10px);
     }
-
+  
     [data-state="empty"] #kakomonn-next-question-indicator::before {
       width: 24px;
       height: 13px;
@@ -181,12 +182,12 @@
       border-left: 3px solid currentColor;
       transform: translateY(-3px) rotate(-45deg);
     }
-
+  
     #kakomonn-next-question-title,
     #next-question-status {
       margin: 0;
     }
-
+  
     #kakomonn-next-question-title {
       max-width: 14ch;
       font-size: clamp(26px, 21px + 2cqi, 34px);
@@ -194,23 +195,23 @@
       letter-spacing: -0.025em;
       line-height: 1.18;
     }
-
+  
     #next-question-status {
       max-width: 34rem;
       color: var(--kakomonn-reader-muted);
       font-size: 15px;
       line-height: 1.65;
     }
-
+  
     #kakomonn-next-question-actions {
       display: grid;
       gap: 10px;
     }
-
+  
     #kakomonn-next-question-actions[hidden] {
       display: none;
     }
-
+  
     #next-question-retry {
       min-height: 52px;
       display: flex;
@@ -228,44 +229,44 @@
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
-
+  
     #next-question-retry[hidden] {
       display: none;
     }
-
+  
     #next-question-retry {
       background: var(--kakomonn-reader-primary);
     }
-
+  
     #next-question-retry:active {
       transform: scale(0.98);
     }
-
+  
     #next-question-retry:focus-visible {
       outline: 2px solid var(--kakomonn-reader-focus-ring);
       outline-offset: 4px;
     }
-
+  
     @container (max-width: 340px) {
       #kakomonn-next-question-panel {
         gap: 20px;
         padding: 24px 20px 20px;
         border-radius: 24px;
       }
-
+  
       #kakomonn-next-question-title {
         font-size: 26px;
       }
     }
-
+  
     @keyframes kakomonn-launcher-spin {
       to {
         transform: rotate(1turn);
       }
     }
-
-    ${CORRECT_FEEDBACK_CSS}
-
+  
+    ${correctFeedbackCSS}
+  
     #kakomonn-reader-shell {
       position: relative;
       z-index: 2147483000;
@@ -276,7 +277,7 @@
       overflow: hidden;
       background: var(--kakomonn-reader-canvas);
     }
-
+  
     #kakomonn-reader-frame {
       display: block;
       width: 100%;
@@ -284,7 +285,7 @@
       border: 0;
       background: var(--kakomonn-reader-canvas);
     }
-
+  
     #kakomonn-reader-time-limit {
       --kakomonn-reader-time-fill: var(--kakomonn-reader-time-question);
       position: absolute;
@@ -300,43 +301,43 @@
       color: var(--kakomonn-reader-time-fill);
       pointer-events: none;
     }
-
+  
     #kakomonn-reader-time-limit[hidden] {
       display: none;
     }
-
+  
     #kakomonn-reader-time-limit[data-phase="explanation"] {
       --kakomonn-reader-time-fill: var(--kakomonn-reader-time-explanation);
     }
-
+  
     #kakomonn-reader-time-limit::-webkit-progress-bar {
       background: var(--kakomonn-reader-time-track);
     }
-
+  
     #kakomonn-reader-time-limit::-webkit-progress-value {
       background: var(--kakomonn-reader-time-fill);
     }
-
+  
     #kakomonn-reader-time-limit::-moz-progress-bar {
       background: var(--kakomonn-reader-time-fill);
     }
-
+  
     #kakomonn-reader-carried-correct-feedback {
       position: absolute;
       z-index: 2;
       margin: 0;
     }
-
+  
     #kakomonn-reader-carried-correct-feedback[hidden] {
       display: none;
     }
-
+  
     #kakomonn-reader-carried-correct-feedback[data-rarity="ssr"] {
       inset: 0;
       width: 100%;
       min-height: 100%;
     }
-
+  
     #kakomonn-reader-sync-settings,
     #kakomonn-reader-error-dialog {
       position: fixed;
@@ -360,23 +361,23 @@
       color: var(--kakomonn-reader-text);
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     }
-
+  
     #kakomonn-reader-sync-settings[open],
     #kakomonn-reader-error-dialog[open] {
       display: grid;
       place-items: center;
     }
-
+  
     #kakomonn-reader-sync-settings:not([open]),
     #kakomonn-reader-error-dialog:not([open]) {
       display: none;
     }
-
+  
     #kakomonn-reader-sync-settings::backdrop,
     #kakomonn-reader-error-dialog::backdrop {
       background: oklch(0.04 0.01 255 / 0.72);
     }
-
+  
     #kakomonn-reader-sync-settings-panel,
     #kakomonn-reader-error-panel {
       width: min(420px, 100%);
@@ -392,26 +393,26 @@
       color: var(--kakomonn-reader-text);
       box-shadow: 0 16px 48px oklch(0.04 0.01 255 / 0.38);
     }
-
+  
     #kakomonn-reader-sync-settings-title,
     #kakomonn-reader-error-title {
       margin: 0;
       font-size: 20px;
     }
-
+  
     #kakomonn-reader-sync-settings-description,
     #kakomonn-reader-error-message {
       margin: 0;
       font-size: 14px;
       line-height: 1.5;
     }
-
+  
     #kakomonn-reader-sync-settings-panel > label {
       color: var(--kakomonn-reader-muted);
       font-size: 13px;
       font-weight: 700;
     }
-
+  
     #kakomonn-reader-sync-token {
       width: 100%;
       min-height: 46px;
@@ -423,7 +424,7 @@
       color: var(--kakomonn-reader-text);
       font-size: 16px;
     }
-
+  
     #kakomonn-reader-sync-settings-error {
       min-height: 20px;
       margin: 0;
@@ -431,7 +432,7 @@
       font-size: 13px;
       line-height: 1.4;
     }
-
+  
     #kakomonn-reader-sync-settings-save,
     #kakomonn-reader-error-retry,
     #kakomonn-reader-error-close {
@@ -442,23 +443,23 @@
       font-size: 15px;
       font-weight: 700;
     }
-
+  
     #kakomonn-reader-sync-settings-save {
       background: var(--kakomonn-reader-primary);
       color: var(--kakomonn-reader-text);
     }
-
+  
     #kakomonn-reader-error-retry,
     #kakomonn-reader-error-close {
       background: var(--kakomonn-reader-primary);
       color: var(--kakomonn-reader-text);
     }
-
+  
     #kakomonn-reader-sync-settings-save:disabled,
     #kakomonn-reader-error-retry:disabled {
       opacity: 0.55;
     }
-
+  
     .kakomonn-reader-dialog-eyebrow {
       margin: 0;
       color: var(--kakomonn-reader-error);
@@ -466,7 +467,7 @@
       font-weight: 800;
       letter-spacing: 0.14em;
     }
-
+  
     #kakomonn-reader-error-detail {
       display: block;
       padding: 12px;
@@ -479,7 +480,7 @@
       overflow-wrap: anywhere;
       white-space: normal;
     }
-
+  
     #kakomonn-reader-sync-token:focus-visible,
     #kakomonn-reader-sync-settings-save:focus-visible,
     #kakomonn-reader-error-retry:focus-visible,
@@ -487,7 +488,7 @@
       outline: 3px solid var(--kakomonn-reader-focus-ring);
       outline-offset: 2px;
     }
-
+  
     @media (prefers-reduced-motion: reduce) {
       [data-state="loading"] #kakomonn-next-question-indicator::before {
         transition: none;
@@ -496,3 +497,5 @@
     }
   `;
   document.documentElement.appendChild(style);
+  
+}

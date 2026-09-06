@@ -32,13 +32,13 @@ iPhone Safariの設定と固定URLは, [`kakomonn-sync`の次の問題を開く�
 
 ## テスト
 
-Node.js 22.12以上とPython 3を使用します.
+Node.js 22.12以上を使用します. rootの単一npm packageがreader, sync, congratulationsのbuildとtestを管理します.
 
 Repositoryの変更をpushまたはdeployする前に, このsectionの完全testを通過させます.
 
 ```bash
 npm ci
-npm run build:kakomonn-reader
+npm run build
 ```
 
 通常利用するChrome profileはlive E2Eに使用しません. Windows Chromeでは[Tampermonkey Updator v1.1.1以上](https://github.com/expgolemclone/tampermonkey-updator/releases/latest)の`install-windows.ps1`を管理者権限のPowerShellで1回実行し, Tampermonkey Beta 5.6以上と`kakomonn-reader`をmachine policyでprovisioningします. installerは旧stableのTampermonkey policyだけを削除し, 既存browser policyを保持します. test scriptが専用user data directoryの作成, policy installの待機, `Allow User Scripts`の有効化, userscript更新, browser操作を所有します.

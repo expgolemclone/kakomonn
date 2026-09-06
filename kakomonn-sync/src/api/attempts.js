@@ -1,4 +1,8 @@
-import { ANSWER_RESULTS, OPERATION_ID_PATTERN, QUESTION_ID_PATTERN } from "../contracts.js";
+import {
+  OPERATION_ID_PATTERN,
+  QUESTION_ID_PATTERN,
+  isAnswerResult,
+} from "../contracts.js";
 import { getLearningStateStub } from "../learning-store.js";
 import { isSite } from "../auth.js";
 import { errorResponse, jsonResponse } from "../http.js";
@@ -25,7 +29,7 @@ export async function handleAttempts(request, env) {
     !QUESTION_ID_PATTERN.test(body.questionId) ||
     typeof body.operationId !== "string" ||
     !OPERATION_ID_PATTERN.test(body.operationId) ||
-    !ANSWER_RESULTS.has(body.answerResult)
+    !isAnswerResult(body.answerResult)
   ) {
     return errorResponse("invalid_request", 400);
   }

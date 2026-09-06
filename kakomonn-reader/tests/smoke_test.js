@@ -977,11 +977,25 @@ async function runSpeechLookaheadCase(context, script) {
     );
     assert.equal((await azureSpeechCalls(page)).length, 2);
     await markAnswerResult(childFrame, "correct");
-    await page.waitForFunction(
-      () =>
-        window.__audioBlobs.length >= 2 &&
-        window.__audioInstance?.src.startsWith("blob:"),
-    );
+    try {
+      await page.waitForFunction(
+        () =>
+          window.__audioBlobs.length >= 2 &&
+          window.__audioInstance?.src.startsWith("blob:"),
+      );
+    } catch (error) {
+      const state = await page.evaluate(() => ({
+        attemptCount: window.__syncMock.attemptCount,
+        audioBlobs: window.__audioBlobs,
+        audioSource: window.__audioInstance?.src,
+        audioPlayCalls: window.__audioPlayCalls,
+        abortedRequestCount: window.__syncMock.abortedRequestCount,
+        feedback: document.querySelector(".kakomonn-reader-correct-feedback")?.outerHTML,
+        heldSpeechRequest: window.__syncMock.releaseHeldSpeechRequest !== null,
+        readerError: document.querySelector("#kakomonn-reader-error-detail")?.textContent,
+      }));
+      throw new Error(`speech lookahead timed out: ${JSON.stringify(state)}`, { cause: error });
+    }
     assert.deepEqual(
       await page.evaluate(() => ({
         abortedRequestCount: window.__syncMock.abortedRequestCount,
@@ -1756,7 +1770,7 @@ async function assertIncorrectSkip(context, script) {
 }
 
 async function main() {
-  execFileSync("python3", ["build.py"], {
+  execFileSync(process.execPath, ["build.mjs"], {
     cwd: projectRoot,
     env: kakomonnFreeEnvironment(),
     stdio: "inherit",
@@ -2312,13 +2326,23 @@ async function main() {
         color: "rgb(255, 255, 255)",
       },
     );
-    await page.waitForFunction(
-      () =>
-        window.__syncMock.attemptCount === 1 &&
-        window.__copiedTexts.length === 1 &&
-        window.__readerPopstateCount >= 1 &&
-        history.state?.entryType === "current",
-    );
+    try {
+      await page.waitForFunction(
+        () =>
+          window.__syncMock.attemptCount === 1 &&
+          window.__copiedTexts.length === 1 &&
+          window.__readerPopstateCount >= 1 &&
+          history.state?.entryType === "current",
+      );
+    } catch (error) {
+      const state = await page.evaluate(() => ({
+        attemptCount: window.__syncMock.attemptCount,
+        copiedTexts: window.__copiedTexts.length,
+        popstateCount: window.__readerPopstateCount,
+        historyState: history.state,
+      }));
+      throw new Error(`answer transition timed out: ${JSON.stringify(state)}`, { cause: error });
+    }
     assert.deepEqual(
       await childFrame.evaluate(() => ({
         commentaryDisplay: getComputedStyle(

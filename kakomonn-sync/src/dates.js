@@ -1,4 +1,4 @@
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+import { DATE_PATTERN } from "../../contracts/kakomonn.mjs";
 const DAY_MS = 86_400_000;
 const TOKYO_OFFSET_MS = 9 * 60 * 60 * 1000;
 

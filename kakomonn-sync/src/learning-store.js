@@ -11,12 +11,16 @@ import {
 } from "./fsrs.js";
 import { isSite } from "./auth.js";
 import {
-  ANSWER_RESULTS,
   canonicalQuestionIds,
+  isAnswerResult,
   OPERATION_ID_PATTERN,
   QUESTION_ID_PATTERN,
 } from "./contracts.js";
 import { initializeLearningSchema } from "./storage/schema.js";
+import {
+  isCelebration,
+  isLearningMetrics,
+} from "../../contracts/kakomonn.mjs";
 
 export { initializeLearningSchema } from "./storage/schema.js";
 
@@ -244,11 +248,15 @@ function celebrationFromRow(row) {
   if (row === undefined) {
     return undefined;
   }
-  return {
+  const celebration = {
     site: row.site,
     date: row.date,
     dailyKpiCompleted: true,
   };
+  if (!isCelebration(celebration)) {
+    throw new Error("stored celebration is invalid");
+  }
+  return celebration;
 }
 
 function readCelebrationForOperation(storage, operationId) {
@@ -326,7 +334,7 @@ function composeLearningMetrics(
     0,
     NEW_QUESTION_GOAL - todayNewQuestionCount
   );
-  return {
+  const metrics = {
     stabilityDays: integerStabilityDays(storedMetrics),
     dailyKpiCompleted:
       previouslyCompleted || (remaining === 0 && newQuestionsRemaining === 0),
@@ -346,6 +354,10 @@ function composeLearningMetrics(
       todayAttemptCount
     ),
   };
+  if (!isLearningMetrics(metrics)) {
+    throw new Error("composed learning metrics are invalid");
+  }
+  return metrics;
 }
 
 function readLearningMetrics(storage, site, nowMs, storedMetrics) {
@@ -550,7 +562,7 @@ function assertAttempt(site, questionId, operationId, result) {
     !isSite(site) ||
     !QUESTION_ID_PATTERN.test(questionId) ||
     !OPERATION_ID_PATTERN.test(operationId) ||
-    !ANSWER_RESULTS.has(result)
+    !isAnswerResult(result)
   ) {
     throw new TypeError("invalid attempt");
   }

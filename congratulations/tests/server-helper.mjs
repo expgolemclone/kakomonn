@@ -8,6 +8,14 @@ import kakomonnConfig from "../../scripts/kakomonn-config.cjs";
 const { kakomonnFreeEnvironment } = kakomonnConfig;
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const repositoryRoot = resolve(projectRoot, "..");
+const wranglerPath = resolve(
+  repositoryRoot,
+  "node_modules",
+  "wrangler",
+  "bin",
+  "wrangler.js",
+);
 
 async function getAvailablePort() {
   const probe = createServer();
@@ -32,11 +40,25 @@ async function getAvailablePort() {
 
 export async function startStaticServer() {
   const port = await getAvailablePort();
-  const child = spawn(process.execPath, ["server.mjs"], {
-    cwd: projectRoot,
-    env: { ...kakomonnFreeEnvironment(), PORT: String(port) },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const origin = `http://127.0.0.1:${port}`;
+  const child = spawn(
+    process.execPath,
+    [
+      wranglerPath,
+      "dev",
+      "--config",
+      resolve(projectRoot, "wrangler.jsonc"),
+      "--ip",
+      "127.0.0.1",
+      "--port",
+      String(port),
+    ],
+    {
+      cwd: repositoryRoot,
+      env: kakomonnFreeEnvironment(),
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
   child.stderr.setEncoding("utf8");
   child.stdout.setEncoding("utf8");
 
@@ -46,36 +68,30 @@ export async function startStaticServer() {
     stderr += chunk;
   });
 
-  const expected = `Celebration server listening on http://127.0.0.1:${port}`;
   try {
-    await new Promise((resolveReady, rejectReady) => {
-      const timeout = setTimeout(() => {
-        rejectReady(new Error(`Server did not start.\n${stderr}`));
-      }, 5_000);
-
-      function cleanup() {
-        clearTimeout(timeout);
-        child.off("exit", handleExit);
-        child.stdout.off("data", handleOutput);
-      }
-
-      function handleExit(code) {
-        cleanup();
-        rejectReady(new Error(`Server exited with code ${code}.\n${stderr}`));
-      }
-
-      function handleOutput(chunk) {
-        stdout += chunk;
-        if (!stdout.includes(expected)) {
-          return;
-        }
-        cleanup();
-        resolveReady();
-      }
-
-      child.once("exit", handleExit);
-      child.stdout.on("data", handleOutput);
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
     });
+    const deadline = Date.now() + 10_000;
+    let ready = false;
+    while (Date.now() < deadline) {
+      if (child.exitCode !== null) {
+        throw new Error(`Wrangler exited with code ${child.exitCode}.\n${stderr}`);
+      }
+      try {
+        const response = await fetch(origin, { redirect: "manual" });
+        if (response.status >= 200 && response.status < 500) {
+          ready = true;
+          break;
+        }
+      } catch {
+        // Wrangler has not started listening yet.
+      }
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+    }
+    if (!ready) {
+      throw new Error(`Wrangler did not start.\n${stderr}\n${stdout}`);
+    }
   } catch (error) {
     if (child.exitCode === null) {
       child.kill();
@@ -85,7 +101,7 @@ export async function startStaticServer() {
   }
 
   return {
-    origin: `http://127.0.0.1:${port}`,
+    origin,
     getStderr: () => stderr,
     async stop() {
       if (child.exitCode !== null) {

@@ -20,10 +20,10 @@
 ## ビルド
 
 ```bash
-python3 build.py
+npm run build:kakomonn-reader
 ```
 
-`src/`にはmetadataとruntime,correct feedback,style,syncとcatalog,次問launcher,UI,本文抽出,speech,page lifecycle,Markdown copy,navigation,shortcutの責務別sourceがあります.`build.py`の明示manifest順に結合し, `assets/feedback/`の5音声をbase64 data URLとして埋め込み, 全sourceと音声を含むfingerprintを付けて`kakomonn-reader.user.js`を生成します. 通常installでは[Latest Release asset](https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js)をTampermonkeyへ登録してください.
+`src/`にはapp stateを所有するreader controllerと, content抽出, Markdown生成, catalog取得, correct feedback, styleのES moduleがあります. Viteが依存関係を解決して1つのuserscriptへbundleし, `build.mjs`が`assets/feedback/`の5音声をbase64 data URLとして埋め込み, metadataとbundleと音声を含むfingerprintを付けて`kakomonn-reader.user.js`を生成します. 通常installでは[Latest Release asset](https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js)をTampermonkeyへ登録してください.
 
 ## Release
 
@@ -49,7 +49,7 @@ Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` mode
 
 ## 学習記録の同期設定
 
-読み上げに必要なWorkerとAzure Speechは, [`kakomonn-sync`のデプロイ手順](../kakomonn-sync/README.md#デプロイ)で準備します. 生成されたAPI URLを`src/metadata-and-runtime.js`の`SYNC_API_URL`と`@connect`へ設定してビルドします.
+読み上げに必要なWorkerとAzure Speechは, [`kakomonn-sync`のデプロイ手順](../kakomonn-sync/README.md#デプロイ)で準備します. 生成されたAPI URLを`src/reader-controller.js`の`SYNC_API_URL`と`src/userscript.meta.txt`の`@connect`へ設定してビルドします.
 
 同期tokenが未保存または認証失敗の場合だけ, 入力dialogが開きます. Win11とiPhoneへ, Worker Secretの`SYNC_TOKEN`と同じ値を入力してください. tokenは各userscript managerの専用storageへ保存され, 対象siteの`localStorage`には保存されません. 接続済みのreaderには設定buttonを表示しません.
 

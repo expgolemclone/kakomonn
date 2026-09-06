@@ -536,7 +536,7 @@ async function main() {
   const configuredScriptPath =
     kakomonnConfiguration.KAKOMONN_READER_SCRIPT_PATH;
   if (!configuredScriptPath) {
-    execFileSync("python3", ["build.py"], {
+    execFileSync(process.execPath, ["build.mjs"], {
       cwd: projectRoot,
       env: kakomonnFreeEnvironment(),
       stdio: "inherit",

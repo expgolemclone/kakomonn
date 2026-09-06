@@ -1,3 +1,10 @@
+import {
+  hasExactKeys,
+  isCalendarDate,
+  isLearningMetrics,
+  isSite as validSite,
+} from "../../contracts/kakomonn.mjs";
+
 const TOKEN_KEY = "kakomonn-dashboard.sync-token";
 const SITE_KEY = "kakomonn-dashboard.site";
 const API_TIMEOUT_MS = 15000;
@@ -48,28 +55,19 @@ function storageRemove(key) {
   try { localStorage.removeItem(key); } catch { throw new DashboardError("storage_unavailable"); }
 }
 
-function validSite(value) {
-  return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(value);
-}
 function validCorrectRatePercent(value) {
   return value === null || (Number.isSafeInteger(value) && value >= 0 && value <= 100);
 }
-function validLearningMetrics(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value) && Number.isSafeInteger(value.stabilityDays) && value.stabilityDays >= 0 && typeof value.dailyKpiCompleted === "boolean" && typeof value.dueCardsCompleted === "boolean" && Number.isSafeInteger(value.dueCardsRemaining) && value.dueCardsRemaining >= 0 && value.dueCardsCompleted === (value.dueCardsRemaining === 0) && Number.isSafeInteger(value.todayNewQuestionCount) && value.todayNewQuestionCount >= 0 && Number.isSafeInteger(value.newQuestionGoal) && value.newQuestionGoal > 0 && Number.isSafeInteger(value.newQuestionsRemaining) && value.newQuestionsRemaining === Math.max(0, value.newQuestionGoal - value.todayNewQuestionCount) && Number.isSafeInteger(value.todayStabilityDaysDelta) && Number.isSafeInteger(value.attemptedQuestionCount) && value.attemptedQuestionCount >= 0 && Number.isSafeInteger(value.todayAttemptedQuestionCount) && value.todayAttemptedQuestionCount >= 0 && validCorrectRatePercent(value.todayCorrectRatePercent);
-}
 function validState(value, site) {
-  return value && value.site === site && /^\d{4}-\d{2}-\d{2}$/.test(value.today) && validLearningMetrics(value.learningMetrics);
+  return value && value.site === site && isCalendarDate(value.today) && isLearningMetrics(value.learningMetrics);
 }
 function validHistory(value, site) {
-  return value && value.site === site && Array.isArray(value.days) && value.days.length === DASHBOARD_HISTORY_DAYS && value.days.every((day) => /^\d{4}-\d{2}-\d{2}$/.test(day.date) && (day.closingStabilityDays === null || (Number.isSafeInteger(day.closingStabilityDays) && day.closingStabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.dailyAttemptedQuestionCount) && day.dailyAttemptedQuestionCount >= 0 && Number.isSafeInteger(day.dailyNewQuestionCount) && day.dailyNewQuestionCount >= 0 && validCorrectRatePercent(day.dailyCorrectRatePercent));
+  return value && value.site === site && Array.isArray(value.days) && value.days.length === DASHBOARD_HISTORY_DAYS && value.days.every((day) => isCalendarDate(day.date) && (day.closingStabilityDays === null || (Number.isSafeInteger(day.closingStabilityDays) && day.closingStabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.dailyAttemptedQuestionCount) && day.dailyAttemptedQuestionCount >= 0 && Number.isSafeInteger(day.dailyNewQuestionCount) && day.dailyNewQuestionCount >= 0 && validCorrectRatePercent(day.dailyCorrectRatePercent));
 }
 function validDashboard(value) {
   if (!hasExactKeys(value, ["sites", "selectedSite", "state", "history"]) || !Array.isArray(value.sites) || value.sites.some((site) => !validSite(site)) || new Set(value.sites).size !== value.sites.length) return false;
   if (value.sites.length === 0) return value.selectedSite === null && value.state === null && value.history === null;
   return validSite(value.selectedSite) && value.sites.includes(value.selectedSite) && validState(value.state, value.selectedSite) && validHistory(value.history, value.selectedSite);
-}
-function hasExactKeys(value, keys) {
-  return value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join("\0") === [...keys].sort().join("\0");
 }
 function validDailyDetails(value, site, date) {
   if (!hasExactKeys(value, ["site", "date", "timeZone", "tables"]) || value.site !== site || value.date !== date || value.timeZone !== "Asia/Tokyo" || !hasExactKeys(value.tables, ["stability_history", "attempts"]) || !Array.isArray(value.tables.stability_history) || value.tables.stability_history.length > 1 || !Array.isArray(value.tables.attempts)) return false;

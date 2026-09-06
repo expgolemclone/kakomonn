@@ -1,9 +1,6 @@
-export const SITE_PATTERN =
-  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/;
+export { SITE_PATTERN, isSite } from "../../contracts/kakomonn.mjs";
 
-export function isSite(value) {
-  return typeof value === "string" && SITE_PATTERN.test(value);
-}
+import { isSite } from "../../contracts/kakomonn.mjs";
 
 async function secretsEqual(received, expected) {
   if (typeof received !== "string" || typeof expected !== "string") {

@@ -80,6 +80,7 @@ APIは`/v11`だけを提供し, LearningState Durable Objectを唯一のsource o
 ### learningMetrics contract
 
 `GET /v11/state`と`POST /v11/attempts`は次の値を`learningMetrics`として返します. 日付の境界は日本時間です.
+runtimeで共有するvalidationとcelebration contractの正本はrepository rootの`contracts/kakomonn.mjs`です.
 
 | Field | Definition |
 | --- | --- |

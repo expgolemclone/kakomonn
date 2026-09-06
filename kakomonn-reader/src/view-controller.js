@@ -1,13 +1,14 @@
+export function installViewController(app) {
   const shell = document.createElement("div");
   shell.id = "kakomonn-reader-shell";
-  shell.dataset.buildFingerprint = BUILD_FINGERPRINT;
-  shell.dataset.scriptHandler = SCRIPT_HANDLER;
-
+  shell.dataset.buildFingerprint = app.BUILD_FINGERPRINT;
+  shell.dataset.scriptHandler = app.SCRIPT_HANDLER;
+  
   const frame = document.createElement("iframe");
   frame.id = "kakomonn-reader-frame";
   frame.title = "過去問ページ";
   frame.allow = "autoplay";
-  frame.src = currentFrameURL;
+  frame.src = app.currentFrameURL;
   function enforceReaderFrameDimensions() {
     frame.removeAttribute("height");
     frame.removeAttribute("width");
@@ -32,23 +33,23 @@
     attributes: true,
     attributeFilter: ["height", "style", "width"],
   });
-
+  
   const timeLimitProgress = document.createElement("progress");
   timeLimitProgress.id = "kakomonn-reader-time-limit";
-  timeLimitProgress.max = TIME_LIMIT_MS;
-  timeLimitProgress.value = TIME_LIMIT_MS;
+  timeLimitProgress.max = app.TIME_LIMIT_MS;
+  timeLimitProgress.value = app.TIME_LIMIT_MS;
   timeLimitProgress.hidden = true;
   timeLimitProgress.setAttribute("aria-label", "問題の制限時間");
-
+  
   const carriedCorrectFeedback = document.createElement("div");
   carriedCorrectFeedback.id = "kakomonn-reader-carried-correct-feedback";
   carriedCorrectFeedback.className = "kakomonn-reader-correct-feedback";
   carriedCorrectFeedback.hidden = true;
   carriedCorrectFeedback.setAttribute("aria-hidden", "true");
-
+  
   shell.append(frame, timeLimitProgress, carriedCorrectFeedback);
   let activeCorrectFeedbackElement = null;
-
+  
   const syncSettings = document.createElement("dialog");
   syncSettings.id = "kakomonn-reader-sync-settings";
   syncSettings.setAttribute(
@@ -59,39 +60,39 @@
     "aria-describedby",
     "kakomonn-reader-sync-settings-description"
   );
-
+  
   const syncSettingsPanel = document.createElement("form");
   syncSettingsPanel.id = "kakomonn-reader-sync-settings-panel";
-
+  
   const syncSettingsTitle = document.createElement("h2");
   syncSettingsTitle.id = "kakomonn-reader-sync-settings-title";
   syncSettingsTitle.textContent = "学習記録へ接続";
-
+  
   const syncSettingsDescription = document.createElement("p");
   syncSettingsDescription.id = "kakomonn-reader-sync-settings-description";
   syncSettingsDescription.textContent =
     "Win11とiPhoneに同じ同期トークンを入力してください.";
-
+  
   const syncTokenLabel = document.createElement("label");
   syncTokenLabel.htmlFor = "kakomonn-reader-sync-token";
   syncTokenLabel.textContent = "同期トークン";
-
+  
   const syncTokenInput = document.createElement("input");
   syncTokenInput.id = "kakomonn-reader-sync-token";
   syncTokenInput.type = "password";
   syncTokenInput.autocomplete = "off";
   syncTokenInput.spellcheck = false;
   syncTokenInput.required = true;
-
+  
   const syncSettingsError = document.createElement("p");
   syncSettingsError.id = "kakomonn-reader-sync-settings-error";
   syncSettingsError.setAttribute("role", "alert");
-
+  
   const syncSettingsSaveButton = document.createElement("button");
   syncSettingsSaveButton.id = "kakomonn-reader-sync-settings-save";
   syncSettingsSaveButton.type = "submit";
   syncSettingsSaveButton.textContent = "確認して保存";
-
+  
   syncSettingsPanel.append(
     syncSettingsTitle,
     syncSettingsDescription,
@@ -101,7 +102,7 @@
     syncSettingsSaveButton
   );
   syncSettings.appendChild(syncSettingsPanel);
-
+  
   const errorDialog = document.createElement("dialog");
   errorDialog.id = "kakomonn-reader-error-dialog";
   errorDialog.setAttribute("aria-labelledby", "kakomonn-reader-error-title");
@@ -109,36 +110,36 @@
     "aria-describedby",
     "kakomonn-reader-error-message kakomonn-reader-error-detail"
   );
-
+  
   const errorDialogPanel = document.createElement("form");
   errorDialogPanel.id = "kakomonn-reader-error-panel";
   errorDialogPanel.method = "dialog";
-
+  
   const errorDialogEyebrow = document.createElement("p");
   errorDialogEyebrow.className = "kakomonn-reader-dialog-eyebrow";
   errorDialogEyebrow.textContent = "ERROR";
-
+  
   const errorDialogTitle = document.createElement("h2");
   errorDialogTitle.id = "kakomonn-reader-error-title";
-
+  
   const errorDialogMessage = document.createElement("p");
   errorDialogMessage.id = "kakomonn-reader-error-message";
-
+  
   const errorDialogDetail = document.createElement("code");
   errorDialogDetail.id = "kakomonn-reader-error-detail";
-
+  
   const errorDialogCloseButton = document.createElement("button");
   errorDialogCloseButton.id = "kakomonn-reader-error-close";
   errorDialogCloseButton.type = "submit";
   errorDialogCloseButton.value = "close";
   errorDialogCloseButton.textContent = "閉じる";
   errorDialogCloseButton.autofocus = true;
-
+  
   const errorDialogRetryButton = document.createElement("button");
   errorDialogRetryButton.id = "kakomonn-reader-error-retry";
   errorDialogRetryButton.type = "button";
   errorDialogRetryButton.hidden = true;
-
+  
   errorDialogPanel.append(
     errorDialogEyebrow,
     errorDialogTitle,
@@ -150,7 +151,7 @@
   errorDialog.appendChild(errorDialogPanel);
   let visibleReaderErrorSignature = "";
   let readerErrorRetryAction = null;
-
+  
   function readerErrorDetail(error, context) {
     const details = [`context=${context}`];
     if (typeof error?.code === "string" && error.code !== "") {
@@ -168,7 +169,7 @@
     }
     return details.join(" | ");
   }
-
+  
   function showReaderError(
     context,
     title,
@@ -197,14 +198,14 @@
       errorDialog.showModal();
     }
   }
-
+  
   errorDialog.addEventListener("close", () => {
     visibleReaderErrorSignature = "";
     readerErrorRetryAction = null;
     errorDialogRetryButton.hidden = true;
     errorDialogRetryButton.disabled = false;
   });
-
+  
   errorDialogRetryButton.addEventListener("click", async () => {
     if (readerErrorRetryAction === null || errorDialogRetryButton.disabled) {
       return;
@@ -222,7 +223,7 @@
       }
     }
   });
-
+  
   function mountReaderUI() {
     document.body.dataset.kakomonnReaderUi = "true";
     if (
@@ -234,18 +235,18 @@
     }
     document.body.replaceChildren(shell, syncSettings, errorDialog);
   }
-
+  
   function clearCorrectFeedbackRemovalTimer() {
-    if (correctFeedbackRemovalTimer === null) {
+    if (app.correctFeedbackRemovalTimer === null) {
       return;
     }
-    window.clearTimeout(correctFeedbackRemovalTimer);
-    correctFeedbackRemovalTimer = null;
+    window.clearTimeout(app.correctFeedbackRemovalTimer);
+    app.correctFeedbackRemovalTimer = null;
   }
-
+  
   function showCarriedCorrectFeedbackVisual(variant) {
     clearCorrectFeedbackRemovalTimer();
-    renderCorrectFeedbackElement(carriedCorrectFeedback, variant);
+    app.renderCorrectFeedbackElement(carriedCorrectFeedback, variant);
     carriedCorrectFeedback.dataset.state = "entering";
     carriedCorrectFeedback.removeAttribute("style");
     if (variant.id !== "ssr") {
@@ -259,26 +260,26 @@
     activeCorrectFeedbackElement = carriedCorrectFeedback;
     return true;
   }
-
-  function showCorrectFeedbackVisual(variant, sourceDocument = frameDocument) {
+  
+  function showCorrectFeedbackVisual(variant, sourceDocument = app.frameDocument) {
     if (
       sourceDocument?.body === undefined ||
-      sourceDocument !== frameDocument
+      sourceDocument !== app.frameDocument
     ) {
       return showCarriedCorrectFeedbackVisual(variant);
     }
-
+  
     const resultBox = sourceDocument.querySelector("#js-answer-result-box");
     if (resultBox === null) {
       return showCarriedCorrectFeedbackVisual(variant);
     }
-
+  
     clearCorrectFeedbackRemovalTimer();
-    renderCorrectFeedbackElement(carriedCorrectFeedback, variant);
+    app.renderCorrectFeedbackElement(carriedCorrectFeedback, variant);
     carriedCorrectFeedback.hidden = true;
     carriedCorrectFeedback.dataset.state = "entering";
     carriedCorrectFeedback.removeAttribute("style");
-
+  
     let feedback = resultBox.querySelector(
       ":scope > .kakomonn-reader-correct-feedback"
     );
@@ -287,23 +288,23 @@
       feedback.className = "kakomonn-reader-correct-feedback";
       resultBox.appendChild(feedback);
     }
-    renderCorrectFeedbackElement(feedback, variant);
+    app.renderCorrectFeedbackElement(feedback, variant);
     feedback.dataset.state = "entering";
     activeCorrectFeedbackElement = feedback;
     return true;
   }
-
+  
   function completeCorrectFeedbackVisual() {
     const feedback = activeCorrectFeedbackElement;
     if (feedback === null) {
       return Promise.resolve();
     }
-
+  
     clearCorrectFeedbackRemovalTimer();
     feedback.dataset.state = "leaving";
     return new Promise((resolve) => {
-      correctFeedbackRemovalTimer = window.setTimeout(() => {
-        correctFeedbackRemovalTimer = null;
+      app.correctFeedbackRemovalTimer = window.setTimeout(() => {
+        app.correctFeedbackRemovalTimer = null;
         if (feedback === carriedCorrectFeedback) {
           feedback.hidden = true;
           feedback.removeAttribute("style");
@@ -314,6 +315,42 @@
           activeCorrectFeedbackElement = null;
         }
         resolve();
-      }, CORRECT_FEEDBACK_LEAVE_DURATION_MS);
+      }, app.CORRECT_FEEDBACK_LEAVE_DURATION_MS);
     });
   }
+
+  Object.defineProperties(app, {
+    shell: { enumerable: false, get: () => shell },
+    frame: { enumerable: false, get: () => frame },
+    enforceReaderFrameDimensions: { enumerable: false, get: () => enforceReaderFrameDimensions },
+    readerFrameDimensionObserver: { enumerable: false, get: () => readerFrameDimensionObserver },
+    timeLimitProgress: { enumerable: false, get: () => timeLimitProgress },
+    carriedCorrectFeedback: { enumerable: false, get: () => carriedCorrectFeedback },
+    activeCorrectFeedbackElement: { enumerable: false, get: () => activeCorrectFeedbackElement, set: (value) => { activeCorrectFeedbackElement = value; } },
+    syncSettings: { enumerable: false, get: () => syncSettings },
+    syncSettingsPanel: { enumerable: false, get: () => syncSettingsPanel },
+    syncSettingsTitle: { enumerable: false, get: () => syncSettingsTitle },
+    syncSettingsDescription: { enumerable: false, get: () => syncSettingsDescription },
+    syncTokenLabel: { enumerable: false, get: () => syncTokenLabel },
+    syncTokenInput: { enumerable: false, get: () => syncTokenInput },
+    syncSettingsError: { enumerable: false, get: () => syncSettingsError },
+    syncSettingsSaveButton: { enumerable: false, get: () => syncSettingsSaveButton },
+    errorDialog: { enumerable: false, get: () => errorDialog },
+    errorDialogPanel: { enumerable: false, get: () => errorDialogPanel },
+    errorDialogEyebrow: { enumerable: false, get: () => errorDialogEyebrow },
+    errorDialogTitle: { enumerable: false, get: () => errorDialogTitle },
+    errorDialogMessage: { enumerable: false, get: () => errorDialogMessage },
+    errorDialogDetail: { enumerable: false, get: () => errorDialogDetail },
+    errorDialogCloseButton: { enumerable: false, get: () => errorDialogCloseButton },
+    errorDialogRetryButton: { enumerable: false, get: () => errorDialogRetryButton },
+    visibleReaderErrorSignature: { enumerable: false, get: () => visibleReaderErrorSignature, set: (value) => { visibleReaderErrorSignature = value; } },
+    readerErrorRetryAction: { enumerable: false, get: () => readerErrorRetryAction, set: (value) => { readerErrorRetryAction = value; } },
+    readerErrorDetail: { enumerable: false, get: () => readerErrorDetail },
+    showReaderError: { enumerable: false, get: () => showReaderError },
+    mountReaderUI: { enumerable: false, get: () => mountReaderUI },
+    clearCorrectFeedbackRemovalTimer: { enumerable: false, get: () => clearCorrectFeedbackRemovalTimer },
+    showCarriedCorrectFeedbackVisual: { enumerable: false, get: () => showCarriedCorrectFeedbackVisual },
+    showCorrectFeedbackVisual: { enumerable: false, get: () => showCorrectFeedbackVisual },
+    completeCorrectFeedbackVisual: { enumerable: false, get: () => completeCorrectFeedbackVisual },
+  });
+}

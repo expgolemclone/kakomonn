@@ -6,12 +6,12 @@ import { fileURLToPath } from "node:url";
 import {
   celebrationSearch,
   parseCelebration,
-} from "../shared/celebration-contract.js";
+} from "../../contracts/kakomonn.mjs";
 import {
   chooseCelebration,
   randomIndex,
   validateManifest,
-} from "../celebration-selection.js";
+} from "../celebration-selection.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const expectedIds = [
@@ -70,7 +70,6 @@ for (const experience of manifest.experiences) {
   await access(resolve(projectRoot, "dist", experience.entry));
 }
 await access(resolve(projectRoot, "dist", "index.html"));
-await access(resolve(projectRoot, "dist", "shared", "celebration-contract.js"));
 await access(resolve(projectRoot, "dist", "shared", "experience-runtime.js"));
 
 for (const sourcePath of [
@@ -80,6 +79,7 @@ for (const sourcePath of [
   const source = await readFile(sourcePath, "utf8");
   assert.equal(source.includes("data-milestone"), false);
   assert.equal(/[\u3040-\u30ff\u3400-\u9fff]/u.test(source), false);
+  assert.doesNotMatch(source, /\b\d+\s+new questions\b/i, sourcePath);
 }
 
 const routerSource = await readFile(resolve(projectRoot, "router.js"), "utf8");
@@ -117,11 +117,13 @@ for (const path of await filesBelow(resolve(projectRoot, "experiences"))) {
   if (
     !path.endsWith(".html") &&
     !path.endsWith(".css") &&
-    !path.endsWith("main.js")
+    !path.endsWith("main.js") &&
+    !path.endsWith(".txt")
   ) {
     continue;
   }
   const source = await readFile(path, "utf8");
+  assert.doesNotMatch(source, /\b\d+\s+new questions\b/i, path);
   assert.doesNotMatch(
     source,
     /https:\/\/(?:fonts\.(?:googleapis|gstatic)\.com|cdn\.jsdelivr\.net)\//,

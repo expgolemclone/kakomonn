@@ -1,30 +1,31 @@
+export function installShortcutsController(app) {
   const ANSWER_CHOICE_SHORTCUT_KEYS = "qwert";
   const DISPLAY_CHOICE_SHORTCUT_KEYS = "asdfg";
   const SHORTCUT_SCROLL_DISTANCE = 100;
   let shortcutSequenceTimer = null;
   let shortcutSequenceDocument = null;
   let shortcutSequenceKey = "";
-
+  
   function shortcutTargetElement(target) {
     if (target?.nodeType === target?.ownerDocument?.defaultView?.Node.ELEMENT_NODE) {
       return target;
     }
     return target?.parentElement ?? null;
   }
-
+  
   function isEditableShortcutTarget(target) {
     const element = shortcutTargetElement(target);
     if (element === null) {
       return false;
     }
-
+  
     if (
       element.isContentEditable ||
       element.closest("textarea, select, [role='textbox']") !== null
     ) {
       return true;
     }
-
+  
     const input = element.closest("input");
     return (
       input !== null &&
@@ -33,19 +34,19 @@
       )
     );
   }
-
+  
   function currentQuestionControls() {
-    if (!frameDocument?.body || frameDocument.defaultView === null) {
+    if (!app.frameDocument?.body || app.frameDocument.defaultView === null) {
       return null;
     }
-
-    const metadataElement = findQuestionMetadataElement(frameDocument);
+  
+    const metadataElement = app.findQuestionMetadataElement(app.frameDocument);
     if (metadataElement === null) {
       return null;
     }
-
+  
     const problemElement = metadataElement.closest(".problem_detail");
-    const answerButton = findAnswerButtonAfter(metadataElement);
+    const answerButton = app.findAnswerButtonAfter(metadataElement);
     if (
       problemElement === null ||
       answerButton === null ||
@@ -53,21 +54,21 @@
     ) {
       return null;
     }
-
+  
     return {
       answerButton,
-      answerChoiceControls: findAnswerChoiceControls(
+      answerChoiceControls: app.findAnswerChoiceControls(
         metadataElement,
         answerButton
       ),
       problemElement,
     };
   }
-
+  
   function isDisabledControl(control) {
     return control.matches(":disabled, [aria-disabled='true']");
   }
-
+  
   function activateAnswerChoice(index) {
     const controls = currentQuestionControls();
     const control = controls?.answerChoiceControls[index];
@@ -76,36 +77,36 @@
       control === undefined ||
       label === null ||
       isDisabledControl(control) ||
-      !isVisibleElement(label)
+      !app.isVisibleElement(label)
     ) {
       return false;
     }
-
+  
     label.click();
     return true;
   }
-
+  
   function activateAnswerButton() {
     const answerButton = currentQuestionControls()?.answerButton;
     if (
       answerButton === undefined ||
       isDisabledControl(answerButton) ||
-      !isVisibleElement(answerButton)
+      !app.isVisibleElement(answerButton)
     ) {
       return false;
     }
-
+  
     answerButton.click();
     return true;
   }
-
+  
   function activateDisplayChoice(index) {
     const controls = currentQuestionControls();
     if (controls === null) {
       return false;
     }
-
-    const list = directChild(controls.problemElement, "ul.list");
+  
+    const list = app.directChild(controls.problemElement, "ul.list");
     const choices =
       list === null ? [] : Array.from(list.children).filter((child) =>
         child.matches("li")
@@ -114,22 +115,22 @@
     if (
       choices.length !== controls.answerChoiceControls.length ||
       choice === undefined ||
-      !isVisibleElement(choice)
+      !app.isVisibleElement(choice)
     ) {
       return false;
     }
-
+  
     choice.click();
     return true;
   }
-
+  
   function scrollQuestionFrame(direction) {
-    const frameWindow = frameDocument?.defaultView;
+    const frameWindow = app.frameDocument?.defaultView;
     if (frameWindow === null || frameWindow === undefined) {
       return false;
     }
-
-    clearFrameProblemScrollTimers();
+  
+    app.clearFrameProblemScrollTimers();
     frameWindow.scrollBy({
       behavior: "auto",
       left: 0,
@@ -137,7 +138,7 @@
     });
     return true;
   }
-
+  
   function clearShortcutSequence() {
     if (shortcutSequenceTimer !== null) {
       window.clearTimeout(shortcutSequenceTimer);
@@ -146,15 +147,15 @@
     shortcutSequenceDocument = null;
     shortcutSequenceKey = "";
   }
-
+  
   function commitPendingShortcut() {
     const key = shortcutSequenceKey;
     const sourceDocument = shortcutSequenceDocument;
     clearShortcutSequence();
     if (
-      sourceDocument !== frameDocument ||
-      syncSettings.open ||
-      errorDialog.open
+      sourceDocument !== app.frameDocument ||
+      app.syncSettings.open ||
+      app.errorDialog.open
     ) {
       return false;
     }
@@ -163,45 +164,45 @@
     }
     return false;
   }
-
+  
   function startShortcutSequence(key) {
     shortcutSequenceKey = key;
-    shortcutSequenceDocument = frameDocument;
+    shortcutSequenceDocument = app.frameDocument;
     shortcutSequenceTimer = window.setTimeout(() => {
       if (key === "g") {
         commitPendingShortcut();
       } else {
         clearShortcutSequence();
       }
-    }, SHORTCUT_SEQUENCE_TIMEOUT_MS);
+    }, app.SHORTCUT_SEQUENCE_TIMEOUT_MS);
   }
-
+  
   function completeShortcutSequence(key) {
     if (
       shortcutSequenceTimer === null ||
-      shortcutSequenceDocument !== frameDocument
+      shortcutSequenceDocument !== app.frameDocument
     ) {
       return false;
     }
-
+  
     if (shortcutSequenceKey === "g" && key === "g") {
       clearShortcutSequence();
-      resetFrameScrollToTop();
+      app.resetFrameScrollToTop();
       return true;
     }
     commitPendingShortcut();
     return false;
   }
-
+  
   function handleEnterShortcut() {
-    const answerResult = getCurrentAnswerResult();
+    const answerResult = app.getCurrentAnswerResult();
     if (answerResult === "unknown") {
-      beginAutomaticCopyFromGesture();
+      app.beginAutomaticCopyFromGesture();
       return activateAnswerButton();
     }
-    return answerResult === "incorrect" && requestIncorrectAnswerAdvance();
+    return answerResult === "incorrect" && app.requestIncorrectAnswerAdvance();
   }
-
+  
   function onReaderKeyDown(event) {
     const key = event.key.toLowerCase();
     const browserBackShortcut = event.shiftKey && key === "h";
@@ -212,15 +213,15 @@
       event.metaKey ||
       (event.shiftKey && !browserBackShortcut) ||
       event.isComposing ||
-      syncSettings.open ||
-      errorDialog.open ||
+      app.syncSettings.open ||
+      app.errorDialog.open ||
       isEditableShortcutTarget(event.target) ||
       (event.repeat && scrollDirection === 0)
     ) {
       clearShortcutSequence();
       return;
     }
-
+  
     let handled = false;
     if (browserBackShortcut) {
       clearShortcutSequence();
@@ -236,9 +237,9 @@
       } else if (event.key === "Enter") {
         handled = handleEnterShortcut();
       } else if (event.key === " ") {
-        handled = toggleSpeechPause();
-      } else if (key === "n" && canSkipCurrentQuestion()) {
-        void handleSkipQuestion();
+        handled = app.toggleSpeechPause();
+      } else if (key === "n" && app.canSkipCurrentQuestion()) {
+        void app.handleSkipQuestion();
         handled = true;
       } else {
         const answerChoiceIndex = ANSWER_CHOICE_SHORTCUT_KEYS.indexOf(key);
@@ -252,76 +253,76 @@
         }
       }
     }
-
+  
     if (!handled) {
       return;
     }
-
+  
     if (!browserBackShortcut) {
-      activateSpeechFromGesture();
+      app.activateSpeechFromGesture();
     }
     event.preventDefault();
     event.stopImmediatePropagation();
   }
-
+  
   function onFrameClick(event) {
-    activateSpeechFromGesture();
+    app.activateSpeechFromGesture();
     const target = event.target;
-    if (!(target instanceof frame.contentWindow.Element)) {
+    if (!(target instanceof app.frame.contentWindow.Element)) {
       return;
     }
-
+  
     const answerButton = target.closest("button, input[type='button'], input[type='submit']");
     if (answerButton === currentQuestionControls()?.answerButton) {
-      beginAutomaticCopyFromGesture();
+      app.beginAutomaticCopyFromGesture();
       return;
     }
-
+  
     const link = target.closest("a[href]");
-    if (!link || getNextQuestionURL(link) === null) {
+    if (!link || app.getNextQuestionURL(link) === null) {
       return;
     }
-
+  
     event.preventDefault();
     event.stopImmediatePropagation();
   }
-
+  
   function clearFrameState() {
     clearShortcutSequence();
-    clearTimeLimit();
-    clearFrameProblemScrollTimers();
-    discardAnswerCopyOperation();
-    frameMutationObserver?.disconnect();
-    frameMutationObserver = null;
-    frameControlObserver?.disconnect();
-    frameControlObserver = null;
-    observedAnswerResult = null;
-    observedCommentary = null;
-    currentPageReadPending = false;
-    awaitingAnswerResultSpeech = false;
+    app.clearTimeLimit();
+    app.clearFrameProblemScrollTimers();
+    app.discardAnswerCopyOperation();
+    app.frameMutationObserver?.disconnect();
+    app.frameMutationObserver = null;
+    app.frameControlObserver?.disconnect();
+    app.frameControlObserver = null;
+    app.observedAnswerResult = null;
+    app.observedCommentary = null;
+    app.currentPageReadPending = false;
+    app.awaitingAnswerResultSpeech = false;
   }
-
+  
   function applyFrameDarkMode(sourceDocument) {
     let darkModeStyle = sourceDocument.getElementById(
-      FRAME_DARK_MODE_STYLE_ID
+      app.FRAME_DARK_MODE_STYLE_ID
     );
     if (darkModeStyle === null) {
       darkModeStyle = sourceDocument.createElement("style");
-      darkModeStyle.id = FRAME_DARK_MODE_STYLE_ID;
+      darkModeStyle.id = app.FRAME_DARK_MODE_STYLE_ID;
       sourceDocument.head.appendChild(darkModeStyle);
     }
-    darkModeStyle.textContent = `${FRAME_DARK_MODE_CSS}\n${CORRECT_FEEDBACK_CSS}`;
+    darkModeStyle.textContent = `${app.FRAME_DARK_MODE_CSS}\n${app.CORRECT_FEEDBACK_CSS}`;
   }
-
+  
   function bindFrameDocument() {
     let nextDocument;
     let nextURL;
-
+  
     try {
-      nextDocument = frame.contentDocument;
-      nextURL = frame.contentWindow.location.href;
+      nextDocument = app.frame.contentDocument;
+      nextURL = app.frame.contentWindow.location.href;
     } catch (error) {
-      showReaderError(
+      app.showReaderError(
         "frame-access",
         "問題pageへアクセスできません",
         "Readerと問題pageが同じoriginであることを確認してください.",
@@ -329,16 +330,16 @@
       );
       return;
     }
-
-    if (nextURL === "about:blank" && frame.src !== "about:blank") {
+  
+    if (nextURL === "about:blank" && app.frame.src !== "about:blank") {
       return;
     }
-    if (nextURL === "about:blank" && shouldLaunchNextQuestionAfterSync) {
+    if (nextURL === "about:blank" && app.shouldLaunchNextQuestionAfterSync) {
       return;
     }
-
+  
     if (!nextDocument?.body) {
-      showReaderError(
+      app.showReaderError(
         "frame-document",
         "問題pageの本文がありません",
         "問題pageを再読み込みしてください.",
@@ -346,38 +347,38 @@
       );
       return;
     }
-
-    if (nextDocument === boundFrameDocument) {
-      scheduleFrameProblemScroll(nextDocument);
+  
+    if (nextDocument === app.boundFrameDocument) {
+      app.scheduleFrameProblemScroll(nextDocument);
       return;
     }
-
+  
     clearFrameState();
-    boundFrameDocument = nextDocument;
-    navigationInProgress = false;
-    frameDocument = nextDocument;
-    synchronizeAnswerPresentation(frameDocument);
-    applyFrameDarkMode(frameDocument);
-    suppressNextQuestionControls(frameDocument);
-    if (getCurrentAnswerResult() === "correct") {
-      beginCorrectAnswerFeedback(frameDocument);
+    app.boundFrameDocument = nextDocument;
+    app.navigationInProgress = false;
+    app.frameDocument = nextDocument;
+    app.synchronizeAnswerPresentation(app.frameDocument);
+    applyFrameDarkMode(app.frameDocument);
+    app.suppressNextQuestionControls(app.frameDocument);
+    if (app.getCurrentAnswerResult() === "correct") {
+      app.beginCorrectAnswerFeedback(app.frameDocument);
     }
-    scheduleFrameProblemScroll(frameDocument);
-    frame.contentWindow.addEventListener("click", onFrameClick, true);
-    frame.contentWindow.addEventListener(
+    app.scheduleFrameProblemScroll(app.frameDocument);
+    app.frame.contentWindow.addEventListener("click", onFrameClick, true);
+    app.frame.contentWindow.addEventListener(
       "keydown",
       onReaderKeyDown,
       true
     );
-    observeFrameChanges();
-
+    app.observeFrameChanges();
+  
     try {
-      currentFrameURL = nextURL;
-      if (!synchronizeCurrentHistoryURL()) {
+      app.currentFrameURL = nextURL;
+      if (!app.synchronizeCurrentHistoryURL()) {
         return;
       }
     } catch (error) {
-      showReaderError(
+      app.showReaderError(
         "frame-url",
         "問題pageのURLを反映できません",
         "Readerのhistoryを更新できませんでした.",
@@ -385,72 +386,99 @@
       );
       return;
     }
-
-    synchronizeTimeLimitPhase();
-    void resumePendingLearningFlow();
-    currentPageReadPending = true;
-    processCurrentPageSpeech();
+  
+    app.synchronizeTimeLimitPhase();
+    void app.resumePendingLearningFlow();
+    app.currentPageReadPending = true;
+    app.processCurrentPageSpeech();
   }
-
+  
   function onReaderFrameReady(event) {
     const message = event.data;
     if (
       event.origin !== location.origin ||
-      event.source !== frame.contentWindow ||
+      event.source !== app.frame.contentWindow ||
       message === null ||
       typeof message !== "object" ||
       Array.isArray(message) ||
       Object.keys(message).sort().join(",") !== "href,type" ||
-      message.type !== READER_FRAME_READY_MESSAGE_TYPE ||
+      message.type !== app.READER_FRAME_READY_MESSAGE_TYPE ||
       typeof message.href !== "string" ||
-      !isSitePageURL(message.href)
+      !app.isSitePageURL(message.href)
     ) {
       return;
     }
-
+  
     try {
       if (
-        frame.contentWindow.location.href !== message.href ||
-        frame.contentDocument?.readyState === "loading"
+        app.frame.contentWindow.location.href !== message.href ||
+        app.frame.contentDocument?.readyState === "loading"
       ) {
         return;
       }
     } catch {
       return;
     }
-
+  
     bindFrameDocument();
   }
-
-  syncSettings.addEventListener("cancel", (event) => {
+  
+  app.syncSettings.addEventListener("cancel", (event) => {
     event.preventDefault();
   });
-  syncSettingsPanel.addEventListener("submit", (event) => {
+  app.syncSettingsPanel.addEventListener("submit", (event) => {
     event.preventDefault();
-    void saveSyncSettings();
+    void app.saveSyncSettings();
   });
   window.addEventListener("message", onReaderFrameReady);
   document.addEventListener("keydown", onReaderKeyDown, true);
-  if (speechSupported) {
-    document.addEventListener("click", activateSpeechFromGesture, true);
+  if (app.speechSupported) {
+    document.addEventListener("click", app.activateSpeechFromGesture, true);
   }
-  window.addEventListener("focus", handlePageResume);
-  window.addEventListener("popstate", handleReaderPopState);
-  window.addEventListener("pagehide", handleReaderPageHide);
+  window.addEventListener("focus", app.handlePageResume);
+  window.addEventListener("popstate", app.handleReaderPopState);
+  window.addEventListener("pagehide", app.handleReaderPageHide);
   window.addEventListener("pageshow", () => {
-    handleReaderPageShow();
-    handlePageResume();
+    app.handleReaderPageShow();
+    app.handlePageResume();
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
-      handlePageResume();
+      app.handlePageResume();
     }
   });
-
-  if (isNextQuestionLauncher) {
-    void startNextQuestionLauncher();
+  
+  if (app.isNextQuestionLauncher) {
+    void app.startNextQuestionLauncher();
   } else {
-    enterReaderUI();
+    app.enterReaderUI();
   }
 
-})();
+  Object.defineProperties(app, {
+    ANSWER_CHOICE_SHORTCUT_KEYS: { enumerable: false, get: () => ANSWER_CHOICE_SHORTCUT_KEYS },
+    DISPLAY_CHOICE_SHORTCUT_KEYS: { enumerable: false, get: () => DISPLAY_CHOICE_SHORTCUT_KEYS },
+    SHORTCUT_SCROLL_DISTANCE: { enumerable: false, get: () => SHORTCUT_SCROLL_DISTANCE },
+    shortcutSequenceTimer: { enumerable: false, get: () => shortcutSequenceTimer, set: (value) => { shortcutSequenceTimer = value; } },
+    shortcutSequenceDocument: { enumerable: false, get: () => shortcutSequenceDocument, set: (value) => { shortcutSequenceDocument = value; } },
+    shortcutSequenceKey: { enumerable: false, get: () => shortcutSequenceKey, set: (value) => { shortcutSequenceKey = value; } },
+    shortcutTargetElement: { enumerable: false, get: () => shortcutTargetElement },
+    isEditableShortcutTarget: { enumerable: false, get: () => isEditableShortcutTarget },
+    currentQuestionControls: { enumerable: false, get: () => currentQuestionControls },
+    isDisabledControl: { enumerable: false, get: () => isDisabledControl },
+    activateAnswerChoice: { enumerable: false, get: () => activateAnswerChoice },
+    activateAnswerButton: { enumerable: false, get: () => activateAnswerButton },
+    activateDisplayChoice: { enumerable: false, get: () => activateDisplayChoice },
+    scrollQuestionFrame: { enumerable: false, get: () => scrollQuestionFrame },
+    clearShortcutSequence: { enumerable: false, get: () => clearShortcutSequence },
+    commitPendingShortcut: { enumerable: false, get: () => commitPendingShortcut },
+    startShortcutSequence: { enumerable: false, get: () => startShortcutSequence },
+    completeShortcutSequence: { enumerable: false, get: () => completeShortcutSequence },
+    handleEnterShortcut: { enumerable: false, get: () => handleEnterShortcut },
+    onReaderKeyDown: { enumerable: false, get: () => onReaderKeyDown },
+    onFrameClick: { enumerable: false, get: () => onFrameClick },
+    clearFrameState: { enumerable: false, get: () => clearFrameState },
+    applyFrameDarkMode: { enumerable: false, get: () => applyFrameDarkMode },
+    bindFrameDocument: { enumerable: false, get: () => bindFrameDocument },
+    onReaderFrameReady: { enumerable: false, get: () => onReaderFrameReady },
+  });
+}

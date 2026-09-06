@@ -974,7 +974,7 @@ async function captureFailureArtifacts(driver, error) {
 async function runTest() {
   verifyHostEnvironment();
   fs.mkdirSync(resultDirectory, { recursive: true });
-  execFileSync("python3", ["build.py"], {
+  execFileSync(process.execPath, ["build.mjs"], {
     cwd: projectRoot,
     env: kakomonnFreeEnvironment(),
     stdio: "inherit",

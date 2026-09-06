@@ -217,7 +217,7 @@ async function seedTodayNewQuestionCount(
 beforeEach(reset);
 
 describe("LearningState schema", () => {
-  it("checks the current schema with two SQL statements", () => {
+  it("checks the current schema and canonical indexes", () => {
     const statements = [];
     const currentTables = [
       "attempts",
@@ -236,9 +236,18 @@ describe("LearningState schema", () => {
       sql: {
         exec(statement) {
           statements.push(statement);
-          const rows = statement.includes("sqlite_master")
-            ? currentTables.map((name) => ({ name }))
-            : [{ version: 11 }];
+          let rows = [];
+          if (statement.includes("WHERE type = 'table'")) {
+            rows = currentTables.map((name) => ({ name }));
+          } else if (statement.includes("SELECT version")) {
+            rows = [{ version: 11 }];
+          } else if (statement.includes("WHERE type = 'index'")) {
+            rows = [
+              { name: "attempts_by_site_attempted_at_operation" },
+              { name: "cards_by_site_due_number" },
+              { name: "questions_by_site_attempted_number" },
+            ];
+          }
           return { toArray: () => rows };
         },
       },
@@ -246,25 +255,36 @@ describe("LearningState schema", () => {
 
     initializeLearningSchema(storage, NOW);
 
-    expect(statements).toHaveLength(2);
+    expect(statements).toHaveLength(4);
     expect(statements[0]).toContain("sqlite_master");
     expect(statements[1]).toContain("SELECT version");
+    expect(statements[2]).toContain("WHERE type = 'index'");
+    expect(statements[3]).toContain("CREATE INDEX IF NOT EXISTS");
   });
 
-  it("returns immediately for the current schema version", async () => {
+  it("reconciles indexes for the current schema version", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       initializeLearningSchema(state.storage, NOW);
       state.storage.sql.exec(
         "CREATE INDEX IF NOT EXISTS attempts_by_site ON attempts (site)"
       );
+      state.storage.sql.exec(
+        "CREATE INDEX IF NOT EXISTS custom_redundant_cards_index ON cards (site)"
+      );
       initializeLearningSchema(state.storage, NOW);
       const indexes = state.storage.sql
         .exec(
-          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'attempts_by_site'"
+          `SELECT name FROM sqlite_master
+           WHERE type = 'index' AND name NOT LIKE 'sqlite_%'
+           ORDER BY name`
         )
         .toArray()
         .map((row) => row.name);
-      expect(indexes).toEqual(["attempts_by_site"]);
+      expect(indexes).toEqual([
+        "attempts_by_site_attempted_at_operation",
+        "cards_by_site_due_number",
+        "questions_by_site_attempted_number",
+      ]);
     });
   });
 

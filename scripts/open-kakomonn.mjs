@@ -33,7 +33,7 @@ export const CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT =
   "--hide-crash-restore-bubble";
 export const CHROME_BOOTSTRAP_URL = "about:blank";
 const READER_METADATA_PATH = fileURLToPath(
-  new URL("../kakomonn-reader/src/metadata-and-runtime.js", import.meta.url),
+  new URL("../kakomonn-reader/src/userscript.meta.txt", import.meta.url),
 );
 
 export function readUserscriptIdentity({ readFile = readFileSync } = {}) {

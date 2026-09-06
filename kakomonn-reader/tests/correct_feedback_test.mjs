@@ -1,29 +1,16 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import vm from "node:vm";
+const {
+  CORRECT_FEEDBACK_VARIANTS,
+  calculateKpiQuestionsRemaining,
+  chooseCorrectFeedbackVariant,
+  randomIntegerBelow,
+} = await import(`data:text/javascript;base64,${Buffer.from(
+  await readFile(new URL("../src/correct-feedback.js", import.meta.url), "utf8"),
+).toString("base64")}`);
 
-const sourceUrl = new URL("../src/correct-feedback.js", import.meta.url);
-
-async function loadSelectionApi() {
-  const source = await readFile(sourceUrl, "utf8");
-  const context = vm.createContext({});
-  vm.runInContext(
-    `${source}\n` +
-      `globalThis.__correctFeedbackTest = {\n` +
-      `  calculateKpiQuestionsRemaining,\n` +
-      `  chooseCorrectFeedbackVariant,\n` +
-      `  randomIntegerBelow,\n` +
-      `  variants: CORRECT_FEEDBACK_VARIANTS,\n` +
-      `};`,
-    context,
-    { filename: sourceUrl.pathname },
-  );
-  return context.__correctFeedbackTest;
-}
-
-test("combines due and new question work into one KPI number", async () => {
-  const { calculateKpiQuestionsRemaining } = await loadSelectionApi();
+test("combines due and new question work into one KPI number", () => {
   assert.equal(
     calculateKpiQuestionsRemaining({
       dueCardsRemaining: 12,
@@ -65,10 +52,9 @@ function queuedCrypto(values) {
   };
 }
 
-test("correct feedback variants expose the agreed copy and tier labels", async () => {
-  const { variants } = await loadSelectionApi();
+test("correct feedback variants expose the agreed copy and tier labels", () => {
   assert.deepEqual(
-    Array.from(variants, (variant) => ({
+    Array.from(CORRECT_FEEDBACK_VARIANTS, (variant) => ({
       displayText: variant.displayText,
       id: variant.id,
       label: variant.label,
@@ -103,8 +89,7 @@ test("correct feedback variants expose the agreed copy and tier labels", async (
   );
 });
 
-test("correct feedback selection has exact 889, 100, 10, and 1 buckets", async () => {
-  const { chooseCorrectFeedbackVariant } = await loadSelectionApi();
+test("correct feedback selection has exact 889, 100, 10, and 1 buckets", () => {
   const counts = new Map();
   for (let bucket = 0; bucket < 1000; bucket += 1) {
     const variant = chooseCorrectFeedbackVariant(queuedCrypto([bucket]));
@@ -118,15 +103,13 @@ test("correct feedback selection has exact 889, 100, 10, and 1 buckets", async (
   });
 });
 
-test("correct feedback random selection rejects modulo-biased values", async () => {
-  const { chooseCorrectFeedbackVariant } = await loadSelectionApi();
+test("correct feedback random selection rejects modulo-biased values", () => {
   const cryptoSource = queuedCrypto([65000, 0]);
   assert.equal(chooseCorrectFeedbackVariant(cryptoSource).id, "ssr");
   assert.equal(cryptoSource.calls, 2);
 });
 
-test("correct feedback random selection has no insecure fallback", async () => {
-  const { randomIntegerBelow } = await loadSelectionApi();
+test("correct feedback random selection has no insecure fallback", () => {
   assert.throws(
     () => randomIntegerBelow(1000, {}),
     /Crypto random values are unavailable/,

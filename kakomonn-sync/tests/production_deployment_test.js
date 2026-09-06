@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const { createHash } = require("node:crypto");
 const { readdir, readFile } = require("node:fs/promises");
-const { extname, resolve } = require("node:path");
+const { extname, relative, resolve, sep } = require("node:path");
 const test = require("node:test");
 const {
   readKakomonnConfiguration,
@@ -9,11 +9,11 @@ const {
 } = require("../../scripts/kakomonn-config.cjs");
 
 const productionOrigin = "https://kakomonn-sync.kakomonn.workers.dev";
-const publicDirectory = resolve(__dirname, "..", "public");
+const distDirectory = resolve(__dirname, "..", "dist");
 const assetControlFiles = new Set(["_headers", "_redirects"]);
 const textAssetExtensions = new Set([".css", ".html", ".js"]);
-const sitePattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/;
 const kakomonnConfiguration = readKakomonnConfiguration();
+const contracts = import("../../contracts/kakomonn.mjs");
 
 function syncToken() {
   return requireKakomonnConfiguration(
@@ -41,20 +41,27 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("production assets match the repository", async (context) => {
-  const entries = await readdir(publicDirectory, { withFileTypes: true });
-  const assetNames = entries
-    .filter((entry) => entry.isFile() && !assetControlFiles.has(entry.name))
-    .map((entry) => entry.name)
-    .sort();
+async function repositoryAssets(directory = distDirectory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nestedAssets = await Promise.all(entries.map(async (entry) => {
+    const absolutePath = resolve(directory, entry.name);
+    if (entry.isDirectory()) return repositoryAssets(absolutePath);
+    if (!entry.isFile() || assetControlFiles.has(entry.name)) return [];
+    return [relative(distDirectory, absolutePath).split(sep).join("/")];
+  }));
+  return nestedAssets.flat().sort();
+}
 
-  assert.notEqual(assetNames.length, 0, "public assets must not be empty");
+test("production assets match the repository", async (context) => {
+  const assetNames = await repositoryAssets();
+
+  assert.notEqual(assetNames.length, 0, "built assets must not be empty");
 
   for (const assetName of assetNames) {
     await context.test(assetName, async () => {
       const expected = canonicalAsset(
         assetName,
-        await readFile(resolve(publicDirectory, assetName))
+        await readFile(resolve(distDirectory, assetName))
       );
       const assetUrl = new URL(`/${assetName}`, productionOrigin);
       assetUrl.searchParams.set("deployment-test", String(Date.now()));
@@ -63,7 +70,10 @@ test("production assets match the repository", async (context) => {
       });
 
       assert.equal(response.status, 200, `${assetUrl.pathname} must be published`);
-      assert.equal(response.headers.get("cache-control"), "no-cache");
+      const expectedCacheControl = assetName.startsWith("assets/")
+        ? "public, max-age=31536000, immutable"
+        : "no-cache";
+      assert.equal(response.headers.get("cache-control"), expectedCacheControl);
       const actual = canonicalAsset(
         assetName,
         Buffer.from(await response.arrayBuffer())
@@ -74,7 +84,7 @@ test("production assets match the repository", async (context) => {
         `${assetUrl.pathname} does not match the repository`
       );
 
-      if (assetName === "app.js") {
+      if (assetName.startsWith("assets/") && extname(assetName) === ".js") {
         const etag = response.headers.get("etag");
         assert.notEqual(etag, null, `${assetUrl.pathname} must publish an ETag`);
         const revalidated = await fetch(assetUrl, {
@@ -94,7 +104,7 @@ test("production /open serves the repository dashboard bridge", async () => {
   assert.equal(response.status, 200);
   const expected = canonicalAsset(
     "open.html",
-    await readFile(resolve(publicDirectory, "open.html")),
+    await readFile(resolve(distDirectory, "open.html")),
   );
   const actual = canonicalAsset(
     "open.html",
@@ -104,6 +114,7 @@ test("production /open serves the repository dashboard bridge", async () => {
 });
 
 test("production serves only the authenticated v11 API backed by LearningState", async () => {
+  const { isLearningMetrics, isSite } = await contracts;
   const unauthorized = await fetch(new URL("/v11/sites", productionOrigin));
   assert.equal(unauthorized.status, 401);
   assert.equal(unauthorized.headers.get("cache-control"), "no-store");
@@ -118,7 +129,7 @@ test("production serves only the authenticated v11 API backed by LearningState",
   assert.equal(sitesResponse.status, 200);
   const sitesBody = await sitesResponse.json();
   assert.equal(Array.isArray(sitesBody.sites), true);
-  assert.equal(sitesBody.sites.every((site) => sitePattern.test(site)), true);
+  assert.equal(sitesBody.sites.every(isSite), true);
 
   if (sitesBody.sites.length === 0) {
     return;
@@ -154,6 +165,7 @@ test("production serves only the authenticated v11 API backed by LearningState",
   assert.equal(stateBody.site, site);
   assert.match(stateBody.today, /^\d{4}-\d{2}-\d{2}$/);
   const metrics = stateBody.learningMetrics;
+  assert.equal(isLearningMetrics(metrics), true);
   assert.deepEqual(Object.keys(metrics).sort(), [
     "attemptedQuestionCount",
     "dailyKpiCompleted",

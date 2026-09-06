@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
-import { celebrationSearch } from "../shared/celebration-contract.js";
-import { validateManifest } from "../celebration-selection.js";
+import { celebrationSearch } from "../../contracts/kakomonn.mjs";
+import { validateManifest } from "../celebration-selection.mjs";
 import { startStaticServer } from "./server-helper.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");

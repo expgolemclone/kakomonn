@@ -1,4 +1,4 @@
-import { parseCelebration } from "./celebration-contract.js";
+import { parseCelebration } from "../../contracts/kakomonn.mjs";
 
 const READY_MESSAGE = "kakomonn:celebration-ready";
 const EXPERIENCE_ID_PATTERN = /^[a-z0-9-]+$/;

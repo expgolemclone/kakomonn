@@ -1,3 +1,4 @@
+export function installLauncherController(app) {
   let nextQuestionLauncherRequestInProgress = false;
   let readerInitializationStarted = false;
   let launcher = null;
@@ -6,49 +7,49 @@
   let launcherStatus = null;
   let launcherActions = null;
   let launcherRetry = null;
-
+  
   function ensureNextQuestionLauncher() {
     if (launcher !== null) {
       return;
     }
-
+  
     document.title = "次の問題へ | KAKOMONN";
-
+  
     launcher = document.createElement("main");
     launcher.id = "kakomonn-next-question-launcher";
     launcher.setAttribute("aria-labelledby", "kakomonn-next-question-title");
-
+  
     launcherPanel = document.createElement("section");
     launcherPanel.id = "kakomonn-next-question-panel";
-
+  
     const launcherBrand = document.createElement("div");
     launcherBrand.id = "kakomonn-next-question-brand";
     launcherBrand.textContent = "KAKOMONN";
-
+  
     const launcherContent = document.createElement("div");
     launcherContent.id = "kakomonn-next-question-content";
-
+  
     const launcherIndicator = document.createElement("div");
     launcherIndicator.id = "kakomonn-next-question-indicator";
     launcherIndicator.setAttribute("aria-hidden", "true");
-
+  
     launcherTitle = document.createElement("h1");
     launcherTitle.id = "kakomonn-next-question-title";
-
+  
     launcherStatus = document.createElement("p");
     launcherStatus.id = "next-question-status";
     launcherStatus.setAttribute("role", "status");
     launcherStatus.setAttribute("aria-live", "polite");
-
+  
     launcherContent.append(
       launcherIndicator,
       launcherTitle,
       launcherStatus
     );
-
+  
     launcherActions = document.createElement("div");
     launcherActions.id = "kakomonn-next-question-actions";
-
+  
     launcherRetry = document.createElement("button");
     launcherRetry.id = "next-question-retry";
     launcherRetry.type = "button";
@@ -56,18 +57,18 @@
     launcherRetry.addEventListener("click", () => {
       void startNextQuestionLauncher();
     });
-
+  
     launcherActions.appendChild(launcherRetry);
     launcherPanel.append(launcherBrand, launcherContent, launcherActions);
     launcher.appendChild(launcherPanel);
   }
-
+  
   function mountNextQuestionLauncher() {
     ensureNextQuestionLauncher();
     delete document.body.dataset.kakomonnReaderUi;
     document.body.replaceChildren(launcher);
   }
-
+  
   function showLauncherLoading() {
     mountNextQuestionLauncher();
     launcherPanel.dataset.state = "loading";
@@ -79,7 +80,7 @@
     launcherActions.hidden = true;
     launcherRetry.hidden = true;
   }
-
+  
   function showLauncherState({ state, title, message, showRetry }) {
     mountNextQuestionLauncher();
     launcherPanel.dataset.state = state;
@@ -94,7 +95,7 @@
     launcherRetry.dataset.variant = "primary";
     launcherActions.hidden = !showRetry;
   }
-
+  
   function showLauncherRequestFailure(error) {
     if (error?.code === "request_timeout") {
       showLauncherState({
@@ -133,36 +134,36 @@
       showRetry: true,
     });
   }
-
+  
   function enterReaderUI() {
-    mountReaderUI();
+    app.mountReaderUI();
     if (!readerInitializationStarted) {
       readerInitializationStarted = true;
-      void initializeSync();
+      void app.initializeSync();
     }
   }
-
+  
   function requireSyncSettings(message) {
     const initializationAlreadyStarted = readerInitializationStarted;
-    shouldLaunchNextQuestionAfterSync = true;
+    app.shouldLaunchNextQuestionAfterSync = true;
     enterReaderUI();
     if (initializationAlreadyStarted) {
-      syncReady = false;
-      openSyncSettings();
-      syncSettingsError.textContent = message;
-      updateSyncDependentControls();
+      app.syncReady = false;
+      app.openSyncSettings();
+      app.syncSettingsError.textContent = message;
+      app.updateSyncDependentControls();
     }
   }
-
+  
   function openScheduledQuestionInReader(questionURL, state = null) {
-    shouldLaunchNextQuestionAfterSync = false;
-    launcherSyncState = state;
+    app.shouldLaunchNextQuestionAfterSync = false;
+    app.launcherSyncState = state;
     enterReaderUI();
-    return navigateToScheduledQuestion(questionURL);
+    return app.navigateToScheduledQuestion(questionURL);
   }
-
+  
   function showNoNextQuestionLauncher() {
-    shouldLaunchNextQuestionAfterSync = true;
+    app.shouldLaunchNextQuestionAfterSync = true;
     showLauncherState({
       state: "empty",
       title: "今解く問題はありません",
@@ -170,25 +171,25 @@
       showRetry: true,
     });
   }
-
+  
   async function startNextQuestionLauncher() {
     if (nextQuestionLauncherRequestInProgress) {
       return;
     }
     nextQuestionLauncherRequestInProgress = true;
     showLauncherLoading();
-
+  
     let storedToken;
     try {
-      storedToken = await GM.getValue(SYNC_TOKEN_KEY, "");
+      storedToken = await GM.getValue(app.SYNC_TOKEN_KEY, "");
       if (typeof storedToken !== "string") {
-        await GM.deleteValue(SYNC_TOKEN_KEY);
+        await GM.deleteValue(app.SYNC_TOKEN_KEY);
         storedToken = "";
       }
     } catch (error) {
       nextQuestionLauncherRequestInProgress = false;
       enterReaderUI();
-      showReaderError(
+      app.showReaderError(
         "launcher-storage",
         "同期設定を読み込めません",
         "Userscript storageを確認できませんでした. ページを再読み込みしてください.",
@@ -196,16 +197,16 @@
       );
       return;
     }
-
+  
     const token = storedToken.trim();
     if (!token) {
       nextQuestionLauncherRequestInProgress = false;
       requireSyncSettings("同期トークンを設定してください");
       return;
     }
-
+  
     try {
-      const result = await requestNextQuestion(token);
+      const result = await app.requestNextQuestion(token);
       if (result.question === null) {
         showNoNextQuestionLauncher();
         return;
@@ -221,3 +222,25 @@
       nextQuestionLauncherRequestInProgress = false;
     }
   }
+
+  Object.defineProperties(app, {
+    nextQuestionLauncherRequestInProgress: { enumerable: false, get: () => nextQuestionLauncherRequestInProgress, set: (value) => { nextQuestionLauncherRequestInProgress = value; } },
+    readerInitializationStarted: { enumerable: false, get: () => readerInitializationStarted, set: (value) => { readerInitializationStarted = value; } },
+    launcher: { enumerable: false, get: () => launcher, set: (value) => { launcher = value; } },
+    launcherPanel: { enumerable: false, get: () => launcherPanel, set: (value) => { launcherPanel = value; } },
+    launcherTitle: { enumerable: false, get: () => launcherTitle, set: (value) => { launcherTitle = value; } },
+    launcherStatus: { enumerable: false, get: () => launcherStatus, set: (value) => { launcherStatus = value; } },
+    launcherActions: { enumerable: false, get: () => launcherActions, set: (value) => { launcherActions = value; } },
+    launcherRetry: { enumerable: false, get: () => launcherRetry, set: (value) => { launcherRetry = value; } },
+    ensureNextQuestionLauncher: { enumerable: false, get: () => ensureNextQuestionLauncher },
+    mountNextQuestionLauncher: { enumerable: false, get: () => mountNextQuestionLauncher },
+    showLauncherLoading: { enumerable: false, get: () => showLauncherLoading },
+    showLauncherState: { enumerable: false, get: () => showLauncherState },
+    showLauncherRequestFailure: { enumerable: false, get: () => showLauncherRequestFailure },
+    enterReaderUI: { enumerable: false, get: () => enterReaderUI },
+    requireSyncSettings: { enumerable: false, get: () => requireSyncSettings },
+    openScheduledQuestionInReader: { enumerable: false, get: () => openScheduledQuestionInReader },
+    showNoNextQuestionLauncher: { enumerable: false, get: () => showNoNextQuestionLauncher },
+    startNextQuestionLauncher: { enumerable: false, get: () => startNextQuestionLauncher },
+  });
+}

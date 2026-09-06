@@ -598,6 +598,15 @@ async function runCase(
       state: "visible",
       timeout: 15_000,
     });
+    await page.waitForFunction(
+      (resultClass) =>
+        document
+          .querySelector("#kakomonn-reader-frame")
+          ?.contentDocument?.querySelector("#js-answer-result-box")
+          ?.classList.contains(resultClass) === true,
+      expectedResultClass,
+      { timeout: 15_000 },
+    );
     const resultClasses =
       (await frame.locator("#js-answer-result-box").getAttribute("class")) ?? "";
     assert.equal(resultClasses.split(/\s+/).includes(expectedResultClass), true);

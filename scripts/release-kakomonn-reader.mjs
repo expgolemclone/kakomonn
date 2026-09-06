@@ -228,7 +228,6 @@ export async function runRelease({
   logger("Checking release prerequisites and synchronized main state");
   runCommand("jj", ["--version"]);
   runCommand("gh", ["--version"]);
-  runCommand("python3", ["--version"]);
   runCommand("gh", ["auth", "status", "--hostname", "github.com"]);
 
   const initialState = assertReleaseState(runCommand);

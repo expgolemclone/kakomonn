@@ -1,6 +1,6 @@
 import manifest from "./celebrations.json" with { type: "json" };
-import { parseCelebration } from "./shared/celebration-contract.js";
-import { chooseCelebration, validateManifest } from "./celebration-selection.js";
+import { parseCelebration } from "../contracts/kakomonn.mjs";
+import { chooseCelebration, validateManifest } from "./celebration-selection.mjs";
 
 const READY_MESSAGE = "kakomonn:celebration-ready";
 const READY_TIMEOUT_MS = 12_000;

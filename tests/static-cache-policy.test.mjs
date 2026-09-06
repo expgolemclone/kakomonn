@@ -18,6 +18,10 @@ test("sync static assets are stored for revalidation", async () => {
   const source = await headersSource("kakomonn-sync/public/_headers");
   assert.match(source, /^\/\*\n  Cache-Control: no-cache\n/);
   assert.equal(source.includes("Cache-Control: no-store"), false);
+  assert.match(
+    source,
+    /\/assets\/\*\n  ! Cache-Control\n  Cache-Control: public, max-age=31536000, immutable/,
+  );
 });
 
 test("sync invokes the Worker only for APIs and disables persistent telemetry", async () => {

@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
+const webDirectory = new URL("../kakomonn-sync/web/", import.meta.url);
 const publicDirectory = new URL("../kakomonn-sync/public/", import.meta.url);
 
 test("the fixed URL serves the dashboard bridge to the configured userscript origin", async () => {
-  const openScript = await readFile(new URL("open.js", publicDirectory), "utf8");
-  const openPage = await readFile(new URL("open.html", publicDirectory), "utf8");
+  const openScript = await readFile(new URL("open.js", webDirectory), "utf8");
+  const openPage = await readFile(new URL("open.html", webDirectory), "utf8");
   const publicFiles = await readdir(publicDirectory);
 
   assert.equal(

@@ -1,17 +1,18 @@
 {
   "name": "kakomonn",
   "private": true,
-  "workspaces": [
-    "congratulations"
-  ],
   "engines": {
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "npm run build:kakomonn-reader",
+    "build": "npm run build:kakomonn-reader && npm run build:kakomonn-sync && npm run build:congratulations",
     "postinstall": "playwright install chromium webkit",
     "open:kakomonn": "node --use-system-ca scripts/open-kakomonn.mjs",
-    "build:kakomonn-reader": "python3 kakomonn-reader/build.py",
+    "build:kakomonn-reader": "node kakomonn-reader/build.mjs",
+    "build:kakomonn-sync": "vite build --config kakomonn-sync/vite.config.js",
+    "build:congratulations": "vite build --config congratulations/vite.config.js",
+    "start:congratulations": "vite --config congratulations/vite.config.js --host 127.0.0.1",
+    "preview:congratulations": "vite preview --config congratulations/vite.config.js --host 127.0.0.1",
     "test": "npm run test:local && npm run test:smoke && npm run test:kakomonn-live-site && npm run test:kakomonn-live-open && npm run test:kakomonn-live-sync",
     "test:local": "npm run test:repository-naming && npm run test:static-cache-policy && npm run test:kakomonn-config && npm run test:kakomonn-sync-launcher && npm run test:open-kakomonn && npm run test:release-script && npm run test:live-sync-script && npm run test:kakomonn-reader && npm run test:kakomonn-sync && npm run test:congratulations",
     "test:repository-naming": "node --test tests/repository_naming_test.mjs",
@@ -21,13 +22,14 @@
     "test:open-kakomonn": "node --test tests/open-kakomonn.test.mjs",
     "test:release-script": "node --test tests/release-kakomonn-reader.test.mjs",
     "test:live-sync-script": "node --test kakomonn-reader/tests/live_sync_e2e_unit_test.js",
-    "test:kakomonn-reader": "npm run build:kakomonn-reader && node --test kakomonn-reader/tests/correct_feedback_test.mjs && python3 kakomonn-reader/tests/build_test.py && es-check es2020 kakomonn-reader/kakomonn-reader.user.js && python3 kakomonn-reader/tests/userscript_metadata_test.py kakomonn-reader/kakomonn-reader.user.js",
+    "test:kakomonn-reader": "npm run build:kakomonn-reader && node --test kakomonn-reader/tests/build_test.mjs kakomonn-reader/tests/correct_feedback_test.mjs kakomonn-reader/tests/userscript_metadata_test.mjs && es-check es2020 kakomonn-reader/kakomonn-reader.user.js",
     "test:kakomonn-sync": "vitest run --config kakomonn-sync/vitest.config.mjs",
-    "test:kakomonn-sync-production": "node --use-system-ca --test kakomonn-sync/tests/production_deployment_test.js",
-    "test:congratulations": "npm --workspace congratulations test",
-    "test:congratulations-production": "npm --workspace congratulations run build && node --use-system-ca congratulations/tests/production.mjs",
-    "test:kakomonn-dashboard": "node kakomonn-sync/tests/dashboard_e2e_test.js",
-    "test:smoke": "node kakomonn-reader/tests/smoke_test.js && node kakomonn-reader/tests/time_limit_smoke_test.js && node kakomonn-reader/tests/webkit_smoke_test.js && node kakomonn-sync/tests/dashboard_e2e_test.js",
+    "test:kakomonn-sync-production": "npm run build:kakomonn-sync && node --use-system-ca --test kakomonn-sync/tests/production_deployment_test.js",
+    "test:congratulations": "npm run check:congratulations && npm run build:congratulations && node congratulations/tests/smoke.mjs && node congratulations/tests/browser.mjs",
+    "check:congratulations": "node --check congratulations/shared/experience-runtime.js && node --check congratulations/celebration-selection.mjs && node --check congratulations/router.js && node --check congratulations/vite.config.js && node --check congratulations/scripts/inject-experience-runtime.mjs && node --check congratulations/tests/smoke.mjs && node --check congratulations/tests/browser.mjs && node --check congratulations/tests/production.mjs",
+    "test:congratulations-production": "npm run build:congratulations && node --use-system-ca congratulations/tests/production.mjs",
+    "test:kakomonn-dashboard": "npm run build:kakomonn-sync && node kakomonn-sync/tests/dashboard_e2e_test.js",
+    "test:smoke": "npm run build:kakomonn-sync && node kakomonn-reader/tests/smoke_test.js && node kakomonn-reader/tests/time_limit_smoke_test.js && node kakomonn-reader/tests/webkit_smoke_test.js && node kakomonn-sync/tests/dashboard_e2e_test.js",
     "test:kakomonn-webkit": "node kakomonn-reader/tests/webkit_smoke_test.js",
     "test:kakomonn-ios-safari": "node --use-system-ca kakomonn-reader/tests/ios_safari_e2e_test.js",
     "test:kakomonn-live-site": "node kakomonn-reader/tests/live_site_e2e_test.js",
@@ -43,6 +45,7 @@
     "appium-xcuitest-driver": "12.8.0",
     "es-check": "9.6.4",
     "playwright": "1.61.1",
+    "vite": "8.1.5",
     "vitest": "4.1.10",
     "wrangler": "4.120.0"
   },

@@ -7,7 +7,7 @@ const {
   readKakomonnConfiguration,
 } = require("../../scripts/kakomonn-config.cjs");
 
-const publicDir = path.resolve(__dirname, "..", "public");
+const distDir = path.resolve(__dirname, "..", "dist");
 const token = "test-dashboard-token";
 const site = "chushoks.kakomonn.com";
 const otherSite = "shindans.kakomonn.com";
@@ -87,18 +87,40 @@ function dashboardFixture(requestedSite) {
   };
 }
 
-const indexSource = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
+const indexSource = fs.readFileSync(path.join(distDir, "index.html"), "utf8");
+
+function referencedAsset(html, pattern) {
+  const reference = html.match(pattern)?.[1];
+  assert.ok(reference, `built HTML is missing ${pattern}`);
+  return fs.readFileSync(path.join(distDir, reference.replace(/^\//, "")), "utf8");
+}
 
 function fixtureHTML() {
   return indexSource
-    .replace(/<link rel="stylesheet" href="\/styles\.css">/, "")
-    .replace(/<script defer src="\/app\.js"><\/script>/, "");
+    .replace(/\s*<link[^>]+rel="stylesheet"[^>]*>/, "")
+    .replace(/\s*<script[^>]+type="module"[^>]*><\/script>/, "");
 }
 
-const appSource = fs.readFileSync(path.join(publicDir, "app.js"), "utf8");
-const openPageSource = fs.readFileSync(path.join(publicDir, "open.html"), "utf8");
-const openScriptSource = fs.readFileSync(path.join(publicDir, "open.js"), "utf8");
-const stylesSource = fs.readFileSync(path.join(publicDir, "styles.css"), "utf8");
+const appSource = referencedAsset(indexSource, /<script[^>]+src="([^"]+)"/);
+const inlineAppSource = appSource.replace(/^import\s*["'][^"']+["'];?/, "");
+const stylesSource = referencedAsset(indexSource, /<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/);
+
+const contentTypes = new Map([
+  [".css", "text/css; charset=utf-8"],
+  [".html", "text/html; charset=utf-8"],
+  [".js", "text/javascript; charset=utf-8"],
+]);
+
+function builtAssetForPath(pathname) {
+  const relativePath = pathname === "/"
+    ? "index.html"
+    : pathname === "/open"
+      ? "open.html"
+      : decodeURIComponent(pathname).replace(/^\//, "");
+  const assetPath = path.resolve(distDir, relativePath);
+  assert.equal(assetPath.startsWith(`${distDir}${path.sep}`), true);
+  return assetPath;
+}
 
 async function launchBrowser(browserType = chromium) {
   const executablePath =
@@ -209,7 +231,7 @@ async function assertDashboard(page) {
   await page.setContent(fixtureHTML());
   await installApiMock(page);
   await page.addStyleTag({ content: stylesSource });
-  await page.addScriptTag({ content: appSource });
+  await page.addScriptTag({ content: inlineAppSource, type: "module" });
   await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+104");
 
   assert.equal(await page.locator("#primary-kpi-title").innerText(), "dailyKpiCompleted");
@@ -353,18 +375,6 @@ async function assertOpenBridge(browser) {
   let readerRequestCount = 0;
   await context.route("https://dashboard.test/**", async (route) => {
     const url = new URL(route.request().url());
-    if (url.pathname === "/app.js") {
-      await route.fulfill({ body: appSource, contentType: "text/javascript; charset=utf-8" });
-      return;
-    }
-    if (url.pathname === "/open.js") {
-      await route.fulfill({ body: openScriptSource, contentType: "text/javascript; charset=utf-8" });
-      return;
-    }
-    if (url.pathname === "/styles.css") {
-      await route.fulfill({ body: stylesSource, contentType: "text/css; charset=utf-8" });
-      return;
-    }
     if (url.pathname === "/v11/dashboard") {
       dashboardRequestCount += 1;
       await route.fulfill({
@@ -373,9 +383,10 @@ async function assertOpenBridge(browser) {
       });
       return;
     }
+    const assetPath = builtAssetForPath(url.pathname);
     await route.fulfill({
-      body: url.pathname === "/open" ? openPageSource : indexSource,
-      contentType: "text/html; charset=utf-8",
+      body: fs.readFileSync(assetPath),
+      contentType: contentTypes.get(path.extname(assetPath)) ?? "application/octet-stream",
     });
   });
   await context.route("https://chushoks.kakomonn.com/**", (route) => {

@@ -1,6 +1,10 @@
-export const OPERATION_ID_PATTERN = /^[0-9a-f]{32}$/;
-export const QUESTION_ID_PATTERN = /^\d+$/;
-export const ANSWER_RESULTS = new Set(["correct", "incorrect"]);
+export {
+  OPERATION_ID_PATTERN,
+  QUESTION_ID_PATTERN,
+  isAnswerResult,
+} from "../../contracts/kakomonn.mjs";
+
+import { QUESTION_ID_PATTERN } from "../../contracts/kakomonn.mjs";
 
 function normalizedQuestionNumber(questionId) {
   const normalized = questionId.replace(/^0+/, "");

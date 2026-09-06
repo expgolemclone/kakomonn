@@ -1,5 +1,5 @@
 import { isSite } from "../auth.js";
-import { QUESTION_ID_PATTERN } from "../contracts.js";
+import { isQuestionId } from "../contracts.js";
 import { getLearningStateStub } from "../learning-store.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
@@ -25,7 +25,7 @@ export async function handleQuestions(request, env) {
     !Array.isArray(body.questionIds) ||
     body.questionIds.length === 0 ||
     body.questionIds.length > 10000 ||
-    body.questionIds.some((value) => typeof value !== "string" || !QUESTION_ID_PATTERN.test(value)) ||
+    body.questionIds.some((value) => !isQuestionId(value)) ||
     new Set(body.questionIds).size !== body.questionIds.length
   ) {
     return errorResponse("invalid_request", 400);

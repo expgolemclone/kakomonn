@@ -72,6 +72,10 @@ try {
   const response = await shell.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
   assert.equal(response?.status(), 200);
   assert.equal(response?.headers()["cache-control"], "no-cache");
+  assert.match(
+    response?.headers()["content-security-policy"] ?? "",
+    /frame-ancestors 'self'/,
+  );
   await shell.waitForSelector('html[data-state="ready"]');
   assert.equal(await shell.locator("#celebration-frame").isVisible(), true);
   assert.equal(

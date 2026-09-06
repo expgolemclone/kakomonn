@@ -1,3 +1,5 @@
+import { scheduledQuestionId } from "../../contracts/kakomonn.mjs";
+
 (() => {
   "use strict";
 
@@ -11,14 +13,9 @@
   function nextQuestionURL(content) {
     let url;
     try { url = new URL(content); } catch { throw new Error("invalid_url"); }
-    if (
-      url.protocol !== "https:" ||
-      url.hostname !== "chushoks.kakomonn.com" ||
-      url.search !== "" ||
-      !(
-        /^\/questions\/\d+$/.test(url.pathname) && url.hash === ""
-      )
-    ) throw new Error("invalid_url");
+    if (scheduledQuestionId(url.href, "chushoks.kakomonn.com") === null) {
+      throw new Error("invalid_url");
+    }
     return url.href;
   }
 

@@ -1,7 +1,7 @@
 import {
-  hasExactKeys,
-  isCalendarDate,
-  isLearningMetrics,
+  RAW_TABLE_COLUMNS,
+  isDailyDetailsResponse as validDailyDetails,
+  isDashboardResponse as validDashboard,
   isSite as validSite,
 } from "../../contracts/kakomonn.mjs";
 
@@ -36,10 +36,6 @@ const el = {
 const state = { token: "", site: "", sites: [], learning: null, history: null, selectedDate: "", dailyDetails: null };
 let loadGeneration = 0;
 let detailGeneration = 0;
-const RAW_TABLE_COLUMNS = {
-  stability_history: ["site", "date", "opening_stability_days", "closing_stability_days", "attempted_question_count", "new_question_count", "attempt_count", "correct_attempt_count"],
-  attempts: ["site", "operation_id", "question_id", "attempted_at_ms", "answer_result", "previous_card_stability_days", "resulting_card_stability_days"],
-};
 
 class DashboardError extends Error {
   constructor(code, status = 0) { super(code); this.code = code; this.status = status; }
@@ -53,27 +49,6 @@ function storageSet(key, value) {
 }
 function storageRemove(key) {
   try { localStorage.removeItem(key); } catch { throw new DashboardError("storage_unavailable"); }
-}
-
-function validCorrectRatePercent(value) {
-  return value === null || (Number.isSafeInteger(value) && value >= 0 && value <= 100);
-}
-function validState(value, site) {
-  return value && value.site === site && isCalendarDate(value.today) && isLearningMetrics(value.learningMetrics);
-}
-function validHistory(value, site) {
-  return value && value.site === site && Array.isArray(value.days) && value.days.length === DASHBOARD_HISTORY_DAYS && value.days.every((day) => isCalendarDate(day.date) && (day.closingStabilityDays === null || (Number.isSafeInteger(day.closingStabilityDays) && day.closingStabilityDays >= 0)) && (day.stabilityDaysDelta === null || Number.isSafeInteger(day.stabilityDaysDelta)) && Number.isSafeInteger(day.dailyAttemptedQuestionCount) && day.dailyAttemptedQuestionCount >= 0 && Number.isSafeInteger(day.dailyNewQuestionCount) && day.dailyNewQuestionCount >= 0 && validCorrectRatePercent(day.dailyCorrectRatePercent));
-}
-function validDashboard(value) {
-  if (!hasExactKeys(value, ["sites", "selectedSite", "state", "history"]) || !Array.isArray(value.sites) || value.sites.some((site) => !validSite(site)) || new Set(value.sites).size !== value.sites.length) return false;
-  if (value.sites.length === 0) return value.selectedSite === null && value.state === null && value.history === null;
-  return validSite(value.selectedSite) && value.sites.includes(value.selectedSite) && validState(value.state, value.selectedSite) && validHistory(value.history, value.selectedSite);
-}
-function validDailyDetails(value, site, date) {
-  if (!hasExactKeys(value, ["site", "date", "timeZone", "tables"]) || value.site !== site || value.date !== date || value.timeZone !== "Asia/Tokyo" || !hasExactKeys(value.tables, ["stability_history", "attempts"]) || !Array.isArray(value.tables.stability_history) || value.tables.stability_history.length > 1 || !Array.isArray(value.tables.attempts)) return false;
-  const validStabilityHistory = value.tables.stability_history.every((row) => hasExactKeys(row, RAW_TABLE_COLUMNS.stability_history) && row.site === site && row.date === date && Number.isSafeInteger(row.opening_stability_days) && row.opening_stability_days >= 0 && Number.isSafeInteger(row.closing_stability_days) && row.closing_stability_days >= 0 && Number.isSafeInteger(row.attempted_question_count) && row.attempted_question_count >= 0 && Number.isSafeInteger(row.new_question_count) && row.new_question_count >= 0 && Number.isSafeInteger(row.attempt_count) && row.attempt_count >= 0 && Number.isSafeInteger(row.correct_attempt_count) && row.correct_attempt_count >= 0 && row.correct_attempt_count <= row.attempt_count);
-  const validAttempts = value.tables.attempts.every((row) => hasExactKeys(row, RAW_TABLE_COLUMNS.attempts) && row.site === site && /^[0-9a-f]{32}$/.test(row.operation_id) && /^\d+$/.test(row.question_id) && Number.isSafeInteger(row.attempted_at_ms) && row.attempted_at_ms > 0 && (row.answer_result === "correct" || row.answer_result === "incorrect") && Number.isFinite(row.previous_card_stability_days) && row.previous_card_stability_days >= 0 && Number.isFinite(row.resulting_card_stability_days) && row.resulting_card_stability_days >= 0);
-  return validStabilityHistory && validAttempts;
 }
 
 async function requestJSON(path, token, { method = "GET", body } = {}) {

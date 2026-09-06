@@ -12,7 +12,7 @@ const token = "test-dashboard-token";
 const site = "chushoks.kakomonn.com";
 const otherSite = "shindans.kakomonn.com";
 const kakomonnConfiguration = readKakomonnConfiguration();
-const attemptedQuestionCountHistory = [18, 22, 19, 26, 31, 24, 28];
+const attemptedQuestionCountHistory = [0, 22, 19, 0, 31, 24, 50];
 const deltaHistory = [null, 112, -14, 0, 138, 106, 104];
 const closingStabilityDaysHistory = [null, 9307, 9412, 9550, 9688, 9794, 9912];
 const correctRateHistory = [null, 100, 33, null, 75, 50, 67];
@@ -37,20 +37,20 @@ const dailyDetails = {
       date: "2026-08-10",
       opening_stability_days: 9808,
       closing_stability_days: 9912,
-      attempted_question_count: 28,
-      new_question_count: 100,
-      attempt_count: 42,
-      correct_attempt_count: 28,
+      attempted_question_count: 50,
+      new_question_count: 50,
+      attempt_count: 51,
+      correct_attempt_count: 34,
     }],
-    attempts: [{
+    attempts: Array.from({ length: 51 }, (_, index) => ({
       site,
-      operation_id: "00000000000000000000000000000001",
-      question_id: "44615",
-      attempted_at_ms: 1786320000000,
-      answer_result: "correct",
+      operation_id: (index + 1).toString(16).padStart(32, "0"),
+      question_id: String(44615 + Math.min(index, 49)),
+      attempted_at_ms: 1786320000000 + index,
+      answer_result: index < 34 ? "correct" : "incorrect",
       previous_card_stability_days: 31.25,
       resulting_card_stability_days: 42.75,
-    }],
+    })),
   },
 };
 
@@ -71,10 +71,14 @@ function dashboardFixture(requestedSite) {
         newQuestionsRemaining: requestedSite === site ? 0 : 20,
         todayStabilityDaysDelta: requestedSite === site ? 104 : 21,
         attemptedQuestionCount: requestedSite === site ? 640 : 100,
-        todayAttemptedQuestionCount: requestedSite === site ? 28 : 4,
-        todayCorrectRatePercent: requestedSite === site ? 67 : null,
+        todayAttemptedQuestionCount: requestedSite === site ? 50 : 30,
+        todayCorrectRatePercent: requestedSite === site ? 67 : 0,
       },
-      catalog: { questionCount: 999, updatedAtMs: 1786320000000 },
+      catalog: {
+        questionCount: 999,
+        updatedAtMs: 1786320000000,
+        generation: 1,
+      },
     },
     history: {
       site: requestedSite,
@@ -82,28 +86,18 @@ function dashboardFixture(requestedSite) {
       today: "2026-08-10",
       days: requestedSite === site
         ? history
-        : history.map((day) => ({ ...day, closingStabilityDays: 2999 })),
+        : history.map((day, index) => ({
+            ...day,
+            closingStabilityDays: index < 24 ? null : 2999,
+            stabilityDaysDelta:
+              index < 24 ? null : index === 30 ? 21 : day.stabilityDaysDelta ?? 0,
+            dailyAttemptedQuestionCount: index === 30 ? 30 : day.dailyAttemptedQuestionCount,
+            dailyNewQuestionCount: index === 30 ? 30 : day.dailyNewQuestionCount,
+            dailyCorrectRatePercent: index === 30 ? 0 : day.dailyCorrectRatePercent,
+          })),
     },
   };
 }
-
-const indexSource = fs.readFileSync(path.join(distDir, "index.html"), "utf8");
-
-function referencedAsset(html, pattern) {
-  const reference = html.match(pattern)?.[1];
-  assert.ok(reference, `built HTML is missing ${pattern}`);
-  return fs.readFileSync(path.join(distDir, reference.replace(/^\//, "")), "utf8");
-}
-
-function fixtureHTML() {
-  return indexSource
-    .replace(/\s*<link[^>]+rel="stylesheet"[^>]*>/, "")
-    .replace(/\s*<script[^>]+type="module"[^>]*><\/script>/, "");
-}
-
-const appSource = referencedAsset(indexSource, /<script[^>]+src="([^"]+)"/);
-const inlineAppSource = appSource.replace(/^import\s*["'][^"']+["'];?/, "");
-const stylesSource = referencedAsset(indexSource, /<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/);
 
 const contentTypes = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -136,7 +130,7 @@ async function launchBrowser(browserType = chromium) {
 }
 
 async function installApiMock(page) {
-  await page.evaluate(
+  await page.addInitScript(
     ({ tokenValue, siteValue, otherSiteValue, dashboardBySite, dailyDetailsValue }) => {
       const storage = new Map([
         ["kakomonn-dashboard.sync-token", tokenValue],
@@ -228,10 +222,15 @@ async function assertDashboard(page) {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
-  await page.setContent(fixtureHTML());
   await installApiMock(page);
-  await page.addStyleTag({ content: stylesSource });
-  await page.addScriptTag({ content: inlineAppSource, type: "module" });
+  await page.route("https://dashboard.test/**", async (route) => {
+    const assetPath = builtAssetForPath(new URL(route.request().url()).pathname);
+    await route.fulfill({
+      body: fs.readFileSync(assetPath),
+      contentType: contentTypes.get(path.extname(assetPath)) ?? "application/octet-stream",
+    });
+  });
+  await page.goto("https://dashboard.test/");
   await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+104");
 
   assert.equal(await page.locator("#primary-kpi-title").innerText(), "dailyKpiCompleted");
@@ -245,7 +244,7 @@ async function assertDashboard(page) {
   assert.equal(await page.locator(".goal-card").count(), 0);
   assert.deepEqual(await page.locator(".metric-list dt").allInnerTexts(), ["todayStabilityDaysDelta", "stabilityDays", "attemptedQuestionCount", "todayAttemptedQuestionCount", "todayCorrectRatePercent"]);
   assert.equal(await page.locator("#attempted-question-count").innerText(), "640");
-  assert.equal(await page.locator("#today-attempted-question-count").innerText(), "28");
+  assert.equal(await page.locator("#today-attempted-question-count").innerText(), "50");
   assert.equal(await page.locator("#today-correct-rate-percent").innerText(), "67");
   assert.equal(await page.locator("#today-correct-rate-percent-unit").innerText(), "%");
   assert.equal(await page.locator("#goal-label, #goal-progress, .stability-card, .stability-meta").count(), 0);
@@ -316,7 +315,7 @@ async function assertDashboard(page) {
   await page.evaluate(() => { window.__delayedDetailDate = "2026-08-08"; });
   await page.locator('[data-chart-date="2026-08-08"]').press("Space");
   await page.locator('[data-chart-date="2026-08-10"]').click();
-  await page.waitForFunction(() => document.querySelector("#daily-details-date")?.textContent === "2026-08-10" && document.querySelector("#daily-details-status")?.textContent === "2 rows");
+  await page.waitForFunction(() => document.querySelector("#daily-details-date")?.textContent === "2026-08-10" && document.querySelector("#daily-details-status")?.textContent === "52 rows");
   await page.evaluate(() => window.__releaseDelayedDetail());
   await page.waitForTimeout(20);
   assert.equal(await page.locator("#daily-details-date").innerText(), "2026-08-10");
@@ -327,15 +326,15 @@ async function assertDashboard(page) {
   assert.equal(await page.locator("#dashboard").isVisible(), true);
   await page.evaluate(() => { window.__detailErrorDate = ""; });
   await page.locator('[data-chart-date="2026-08-10"]').click();
-  await page.waitForFunction(() => document.querySelector("#daily-details-status")?.textContent === "2 rows");
+  await page.waitForFunction(() => document.querySelector("#daily-details-status")?.textContent === "52 rows");
 
   await page.locator("#site-select").selectOption(otherSite);
   await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+21");
   assert.equal(await page.locator("#daily-kpi-completed").innerText(), "未達成");
   assert.equal(await page.locator("#due-cards-remaining").innerText(), "12");
   assert.equal(await page.locator("#new-questions-remaining").innerText(), "20");
-  assert.equal(await page.locator("#today-correct-rate-percent").innerText(), "--");
-  assert.equal(await page.locator("#today-correct-rate-percent-unit").isHidden(), true);
+  assert.equal(await page.locator("#today-correct-rate-percent").innerText(), "0");
+  assert.equal(await page.locator("#today-correct-rate-percent-unit").isHidden(), false);
   await page.locator("#site-select").selectOption(site);
   await page.waitForFunction(() => document.querySelector("#today-stability-days-delta")?.textContent === "+104");
 
@@ -475,6 +474,7 @@ async function assertOpenBridge(browser) {
       {
         code: "invalid_url",
         state: "ready",
+        target: "https://chushoks.kakomonn.com:444/questions/45124",
         title: "次の問題を開けません",
       },
       {
@@ -491,9 +491,15 @@ async function assertOpenBridge(browser) {
       const failurePage = await context.newPage();
       failurePage.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
       await failurePage.goto("https://dashboard.test/open");
-      await failurePage.evaluate((state) => {
+      await failurePage.evaluate(({ state, target }) => {
+        if (target !== undefined) {
+          document.documentElement.setAttribute(
+            "data-kakomonn-reader-bridge-target",
+            target,
+          );
+        }
         document.documentElement.dataset.kakomonnReaderBridgeState = state;
-      }, bridgeFailure.state);
+      }, bridgeFailure);
       await failurePage.locator("#open-error").waitFor({ state: "visible" });
       assert.equal(
         await failurePage.locator("#open-error-title").innerText(),

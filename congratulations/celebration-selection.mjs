@@ -38,8 +38,10 @@ export function validateManifest(manifest) {
 }
 
 export function randomIndex(length, cryptoSource = globalThis.crypto) {
-  if (!Number.isSafeInteger(length) || length <= 0) {
-    throw new RangeError("length must be a positive safe integer.");
+  if (!Number.isSafeInteger(length) || length <= 0 || length > UINT32_RANGE) {
+    throw new RangeError(
+      `length must be a positive integer no greater than ${UINT32_RANGE}.`,
+    );
   }
   if (typeof cryptoSource?.getRandomValues !== "function") {
     throw new TypeError("Crypto random values are unavailable.");

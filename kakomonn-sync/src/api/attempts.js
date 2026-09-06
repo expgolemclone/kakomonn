@@ -1,7 +1,7 @@
 import {
   OPERATION_ID_PATTERN,
-  QUESTION_ID_PATTERN,
   isAnswerResult,
+  isQuestionId,
 } from "../contracts.js";
 import { getLearningStateStub } from "../learning-store.js";
 import { isSite } from "../auth.js";
@@ -25,8 +25,7 @@ export async function handleAttempts(request, env) {
     keys[2] !== "questionId" ||
     keys[3] !== "site" ||
     !isSite(body.site) ||
-    typeof body.questionId !== "string" ||
-    !QUESTION_ID_PATTERN.test(body.questionId) ||
+    !isQuestionId(body.questionId) ||
     typeof body.operationId !== "string" ||
     !OPERATION_ID_PATTERN.test(body.operationId) ||
     !isAnswerResult(body.answerResult)

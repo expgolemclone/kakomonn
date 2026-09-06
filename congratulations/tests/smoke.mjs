@@ -54,7 +54,8 @@ for (const invalidSearch of [
   assert.throws(() => parseCelebration(invalidSearch), /invalid/i);
 }
 
-assert.throws(() => randomIndex(0), /positive safe integer/);
+assert.throws(() => randomIndex(0), /positive integer/);
+assert.throws(() => randomIndex(0x1_0000_0001), /no greater than/);
 for (const [index, expectedId] of expectedIds.entries()) {
   const cryptoSource = {
     getRandomValues(values) {

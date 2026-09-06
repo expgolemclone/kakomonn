@@ -34,6 +34,10 @@ test("congratulations caches stable and content-addressed assets", async () => {
   const source = await headersSource("congratulations/public/_headers");
   assert.match(source, /^\/\*\n  Cache-Control: no-cache\n/);
   assert.equal(source.includes("Cache-Control: no-store"), false);
+  assert.match(
+    source,
+    /Content-Security-Policy: default-src 'self';.*frame-ancestors 'self';.*object-src 'none'/,
+  );
 
   for (const path of [
     "/assets/*",

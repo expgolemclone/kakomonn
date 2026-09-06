@@ -176,17 +176,23 @@ async function seedReviewCard(
               AND questions.question_id = cards.question_id
              WHERE cards.site = ?
            ),
-           attempted_question_count = (
+           attempted_question_count = MAX(attempted_question_count, (
              SELECT COUNT(*) FROM cards WHERE cards.site = ?
-           ),
+           ), (
+             SELECT today_attempted_question_count + COUNT(*)
+             FROM cards
+             WHERE cards.site = ?
+               AND cards.last_attempt_date <> '2026-08-10'
+           )),
            daily_metrics_date = '2026-08-10',
-           today_attempted_question_count = (
+           today_attempted_question_count = MAX(today_attempted_question_count, (
              SELECT COUNT(*) FROM cards
              WHERE cards.site = ?
                AND cards.last_review_ms >= ?
                AND cards.last_review_ms < ?
-           )
+           ))
        WHERE site = ?`,
+      site,
       site,
       site,
       site,
@@ -205,9 +211,21 @@ async function seedTodayNewQuestionCount(
   await runInRawDurableObject(stub(), (_instance, state) => {
     state.storage.sql.exec(
       `UPDATE learning_metrics
-       SET daily_metrics_date = ?, today_new_question_count = ?
+       SET daily_metrics_date = ?,
+           today_new_question_count = ?,
+           attempted_question_count = MAX(attempted_question_count, ? + (
+             SELECT COUNT(*) FROM cards
+             WHERE cards.site = ? AND cards.last_attempt_date <> ?
+           )),
+           today_attempted_question_count = MAX(today_attempted_question_count, ?),
+           today_attempt_count = MAX(today_attempt_count, ?)
        WHERE site = ?`,
       date,
+      count,
+      count,
+      site,
+      date,
+      count,
       count,
       site
     );
@@ -2154,6 +2172,7 @@ describe("v11 HTTP contract", () => {
     for (const body of [
       { site: SITE, questionIds: [], expectedGeneration: 2 },
       { site: SITE, questionIds: ["1", "1"], expectedGeneration: 2 },
+      { site: SITE, questionIds: ["9223372036854775808"], expectedGeneration: 2 },
       { site: SITE, questionIds: ["1"], expectedGeneration: -1 },
       { site: SITE, questionIds: ["1"] },
     ]) {

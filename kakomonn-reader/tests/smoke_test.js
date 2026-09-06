@@ -10,6 +10,7 @@ const {
 const {
   installSyncMock,
   PENDING_ATTEMPT_KEY,
+  PENDING_CELEBRATION_KEY,
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,
 } = require("./sync_mock");
@@ -34,6 +35,13 @@ const iosUserAgent =
 const windowsFirefoxUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) " +
   "Gecko/20100101 Firefox/141.0";
+const KPI_COMPLETION_SYNC_OPTIONS = Object.freeze({
+  attemptCount: 49,
+  attemptedQuestionCount: 49,
+  todayAttemptCount: 49,
+  todayAttemptedQuestionCount: 49,
+  todayNewQuestionCount: 49,
+});
 const iosChromeUserAgent =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/150.0.0.0 " +
@@ -1362,7 +1370,11 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
         body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
       }),
   );
-  const errors = await preparePage(page, "audio-manual");
+  const errors = await preparePage(
+    page,
+    "audio-manual",
+    KPI_COMPLETION_SYNC_OPTIONS,
+  );
   await installCorrectFeedbackRandom(page, [111]);
   const childFrame = await loadMockQuestion(page, script);
   try {
@@ -1380,7 +1392,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
     await markAnswerResult(childFrame, "correct");
     await page.waitForFunction(
       () =>
-        window.__syncMock.attemptCount === 1 &&
+        window.__syncMock.attemptCount === 50 &&
         window.__copiedTexts.length === 1 &&
         history.state?.entryType === "current" &&
         document.querySelector("#kakomonn-reader-frame")?.contentWindow
@@ -1619,6 +1631,59 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
   }
 }
 
+async function runMismatchedCelebrationRejectedCase(context, script) {
+  const page = await context.newPage();
+  const errors = await preparePage(page, "none", KPI_COMPLETION_SYNC_OPTIONS);
+  const childFrame = await loadMockQuestion(page, script);
+  try {
+    if (
+      await page
+        .locator("#kakomonn-reader-error-dialog")
+        .getAttribute("open") !== null
+    ) {
+      await page.locator("#kakomonn-reader-error-close").click();
+    }
+    await page.evaluate(() => {
+      window.__syncMock.nextCelebration = {
+        site: "shindans.kakomonn.com",
+        date: "2026-08-10",
+        dailyKpiCompleted: true,
+      };
+    });
+    await markAnswerResult(childFrame, "incorrect");
+    await page.waitForFunction(
+      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+    );
+
+    assert.equal(
+      await page.locator("#kakomonn-reader-error-title").innerText(),
+      "解答記録を同期できません",
+    );
+    assert.match(
+      await page.locator("#kakomonn-reader-error-detail").innerText(),
+      /invalid_response/,
+    );
+    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
+    assert.equal(
+      await page.evaluate(
+        (key) => window.__getGMValue(key)?.phase,
+        PENDING_ATTEMPT_KEY,
+      ),
+      "queued",
+    );
+    assert.equal(
+      await page.evaluate(
+        (key) => window.__getGMValue(key),
+        PENDING_CELEBRATION_KEY,
+      ),
+      null,
+    );
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.close();
+  }
+}
+
 async function runIncorrectCelebrationEnterCase(context, script) {
   const page = await context.newPage();
   await page.route(
@@ -1629,7 +1694,7 @@ async function runIncorrectCelebrationEnterCase(context, script) {
         body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
       }),
   );
-  const errors = await preparePage(page, "audio");
+  const errors = await preparePage(page, "audio", KPI_COMPLETION_SYNC_OPTIONS);
   const childFrame = await loadMockQuestion(page, script);
   try {
     await page.evaluate(() => {
@@ -2467,6 +2532,7 @@ async function main() {
     await runIncorrectEnterReservationCase(context, script);
     await runIncorrectEnterCopyRetryCase(context, script);
     await runIncorrectEnterSyncRetryCase(context, script);
+    await runMismatchedCelebrationRejectedCase(context, script);
     await runIncorrectCelebrationEnterCase(context, script);
     await runOrphanedCelebrationRecoveryCase(context, script);
     await runIncorrectEnterNoNextCase(context, script);

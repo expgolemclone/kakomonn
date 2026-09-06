@@ -1,4 +1,4 @@
-import { DATE_PATTERN } from "../../contracts/kakomonn.mjs";
+import { calendarDateOrdinal } from "../../contracts/kakomonn.mjs";
 const DAY_MS = 86_400_000;
 const TOKYO_OFFSET_MS = 9 * 60 * 60 * 1000;
 
@@ -18,14 +18,7 @@ export function getTokyoDate(date = new Date()) {
 }
 
 export function dateOrdinal(value) {
-  if (!DATE_PATTERN.test(value)) {
-    return null;
-  }
-  const date = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    return null;
-  }
-  return Math.floor(date.getTime() / DAY_MS);
+  return calendarDateOrdinal(value);
 }
 
 export function isoDateFromOrdinal(ordinal) {

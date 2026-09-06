@@ -1,7 +1,6 @@
 import {
-  isCalendarDate,
-  isCelebration,
-  isLearningMetrics,
+  isNextResponse,
+  isSite,
 } from "../../contracts/kakomonn.mjs";
 import { createCatalogLoader } from "./catalog.js";
 import {
@@ -173,39 +172,8 @@ export async function startReader() {
     SyncRequestError,
   });
   
-  function isReaderBridgeNextResponse(value) {
-    if (
-      value?.state === null ||
-      typeof value?.state !== "object" ||
-      value.state.site !== NEXT_QUESTION_SITE_ID
-    ) {
-      return false;
-    }
-    if (value?.question === null) {
-      return true;
-    }
-    const question = value?.question;
-    if (
-      question === null ||
-      typeof question !== "object" ||
-      !/^\d+$/.test(question.questionId)
-    ) {
-      return false;
-    }
-    try {
-      const url = new URL(question.url);
-      return (
-        url.origin === `https://${NEXT_QUESTION_SITE_ID}` &&
-        url.pathname === `/questions/${question.questionId}` &&
-        url.search === "" &&
-        url.hash === "" &&
-        (question.kind === "review" || question.kind === "new") &&
-        (question.dueMs === null || Number.isSafeInteger(question.dueMs))
-      );
-    } catch {
-      return false;
-    }
-  }
+  const isReaderBridgeNextResponse = (value) =>
+    isNextResponse(value, NEXT_QUESTION_SITE_ID);
   if (
     SCRIPT_HANDLER !== "Tampermonkey" ||
     (!isWindowsChrome && !isIPhoneSafari) ||
@@ -254,11 +222,7 @@ export async function startReader() {
     return;
   }
   const SITE_ID = location.hostname.toLowerCase();
-  if (
-    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(
-      SITE_ID
-    )
-  ) {
+  if (!isSite(SITE_ID)) {
     return;
   }
   const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE_ID}.v9.pending-attempt`;
@@ -491,34 +455,23 @@ export async function startReader() {
     READER_FRAME_READY_MESSAGE_TYPE: { enumerable: false, get: () => READER_FRAME_READY_MESSAGE_TYPE },
     BUILD_FINGERPRINT: { enumerable: false, get: () => BUILD_FINGERPRINT },
     SCRIPT_HANDLER: { enumerable: false, get: () => SCRIPT_HANDLER },
-    userAgent: { enumerable: false, get: () => userAgent },
-    isWindowsChrome: { enumerable: false, get: () => isWindowsChrome },
     isIPhoneSafari: { enumerable: false, get: () => isIPhoneSafari },
-    SYNC_API_URL: { enumerable: false, get: () => SYNC_API_URL },
     SYNC_TOKEN_KEY: { enumerable: false, get: () => SYNC_TOKEN_KEY },
     LAUNCH_HANDOFF_KEY: { enumerable: false, get: () => LAUNCH_HANDOFF_KEY },
     LAUNCH_HANDOFF_MAX_AGE_MS: { enumerable: false, get: () => LAUNCH_HANDOFF_MAX_AGE_MS },
-    SYNC_TIMEOUT_MS: { enumerable: false, get: () => SYNC_TIMEOUT_MS },
-    isReaderBridge: { enumerable: false, get: () => isReaderBridge },
-    NEXT_QUESTION_SITE_ID: { enumerable: false, get: () => NEXT_QUESTION_SITE_ID },
-    READER_BRIDGE_TARGET_ATTRIBUTE: { enumerable: false, get: () => READER_BRIDGE_TARGET_ATTRIBUTE },
     isNextQuestionLauncher: { enumerable: false, get: () => isNextQuestionLauncher },
     shouldLaunchNextQuestionAfterSync: { enumerable: false, get: () => shouldLaunchNextQuestionAfterSync, set: (value) => { shouldLaunchNextQuestionAfterSync = value; } },
     CONGRATULATIONS_URL: { enumerable: false, get: () => CONGRATULATIONS_URL },
     SyncRequestError: { enumerable: false, get: () => SyncRequestError },
     gmXMLHttpRequest: { enumerable: false, get: () => gmXMLHttpRequest },
     requestSyncResponse: { enumerable: false, get: () => requestSyncResponse },
-    isReaderBridgeNextResponse: { enumerable: false, get: () => isReaderBridgeNextResponse },
     SITE_ID: { enumerable: false, get: () => SITE_ID },
     PENDING_ATTEMPT_KEY: { enumerable: false, get: () => PENDING_ATTEMPT_KEY },
     PENDING_CELEBRATION_KEY: { enumerable: false, get: () => PENDING_CELEBRATION_KEY },
-    CATALOG_TIMEOUT_MS: { enumerable: false, get: () => CATALOG_TIMEOUT_MS },
-    CATALOG_FETCH_CONCURRENCY: { enumerable: false, get: () => CATALOG_FETCH_CONCURRENCY },
     SPEECH_TIMEOUT_MS: { enumerable: false, get: () => SPEECH_TIMEOUT_MS },
     FRAME_PROBLEM_SCROLL_DELAYS_MS: { enumerable: false, get: () => FRAME_PROBLEM_SCROLL_DELAYS_MS },
     SHORTCUT_SEQUENCE_TIMEOUT_MS: { enumerable: false, get: () => SHORTCUT_SEQUENCE_TIMEOUT_MS },
     TIME_LIMIT_MS: { enumerable: false, get: () => TIME_LIMIT_MS },
-    MAX_CHUNK_LENGTH: { enumerable: false, get: () => MAX_CHUNK_LENGTH },
     FRAME_DARK_MODE_STYLE_ID: { enumerable: false, get: () => FRAME_DARK_MODE_STYLE_ID },
     FRAME_DARK_MODE_CSS: { enumerable: false, get: () => FRAME_DARK_MODE_CSS },
     QUESTION_SPEECH_RATE: { enumerable: false, get: () => QUESTION_SPEECH_RATE },
@@ -583,16 +536,10 @@ export async function startReader() {
     waitForCorrectFeedbackKpi: { enumerable: false, get: () => waitForCorrectFeedbackKpi },
     extractQuestionText: { enumerable: false, get: () => extractQuestionText },
     loadCompleteQuestionCatalog: { enumerable: false, get: () => loadCompleteQuestionCatalog },
-    isCalendarDate: { enumerable: false, get: () => isCalendarDate },
-    isCelebration: { enumerable: false, get: () => isCelebration },
-    isLearningMetrics: { enumerable: false, get: () => isLearningMetrics },
-    createCatalogLoader: { enumerable: false, get: () => createCatalogLoader },
     answerResultFromDocument: { enumerable: false, get: () => answerResultFromDocument },
-    extractQuestionTextFromDocument: { enumerable: false, get: () => extractQuestionTextFromDocument },
     findAnswerButtonAfter: { enumerable: false, get: () => findAnswerButtonAfter },
     findAnswerChoiceControls: { enumerable: false, get: () => findAnswerChoiceControls },
     findQuestionMetadataElement: { enumerable: false, get: () => findQuestionMetadataElement },
-    hasVisibleExplanationLock: { enumerable: false, get: () => hasVisibleExplanationLock },
     isVisibleElement: { enumerable: false, get: () => isVisibleElement },
     normalizeInlineText: { enumerable: false, get: () => normalizeInlineText },
     splitText: { enumerable: false, get: () => splitText },
@@ -604,12 +551,9 @@ export async function startReader() {
     chooseCorrectFeedbackVariant: { enumerable: false, get: () => chooseCorrectFeedbackVariant },
     renderCorrectFeedbackElement: { enumerable: false, get: () => renderCorrectFeedbackElement },
     resolveCorrectFeedbackKpi: { enumerable: false, get: () => resolveCorrectFeedbackKpi },
-    waitForCorrectFeedbackKpiResult: { enumerable: false, get: () => waitForCorrectFeedbackKpiResult },
     buildCopyMarkdown: { enumerable: false, get: () => buildCopyMarkdown },
     directChild: { enumerable: false, get: () => directChild },
     isSelectedAnswerChoice: { enumerable: false, get: () => isSelectedAnswerChoice },
-    installReaderStyles: { enumerable: false, get: () => installReaderStyles },
-    createSyncRequest: { enumerable: false, get: () => createSyncRequest },
   });
   installSyncController(app);
   installLauncherController(app);

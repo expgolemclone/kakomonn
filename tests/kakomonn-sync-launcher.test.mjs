@@ -22,7 +22,10 @@ test("the fixed URL serves the dashboard bridge to the configured userscript ori
     openScript.includes('"data-kakomonn-reader-bridge-target"'),
     true,
   );
-  assert.equal(openScript.includes('/^\\/questions\\/\\d+$/'), true);
+  assert.equal(
+    openScript.includes('scheduledQuestionId(url.href, "chushoks.kakomonn.com")'),
+    true,
+  );
   assert.equal(openScript.includes("/createques"), false);
   assert.equal(openScript.includes('state === "ready"'), true);
   assert.equal(openScript.includes('state === "error"'), true);

@@ -58,6 +58,15 @@ describe("v11 speech token", () => {
         throw new Error("network failed");
       }
     );
+    const interruptedBody = await issueSpeechToken(
+      { AZURE_SPEECH_KEY: "configured" },
+      async () => ({
+        ok: true,
+        async text() {
+          throw new Error("upstream body interrupted");
+        },
+      })
+    );
 
     expect(unconfigured.status).toBe(500);
     await expect(unconfigured.json()).resolves.toEqual({
@@ -73,6 +82,10 @@ describe("v11 speech token", () => {
     });
     expect(unavailable.status).toBe(502);
     await expect(unavailable.json()).resolves.toEqual({
+      error: "speech_service_unavailable",
+    });
+    expect(interruptedBody.status).toBe(502);
+    await expect(interruptedBody.json()).resolves.toEqual({
       error: "speech_service_unavailable",
     });
   });

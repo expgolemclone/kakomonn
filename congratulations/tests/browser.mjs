@@ -73,6 +73,10 @@ async function verifyShell(browser, origin, experience, selectedIndex) {
       waitUntil: "domcontentloaded",
     });
     assert.equal(response?.headers()["cache-control"], "no-cache");
+    assert.match(
+      response?.headers()["content-security-policy"] ?? "",
+      /frame-ancestors 'self'/,
+    );
     await page.waitForSelector('html[data-state="ready"]');
     const selectedId = await page.locator("#celebration-frame").getAttribute("data-experience-id");
     assert.equal(selectedId, experience.id);

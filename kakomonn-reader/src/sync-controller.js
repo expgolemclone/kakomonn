@@ -1,114 +1,33 @@
+import {
+  isAttemptResponse as isAttemptResponseContract,
+  isCatalogConflictResponse as isCatalogConflictResponseContract,
+  isCatalogResponse as isCatalogResponseContract,
+  isCelebration,
+  isLearningState,
+  isNextQuestion as isNextQuestionContract,
+  isNextResponse as isNextResponseContract,
+  isQuestionId,
+  isSpeechTokenResponse as isSpeechTokenResponseContract,
+  scheduledQuestionId,
+} from "../../contracts/kakomonn.mjs";
+
 export function installSyncController(app) {
-  function isSyncState(value) {
-    const validCatalog =
-      value?.catalog === null ||
-      (value?.catalog !== null &&
-        typeof value?.catalog === "object" &&
-        Number.isSafeInteger(value.catalog.questionCount) &&
-        value.catalog.questionCount > 0 &&
-        Number.isSafeInteger(value.catalog.updatedAtMs) &&
-        value.catalog.updatedAtMs > 0 &&
-        Number.isSafeInteger(value.catalog.generation) &&
-        value.catalog.generation > 0);
-    const validLearningMetrics = app.isLearningMetrics(value?.learningMetrics);
-    return (
-      value !== null &&
-      typeof value === "object" &&
-      value.site === app.SITE_ID &&
-      /^\d{4}-\d{2}-\d{2}$/.test(value.today) &&
-      validLearningMetrics &&
-      validCatalog
-    );
-  }
+  const isSyncState = (value) => isLearningState(value, app.SITE_ID);
   
-  function isAttemptResponse(value) {
-    const metrics = value?.learningMetrics;
-    const validCelebration =
-      value?.celebration === undefined || app.isCelebration(value.celebration);
-    return (
-      value !== null &&
-      typeof value === "object" &&
-      value.attempt !== null &&
-      typeof value.attempt === "object" &&
-      /^\d+$/.test(value.attempt.questionId) &&
-      (value.attempt.answerResult === "correct" ||
-        value.attempt.answerResult === "incorrect") &&
-      Number.isSafeInteger(value.attempt.attemptedAtMs) &&
-      value.attempt.attemptedAtMs > 0 &&
-      Number.isFinite(value.attempt.previousCardStabilityDays) &&
-      value.attempt.previousCardStabilityDays >= 0 &&
-      Number.isFinite(value.attempt.resultingCardStabilityDays) &&
-      value.attempt.resultingCardStabilityDays >= 0 &&
-      Number.isSafeInteger(value.attempt.previousStabilityDays) &&
-      value.attempt.previousStabilityDays >= 0 &&
-      Number.isSafeInteger(value.attempt.resultingStabilityDays) &&
-      value.attempt.resultingStabilityDays >= 0 &&
-      app.isLearningMetrics(metrics) &&
-      isNextQuestion(value.nextQuestion) &&
-      validCelebration
-    );
-  }
+  const isAttemptResponse = (value) =>
+    isAttemptResponseContract(value, app.SITE_ID);
   
-  function isNextQuestion(question) {
-    if (question === null) {
-      return true;
-    }
-    if (typeof question !== "object") {
-      return false;
-    }
-    const questionId = question.questionId;
-    if (!/^\d+$/.test(questionId)) {
-      return false;
-    }
-    try {
-      const url = new URL(question.url);
-      return (
-        url.origin === `https://${app.SITE_ID}` &&
-        url.pathname === `/questions/${questionId}` &&
-        url.search === "" &&
-        url.hash === "" &&
-        (question.kind === "review" || question.kind === "new") &&
-        (question.dueMs === null || Number.isSafeInteger(question.dueMs))
-      );
-    } catch {
-      return false;
-    }
-  }
+  const isNextQuestion = (value) =>
+    isNextQuestionContract(value, app.SITE_ID);
   
-  function isNextResponse(value) {
-    return (
-      value !== null &&
-      typeof value === "object" &&
-      isSyncState(value.state) &&
-      isNextQuestion(value.question)
-    );
-  }
+  const isNextResponse = (value) =>
+    isNextResponseContract(value, app.SITE_ID);
   
-  function isCatalogResponse(value) {
-    return (
-      value !== null &&
-      typeof value === "object" &&
-      value.site === app.SITE_ID &&
-      Number.isSafeInteger(value.questionCount) &&
-      value.questionCount > 0 &&
-      Number.isSafeInteger(value.updatedAtMs) &&
-      value.updatedAtMs > 0 &&
-      Number.isSafeInteger(value.generation) &&
-      value.generation > 0 &&
-      isNextQuestion(value.question)
-    );
-  }
+  const isCatalogResponse = (value) =>
+    isCatalogResponseContract(value, app.SITE_ID);
   
-  function isCatalogConflictResponse(value) {
-    return (
-      value !== null &&
-      typeof value === "object" &&
-      value.error === "catalog_conflict" &&
-      Number.isSafeInteger(value.currentGeneration) &&
-      value.currentGeneration > 0 &&
-      isCatalogResponse({ ...value.catalog, question: value.question })
-    );
-  }
+  const isCatalogConflictResponse = (value) =>
+    isCatalogConflictResponseContract(value, app.SITE_ID);
   
   function isLaunchHandoff(value) {
     if (
@@ -124,17 +43,7 @@ export function installSyncController(app) {
     return ageMs >= 0 && ageMs <= app.LAUNCH_HANDOFF_MAX_AGE_MS;
   }
   
-  function isSpeechTokenResponse(value) {
-    return (
-      value !== null &&
-      typeof value === "object" &&
-      typeof value.token === "string" &&
-      value.token.length > 0 &&
-      value.token.length <= 8192 &&
-      !/\s/.test(value.token) &&
-      value.expiresInSeconds === 600
-    );
-  }
+  const isSpeechTokenResponse = isSpeechTokenResponseContract;
   
   function isSitePageURL(value) {
     try {
@@ -190,7 +99,7 @@ export function installSyncController(app) {
       typeof value !== "object" ||
       value.site !== app.SITE_ID ||
       !/^[0-9a-f]{32}$/.test(value.operationId) ||
-      !/^\d+$/.test(value.questionId) ||
+      !isQuestionId(value.questionId) ||
       (value.answerResult !== "correct" && value.answerResult !== "incorrect") ||
       !isSitePageURL(value.pageURL) ||
       extractQuestionIdFromURL(value.pageURL) !== value.questionId ||
@@ -218,21 +127,11 @@ export function installSyncController(app) {
   }
   
   function isPendingCelebration(value) {
-    return app.isCelebration(value);
+    return isCelebration(value, app.SITE_ID);
   }
   
   function isScheduledQuestionURL(value) {
-    try {
-      const url = new URL(value);
-      return (
-        url.origin === `https://${app.SITE_ID}` &&
-        /^\/questions\/\d+$/.test(url.pathname) &&
-        url.search === "" &&
-        url.hash === ""
-      );
-    } catch {
-      return false;
-    }
+    return scheduledQuestionId(value, app.SITE_ID) !== null;
   }
   
   function requestSyncState(token) {
@@ -245,7 +144,10 @@ export function installSyncController(app) {
       "POST",
       "/v11/attempts",
       token,
-      isAttemptResponse,
+      (value) =>
+        isAttemptResponse(value) &&
+        value.attempt.questionId === operation.questionId &&
+        value.attempt.answerResult === operation.answerResult,
       {
         site: operation.site,
         questionId: operation.questionId,

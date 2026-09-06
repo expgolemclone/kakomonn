@@ -1,3 +1,5 @@
+import { canonicalQuestionIds } from "../../contracts/kakomonn.mjs";
+
 export function createCatalogLoader({
   fetchConcurrency,
   siteId,
@@ -224,7 +226,7 @@ export function createCatalogLoader({
   
     return {
       totalPages,
-      questionIds: [...questionIds].sort((left, right) => Number(left) - Number(right)),
+      questionIds: canonicalQuestionIds([...questionIds]),
     };
   }
   
@@ -280,7 +282,7 @@ export function createCatalogLoader({
       if (questionIds.size === 0) {
         throw new SyncRequestError("catalog_error");
       }
-      return [...questionIds].sort((left, right) => Number(left) - Number(right));
+      return canonicalQuestionIds([...questionIds]);
     } catch (error) {
       controller.abort();
       throw error;

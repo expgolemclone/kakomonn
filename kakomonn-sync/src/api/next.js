@@ -1,5 +1,5 @@
 import { isSite } from "../auth.js";
-import { QUESTION_ID_PATTERN } from "../contracts.js";
+import { isQuestionId } from "../contracts.js";
 import { getLearningStateStub } from "../learning-store.js";
 import { errorResponse, jsonResponse } from "../http.js";
 
@@ -18,7 +18,7 @@ export async function handleNext(url, env) {
   const excludeQuestionId = url.searchParams.get("excludeQuestionId");
   if (
     !isSite(site) ||
-    (excludeQuestionId !== null && !QUESTION_ID_PATTERN.test(excludeQuestionId))
+    (excludeQuestionId !== null && !isQuestionId(excludeQuestionId))
   ) {
     return errorResponse("invalid_request", 400);
   }

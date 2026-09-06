@@ -13,8 +13,8 @@ import { isSite } from "./auth.js";
 import {
   canonicalQuestionIds,
   isAnswerResult,
+  isQuestionId,
   OPERATION_ID_PATTERN,
-  QUESTION_ID_PATTERN,
 } from "./contracts.js";
 import { initializeLearningSchema } from "./storage/schema.js";
 import {
@@ -26,7 +26,7 @@ export { initializeLearningSchema } from "./storage/schema.js";
 
 export const LEARNING_STATE_OBJECT_NAME = "primary";
 export const NEW_QUESTION_GOAL = 50;
-export { OPERATION_ID_PATTERN, QUESTION_ID_PATTERN } from "./contracts.js";
+export { OPERATION_ID_PATTERN } from "./contracts.js";
 
 function rowToCard(row) {
   if (row === undefined) {
@@ -560,7 +560,7 @@ function catalogResultWithNextQuestion(storage, site, nowMs, catalog) {
 function assertAttempt(site, questionId, operationId, result) {
   if (
     !isSite(site) ||
-    !QUESTION_ID_PATTERN.test(questionId) ||
+    !isQuestionId(questionId) ||
     !OPERATION_ID_PATTERN.test(operationId) ||
     !isAnswerResult(result)
   ) {
@@ -875,8 +875,7 @@ export class LearningState extends DurableObject {
     if (
       !isSite(site) ||
       !Number.isSafeInteger(nowMs) ||
-      (excludeQuestionId !== null &&
-        (typeof excludeQuestionId !== "string" || !QUESTION_ID_PATTERN.test(excludeQuestionId)))
+      (excludeQuestionId !== null && !isQuestionId(excludeQuestionId))
     ) {
       throw new TypeError("invalid next request");
     }
@@ -892,8 +891,7 @@ export class LearningState extends DurableObject {
     if (
       !isSite(site) ||
       !Number.isSafeInteger(nowMs) ||
-      (excludeQuestionId !== null &&
-        (typeof excludeQuestionId !== "string" || !QUESTION_ID_PATTERN.test(excludeQuestionId)))
+      (excludeQuestionId !== null && !isQuestionId(excludeQuestionId))
     ) {
       throw new TypeError("invalid next state request");
     }
@@ -928,7 +926,7 @@ export class LearningState extends DurableObject {
       !Array.isArray(questionIds) ||
       questionIds.length === 0 ||
       questionIds.length > 10000 ||
-      questionIds.some((id) => typeof id !== "string" || !QUESTION_ID_PATTERN.test(id)) ||
+      questionIds.some((id) => !isQuestionId(id)) ||
       new Set(questionIds).size !== questionIds.length ||
       !Number.isSafeInteger(expectedGeneration) ||
       expectedGeneration < 0 ||

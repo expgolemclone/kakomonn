@@ -28,7 +28,12 @@ export async function issueSpeechToken(env, fetcher = fetch) {
       response.status === 401 || response.status === 403 ? 500 : 502
     );
   }
-  const token = (await response.text()).trim();
+  let token;
+  try {
+    token = (await response.text()).trim();
+  } catch {
+    return errorResponse("speech_service_unavailable", 502);
+  }
   if (!token || token.length > 8192 || /\s/.test(token)) {
     return errorResponse("invalid_speech_response", 502);
   }

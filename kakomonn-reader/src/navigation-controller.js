@@ -1,3 +1,5 @@
+import { isQuestionId } from "../../contracts/kakomonn.mjs";
+
 export function installNavigationController(app) {
   function currentQuestionId() {
     const questionId = app.extractQuestionIdFromURL(app.currentFrameURL);
@@ -10,7 +12,7 @@ export function installNavigationController(app) {
     const randomQuestionId = app.frameDocument?.querySelector(
       'input[type="hidden"][name="StudyRandumId"]',
     )?.value;
-    return /^\d+$/.test(randomQuestionId ?? "") ? randomQuestionId : null;
+    return isQuestionId(randomQuestionId) ? randomQuestionId : null;
   }
   
   function canSkipCurrentQuestion() {

@@ -13,8 +13,6 @@ const MARKDOWN_BLOCK_TAG_NAMES = new Set([
   ...BLOCK_TAG_NAMES,
   "FIGURE",
 ]);
-let answerCopyOperation = null;
-let automaticCopyPromise = null;
 
 function normalizeMarkdown(rawMarkdown) {
   return rawMarkdown

@@ -14,7 +14,8 @@
     "start:congratulations": "vite --config congratulations/vite.config.js --host 127.0.0.1",
     "preview:congratulations": "vite preview --config congratulations/vite.config.js --host 127.0.0.1",
     "test": "npm run test:local && npm run test:smoke && npm run test:kakomonn-live-site && npm run test:kakomonn-live-open && npm run test:kakomonn-live-sync",
-    "test:local": "npm run test:repository-naming && npm run test:static-cache-policy && npm run test:kakomonn-config && npm run test:kakomonn-sync-launcher && npm run test:open-kakomonn && npm run test:release-script && npm run test:live-sync-script && npm run test:kakomonn-reader && npm run test:kakomonn-sync && npm run test:congratulations",
+    "test:local": "npm run test:contracts && npm run test:repository-naming && npm run test:static-cache-policy && npm run test:kakomonn-config && npm run test:kakomonn-sync-launcher && npm run test:open-kakomonn && npm run test:release-script && npm run test:live-sync-script && npm run test:kakomonn-reader && npm run test:kakomonn-sync && npm run test:congratulations",
+    "test:contracts": "node --test tests/kakomonn-contract.test.mjs",
     "test:repository-naming": "node --test tests/repository_naming_test.mjs",
     "test:static-cache-policy": "node --test tests/static-cache-policy.test.mjs",
     "test:kakomonn-config": "node --test tests/kakomonn-config.test.mjs",
@@ -42,7 +43,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.20.3",
     "appium": "3.7.0",
-    "appium-xcuitest-driver": "12.8.0",
+    "appium-xcuitest-driver": "12.10.0",
     "es-check": "9.6.4",
     "playwright": "1.61.1",
     "vite": "8.1.5",

@@ -504,6 +504,27 @@ test("reads and validates the exact dedicated Chrome DevTools port", () => {
   );
 });
 
+test("waits for the dedicated port after Chrome hands off successfully", async () => {
+  let reads = 0;
+  const port = await waitForDevToolsActivePort(PROFILE_PATH, { exitCode: 0 }, {
+    delayImpl: async () => {},
+    readPort: () => {
+      reads += 1;
+      if (reads === 1) throw new Error("not ready yet");
+      return 49152;
+    },
+  });
+  assert.equal(port, 49152);
+  assert.equal(reads, 2);
+});
+
+test("a successful Chrome exit without a dedicated port still fails", async () => {
+  await assert.rejects(
+    waitForDevToolsActivePort(PROFILE_PATH, { exitCode: 0 }, { timeoutMs: 0 }),
+    /remote debugging did not start/,
+  );
+});
+
 test("reads the launcher userscript identity from the canonical metadata", () => {
   assert.deepEqual(
     readUserscriptIdentity({

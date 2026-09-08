@@ -48,7 +48,8 @@ async function waitForDevToolsActivePort(
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
   while (Date.now() < deadline) {
-    if (Number.isInteger(browserProcess.exitCode)) {
+    // Chrome can hand off to another process and exit successfully on Windows.
+    if (Number.isInteger(browserProcess.exitCode) && browserProcess.exitCode !== 0) {
       throw new Error(
         `Google Chrome exited before remote debugging started: ${browserProcess.exitCode}`,
       );

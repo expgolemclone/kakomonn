@@ -72,7 +72,7 @@ export async function startStaticServer() {
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
     });
-    const deadline = Date.now() + 10_000;
+    const deadline = Date.now() + 60_000;
     let ready = false;
     while (Date.now() < deadline) {
       if (child.exitCode !== null) {

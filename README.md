@@ -26,6 +26,8 @@ npm run open:kakomonn
 
 Chromeが同じ専用profileで起動済みの場合は, processの起動optionを確認します. 必要なoptionで起動済みならTampermonkey Betaを確認して固定`/open`の専用tabを追加し, そうでなければその専用profileのChromeだけを終了します. Chrome停止中の初回commandは`about:blank`だけでbrowserを起動し, application URLを開かず終了します. Chrome起動後に同じcommandをもう一度実行してください. 固定URLをChromeのcold起動引数として渡す経路はありません. 通常利用するChrome profileまたはその配下は指定できません. 完全testもこの専用profileの既存Chrome processを終了するため, test前に専用profileでの作業を保存してください.
 
+Readerで同期tokenを設定すると, 同じbrowser profileのsync dashboardもUserscript専用storageの同じtokenで自動接続します. Dashboardへtokenを再入力する必要はありません.
+
 ## iPhone Safari
 
 iPhone Safariの設定と固定URLは, [`kakomonn-sync`の次の問題を開く手順](kakomonn-sync/README.md#次の問題を開く)を参照してください. Readerの対応環境と再生動作は, [`kakomonn-reader`の動作環境](kakomonn-reader/README.md#動作環境)に記載しています.

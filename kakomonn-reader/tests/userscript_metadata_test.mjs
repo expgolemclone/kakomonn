@@ -5,6 +5,7 @@ import test from "node:test";
 const scriptPath = new URL("../kakomonn-reader.user.js", import.meta.url);
 const expectedMatches = new Set([
   "https://*.kakomonn.com/*",
+  "https://kakomonn-sync.kakomonn.workers.dev/",
   "https://kakomonn-sync.kakomonn.workers.dev/open",
 ]);
 const updateURL = "https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js";
@@ -37,7 +38,7 @@ test("generated userscript metadata is valid", async () => {
   single(entries, "name");
   single(entries, "namespace");
   single(entries, "description");
-  assert.match(single(entries, "version"), /^\d+\.\d+\.\d+$/);
+  assert.equal(single(entries, "version"), "2.3.0");
   assert.equal(single(entries, "run-at"), "document-end");
   assert.equal(entries.has("noframes"), false);
   assert.deepEqual(new Set(entries.get("match")), expectedMatches);

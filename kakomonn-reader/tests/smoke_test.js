@@ -680,6 +680,170 @@ async function assertReaderBridge(browser, script) {
   await context.close();
 }
 
+async function assertDashboardBridge(browser, script) {
+  const context = await browser.newContext({ userAgent: chromeUserAgent });
+  await context.route(`${SYNC_API_ORIGIN}/`, (route) =>
+    route.fulfill({
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html lang=\"ja\"><body></body></html>",
+    }),
+  );
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  await page.goto(`${SYNC_API_ORIGIN}/`);
+  await page.evaluate(() => {
+    window.__dashboardToken = "private-token";
+    window.__dashboardStorageError = false;
+    window.__dashboardResponseStatus = 200;
+    window.__dashboardGetValueCalls = [];
+    window.__dashboardRequests = [];
+    window.GM_info = { scriptHandler: "Tampermonkey" };
+    window.GM = {
+      async getValue(key, defaultValue) {
+        window.__dashboardGetValueCalls.push({ key, defaultValue });
+        if (window.__dashboardStorageError) {
+          throw new Error("mock storage failure");
+        }
+        return window.__dashboardToken;
+      },
+      xmlHttpRequest(details) {
+        window.__dashboardRequests.push({
+          authorization: details.headers?.Authorization ?? "",
+          method: details.method,
+          url: details.url,
+        });
+        const url = new URL(details.url);
+        const responseBody = url.pathname === "/v11/dashboard"
+          ? { history: null, selectedSite: null, sites: [], state: null }
+          : {
+              date: url.searchParams.get("date"),
+              site: url.searchParams.get("site"),
+              tables: { attempts: [], stability_history: [] },
+              timeZone: "Asia/Tokyo",
+            };
+        const status = window.__dashboardResponseStatus;
+        queueMicrotask(() => details.onload({
+          responseText: JSON.stringify(
+            status === 200 ? responseBody : { error: "unauthorized" },
+          ),
+          status,
+        }));
+        return { abort() {} };
+      },
+    };
+  });
+  await page.addScriptTag({ content: script });
+  await page.waitForFunction(() =>
+    document.documentElement.dataset.kakomonnDashboardBridgeState === "ready");
+  await page.evaluate(() => {
+    window.__callDashboardBridge = (request) => new Promise((resolve) => {
+      const receive = (event) => {
+        const response = JSON.parse(event.detail);
+        if (response.id !== request.id) return;
+        document.removeEventListener("kakomonn-dashboard:response", receive);
+        resolve({ response, serialized: event.detail });
+      };
+      document.addEventListener("kakomonn-dashboard:response", receive);
+      document.dispatchEvent(new CustomEvent("kakomonn-dashboard:request", {
+        detail: JSON.stringify(request),
+      }));
+    });
+  });
+
+  const dashboard = await page.evaluate(() => window.__callDashboardBridge({
+    id: 1,
+    operation: "dashboard",
+    site: null,
+  }));
+  assert.equal(dashboard.response.ok, true);
+  assert.deepEqual(dashboard.response.data.sites, []);
+  assert.equal(dashboard.serialized.includes("private-token"), false);
+
+  const details = await page.evaluate(() => window.__callDashboardBridge({
+    date: "2026-08-10",
+    id: 2,
+    operation: "daily-details",
+    site: "chushoks.kakomonn.com",
+  }));
+  assert.equal(details.response.ok, true);
+  assert.equal(details.response.data.date, "2026-08-10");
+
+  const invalid = await page.evaluate(() => window.__callDashboardBridge({
+    id: 3,
+    operation: "state",
+    site: "chushoks.kakomonn.com",
+  }));
+  assert.deepEqual(invalid.response, {
+    code: "invalid_request",
+    id: 3,
+    ok: false,
+    status: 0,
+  });
+
+  await page.evaluate(() => { window.__dashboardToken = ""; });
+  const missing = await page.evaluate(() => window.__callDashboardBridge({
+    id: 4,
+    operation: "dashboard",
+    site: null,
+  }));
+  assert.equal(missing.response.code, "token_missing");
+
+  await page.evaluate(() => {
+    window.__dashboardToken = "private-token";
+    window.__dashboardStorageError = true;
+  });
+  const storageError = await page.evaluate(() => window.__callDashboardBridge({
+    id: 5,
+    operation: "dashboard",
+    site: null,
+  }));
+  assert.equal(storageError.response.code, "storage_unavailable");
+
+  await page.evaluate(() => {
+    window.__dashboardStorageError = false;
+    window.__dashboardResponseStatus = 401;
+  });
+  const unauthorized = await page.evaluate(() => window.__callDashboardBridge({
+    id: 6,
+    operation: "dashboard",
+    site: null,
+  }));
+  assert.deepEqual(unauthorized.response, {
+    code: "unauthorized",
+    id: 6,
+    ok: false,
+    status: 401,
+  });
+
+  assert.deepEqual(
+    await page.evaluate(() => window.__dashboardRequests),
+    [
+      {
+        authorization: "Bearer private-token",
+        method: "GET",
+        url: `${SYNC_API_ORIGIN}/v11/dashboard`,
+      },
+      {
+        authorization: "Bearer private-token",
+        method: "GET",
+        url: `${SYNC_API_ORIGIN}/v11/daily-details?date=2026-08-10&site=chushoks.kakomonn.com`,
+      },
+      {
+        authorization: "Bearer private-token",
+        method: "GET",
+        url: `${SYNC_API_ORIGIN}/v11/dashboard`,
+      },
+    ],
+  );
+  assert.equal(
+    await page.locator("#kakomonn-reader-shell").count(),
+    0,
+  );
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
 async function markAnswerResult(childFrame, answerResult) {
   await childFrame.evaluate((result) => {
     const selectedAnswer = document.querySelector(
@@ -1861,6 +2025,7 @@ async function main() {
   });
   try {
     await assertReaderBridge(browser, script);
+    await assertDashboardBridge(browser, script);
     const context = await browser.newContext({ userAgent: chromeUserAgent });
     const page = await context.newPage();
     const errors = await preparePage(page, "audio", {

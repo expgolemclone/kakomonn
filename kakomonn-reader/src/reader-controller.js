@@ -40,6 +40,8 @@ import { installNavigationController } from "./navigation-controller.js";
 import { installLifecycleController } from "./lifecycle-controller.js";
 import { installSpeechController } from "./speech-controller.js";
 import { installShortcutsController } from "./shortcuts-controller.js";
+import { installDashboardBridge } from "./dashboard-bridge.js";
+import { DASHBOARD_BRIDGE_STATE_ATTRIBUTE } from "../../contracts/dashboard-bridge.mjs";
 
 export async function startReader() {
 "use strict";
@@ -87,6 +89,8 @@ export async function startReader() {
     location.pathname === "/open" &&
     location.search === "" &&
     location.hash === "";
+  const isDashboardBridge =
+    location.origin === SYNC_API_URL && location.pathname === "/";
   const NEXT_QUESTION_SITE_ID = "chushoks.kakomonn.com";
   const READER_BRIDGE_TARGET_ATTRIBUTE =
     "data-kakomonn-reader-bridge-target";
@@ -174,6 +178,28 @@ export async function startReader() {
   
   const isReaderBridgeNextResponse = (value) =>
     isNextResponse(value, NEXT_QUESTION_SITE_ID);
+  const hasDashboardBridgeRuntime =
+    SCRIPT_HANDLER === "Tampermonkey" &&
+    (isWindowsChrome || isIPhoneSafari) &&
+    typeof GM === "object" &&
+    GM !== null &&
+    typeof GM.getValue === "function" &&
+    typeof GM.xmlHttpRequest === "function";
+  if (isDashboardBridge) {
+    if (!hasDashboardBridgeRuntime) {
+      document.documentElement.setAttribute(
+        DASHBOARD_BRIDGE_STATE_ATTRIBUTE,
+        "error",
+      );
+      return;
+    }
+    installDashboardBridge({
+      gm: GM,
+      requestSyncResponse,
+      syncTokenKey: SYNC_TOKEN_KEY,
+    });
+    return;
+  }
   if (
     SCRIPT_HANDLER !== "Tampermonkey" ||
     (!isWindowsChrome && !isIPhoneSafari) ||

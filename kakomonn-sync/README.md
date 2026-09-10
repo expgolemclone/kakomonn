@@ -10,7 +10,7 @@ productionのWorker rootを開くと,独立した学習ログを表示します.
 https://kakomonn-sync.kakomonn.workers.dev/
 ```
 
-初回だけ`kakomonn-reader`と同じ同期tokenを入力します. tokenと最後に表示したサイトだけをこのoriginの`localStorage`へ保存します.
+同じbrowser profileで最新の`kakomonn-reader`をTampermonkeyへinstallして使用します. dashboardはreaderのUserscript専用storageに保存された同期tokenで自動接続し, tokenの入力と変更はreaderの同期設定だけで行います. dashboardのDOM, JavaScript state, URL, `localStorage`へtokenを渡しません. `localStorage`には最後に表示したサイトだけを保存します.
 
 dashboardは[`learningMetrics`](#learningmetrics-contract)のprimary KPIと残件数を同じcardへ表示し, それ以外を詳細指標として扱います. 31日graphは[`history`](#history-contract)のstability変化をbar, 正答率を0%から100%のlineで表示します. graphの日付を選択すると, 該当する`stability_history`と`attempts`の全columnをDBのcolumn名と保存値のまま確認できます.
 
@@ -22,7 +22,7 @@ Windowsのopen commandまたはiPhone Safariから, 次の固定URLでFSRSに基
 https://kakomonn-sync.kakomonn.workers.dev/open
 ```
 
-`/open`はdashboard bridgeでreader userscriptが専用storageの同期tokenを読み, read-onlyの`GET /v11/next`が成功するまで待ちます. 応答に次問がある場合だけ安全な問題URLをDOMへ渡して直接移動するため, cold transportを問題siteへ持ち込みません. 次問がない場合とtokenが未設定または不正な場合は問題siteへ移動せず, bridge上で理由と再読み込み操作を表示します. 15秒以内に準備できない場合は, Tampermonkeyとreaderを確認するerrorを表示します. tokenをDOM, URL, dashboardの`localStorage`へ保存しません. readerでbrowser backを実行するとbridgeが`/`へ戻し, 最新のdashboardを読み込みます.
+`/open`はdashboard bridgeでreader userscriptが専用storageの同期tokenを読み, read-onlyの`GET /v11/next`が成功するまで待ちます. 応答に次問がある場合だけ安全な問題URLをDOMへ渡して直接移動するため, cold transportを問題siteへ持ち込みません. 次問がない場合とtokenが未設定または不正な場合は問題siteへ移動せず, bridge上で理由と再読み込み操作を表示します. 15秒以内に準備できない場合は, Tampermonkeyとreaderを確認するerrorを表示します. tokenをDOM, URL, dashboardの`localStorage`へ保存しません. readerでbrowser backを実行するとbridgeが`/`へ戻し, Userscript専用storageの同じtokenで最新のdashboardを読み込みます.
 
 token未設定または認証失敗の場合は, redirect先の同期設定でtokenを保存し, 再読込せず次の問題へ進みます. 通信失敗, 問題catalog未同期, 次問なしの場合は, 原因と再試行操作を表示します.
 
@@ -57,7 +57,7 @@ $speechKey | npx wrangler secret put AZURE_SPEECH_KEY --config kakomonn-sync/wra
 npm run deploy:kakomonn-sync
 ```
 
-このcommandはWorker testとdashboard E2Eを実行してからdeploymentし,productionの全公開assetがrepositoryと一致することまで検証します.
+このcommandはWorker testとdashboard E2Eを実行してからdeploymentし, productionの全公開assetがrepositoryと一致することと, 実Tampermonkeyのreader tokenでdashboardが自動接続することまで検証します.
 
 `SYNC_TOKEN`には暗号学的に安全な256bit以上のrandom値を設定します.デプロイで表示された`workers.dev` URLは`kakomonn-reader`の`SYNC_API_URL`へ設定します.tokenとkeyはsourceや設定fileへ保存しません.
 

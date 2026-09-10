@@ -11,6 +11,11 @@ import {
   isQuestionId,
   scheduledQuestionId,
 } from "../contracts/kakomonn.mjs";
+import {
+  dashboardBridgeRequestId,
+  isDashboardBridgeRequest,
+  isDashboardBridgeResponse,
+} from "../contracts/dashboard-bridge.mjs";
 
 const site = "chushoks.kakomonn.com";
 const learningMetrics = Object.freeze({
@@ -220,6 +225,59 @@ test("daily details rows are bound to the requested Tokyo date", () => {
         }],
       },
     }, site, "2026-08-10"),
+    false,
+  );
+});
+
+test("dashboard bridge messages use exact request and response shapes", () => {
+  assert.equal(
+    isDashboardBridgeRequest({ id: 1, operation: "dashboard", site: null }),
+    true,
+  );
+  assert.equal(
+    isDashboardBridgeRequest({ id: 2, operation: "dashboard", site }),
+    true,
+  );
+  assert.equal(
+    isDashboardBridgeRequest({
+      date: "2026-08-10",
+      id: 3,
+      operation: "daily-details",
+      site,
+    }),
+    true,
+  );
+  for (const invalid of [
+    { id: 0, operation: "dashboard", site: null },
+    { id: 1, operation: "dashboard" },
+    { id: 1, operation: "state", site },
+    { date: "2026-02-30", id: 1, operation: "daily-details", site },
+    { date: "2026-08-10", id: 1, operation: "daily-details", site: "example.com" },
+  ]) {
+    assert.equal(isDashboardBridgeRequest(invalid), false);
+  }
+  assert.equal(dashboardBridgeRequestId({ id: 4, operation: "unknown" }), 4);
+  assert.equal(dashboardBridgeRequestId({ id: -1 }), null);
+  assert.equal(
+    isDashboardBridgeResponse({ data: { sites: [] }, id: 5, ok: true }, 5),
+    true,
+  );
+  assert.equal(
+    isDashboardBridgeResponse(
+      { code: "token_missing", id: 5, ok: false, status: 0 },
+      5,
+    ),
+    true,
+  );
+  assert.equal(
+    isDashboardBridgeResponse(
+      { code: "token_missing", extra: true, id: 5, ok: false, status: 0 },
+      5,
+    ),
+    false,
+  );
+  assert.equal(
+    isDashboardBridgeResponse({ data: { sites: [] }, id: 6, ok: true }, 5),
     false,
   );
 });

@@ -161,49 +161,62 @@ async function installApiMock(page) {
         },
       });
       window.__apiCalls = [];
-      window.fetch = async (input, init = {}) => {
-        const url = new URL(String(input), "https://dashboard.test");
-        const headers = new Headers(init.headers ?? {});
-        window.__apiCalls.push({
-          pathname: url.pathname,
-          search: url.search,
-          method: init.method ?? "GET",
-          authorization: headers.get("Authorization"),
-        });
-        const respond = (status, body) =>
-          new Response(JSON.stringify(body), {
-            status,
-            headers: { "Content-Type": "application/json" },
-          });
-        if (headers.get("Authorization") !== `Bearer ${tokenValue}`) {
-          return respond(401, { error: "unauthorized" });
-        }
-        if (url.pathname === "/v11/dashboard") {
-          const requestedSite = [siteValue, otherSiteValue].includes(url.searchParams.get("site"))
-            ? url.searchParams.get("site")
+      window.__nativeFetchCalls = 0;
+      window.fetch = async () => {
+        window.__nativeFetchCalls += 1;
+        throw new Error("dashboard must use the userscript bridge");
+      };
+      const respond = (response) => document.dispatchEvent(new CustomEvent(
+        "kakomonn-dashboard:response",
+        { detail: JSON.stringify(response) },
+      ));
+      document.addEventListener("kakomonn-dashboard:request", async (event) => {
+        const request = JSON.parse(event.detail);
+        window.__apiCalls.push(request);
+        if (request.operation === "dashboard") {
+          const requestedSite = [siteValue, otherSiteValue].includes(request.site)
+            ? request.site
             : siteValue;
           if (requestedSite === window.__delayedSite) {
             await new Promise((resolve) => window.__delayedResolvers.push(resolve));
           }
-          return respond(200, dashboardBySite[requestedSite]);
+          respond({ data: dashboardBySite[requestedSite], id: request.id, ok: true });
+          return;
         }
-        if (url.pathname === "/v11/daily-details") {
-          const requestedSite = url.searchParams.get("site");
-          const date = url.searchParams.get("date");
+        if (request.operation === "daily-details") {
+          const requestedSite = request.site;
+          const date = request.date;
           if (date === window.__delayedDetailDate) {
             await new Promise((resolve) => window.__delayedDetailResolvers.push(resolve));
           }
-          if (date === window.__detailErrorDate) return respond(500, { error: "request_failed" });
-          if (requestedSite === siteValue && date === dailyDetailsValue.date) return respond(200, dailyDetailsValue);
-          return respond(200, {
+          if (date === window.__detailErrorDate) {
+            respond({ code: "request_failed", id: request.id, ok: false, status: 500 });
+            return;
+          }
+          const data = requestedSite === siteValue && date === dailyDetailsValue.date
+            ? dailyDetailsValue
+            : {
             site: requestedSite,
             date,
             timeZone: "Asia/Tokyo",
             tables: { stability_history: [], attempts: [] },
-          });
+          };
+          respond({ data, id: request.id, ok: true });
+          return;
         }
-        return respond(404, { error: "not_found" });
+        respond({ code: "invalid_request", id: request.id, ok: false, status: 0 });
+      });
+      const markReady = () => {
+        if (document.documentElement === null) {
+          document.addEventListener("readystatechange", markReady, { once: true });
+          return;
+        }
+        document.documentElement.setAttribute(
+          "data-kakomonn-dashboard-bridge-state",
+          "ready",
+        );
       };
+      markReady();
     },
     {
       tokenValue: token,
@@ -292,9 +305,10 @@ async function assertDashboard(page) {
   assert.equal(text.includes("祝福"), false);
   assert.equal(await page.locator(".primary-kpi-card").innerText().then((value) => value.includes("解いた問題数")), false);
   const calls = await page.evaluate(() => window.__apiCalls);
-  assert.equal(calls.some((call) => !call.pathname.startsWith("/v11/")), false);
-  assert.equal(calls.filter((call) => call.pathname === "/v11/dashboard").length, 1);
-  assert.equal(calls.filter((call) => ["/v11/sites", "/v11/state", "/v11/history"].includes(call.pathname)).length, 0);
+  assert.equal(calls.some((call) => !["dashboard", "daily-details"].includes(call.operation)), false);
+  assert.equal(calls.filter((call) => call.operation === "dashboard").length, 1);
+  assert.equal(await page.evaluate(() => window.__nativeFetchCalls), 0);
+  assert.equal(await page.evaluate(() => localStorage.getItem("kakomonn-dashboard.sync-token")), null);
   assert.deepEqual(errors, []);
 
   await page.locator('[data-chart-date="2026-08-10"]').click();
@@ -348,40 +362,130 @@ async function assertDashboard(page) {
   assert.equal(await page.locator("#load-error").isVisible(), false);
   assert.equal(await page.locator("#daily-details-instruction").isVisible(), true);
 
-  await page.locator("#settings-button").click();
-  await page.locator("#settings-token").fill("incorrect-token");
-  await page.locator("#settings-form button[type=submit]").click();
-  await page.waitForFunction(() => document.querySelector("#settings-message")?.textContent === "同期tokenが正しくありません.");
-  await page.locator("#settings-close").click();
   await page.locator("#refresh-button").click();
   await page.waitForFunction(() => document.querySelector("#dashboard-status")?.textContent === "更新日 2026-08-10");
-  const finalCalls = await page.evaluate(() => window.__apiCalls);
-  const finalDashboardCall = finalCalls.filter((call) => call.pathname === "/v11/dashboard").at(-1);
-  assert.equal(finalDashboardCall.authorization, `Bearer ${token}`);
+  assert.equal(await page.locator("#settings-button, #settings-dialog, #auth-token").count(), 0);
+}
+
+async function assertDashboardConnectionStates(browser) {
+  async function openState(mode) {
+    const page = await browser.newPage();
+    await page.addInitScript((bridgeMode) => {
+      if (bridgeMode === "missing" || bridgeMode === "unauthorized") {
+        document.addEventListener("kakomonn-dashboard:request", (event) => {
+          const request = JSON.parse(event.detail);
+          document.dispatchEvent(new CustomEvent("kakomonn-dashboard:response", {
+            detail: JSON.stringify({
+              code: bridgeMode === "missing" ? "token_missing" : "unauthorized",
+              id: request.id,
+              ok: false,
+              status: bridgeMode === "missing" ? 0 : 401,
+            }),
+          }));
+        });
+      }
+      if (bridgeMode === "timeout") return;
+      const markState = () => {
+        if (document.documentElement === null) {
+          document.addEventListener("readystatechange", markState, { once: true });
+          return;
+        }
+        document.documentElement.setAttribute(
+          "data-kakomonn-dashboard-bridge-state",
+          bridgeMode === "unavailable" ? "error" : "ready",
+        );
+      };
+      markState();
+    }, mode);
+    await page.route("https://dashboard.test/**", async (route) => {
+      const assetPath = builtAssetForPath(new URL(route.request().url()).pathname);
+      await route.fulfill({
+        body: fs.readFileSync(assetPath),
+        contentType: contentTypes.get(path.extname(assetPath)) ?? "application/octet-stream",
+      });
+    });
+    return page;
+  }
+
+  for (const mode of ["missing", "unauthorized"]) {
+    const page = await openState(mode);
+    try {
+      await page.goto("https://dashboard.test/");
+      await page.waitForFunction(() =>
+        document.querySelector("#auth-title")?.textContent ===
+        "Readerの同期設定が必要です");
+      assert.equal(await page.locator("#auth-panel").isVisible(), true);
+      assert.equal(await page.locator("#auth-token").count(), 0);
+      assert.equal(
+        await page.locator("#auth-actions a").getAttribute("href"),
+        "https://chushoks.kakomonn.com/createques#kakomonn-next",
+      );
+      assert.match(
+        await page.locator("#auth-message").innerText(),
+        mode === "missing" ? /まだ保存されていません/ : /認証されませんでした/,
+      );
+    } finally {
+      await page.close();
+    }
+  }
+
+  const unavailablePage = await openState("unavailable");
+  try {
+    await unavailablePage.goto("https://dashboard.test/");
+    await unavailablePage.locator("#load-error").waitFor({ state: "visible" });
+    assert.match(await unavailablePage.locator("#error-message").innerText(), /最新のreader/);
+  } finally {
+    await unavailablePage.close();
+  }
+
+  const timeoutPage = await openState("timeout");
+  try {
+    await timeoutPage.clock.install();
+    await timeoutPage.goto("https://dashboard.test/");
+    await timeoutPage.clock.fastForward(15_000);
+    await timeoutPage.locator("#load-error").waitFor({ state: "visible" });
+    assert.match(await timeoutPage.locator("#error-message").innerText(), /確認できませんでした/);
+  } finally {
+    await timeoutPage.close();
+  }
 }
 
 async function assertOpenBridge(browser) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-  await context.addInitScript(
-    ({ tokenValue, siteValue }) => {
-      if (location.hostname !== "dashboard.test") return;
-      localStorage.setItem("kakomonn-dashboard.sync-token", tokenValue);
-      localStorage.setItem("kakomonn-dashboard.site", siteValue);
-    },
-    { tokenValue: token, siteValue: site },
-  );
   let dashboardRequestCount = 0;
+  await context.exposeFunction("__recordDashboardBridgeRequest", () => {
+    dashboardRequestCount += 1;
+  });
+  await context.addInitScript(
+    ({ siteValue, dashboardValue }) => {
+      if (location.hostname !== "dashboard.test") return;
+      localStorage.setItem("kakomonn-dashboard.site", siteValue);
+      window.__dashboardBridgeRequests = [];
+      document.addEventListener("kakomonn-dashboard:request", (event) => {
+        const request = JSON.parse(event.detail);
+        window.__dashboardBridgeRequests.push(request);
+        void window.__recordDashboardBridgeRequest();
+        document.dispatchEvent(new CustomEvent("kakomonn-dashboard:response", {
+          detail: JSON.stringify({ data: dashboardValue, id: request.id, ok: true }),
+        }));
+      });
+      const markReady = () => {
+        if (document.documentElement === null) {
+          document.addEventListener("readystatechange", markReady, { once: true });
+          return;
+        }
+        document.documentElement.setAttribute(
+          "data-kakomonn-dashboard-bridge-state",
+          "ready",
+        );
+      };
+      markReady();
+    },
+    { siteValue: site, dashboardValue: dashboardFixture(site) },
+  );
   let readerRequestCount = 0;
   await context.route("https://dashboard.test/**", async (route) => {
     const url = new URL(route.request().url());
-    if (url.pathname === "/v11/dashboard") {
-      dashboardRequestCount += 1;
-      await route.fulfill({
-        body: JSON.stringify(dashboardFixture(site)),
-        contentType: "application/json; charset=utf-8",
-      });
-      return;
-    }
     const assetPath = builtAssetForPath(url.pathname);
     await route.fulfill({
       body: fs.readFileSync(assetPath),
@@ -543,12 +647,16 @@ async function main() {
     const metrics = await mobile.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: window.innerWidth }));
     assert.equal(metrics.width <= metrics.viewport, true, JSON.stringify(metrics));
     await mobile.close();
+    await assertDashboardConnectionStates(browser);
     await assertOpenBridge(browser);
   } finally {
     await browser.close();
   }
   const webkitBrowser = await launchBrowser(webkit);
   try {
+    const dashboard = await webkitBrowser.newPage({ viewport: { width: 390, height: 844 } });
+    await assertDashboard(dashboard);
+    await dashboard.close();
     await assertOpenBridge(webkitBrowser);
   } finally {
     await webkitBrowser.close();

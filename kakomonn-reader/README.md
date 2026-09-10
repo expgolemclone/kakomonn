@@ -51,7 +51,7 @@ Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` mode
 
 読み上げに必要なWorkerとAzure Speechは, [`kakomonn-sync`のデプロイ手順](../kakomonn-sync/README.md#デプロイ)で準備します. 生成されたAPI URLを`src/reader-controller.js`の`SYNC_API_URL`と`src/userscript.meta.txt`の`@connect`へ設定してビルドします.
 
-同期tokenが未保存または認証失敗の場合だけ, 入力dialogが開きます. Win11とiPhoneへ, Worker Secretの`SYNC_TOKEN`と同じ値を入力してください. tokenは各userscript managerの専用storageへ保存され, 対象siteの`localStorage`には保存されません. 接続済みのreaderには設定buttonを表示しません.
+同期tokenが未保存または認証失敗の場合だけ, 入力dialogが開きます. Win11とiPhoneへ, Worker Secretの`SYNC_TOKEN`と同じ値を入力してください. tokenはbrowser profileごとのUserscript専用storageを唯一の保存先とし, 問題siteとsync dashboardの`localStorage`には保存されません. 同じprofileのsync dashboardはこのtokenで自動接続します. 接続済みのreaderには設定buttonを表示しません.
 
 remote stateはreader sessionの開始時に取得します. launcherから開いた場合は`/v11/next`が返したstateを引き継ぐため, 追加の`/v11/state`は呼びません. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
 

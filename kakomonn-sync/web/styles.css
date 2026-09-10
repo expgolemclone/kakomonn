@@ -28,7 +28,9 @@ main { flex: 1; padding: 34px 0 48px; }
 .panel, .primary-kpi-card, .metrics-card, .history-card { border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 94%, transparent); border-radius: 18px; box-shadow: 0 18px 70px rgba(0,0,0,.18); }
 .panel { padding: clamp(24px, 5vw, 48px); max-width: 720px; }
 .auth-panel p { color: var(--muted); max-width: 58ch; }
-.auth-form { margin-top: 28px; }
+.auth-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.auth-actions[hidden] { display: none; }
+.auth-actions a { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 label { display: block; margin-bottom: 8px; color: var(--muted); font-size: .82rem; font-weight: 700; }
 .input-row { display: flex; gap: 10px; }
 input, select { min-height: 44px; border: 1px solid var(--border); border-radius: 10px; background: #0b1019; color: inherit; padding: 9px 12px; }
@@ -114,16 +116,14 @@ footer p { margin: 0 0 4px; }
 dialog { width: min(520px, calc(100% - 28px)); border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: inherit; padding: 28px; }
 dialog::backdrop { background: rgba(0,0,0,.68); }
 .dialog-close { float: right; border: 0; background: transparent; color: var(--muted); font-size: 1.5rem; }
-.dialog-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; }
 .open-dialog-actions { align-items: center; }
 .open-dialog-actions a { display: inline-flex; min-height: 44px; align-items: center; color: var(--accent-2); }
-#settings-token { width: 100%; }
 @media (max-width: 680px) {
   .page-shell { width: min(100% - 20px, 1120px); }
   .site-header { align-items: start; padding-top: 24px; }
   .header-actions > span { display: none; }
   main { padding-top: 20px; }
-  .input-row, .toolbar { align-items: stretch; flex-direction: column; }
+  .input-row, .toolbar, .auth-actions { align-items: stretch; flex-direction: column; }
   .toolbar select { min-width: 100%; width: 100%; }
   .primary-kpi-card { grid-template-columns: 1fr; }
   .primary-kpi-values { align-items: stretch; flex-direction: column; }

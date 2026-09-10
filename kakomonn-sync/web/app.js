@@ -4,10 +4,16 @@ import {
   isDashboardResponse as validDashboard,
   isSite as validSite,
 } from "../../contracts/kakomonn.mjs";
+import {
+  DASHBOARD_BRIDGE_REQUEST_EVENT,
+  DASHBOARD_BRIDGE_RESPONSE_EVENT,
+  DASHBOARD_BRIDGE_STATE_ATTRIBUTE,
+  DASHBOARD_BRIDGE_TIMEOUT_MS,
+  isDashboardBridgeResponse,
+} from "../../contracts/dashboard-bridge.mjs";
 
-const TOKEN_KEY = "kakomonn-dashboard.sync-token";
+const LEGACY_TOKEN_KEY = "kakomonn-dashboard.sync-token";
 const SITE_KEY = "kakomonn-dashboard.site";
-const API_TIMEOUT_MS = 15000;
 const SVG_NS = "http://www.w3.org/2000/svg";
 const DASHBOARD_HISTORY_DAYS = 31;
 const CHART_DAY_WIDTH = 88;
@@ -26,16 +32,17 @@ const byId = (id) => {
 };
 
 const el = {
-  authPanel: byId("auth-panel"), authForm: byId("auth-form"), authToken: byId("auth-token"), authMessage: byId("auth-message"),
+  authPanel: byId("auth-panel"), authTitle: byId("auth-title"), authDescription: byId("auth-description"), authActions: byId("auth-actions"), authMessage: byId("auth-message"), authRetry: byId("auth-retry"),
   dashboard: byId("dashboard"), siteEmpty: byId("site-empty"), loadError: byId("load-error"), errorMessage: byId("error-message"), retryButton: byId("retry-button"),
-  settingsButton: byId("settings-button"), settingsDialog: byId("settings-dialog"), settingsForm: byId("settings-form"), settingsToken: byId("settings-token"), settingsMessage: byId("settings-message"), settingsClose: byId("settings-close"), forgetToken: byId("forget-token"),
   siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), dailyKpiCompletedElement: byId("daily-kpi-completed"), dueCardsRemainingElement: byId("due-cards-remaining"), newQuestionsRemainingElement: byId("new-questions-remaining"), todayStabilityDaysDeltaElement: byId("today-stability-days-delta"), stabilityDaysElement: byId("stability-days"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), todayCorrectRatePercentElement: byId("today-correct-rate-percent"), todayCorrectRatePercentUnit: byId("today-correct-rate-percent-unit"), stabilityChartAxis: byId("stability-chart-axis"), historyScroll: byId("history-scroll"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
   dailyDetails: byId("daily-details"), dailyDetailsDate: byId("daily-details-date"), dailyDetailsInstruction: byId("daily-details-instruction"), dailyDetailsStatus: byId("daily-details-status"), dailyDetailsTables: byId("daily-details-tables"), stabilityHistoryTable: byId("stability-history-table"), attemptsTable: byId("attempts-table"),
 };
 
-const state = { token: "", site: "", sites: [], learning: null, history: null, selectedDate: "", dailyDetails: null };
+const state = { site: "", sites: [], learning: null, history: null, selectedDate: "", dailyDetails: null };
 let loadGeneration = 0;
 let detailGeneration = 0;
+let bridgeRequestId = 0;
+let bridgeReadyPromise = null;
 
 class DashboardError extends Error {
   constructor(code, status = 0) { super(code); this.code = code; this.status = status; }
@@ -51,23 +58,84 @@ function storageRemove(key) {
   try { localStorage.removeItem(key); } catch { throw new DashboardError("storage_unavailable"); }
 }
 
-async function requestJSON(path, token, { method = "GET", body } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
-  let response;
-  try {
-    const headers = { Authorization: `Bearer ${token}` };
-    if (body !== undefined) headers["Content-Type"] = "application/json";
-    response = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: controller.signal });
-  } catch (error) {
-    throw new DashboardError(error?.name === "AbortError" ? "timeout" : "network_error");
-  } finally {
-    clearTimeout(timer);
+function waitForDashboardBridge() {
+  const currentState = document.documentElement.getAttribute(
+    DASHBOARD_BRIDGE_STATE_ATTRIBUTE,
+  );
+  if (currentState === "ready") return Promise.resolve();
+  if (currentState === "error") {
+    return Promise.reject(new DashboardError("reader_unavailable"));
   }
-  let responseBody;
-  try { responseBody = await response.json(); } catch { throw new DashboardError("invalid_response", response.status); }
-  if (!response.ok) throw new DashboardError(typeof responseBody?.error === "string" ? responseBody.error : "request_failed", response.status);
-  return responseBody;
+  if (bridgeReadyPromise !== null) return bridgeReadyPromise;
+  bridgeReadyPromise = new Promise((resolve, reject) => {
+    let timer = null;
+    const observer = new MutationObserver(() => {
+      const bridgeState = document.documentElement.getAttribute(
+        DASHBOARD_BRIDGE_STATE_ATTRIBUTE,
+      );
+      if (bridgeState !== "ready" && bridgeState !== "error") return;
+      observer.disconnect();
+      if (timer !== null) clearTimeout(timer);
+      if (bridgeState === "ready") resolve();
+      else reject(new DashboardError("reader_unavailable"));
+    });
+    observer.observe(document.documentElement, {
+      attributeFilter: [DASHBOARD_BRIDGE_STATE_ATTRIBUTE],
+      attributes: true,
+    });
+    timer = setTimeout(() => {
+      observer.disconnect();
+      reject(new DashboardError("reader_ready_timeout"));
+    }, DASHBOARD_BRIDGE_TIMEOUT_MS);
+  }).finally(() => {
+    bridgeReadyPromise = null;
+  });
+  return bridgeReadyPromise;
+}
+
+async function requestJSON(request) {
+  await waitForDashboardBridge();
+  const id = ++bridgeRequestId;
+  return new Promise((resolve, reject) => {
+    let timer = null;
+    const cleanup = () => {
+      if (timer !== null) clearTimeout(timer);
+      document.removeEventListener(
+        DASHBOARD_BRIDGE_RESPONSE_EVENT,
+        handleResponse,
+      );
+    };
+    const handleResponse = (event) => {
+      let response;
+      try {
+        response = JSON.parse(event.detail);
+      } catch {
+        return;
+      }
+      if (response?.id !== id) return;
+      if (!isDashboardBridgeResponse(response, id)) {
+        cleanup();
+        reject(new DashboardError("invalid_response"));
+        return;
+      }
+      cleanup();
+      if (response.ok) resolve(response.data);
+      else reject(new DashboardError(response.code, response.status));
+    };
+    timer = setTimeout(() => {
+      cleanup();
+      reject(new DashboardError("timeout"));
+    }, DASHBOARD_BRIDGE_TIMEOUT_MS);
+    document.addEventListener(
+      DASHBOARD_BRIDGE_RESPONSE_EVENT,
+      handleResponse,
+    );
+    document.dispatchEvent(
+      new CustomEvent(DASHBOARD_BRIDGE_REQUEST_EVENT, {
+        detail: JSON.stringify({ id, ...request }),
+      }),
+    );
+  });
 }
 
 function formatted(value) { return value.toLocaleString("ja-JP"); }
@@ -319,7 +387,6 @@ function renderDailyDetailsError(error) {
 async function loadDailyDetails(date, { focusChart = false } = {}) {
   const generation = ++detailGeneration;
   const site = state.site;
-  const token = state.token;
   state.selectedDate = date;
   state.dailyDetails = null;
   renderChart(state.history.days);
@@ -327,14 +394,18 @@ async function loadDailyDetails(date, { focusChart = false } = {}) {
   if (focusChart) el.stabilityChart.querySelector(`[data-chart-date="${date}"]`)?.focus();
   let details;
   try {
-    details = await requestJSON(`/v11/daily-details?${new URLSearchParams({ site, date })}`, token);
+    details = await requestJSON({ date, operation: "daily-details", site });
     if (!validDailyDetails(details, site, date)) throw new DashboardError("invalid_response");
   } catch (error) {
-    if (generation !== detailGeneration || site !== state.site || token !== state.token || date !== state.selectedDate) return false;
+    if (generation !== detailGeneration || site !== state.site || date !== state.selectedDate) return false;
+    if (error?.code === "token_missing" || error?.code === "unauthorized") {
+      showReaderSetup(error);
+      return false;
+    }
     renderDailyDetailsError(error);
     return false;
   }
-  if (generation !== detailGeneration || site !== state.site || token !== state.token || date !== state.selectedDate) return false;
+  if (generation !== detailGeneration || site !== state.site || date !== state.selectedDate) return false;
   state.dailyDetails = details;
   renderDailyDetailsResult(details);
   return true;
@@ -360,26 +431,39 @@ function renderDashboard() {
   el.authPanel.hidden = true;
   el.siteEmpty.hidden = true;
   el.loadError.hidden = true;
-  el.settingsButton.hidden = false;
   el.dashboardStatus.textContent = `更新日 ${learning.today}`;
   scrollHistoryToLatest();
 }
 
 function showError(error) {
   const messages = {
-    unauthorized: "同期tokenが正しくありません.", timeout: "読み込みがタイムアウトしました.", network_error: "networkへ接続できません.", storage_unavailable: "browser storageを利用できません.", invalid_response: "API応答が不正です.", server_misconfigured: "同期APIが設定されていません.",
+    reader_unavailable: "対応する過去問readerを利用できません. Tampermonkeyで最新のreaderを有効にしてください.", reader_ready_timeout: "過去問readerを確認できませんでした. Tampermonkeyで最新のreaderを有効にして再読み込みしてください.", timeout: "読み込みがタイムアウトしました.", network_error: "networkへ接続できません.", storage_unavailable: "browser storageを利用できません.", invalid_response: "API応答が不正です.", server_misconfigured: "同期APIが設定されていません.",
   };
   el.errorMessage.textContent = messages[error?.code] ?? "学習記録を読み込めませんでした.";
   el.loadError.hidden = false;
+  el.authPanel.hidden = true;
   el.dashboard.hidden = true;
   el.siteEmpty.hidden = true;
 }
 
-async function fetchDashboardData(site, token) {
-  const parameters = new URLSearchParams();
-  if (site !== null) parameters.set("site", site);
-  const suffix = parameters.size === 0 ? "" : `?${parameters}`;
-  const data = await requestJSON(`/v11/dashboard${suffix}`, token);
+function showReaderSetup(error) {
+  loadGeneration += 1;
+  detailGeneration += 1;
+  el.authTitle.textContent = "Readerの同期設定が必要です";
+  el.authDescription.textContent =
+    "同じbrowser profileの問題画面で同期tokenを設定してから, このdashboardを再読み込みしてください.";
+  el.authMessage.textContent = error?.code === "unauthorized"
+    ? "保存済みの同期tokenが認証されませんでした."
+    : "同期tokenがまだ保存されていません.";
+  el.authActions.hidden = false;
+  el.authPanel.hidden = false;
+  el.dashboard.hidden = true;
+  el.siteEmpty.hidden = true;
+  el.loadError.hidden = true;
+}
+
+async function fetchDashboardData(site) {
+  const data = await requestJSON({ operation: "dashboard", site });
   if (!validDashboard(data)) throw new DashboardError("invalid_response");
   return data;
 }
@@ -394,15 +478,14 @@ function applySiteData(data) {
 async function loadSelectedSite() {
   const generation = ++loadGeneration;
   const site = state.site;
-  const token = state.token;
   let data;
   try {
-    data = await fetchDashboardData(site, token);
+    data = await fetchDashboardData(site);
   } catch (error) {
-    if (generation !== loadGeneration || site !== state.site || token !== state.token) return false;
+    if (generation !== loadGeneration || site !== state.site) return false;
     throw error;
   }
-  if (generation !== loadGeneration || site !== state.site || token !== state.token || data.selectedSite !== site) return false;
+  if (generation !== loadGeneration || site !== state.site || data.selectedSite !== site) return false;
   applySiteData(data);
   return true;
 }
@@ -414,50 +497,43 @@ function renderSiteOptions() {
   el.siteSelect.value = state.site;
 }
 
-async function connect(token, { persist = true } = {}) {
+async function connect() {
   const generation = ++loadGeneration;
   const saved = storageGet(SITE_KEY);
   let data;
   try {
-    data = await fetchDashboardData(validSite(saved) ? saved : null, token);
+    data = await fetchDashboardData(validSite(saved) ? saved : null);
   } catch (error) {
     if (generation !== loadGeneration) return false;
     throw error;
   }
   if (generation !== loadGeneration) return false;
   const site = data.selectedSite ?? "";
-  if (persist) storageSet(TOKEN_KEY, token);
   if (site === "") storageRemove(SITE_KEY); else storageSet(SITE_KEY, site);
-  state.token = token; state.sites = data.sites; state.site = site;
+  state.sites = data.sites; state.site = site;
   state.learning = null; state.history = null;
   resetDailyDetails();
   if (data.sites.length === 0) {
-    el.authPanel.hidden = true; el.dashboard.hidden = true; el.loadError.hidden = true; el.siteEmpty.hidden = false; el.settingsButton.hidden = false; return true;
+    el.authPanel.hidden = true; el.dashboard.hidden = true; el.loadError.hidden = true; el.siteEmpty.hidden = false; return true;
   }
   renderSiteOptions();
   applySiteData(data);
   return true;
 }
 
-el.authForm.addEventListener("submit", async (event) => {
-  event.preventDefault(); const token = el.authToken.value.trim();
-  if (!token) { el.authMessage.textContent = "同期tokenを入力してください."; return; }
-  el.authMessage.textContent = "接続中";
-  try { if (await connect(token)) { el.authToken.value = ""; el.authMessage.textContent = ""; } } catch (error) { el.authMessage.textContent = error?.code === "unauthorized" ? "同期tokenが正しくありません." : "接続できませんでした."; }
-});
-
 el.siteSelect.addEventListener("change", async () => {
   if (!state.sites.includes(el.siteSelect.value)) return;
   resetDailyDetails(); state.site = el.siteSelect.value; storageSet(SITE_KEY, state.site);
-  try { await loadSelectedSite(); } catch (error) { showError(error); }
+  try { await loadSelectedSite(); } catch (error) { if (error?.code === "token_missing" || error?.code === "unauthorized") showReaderSetup(error); else showError(error); }
 });
 el.refreshButton.addEventListener("click", async () => {
   const selectedDate = state.selectedDate;
   try {
     if (await loadSelectedSite() && selectedDate !== "" && state.selectedDate === selectedDate) await loadDailyDetails(selectedDate);
-  } catch (error) { showError(error); }
+  } catch (error) { if (error?.code === "token_missing" || error?.code === "unauthorized") showReaderSetup(error); else showError(error); }
 });
-el.retryButton.addEventListener("click", async () => { try { await connect(state.token, { persist: false }); } catch (error) { showError(error); } });
+el.retryButton.addEventListener("click", () => { void initializeDashboard(); });
+el.authRetry.addEventListener("click", () => { void initializeDashboard(); });
 el.stabilityChart.addEventListener("click", (event) => {
   const target = event.target.closest?.("[data-chart-date]");
   if (target) void loadDailyDetails(target.getAttribute("data-chart-date"), { focusChart: true });
@@ -469,28 +545,22 @@ el.stabilityChart.addEventListener("keydown", (event) => {
   event.preventDefault();
   void loadDailyDetails(target.getAttribute("data-chart-date"), { focusChart: true });
 });
-el.settingsButton.addEventListener("click", () => { el.settingsMessage.textContent = ""; el.settingsToken.value = ""; el.settingsDialog.showModal(); });
-el.settingsClose.addEventListener("click", () => el.settingsDialog.close());
-el.settingsForm.addEventListener("submit", async (event) => {
-  event.preventDefault(); const token = el.settingsToken.value.trim();
-  if (!token) { el.settingsMessage.textContent = "同期tokenを入力してください."; return; }
-  try { if (await connect(token)) el.settingsDialog.close(); } catch (error) { el.settingsMessage.textContent = error?.code === "unauthorized" ? "同期tokenが正しくありません." : "tokenを変更できませんでした."; }
-});
-el.forgetToken.addEventListener("click", () => {
-  loadGeneration += 1;
-  storageRemove(TOKEN_KEY); storageRemove(SITE_KEY); state.token = ""; state.site = ""; state.sites = []; state.learning = null; state.history = null;
-  resetDailyDetails();
-  el.settingsDialog.close(); el.settingsButton.hidden = true; el.dashboard.hidden = true; el.siteEmpty.hidden = true; el.loadError.hidden = true; el.authPanel.hidden = false;
-});
-
 async function initializeDashboard() {
   try {
-    const token = storageGet(TOKEN_KEY) ?? "";
-    if (!token) return;
-    await connect(token, { persist: false });
+    storageRemove(LEGACY_TOKEN_KEY);
+    el.authTitle.textContent = "Readerと接続しています";
+    el.authDescription.textContent =
+      "同じbrowser profileの過去問readerから学習記録を読み込みます.";
+    el.authMessage.textContent = "接続を確認中です.";
+    el.authActions.hidden = true;
+    el.authPanel.hidden = false;
+    el.dashboard.hidden = true;
+    el.siteEmpty.hidden = true;
+    el.loadError.hidden = true;
+    await connect();
   } catch (error) {
-    if (error?.code === "unauthorized") { storageRemove(TOKEN_KEY); el.authMessage.textContent = "保存済みtokenを確認してください."; return; }
-    showError(error);
+    if (error?.code === "token_missing" || error?.code === "unauthorized") showReaderSetup(error);
+    else showError(error);
   }
 }
 

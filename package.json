@@ -35,9 +35,10 @@
     "test:kakomonn-ios-safari": "node --use-system-ca kakomonn-reader/tests/ios_safari_e2e_test.js",
     "test:kakomonn-live-site": "node kakomonn-reader/tests/live_site_e2e_test.js",
     "test:kakomonn-live-open": "npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader/tests/live_open_e2e_test.js",
+    "test:kakomonn-live-dashboard": "npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader/tests/live_dashboard_e2e_test.js",
     "test:kakomonn-live-sync": "npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader/tests/live_sync_e2e_test.js",
     "release:kakomonn-reader": "node scripts/release-kakomonn-reader.mjs",
-    "deploy:kakomonn-sync": "npm run test:kakomonn-sync && npm run test:kakomonn-dashboard && node --use-system-ca node_modules/wrangler/bin/wrangler.js deploy --config kakomonn-sync/wrangler.jsonc && npm run test:kakomonn-sync-production",
+    "deploy:kakomonn-sync": "npm run test:kakomonn-sync && npm run test:kakomonn-dashboard && node --use-system-ca node_modules/wrangler/bin/wrangler.js deploy --config kakomonn-sync/wrangler.jsonc && npm run test:kakomonn-sync-production && npm run test:kakomonn-live-dashboard",
     "deploy:congratulations": "npm run test:congratulations && node --use-system-ca node_modules/wrangler/bin/wrangler.js deploy --config congratulations/wrangler.jsonc && npm run test:congratulations-production"
   },
   "devDependencies": {

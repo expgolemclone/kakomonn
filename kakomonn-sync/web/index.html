@@ -19,23 +19,19 @@
         </div>
         <div class="header-actions">
           <span>Asia/Tokyo</span>
-          <button id="settings-button" class="text-button" type="button" hidden>同期設定</button>
         </div>
       </header>
 
       <main>
         <section id="auth-panel" class="panel auth-panel" aria-labelledby="auth-title">
           <p class="eyebrow">DEVICE LINK</p>
-          <h2 id="auth-title">学習記録へ接続</h2>
-          <p>過去問readerと同じ同期tokenを入力します. tokenはこのbrowserだけに保存します.</p>
-          <form id="auth-form" class="auth-form" novalidate>
-            <label for="auth-token">同期token</label>
-            <div class="input-row">
-              <input id="auth-token" type="password" autocomplete="current-password" spellcheck="false" required>
-              <button class="primary-button" type="submit">開く</button>
-            </div>
-          </form>
-          <p id="auth-message" class="message" role="alert"></p>
+          <h2 id="auth-title">Readerと接続しています</h2>
+          <p id="auth-description">同じbrowser profileの過去問readerから学習記録を読み込みます.</p>
+          <div id="auth-actions" class="auth-actions" hidden>
+            <a class="primary-button" href="https://chushoks.kakomonn.com/createques#kakomonn-next">Readerで設定する</a>
+            <button id="auth-retry" class="text-button" type="button">再読み込み</button>
+          </div>
+          <p id="auth-message" class="message" role="status" aria-live="polite">接続を確認中です.</p>
         </section>
 
         <section id="dashboard" hidden>
@@ -155,19 +151,5 @@
       </footer>
     </div>
 
-    <dialog id="settings-dialog" aria-labelledby="settings-title">
-      <form id="settings-form" method="dialog" novalidate>
-        <button id="settings-close" class="dialog-close" type="button" aria-label="同期設定を閉じる">×</button>
-        <p class="eyebrow">DEVICE SETTINGS</p>
-        <h2 id="settings-title">同期token</h2>
-        <label for="settings-token">新しい同期token</label>
-        <input id="settings-token" type="password" autocomplete="current-password" spellcheck="false">
-        <p id="settings-message" class="message" role="alert"></p>
-        <div class="dialog-actions">
-          <button id="forget-token" class="danger-button" type="button">この端末から削除</button>
-          <button class="primary-button" type="submit">tokenを変更</button>
-        </div>
-      </form>
-    </dialog>
   </body>
 </html>

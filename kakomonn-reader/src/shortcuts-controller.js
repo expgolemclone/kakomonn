@@ -1,3 +1,5 @@
+import { isIPhoneNextQuestionSwipe } from "./swipe-navigation.js";
+
 export function installShortcutsController(app) {
   const ANSWER_CHOICE_SHORTCUT_KEYS = "qwert";
   const DISPLAY_CHOICE_SHORTCUT_KEYS = "asdfg";
@@ -5,6 +7,7 @@ export function installShortcutsController(app) {
   let shortcutSequenceTimer = null;
   let shortcutSequenceDocument = null;
   let shortcutSequenceKey = "";
+  let frameSwipeStart = null;
   
   function shortcutTargetElement(target) {
     if (target?.nodeType === target?.ownerDocument?.defaultView?.Node.ELEMENT_NODE) {
@@ -286,9 +289,73 @@ export function installShortcutsController(app) {
     event.preventDefault();
     event.stopImmediatePropagation();
   }
+
+  function onFrameTouchStart(event) {
+    frameSwipeStart = null;
+    if (
+      !app.isIPhoneSafari ||
+      event.touches.length !== 1 ||
+      app.syncSettings.open ||
+      app.errorDialog.open ||
+      app.getCurrentAnswerResult() !== "incorrect"
+    ) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    frameSwipeStart = {
+      identifier: touch.identifier,
+      timeStamp: event.timeStamp,
+      x: touch.clientX,
+      y: touch.clientY,
+    };
+  }
+
+  function onFrameTouchMove(event) {
+    if (event.touches.length !== 1) {
+      frameSwipeStart = null;
+    }
+  }
+
+  function onFrameTouchCancel() {
+    frameSwipeStart = null;
+  }
+
+  function onFrameTouchEnd(event) {
+    const start = frameSwipeStart;
+    frameSwipeStart = null;
+    if (start === null || event.changedTouches.length === 0) {
+      return;
+    }
+
+    const touch = Array.from(event.changedTouches).find(
+      (candidate) => candidate.identifier === start.identifier
+    );
+    if (touch === undefined) {
+      return;
+    }
+
+    if (
+      !isIPhoneNextQuestionSwipe({
+        durationMs: event.timeStamp - start.timeStamp,
+        endX: touch.clientX,
+        endY: touch.clientY,
+        startX: start.x,
+        startY: start.y,
+        viewportWidth: app.frame.contentWindow.innerWidth,
+      }) ||
+      !app.requestIncorrectAnswerAdvance()
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
   
   function clearFrameState() {
     clearShortcutSequence();
+    frameSwipeStart = null;
     app.clearTimeLimit();
     app.clearFrameProblemScrollTimers();
     app.discardAnswerCopyOperation();
@@ -370,6 +437,28 @@ export function installShortcutsController(app) {
       onReaderKeyDown,
       true
     );
+    if (app.isIPhoneSafari) {
+      app.frame.contentWindow.addEventListener(
+        "touchstart",
+        onFrameTouchStart,
+        { capture: true, passive: true }
+      );
+      app.frame.contentWindow.addEventListener(
+        "touchmove",
+        onFrameTouchMove,
+        { capture: true, passive: true }
+      );
+      app.frame.contentWindow.addEventListener(
+        "touchcancel",
+        onFrameTouchCancel,
+        { capture: true, passive: true }
+      );
+      app.frame.contentWindow.addEventListener(
+        "touchend",
+        onFrameTouchEnd,
+        { capture: true, passive: false }
+      );
+    }
     app.observeFrameChanges();
   
     try {
@@ -461,6 +550,7 @@ export function installShortcutsController(app) {
     shortcutSequenceTimer: { enumerable: false, get: () => shortcutSequenceTimer, set: (value) => { shortcutSequenceTimer = value; } },
     shortcutSequenceDocument: { enumerable: false, get: () => shortcutSequenceDocument, set: (value) => { shortcutSequenceDocument = value; } },
     shortcutSequenceKey: { enumerable: false, get: () => shortcutSequenceKey, set: (value) => { shortcutSequenceKey = value; } },
+    frameSwipeStart: { enumerable: false, get: () => frameSwipeStart, set: (value) => { frameSwipeStart = value; } },
     shortcutTargetElement: { enumerable: false, get: () => shortcutTargetElement },
     isEditableShortcutTarget: { enumerable: false, get: () => isEditableShortcutTarget },
     currentQuestionControls: { enumerable: false, get: () => currentQuestionControls },
@@ -476,6 +566,10 @@ export function installShortcutsController(app) {
     handleEnterShortcut: { enumerable: false, get: () => handleEnterShortcut },
     onReaderKeyDown: { enumerable: false, get: () => onReaderKeyDown },
     onFrameClick: { enumerable: false, get: () => onFrameClick },
+    onFrameTouchStart: { enumerable: false, get: () => onFrameTouchStart },
+    onFrameTouchMove: { enumerable: false, get: () => onFrameTouchMove },
+    onFrameTouchCancel: { enumerable: false, get: () => onFrameTouchCancel },
+    onFrameTouchEnd: { enumerable: false, get: () => onFrameTouchEnd },
     clearFrameState: { enumerable: false, get: () => clearFrameState },
     applyFrameDarkMode: { enumerable: false, get: () => applyFrameDarkMode },
     bindFrameDocument: { enumerable: false, get: () => bindFrameDocument },

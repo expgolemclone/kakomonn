@@ -47,8 +47,6 @@ Releaseのtagは`kakomonn-reader-v<version>`,titleは`kakomonn-reader v<version>
 
 Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` modeとiPhone Safari + Tampermonkeyだけに対応します. Windows launcherはcold Chromeでは`about:blank`だけを開き, 起動済みChromeから再実行した場合だけ固定`/open`へ遷移します. 両端末とも問題文と解説にはAzure Speechの`ja-JP-NanamiNeural`を使用し, 短期tokenの取得後はAzureから音声を直接受信します. 長文では現在のchunk再生開始時に次の1chunkを先読みします. 同期と問題pageの準備が完了すると, 問題文の自動読み上げを試みます. iPhone Safariが初回の自動再生を拒否した場合は, 最初の画面tapで読み上げを再試行し, 以降の問題は自動で読み上げます. 問題文と解説の読み上げにはインターネット接続が必要です.
 
-長時間利用時のSafari WebContentとTampermonkey runtimeの蓄積を抑えるため, iPhone Safariでは25回の問題遷移ごとに現在の問題URLでtop documentを再読み込みします. Userscript storage, site storage, Browser cacheを消去する処理ではなく, reader, 問題iframe, audio, timer, observerを含むpage runtimeを作り直します.
-
 ## 学習記録の同期設定
 
 読み上げに必要なWorkerとAzure Speechは, [`kakomonn-sync`のデプロイ手順](../kakomonn-sync/README.md#デプロイ)で準備します. 生成されたAPI URLを`src/reader-controller.js`の`SYNC_API_URL`と`src/userscript.meta.txt`の`@connect`へ設定してビルドします.
@@ -57,9 +55,9 @@ Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` mode
 
 remote stateはreader sessionの開始時に取得します. launcherから開いた場合は`/v11/next`が返したstateを引き継ぐため, 追加の`/v11/state`は呼びません. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
 
-未解答時の`Enter`は解答を実行します. 正解と不正解のどちらでも, 正誤表示時に解答記録を同期し, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でclipboardへ自動copyします. `n`または問題時間切れによるskipではcopyしません. 同期またはcopyに失敗した場合は同じ解説pageへ留まり, error dialogの`同期を再試行`または`コピーを再試行`から再開します. 同じ操作の再送は二重加算されません. 同期とcopyの成功後, 正解時は保存responseで取得済みの次問へ自動で移動します. Windowsでは不正解時の`Enter`は次問への移動を予約し, 同期またはcopyの処理中に押した場合も処理完了後に移動します. Browser forwardでも移動できます. iPhone SafariではReader用のBrowser history entryを追加せず, 不正解の解説表示中に画面左右60pxを除く領域から左へswipeすると, 同期とcopyの完了後に保存responseで取得済みの次問へ直接移動します. 外付けkeyboardの`Enter`も同じ直接遷移を行います. Safariの画面端から始まるback/forward gestureはReaderが処理しません. どの遷移も追加のWorker通信は行いません. 解説時間切れでは移動しません. Browser backまたは`Shift+H`ではdashboard側へ戻り, Browser forwardではBrowser自身の履歴へ進みます.
+未解答時の`Enter`は解答を実行します. 正解と不正解のどちらでも, 正誤表示時に解答記録を同期し, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でclipboardへ自動copyします. `n`または問題時間切れによるskipではcopyしません. 同期またはcopyに失敗した場合は同じ解説pageへ留まり, error dialogの`同期を再試行`または`コピーを再試行`から再開します. 同じ操作の再送は二重加算されません. 同期とcopyの成功後, 正解時は保存responseで取得済みの次問へ自動で移動します. 不正解時の`Enter`は次問への移動を予約し, 同期またはcopyの処理中に押した場合も処理完了後に移動します. iPhone Safariでは画面中央から左へのswipeでも次問へ進めます. swipeのedge除外領域と必要移動量はviewport幅に対する比率で判定し, Safariのedge gestureと競合しないようにします. WindowsではBrowser forwardでも移動できます. どの遷移も追加のWorker通信は行いません. 解説時間切れでは移動しません. Browser backまたは`Shift+H`では解答済みのReader履歴を飛ばしてdashboardへ戻り, dashboardからBrowser forwardすると最新の問題へ復帰します.
 
-同期Workerが解答responseで`celebration`を返した場合は, readerがそのeventをUserscript専用storageへ保存します. 同期とcopyの成功後, 正解時は正解feedbackの完了後に祝福pageへ自動で移動します. 不正解時はWindowsでは`Enter`またはBrowser forward, iPhone Safariでは左swipeまたは外付けkeyboardの`Enter`で祝福pageへ移動します. 移動前にpageを閉じても, 次回起動時に同じeventから再開します.
+同期Workerが解答responseで`celebration`を返した場合は, readerがそのeventをUserscript専用storageへ保存します. 同期とcopyの成功後, 正解時は正解feedbackの完了後に祝福pageへ自動で移動します. 不正解時はiPhone Safariで`Enter`または中央から左swipe, Windowsで`Enter`またはBrowser forwardにより移動します. 移動前にpageを閉じても, 次回起動時に同じeventから再開します.
 
 ## バージョン管理
 

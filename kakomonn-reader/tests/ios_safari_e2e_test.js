@@ -851,6 +851,61 @@ async function submitAnswer(driver, answerText) {
   await switchToReaderFrame(driver);
 }
 
+async function dispatchNextQuestionSwipe(driver) {
+  await switchToReaderFrame(driver);
+  const result = await driver.execute(() => {
+    const target = document.body;
+    const startX = innerWidth * 0.75;
+    const endX = innerWidth * 0.25;
+    const y = innerHeight * 0.5;
+    const createTouch = (clientX) =>
+      new Touch({
+        clientX,
+        clientY: y,
+        force: 1,
+        identifier: 1,
+        pageX: clientX + scrollX,
+        pageY: y + scrollY,
+        radiusX: 1,
+        radiusY: 1,
+        rotationAngle: 0,
+        screenX: clientX,
+        screenY: y,
+        target,
+      });
+    const startTouch = createTouch(startX);
+    const endTouch = createTouch(endX);
+    target.dispatchEvent(
+      new TouchEvent("touchstart", {
+        bubbles: true,
+        cancelable: true,
+        changedTouches: [startTouch],
+        targetTouches: [startTouch],
+        touches: [startTouch],
+      }),
+    );
+    const endEvent = new TouchEvent("touchend", {
+      bubbles: true,
+      cancelable: true,
+      changedTouches: [endTouch],
+      targetTouches: [],
+      touches: [],
+    });
+    const dispatchResult = target.dispatchEvent(endEvent);
+    return {
+      dispatchResult,
+      endDefaultPrevented: endEvent.defaultPrevented,
+      touchConstructor: typeof Touch,
+      touchEventConstructor: typeof TouchEvent,
+    };
+  });
+  assert.equal(result.touchConstructor, "function");
+  assert.equal(result.touchEventConstructor, "function");
+  assert.equal(result.dispatchResult, false);
+  assert.equal(result.endDefaultPrevented, true);
+  await driver.switchToTopFrame();
+}
+
 async function readExplanationContents(driver) {
   await waitForElement(driver, "#js-answer-result-box.is-wrong", 30_000);
   const explanationElements = await driver.$$(
@@ -1135,17 +1190,18 @@ async function runTest() {
     await driver.waitUntil(
       () => driver.execute(
         (previousLength) =>
-          history.length > previousLength &&
+          window.__syncMock.attemptCount === 1 &&
+          history.length === previousLength &&
           history.state?.entryType === "current",
         historyLengthBefore,
       ),
       {
         interval: 250,
         timeout: 30_000,
-        timeoutMsg: "Browser forward was not prepared",
+        timeoutMsg: "The iPhone reader changed browser history before swipe",
       },
     );
-    await driver.navigateForward();
+    await dispatchNextQuestionSwipe(driver);
     await driver.waitUntil(
       () =>
         driver.execute(
@@ -1160,6 +1216,7 @@ async function runTest() {
         timeoutMsg: "The reader did not navigate to the scheduled question",
       },
     );
+    assert.equal(await driver.execute(() => history.length), historyLengthBefore);
     assert.equal(
       await driver.execute(
         () =>

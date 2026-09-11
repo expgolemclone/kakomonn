@@ -533,11 +533,32 @@ export function installNavigationController(app) {
       app.pendingAttempt === null ||
       app.pendingAttempt.answerResult !== "incorrect" ||
       app.pendingAttempt.phase !== "recorded" ||
-      preparedDestinationOperationId !== app.pendingAttempt.operationId
+      !["completed", "not-required"].includes(app.pendingAttempt.copy.state) ||
+      !app.syncReady ||
+      app.syncInProgress ||
+      app.nextQuestionOperationInProgress
     ) {
       return false;
     }
-  
+
+    if (app.isIPhoneSafari) {
+      if (app.pendingCelebration !== null) {
+        const currentState = ensureCurrentReaderHistory();
+        void transitionToPendingCelebration(
+          currentState.index,
+          "達成情報は保持されています. ページを再読み込みしてください."
+        );
+        return true;
+      }
+      if (app.pendingAttempt.nextURL === null) {
+        return false;
+      }
+      return navigateToScheduledQuestion(app.pendingAttempt.nextURL);
+    }
+
+    if (preparedDestinationOperationId !== app.pendingAttempt.operationId) {
+      return false;
+    }
     app.navigationInProgress = true;
     app.updateSyncDependentControls();
     history.forward();
@@ -589,6 +610,25 @@ export function installNavigationController(app) {
       app.pendingAttempt.phase !== "recorded" ||
       !["completed", "not-required"].includes(app.pendingAttempt.copy.state)
     ) {
+      return false;
+    }
+    if (app.isIPhoneSafari && app.pendingAttempt.answerResult === "incorrect") {
+      if (
+        app.pendingCelebration !== null ||
+        app.pendingAttempt.nextURL !== null
+      ) {
+        return activateRequestedIncorrectDestination();
+      }
+      clearIncorrectAdvanceRequest();
+      if (noNextQuestionOperationId !== app.pendingAttempt.operationId) {
+        noNextQuestionOperationId = app.pendingAttempt.operationId;
+        app.showReaderError(
+          "next-question-empty",
+          "出題できる問題はありません",
+          "時間を置いてから次の学習sessionを開始してください.",
+          { code: "next_question_empty" }
+        );
+      }
       return false;
     }
     if (app.pendingCelebration !== null) {
@@ -799,6 +839,9 @@ export function installNavigationController(app) {
     const recorded = await recordCurrentAnswer(answerResult, false);
     if (!recorded || app.pendingAttempt?.phase !== "recorded") {
       return false;
+    }
+    if (app.isIPhoneSafari && answerResult === "incorrect") {
+      incorrectAdvanceRequested = true;
     }
     return maybePreparePendingDestination();
   }

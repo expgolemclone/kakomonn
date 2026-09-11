@@ -2,30 +2,36 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  IPHONE_NEXT_SWIPE_EDGE_GUARD_PX,
+  IPHONE_NEXT_SWIPE_EDGE_GUARD_RATIO,
   IPHONE_NEXT_SWIPE_MAX_DURATION_MS,
-  IPHONE_NEXT_SWIPE_MIN_DISTANCE_PX,
+  IPHONE_NEXT_SWIPE_MIN_DISTANCE_RATIO,
   isIPhoneNextQuestionSwipe,
 } from "../src/swipe-navigation.js";
 
-const baseSwipe = {
-  durationMs: 250,
-  endX: 120,
-  endY: 420,
-  startX: 300,
-  startY: 400,
-  viewportWidth: 402,
-};
+function swipeForWidth(viewportWidth) {
+  return {
+    durationMs: 250,
+    endX: viewportWidth * 0.25,
+    endY: 420,
+    startX: viewportWidth * 0.75,
+    startY: 400,
+    viewportWidth,
+  };
+}
 
-test("accepts a central left swipe", () => {
-  assert.equal(isIPhoneNextQuestionSwipe(baseSwipe), true);
-});
+for (const viewportWidth of [320, 402, 430, 768]) {
+  test(`accepts a central left swipe at ${viewportWidth}px viewport width`, () => {
+    assert.equal(isIPhoneNextQuestionSwipe(swipeForWidth(viewportWidth)), true);
+  });
+}
 
-test("keeps Safari edge gestures outside the reader gesture", () => {
+test("keeps Safari edge gestures outside the reader gesture by viewport ratio", () => {
+  const baseSwipe = swipeForWidth(402);
+  const edgeGuard = baseSwipe.viewportWidth * IPHONE_NEXT_SWIPE_EDGE_GUARD_RATIO;
   assert.equal(
     isIPhoneNextQuestionSwipe({
       ...baseSwipe,
-      startX: IPHONE_NEXT_SWIPE_EDGE_GUARD_PX - 1,
+      startX: edgeGuard * 0.99,
       endX: 0,
     }),
     false,
@@ -33,27 +39,46 @@ test("keeps Safari edge gestures outside the reader gesture", () => {
   assert.equal(
     isIPhoneNextQuestionSwipe({
       ...baseSwipe,
-      startX: baseSwipe.viewportWidth - IPHONE_NEXT_SWIPE_EDGE_GUARD_PX + 1,
-      endX: 100,
+      startX: baseSwipe.viewportWidth - edgeGuard * 0.99,
+      endX: baseSwipe.viewportWidth * 0.25,
     }),
     false,
   );
 });
 
-test("rejects short, vertical, rightward, and slow gestures", () => {
-  assert.equal(
-    isIPhoneNextQuestionSwipe({
-      ...baseSwipe,
-      endX: baseSwipe.startX - IPHONE_NEXT_SWIPE_MIN_DISTANCE_PX + 1,
-    }),
-    false,
-  );
+test("uses viewport-relative minimum distance", () => {
+  for (const viewportWidth of [320, 402, 768]) {
+    const baseSwipe = swipeForWidth(viewportWidth);
+    const minimumDistance =
+      viewportWidth * IPHONE_NEXT_SWIPE_MIN_DISTANCE_RATIO;
+    assert.equal(
+      isIPhoneNextQuestionSwipe({
+        ...baseSwipe,
+        endX: baseSwipe.startX - minimumDistance * 0.99,
+      }),
+      false,
+    );
+    assert.equal(
+      isIPhoneNextQuestionSwipe({
+        ...baseSwipe,
+        endX: baseSwipe.startX - minimumDistance,
+      }),
+      true,
+    );
+  }
+});
+
+test("rejects vertical, rightward, and slow gestures", () => {
+  const baseSwipe = swipeForWidth(402);
   assert.equal(
     isIPhoneNextQuestionSwipe({ ...baseSwipe, endY: 650 }),
     false,
   );
   assert.equal(
-    isIPhoneNextQuestionSwipe({ ...baseSwipe, endX: 380 }),
+    isIPhoneNextQuestionSwipe({
+      ...baseSwipe,
+      endX: baseSwipe.viewportWidth * 0.9,
+    }),
     false,
   );
   assert.equal(

@@ -15,6 +15,7 @@ const {
   SYNC_TOKEN_KEY,
 } = require("./sync_mock");
 const {
+  dispatchNextQuestionSwipe,
   installReaderInChildFrames,
 } = require("./support/frame_reader");
 
@@ -3071,6 +3072,7 @@ async function main() {
       ),
     });
     assert.equal(await speechTokenCallCount(iosPage), 1);
+    const iosHistoryLength = await iosPage.evaluate(() => history.length);
     await firstAnswer.tap();
     assert.equal(await firstAnswer.isChecked(), true);
     await iosFrame.getByRole("button", { name: "解答する" }).tap();
@@ -3079,9 +3081,13 @@ async function main() {
       () =>
         window.__syncMock.attemptCount === 1 &&
         window.__copiedTexts.length === 1 &&
-        window.__readerPopstateCount >= 1 &&
         history.state?.entryType === "current",
     );
+    assert.equal(
+      await iosPage.evaluate(() => window.__readerPopstateCount),
+      0,
+    );
+    assert.equal(await iosPage.evaluate(() => history.length), iosHistoryLength);
     await iosPage.waitForFunction(
       () => window.__audioInstance?.src === "",
     );
@@ -3092,10 +3098,14 @@ async function main() {
       await iosPage.evaluate(() => window.__copiedTexts[0]),
       expectedCopiedMarkdown,
     );
-    await iosPage.evaluate(() => history.forward());
+    assert.deepEqual(await dispatchNextQuestionSwipe(iosFrame), {
+      dispatchResult: false,
+      endDefaultPrevented: true,
+    });
     await iosFrame.waitForURL(
       "https://chushoks.kakomonn.com/questions/45125",
     );
+    assert.equal(await iosPage.evaluate(() => history.length), iosHistoryLength);
     const iosStateCallsBeforeResume = await iosPage.evaluate(() =>
       window.__syncMock.calls.filter(
         (call) => new URL(call.url).pathname === "/v11/state",

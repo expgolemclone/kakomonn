@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   IPHONE_RUNTIME_RECYCLE_AFTER_TRANSITIONS,
   createReaderRuntimeRecycleTracker,
-} from "../src/runtime-recycle.js";
+} from "../src/runtime-recycle.mjs";
 
 const origin = "https://chushoks.kakomonn.com";
 

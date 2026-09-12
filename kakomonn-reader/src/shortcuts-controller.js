@@ -1,4 +1,4 @@
-import { isIPhoneNextQuestionSwipe } from "./swipe-navigation.js";
+import { isIPhoneNextQuestionSwipe } from "./swipe-navigation.mjs";
 
 export function installShortcutsController(app) {
   const ANSWER_CHOICE_SHORTCUT_KEYS = "qwert";

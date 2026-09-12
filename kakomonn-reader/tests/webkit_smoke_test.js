@@ -13,6 +13,7 @@ const {
   SYNC_API_ORIGIN,
 } = require("./sync_mock");
 const {
+  dispatchNextQuestionSwipe,
   installReaderInChildFrames,
 } = require("./support/frame_reader");
 
@@ -890,6 +891,9 @@ async function main() {
         window.__readerPopstateCount += 1;
       });
     });
+    const historyLengthBeforeIncorrect = await page.evaluate(
+      () => history.length,
+    );
     if (await page.locator("#kakomonn-reader-error-dialog").getAttribute("open") !== null) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
@@ -1039,8 +1043,15 @@ async function main() {
     await page.waitForFunction(
       () =>
         window.__copiedTexts.length === 1 &&
-        window.__readerPopstateCount >= 1 &&
         history.state?.entryType === "current",
+    );
+    assert.equal(
+      await page.evaluate(() => window.__readerPopstateCount),
+      0,
+    );
+    assert.equal(
+      await page.evaluate(() => history.length),
+      historyLengthBeforeIncorrect,
     );
     assert.equal(
       await page.evaluate(() => window.__copiedTexts[0]),
@@ -1056,8 +1067,15 @@ async function main() {
       ).length - 1,
       1,
     );
-    await page.evaluate(() => history.forward());
+    assert.deepEqual(await dispatchNextQuestionSwipe(childFrame), {
+      dispatchResult: false,
+      endDefaultPrevented: true,
+    });
     await childFrame.waitForURL(nextQuestionURL);
+    assert.equal(
+      await page.evaluate(() => history.length),
+      historyLengthBeforeIncorrect,
+    );
     assert.equal(
       await page.evaluate(
         () =>

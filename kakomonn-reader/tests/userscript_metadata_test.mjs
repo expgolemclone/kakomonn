@@ -38,7 +38,7 @@ test("generated userscript metadata is valid", async () => {
   single(entries, "name");
   single(entries, "namespace");
   single(entries, "description");
-  assert.equal(single(entries, "version"), "2.3.0");
+  assert.equal(single(entries, "version"), "2.3.1");
   assert.equal(single(entries, "run-at"), "document-end");
   assert.equal(entries.has("noframes"), false);
   assert.deepEqual(new Set(entries.get("match")), expectedMatches);

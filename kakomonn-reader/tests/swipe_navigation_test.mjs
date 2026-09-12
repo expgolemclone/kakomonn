@@ -6,7 +6,7 @@ import {
   IPHONE_NEXT_SWIPE_MAX_DURATION_MS,
   IPHONE_NEXT_SWIPE_MIN_DISTANCE_RATIO,
   isIPhoneNextQuestionSwipe,
-} from "../src/swipe-navigation.js";
+} from "../src/swipe-navigation.mjs";
 
 function swipeForWidth(viewportWidth) {
   return {

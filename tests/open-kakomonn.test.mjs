@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import chromeDevTools from "../scripts/chrome-devtools.cjs";
@@ -9,7 +10,8 @@ import {
   CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT,
   CHROME_REMOTE_DEBUGGING_ARGUMENT,
   KAKOMONN_OPEN_URL,
-  openKakomonn,
+  ensureKakomonnBrowser,
+  openKakomonnURL,
   readUserscriptIdentity,
   resolveKakomonnLaunch,
 } from "../scripts/open-kakomonn.mjs";
@@ -49,6 +51,24 @@ const EMPTY_PROFILE_STATE = Object.freeze({
   rootProcessCount: 0,
 });
 
+test("runs browser and URL phases in separate sequential processes", () => {
+  const packageJSON = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  assert.equal(
+    packageJSON.scripts["open:kakomonn"],
+    "npm run open:kakomonn:browser && npm run open:kakomonn:url",
+  );
+  assert.equal(
+    packageJSON.scripts["open:kakomonn:browser"],
+    "node --use-system-ca scripts/open-kakomonn.mjs browser",
+  );
+  assert.equal(
+    packageJSON.scripts["open:kakomonn:url"],
+    "node --use-system-ca scripts/open-kakomonn.mjs url",
+  );
+});
+
 function expectedStat(candidatePath) {
   if (candidatePath === CHROME_PATH) {
     return { isDirectory: () => false, isFile: () => true };
@@ -86,7 +106,6 @@ test("starts only the browser when the dedicated profile is cold", async () => {
   const calls = [];
   let unrefCallCount = 0;
   const profileInspections = [];
-  const preparations = [];
   const removals = [];
   const spawnProcess = (...arguments_) => {
     calls.push(arguments_);
@@ -98,17 +117,13 @@ test("starts only the browser when the dedicated profile is cold", async () => {
     };
   };
 
-  const launch = await openKakomonn({
+  const launch = await ensureKakomonnBrowser({
     configuration: {},
     inspectProfile(userDataDir, options) {
       profileInspections.push({ options, userDataDir });
       return EMPTY_PROFILE_STATE;
     },
     platform: "win32",
-    async prepareBrowser() {
-      preparations.push("unexpected");
-      throw new Error("cold Chrome must not create an application target");
-    },
     removeFile(filePath, options) {
       removals.push({ filePath, options });
     },
@@ -152,23 +167,52 @@ test("starts only the browser when the dedicated profile is cold", async () => {
     filePath: `${PROFILE_PATH}\\DevToolsActivePort`,
     options: { force: true },
   }]);
-  assert.deepEqual(preparations, []);
   assert.deepEqual(launch, {
     arguments: calls[0][1],
-    applicationOpened: false,
-    coldStart: true,
+    browserStarted: true,
     devToolsPort: 9222,
     executablePath: CHROME_PATH,
-    targetId: null,
     userDataDir: PROFILE_PATH,
   });
 });
 
-test("prepares a new page in an already warm compatible Chrome process", async () => {
-  let stopCalled = false;
+test("keeps an already warm compatible Chrome process", async () => {
   let spawnCalled = false;
+  let stopCalled = false;
+  const result = await ensureKakomonnBrowser({
+    configuration: {},
+    inspectProfile() {
+      return {
+        autoplayAllowed: true,
+        processCount: 8,
+        remoteDebuggingEnabled: true,
+        rootProcessCount: 1,
+      };
+    },
+    platform: "win32",
+    readDevToolsPort(userDataDir) {
+      assert.equal(userDataDir, PROFILE_PATH);
+      return 9333;
+    },
+    spawnProcess() {
+      spawnCalled = true;
+      return { unref() {} };
+    },
+    stat: expectedStat,
+    stopProfile() {
+      stopCalled = true;
+    },
+    systemEnvironment: SYSTEM_ENVIRONMENT,
+  });
+  assert.equal(spawnCalled, false);
+  assert.equal(stopCalled, false);
+  assert.equal(result.browserStarted, false);
+  assert.equal(result.devToolsPort, 9333);
+});
+
+test("prepares a new page in the separate URL phase", async () => {
   let prepared = false;
-  const result = await openKakomonn({
+  const result = await openKakomonnURL({
     configuration: {},
     inspectProfile() {
       return {
@@ -188,27 +232,35 @@ test("prepares a new page in an already warm compatible Chrome process", async (
       assert.equal(userDataDir, PROFILE_PATH);
       return 9333;
     },
-    spawnProcess() {
-      spawnCalled = true;
-      return { unref() {} };
-    },
     stat: expectedStat,
-    stopProfile() {
-      stopCalled = true;
-    },
     systemEnvironment: SYSTEM_ENVIRONMENT,
   });
-  assert.equal(spawnCalled, false);
   assert.equal(prepared, true);
-  assert.equal(stopCalled, false);
   assert.equal(result.applicationOpened, true);
-  assert.equal(result.coldStart, false);
   assert.equal(result.targetId, "warm-target");
+});
+
+test("rejects the URL phase unless the dedicated Chrome is ready", async () => {
+  let prepared = false;
+  await assert.rejects(
+    openKakomonnURL({
+      configuration: {},
+      inspectProfile: () => EMPTY_PROFILE_STATE,
+      platform: "win32",
+      async prepareBrowser() {
+        prepared = true;
+      },
+      stat: expectedStat,
+      systemEnvironment: SYSTEM_ENVIRONMENT,
+    }),
+    /Dedicated Chrome is not ready for the application URL/,
+  );
+  assert.equal(prepared, false);
 });
 
 test("restarts an incompatible Chrome process without opening the application", async () => {
   const operations = [];
-  await openKakomonn({
+  await ensureKakomonnBrowser({
     configuration: {},
     inspectProfile() {
       operations.push("inspect");
@@ -220,9 +272,6 @@ test("restarts an incompatible Chrome process without opening the application", 
       };
     },
     platform: "win32",
-    async prepareBrowser() {
-      throw new Error("restarted Chrome must stop before app preparation");
-    },
     removeFile() {
       operations.push("remove-port");
     },
@@ -255,7 +304,7 @@ test("does not launch when a required dedicated Chrome restart fails", async () 
   let spawnCalled = false;
   await assert.rejects(
     async () =>
-      openKakomonn({
+      ensureKakomonnBrowser({
         configuration: {},
         inspectProfile: () => ({
           autoplayAllowed: false,
@@ -283,7 +332,7 @@ test("does not launch when the dedicated Chrome process cannot be inspected", as
   let spawnCalled = false;
   await assert.rejects(
     async () =>
-      openKakomonn({
+      ensureKakomonnBrowser({
         configuration: {},
         inspectProfile() {
           throw new Error("inspection failed");
@@ -406,7 +455,7 @@ test("rejects the standard Chrome profile before inspecting processes", async ()
   let inspected = false;
   await assert.rejects(
     async () =>
-      openKakomonn({
+      ensureKakomonnBrowser({
         configuration: {
           KAKOMONN_CHROME_USER_DATA_DIR: standardProfile,
         },

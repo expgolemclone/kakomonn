@@ -7,7 +7,9 @@
   "scripts": {
     "build": "npm run build:kakomonn-reader && npm run build:kakomonn-sync && npm run build:congratulations",
     "postinstall": "playwright install chromium webkit",
-    "open:kakomonn": "node --use-system-ca scripts/open-kakomonn.mjs",
+    "open:kakomonn": "npm run open:kakomonn:browser && npm run open:kakomonn:url",
+    "open:kakomonn:browser": "node --use-system-ca scripts/open-kakomonn.mjs browser",
+    "open:kakomonn:url": "node --use-system-ca scripts/open-kakomonn.mjs url",
     "build:kakomonn-reader": "node kakomonn-reader/build.mjs",
     "build:kakomonn-sync": "vite build --config kakomonn-sync/vite.config.js",
     "build:congratulations": "vite build --config congratulations/vite.config.js",

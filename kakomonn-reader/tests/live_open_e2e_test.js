@@ -70,7 +70,7 @@ async function readLearningActivities(token, dates) {
 }
 
 async function main() {
-  const { openKakomonn } = await import("../../scripts/open-kakomonn.mjs");
+  const { openKakomonnURL } = await import("../../scripts/open-kakomonn.mjs");
   const configuration = readKakomonnConfiguration({
     envFilePath: repositoryEnvPath,
   });
@@ -114,9 +114,8 @@ async function main() {
     );
     assert.equal(configuredState.settingsOpen, false);
     assert.equal(configuredState.topControlsPresent, false);
-    const launch = await openKakomonn({ configuration });
+    const launch = await openKakomonnURL({ configuration });
     assert.equal(launch.applicationOpened, true);
-    assert.equal(launch.coldStart, false);
     await setupPage.close();
     setupPage = null;
     page = await waitUntil(

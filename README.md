@@ -24,7 +24,7 @@
 npm run open:kakomonn
 ```
 
-Chromeが同じ専用profileで起動済みの場合は, processの起動optionを確認します. 必要なoptionで起動済みならTampermonkey Betaを確認して固定`/open`の専用tabを追加し, そうでなければその専用profileのChromeだけを終了します. Chrome停止中の初回commandは`about:blank`だけでbrowserを起動し, application URLを開かず終了します. Chrome起動後に同じcommandをもう一度実行してください. 固定URLをChromeのcold起動引数として渡す経路はありません. 通常利用するChrome profileまたはその配下は指定できません. 完全testもこの専用profileの既存Chrome processを終了するため, test前に専用profileでの作業を保存してください.
+Chromeが同じ専用profileで起動済みの場合は, processの起動optionを確認します. 必要なoptionで起動済みなら再起動せず, そうでなければその専用profileのChromeだけを終了して起動し直します. commandは内部でbrowser起動とURL表示を別processとして直列実行し, 1回の実行でChromeを準備した後にTampermonkey Betaを確認して固定`/open`の専用tabを追加します. 固定URLをChromeのcold起動引数として渡す経路はありません. 通常利用するChrome profileまたはその配下は指定できません. 完全testもこの専用profileの既存Chrome processを終了するため, test前に専用profileでの作業を保存してください.
 
 Readerで同期tokenを設定すると, 同じbrowser profileのsync dashboardもUserscript専用storageの同じtokenで自動接続します. Dashboardへtokenを再入力する必要はありません.
 

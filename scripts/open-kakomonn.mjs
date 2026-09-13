@@ -131,18 +131,24 @@ export function resolveKakomonnLaunch({
   };
 }
 
-export async function openKakomonn({
+function isCompatibleKakomonnProfile(profileState) {
+  return (
+    profileState.processCount > 0 &&
+    profileState.autoplayAllowed &&
+    profileState.remoteDebuggingEnabled
+  );
+}
+
+export async function ensureKakomonnBrowser({
   configuration = readKakomonnConfiguration(),
   inspectProfile = inspectDedicatedChrome,
   platform = process.platform,
-  prepareBrowser = prepareKakomonnPage,
   readDevToolsPort = readDevToolsActivePort,
   removeFile = rmSync,
   spawnProcess = spawn,
   stat = statSync,
   stopProfile = stopDedicatedChrome,
   systemEnvironment = process.env,
-  userscriptIdentity = readUserscriptIdentity(),
   waitForDevToolsPort = waitForDevToolsActivePort,
 } = {}) {
   const launch = resolveKakomonnLaunch({
@@ -154,19 +160,15 @@ export async function openKakomonn({
   const profileState = inspectProfile(launch.userDataDir, {
     systemEnvironment,
   });
-  const existingProfileIsCompatible =
-    profileState.processCount > 0 &&
-    profileState.autoplayAllowed &&
-    profileState.remoteDebuggingEnabled;
+  const existingProfileIsCompatible = isCompatibleKakomonnProfile(profileState);
   if (profileState.processCount > 0 && !existingProfileIsCompatible) {
     stopProfile(launch.userDataDir, { systemEnvironment });
   }
   const coldStart = !existingProfileIsCompatible;
-  let browserProcess = null;
   let port;
   if (coldStart) {
     removeFile(activePortPath(launch.userDataDir), { force: true });
-    browserProcess = spawnProcess(
+    const browserProcess = spawnProcess(
       launch.executablePath,
       launch.arguments,
       {
@@ -180,15 +182,42 @@ export async function openKakomonn({
       launch.userDataDir,
       browserProcess,
     );
-    return Object.freeze({
-      ...launch,
-      applicationOpened: false,
-      coldStart: true,
-      devToolsPort: port,
-      targetId: null,
-    });
+  } else {
+    port = readDevToolsPort(launch.userDataDir);
   }
-  port = readDevToolsPort(launch.userDataDir);
+
+  return Object.freeze({
+    ...launch,
+    browserStarted: coldStart,
+    devToolsPort: port,
+  });
+}
+
+export async function openKakomonnURL({
+  configuration = readKakomonnConfiguration(),
+  inspectProfile = inspectDedicatedChrome,
+  platform = process.platform,
+  prepareBrowser = prepareKakomonnPage,
+  readDevToolsPort = readDevToolsActivePort,
+  stat = statSync,
+  systemEnvironment = process.env,
+  userscriptIdentity = readUserscriptIdentity(),
+} = {}) {
+  const launch = resolveKakomonnLaunch({
+    configuration,
+    platform,
+    stat,
+    systemEnvironment,
+  });
+  const profileState = inspectProfile(launch.userDataDir, {
+    systemEnvironment,
+  });
+  if (!isCompatibleKakomonnProfile(profileState)) {
+    throw new Error(
+      "Dedicated Chrome is not ready for the application URL",
+    );
+  }
+  const port = readDevToolsPort(launch.userDataDir);
 
   const prepared = await prepareBrowser(port, {
     openURL: KAKOMONN_OPEN_URL,
@@ -199,7 +228,6 @@ export async function openKakomonn({
   return Object.freeze({
     ...launch,
     applicationOpened: true,
-    coldStart: false,
     devToolsPort: port,
     targetId: prepared.targetId,
   });
@@ -208,10 +236,14 @@ export async function openKakomonn({
 const scriptPath = process.argv[1] ? path.resolve(process.argv[1]) : null;
 if (scriptPath === fileURLToPath(import.meta.url)) {
   try {
-    const result = await openKakomonn();
-    if (!result.applicationOpened) {
-      console.log(
-        "専用Chromeを準備しました. Chromeの起動後に同じcommandをもう一度実行してください.",
+    const phase = process.argv[2];
+    if (phase === "browser") {
+      await ensureKakomonnBrowser();
+    } else if (phase === "url") {
+      await openKakomonnURL();
+    } else {
+      throw new Error(
+        "open-kakomonn requires exactly one phase: browser or url",
       );
     }
   } catch (error) {

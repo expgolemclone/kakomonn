@@ -55,9 +55,9 @@ Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` mode
 
 remote stateはreader sessionの開始時に取得します. launcherから開いた場合は`/v11/next`が返したstateを引き継ぐため, 追加の`/v11/state`は呼びません. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
 
-未解答時の`Enter`は解答を実行します. 正解と不正解のどちらでも, 正誤表示時に解答記録を同期し, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でclipboardへ自動copyします. `n`または問題時間切れによるskipではcopyしません. 同期またはcopyに失敗した場合は同じ解説pageへ留まり, error dialogの`同期を再試行`または`コピーを再試行`から再開します. 同じ操作の再送は二重加算されません. 同期とcopyの成功後, 正解時は保存responseで取得済みの次問へ自動で移動します. 不正解時の`Enter`は次問への移動を予約し, 同期またはcopyの処理中に押した場合も処理完了後に移動します. iPhone Safariでは画面中央から左へのswipeでも次問へ進めます. swipeのedge除外領域と必要移動量はviewport幅に対する比率で判定し, Safariのedge gestureと競合しないようにします. WindowsではBrowser forwardでも移動できます. どの遷移も追加のWorker通信は行いません. 解説時間切れでは移動しません. Browser backまたは`Shift+H`では解答済みのReader履歴を飛ばしてdashboardへ戻り, dashboardからBrowser forwardすると最新の問題へ復帰します.
+未解答時の`Enter`は解答を実行します. 正解と不正解のどちらでも, 正誤表示時に解答記録を同期し, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でclipboardへ自動copyします. `n`または問題時間切れによるskipではcopyしません. 同期に失敗した場合は同じ解説pageへ留まり, error dialogの`同期を再試行`から再開します. 同じ操作の再送は二重加算されません. Windowsでは同期とcopyの成功後, iPhone Safariでは同期成功後にMarkdownをClipboard APIへ渡した時点で, 正解時は保存responseで取得済みの次問へ自動で移動します. iPhone Safariのclipboard完了通知が失敗またはtimeoutしても次問遷移は取り消さず, 表示された`コピーを再試行`から保存済みMarkdownを再copyできます. 不正解時の`Enter`は次問への移動を予約し, 同期またはcopyの準備中に押した場合も準備完了後に移動します. iPhone Safariでは画面中央から左へのswipeでも次問へ進めます. swipeのedge除外領域と必要移動量はviewport幅に対する比率で判定し, Safariのedge gestureと競合しないようにします. WindowsではBrowser forwardでも移動できます. どの遷移も追加のWorker通信は行いません. 解説時間切れでは移動しません. Browser backまたは`Shift+H`では解答済みのReader履歴を飛ばしてdashboardへ戻り, dashboardからBrowser forwardすると最新の問題へ復帰します.
 
-同期Workerが解答responseで`celebration`を返した場合は, readerがそのeventをUserscript専用storageへ保存します. 同期とcopyの成功後, 正解時は正解feedbackの完了後に祝福pageへ自動で移動します. 不正解時はiPhone Safariで`Enter`または中央から左swipe, Windowsで`Enter`またはBrowser forwardにより移動します. 移動前にpageを閉じても, 次回起動時に同じeventから再開します.
+同期Workerが解答responseで`celebration`を返した場合は, readerがそのeventをUserscript専用storageへ保存します. 前段の端末別遷移条件を満たした後, 正解時は正解feedbackの完了後に祝福pageへ自動で移動します. 不正解時はiPhone Safariで`Enter`または中央から左swipe, Windowsで`Enter`またはBrowser forwardにより移動します. 移動前にpageを閉じても, 次回起動時に同じeventから再開します.
 
 ## バージョン管理
 

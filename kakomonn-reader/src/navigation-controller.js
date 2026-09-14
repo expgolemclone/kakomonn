@@ -38,6 +38,13 @@ export function installNavigationController(app) {
     return app.answerResultFromDocument(app.frameDocument);
   }
 
+  function isCopyReadyForNavigation(operation) {
+    return (
+      ["completed", "not-required"].includes(operation.copy.state) ||
+      (app.isIPhoneSafari && operation.copy.state === "ready")
+    );
+  }
+
   function synchronizeAnswerPresentation(sourceDocument = app.frameDocument) {
     if (sourceDocument?.documentElement === undefined || app.frameDocument !== sourceDocument) {
       return;
@@ -509,7 +516,7 @@ export function installNavigationController(app) {
       app.pendingAttempt === null ||
       app.pendingAttempt.answerResult !== "incorrect" ||
       app.pendingAttempt.phase !== "recorded" ||
-      !["completed", "not-required"].includes(app.pendingAttempt.copy.state) ||
+      !isCopyReadyForNavigation(app.pendingAttempt) ||
       !app.syncReady ||
       app.syncInProgress ||
       app.nextQuestionOperationInProgress
@@ -584,7 +591,7 @@ export function installNavigationController(app) {
     }
     if (
       app.pendingAttempt.phase !== "recorded" ||
-      !["completed", "not-required"].includes(app.pendingAttempt.copy.state)
+      !isCopyReadyForNavigation(app.pendingAttempt)
     ) {
       return false;
     }

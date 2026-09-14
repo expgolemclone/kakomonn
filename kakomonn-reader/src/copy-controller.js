@@ -1,4 +1,8 @@
 export function installCopyController(app) {
+  const CLIPBOARD_WRITE_TIMEOUT_MS = 5000;
+  let automaticCopyOperation = null;
+  let latestAutomaticCopyOperationId = null;
+
   function selectedAnswerIsReady() {
     const controls = app.currentQuestionControls();
     return (
@@ -117,13 +121,49 @@ export function installCopyController(app) {
     );
   }
 
-  function showClipboardWriteError(error) {
+  function clipboardWriteWithTimeout(writePromise) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const settle = (callback, value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeout);
+        callback(value);
+      };
+      const timeout = window.setTimeout(() => {
+        const error = new Error("clipboard write timed out");
+        error.code = "clipboard_write_timeout";
+        settle(reject, error);
+      }, CLIPBOARD_WRITE_TIMEOUT_MS);
+      Promise.resolve(writePromise).then(
+        (value) => settle(resolve, value),
+        (error) => settle(reject, error),
+      );
+    });
+  }
+
+  async function retryMarkdownCopy(markdown) {
+    try {
+      await clipboardWriteWithTimeout(writeMarkdownToClipboard(markdown, true));
+      return true;
+    } catch (error) {
+      showClipboardWriteError(error, markdown);
+      return false;
+    }
+  }
+
+  function showClipboardWriteError(error, markdown) {
+    const retryAction = app.isIPhoneSafari
+      ? () => retryMarkdownCopy(markdown)
+      : retryPendingCopy;
     app.showReaderError(
       "clipboard-write",
       "クリップボードへコピーできません",
       "BrowserまたはUserscript managerのclipboard権限を確認してください.",
       error,
-      { label: "コピーを再試行", run: retryPendingCopy },
+      { label: "コピーを再試行", run: retryAction },
     );
   }
 
@@ -137,21 +177,67 @@ export function installCopyController(app) {
     );
   }
 
-  async function processPendingAutomaticCopy(retryFromGesture = false) {
-    if (app.automaticCopyPromise !== null) {
-      return app.automaticCopyPromise;
+  async function completeClipboardWrite(operationId, markdown, writePromise) {
+    try {
+      await clipboardWriteWithTimeout(writePromise);
+      if (
+        app.pendingAttempt?.operationId === operationId &&
+        app.pendingAttempt.copy.state === "ready"
+      ) {
+        try {
+          await app.updatePendingAttempt(operationId, (current) => ({
+            ...current,
+            copy: { state: "completed" },
+          }));
+        } catch (error) {
+          if (app.pendingAttempt?.operationId === operationId) {
+            showCopyStorageError(error);
+            return false;
+          }
+        }
+      }
+      if (app.answerCopyOperation?.operationId === operationId) {
+        discardAnswerCopyOperation();
+      }
+      if (
+        latestAutomaticCopyOperationId === operationId ||
+        app.pendingAttempt?.operationId === operationId
+      ) {
+        await app.maybePreparePendingDestination();
+      }
+      return true;
+    } catch (error) {
+      if (
+        latestAutomaticCopyOperationId === operationId &&
+        (app.pendingAttempt === null || app.pendingAttempt.operationId === operationId)
+      ) {
+        showClipboardWriteError(error, markdown);
+      }
+      return false;
+    } finally {
+      if (automaticCopyOperation?.operationId === operationId) {
+        automaticCopyOperation = null;
+      }
+      app.updateSyncDependentControls();
     }
+  }
+
+  function processPendingAutomaticCopy(retryFromGesture = false) {
     if (
       app.pendingAttempt === null ||
       !["required", "ready"].includes(app.pendingAttempt.copy.state)
     ) {
-      return app.pendingAttempt?.copy.state === "completed";
+      return Promise.resolve(app.pendingAttempt?.copy.state === "completed");
     }
 
     const operationId = app.pendingAttempt.operationId;
-    app.automaticCopyPromise = (async () => {
+    if (automaticCopyOperation?.operationId === operationId) {
+      return automaticCopyOperation.dispatchPromise;
+    }
+    latestAutomaticCopyOperationId = operationId;
+
+    const dispatchPromise = (async () => {
       let markdown = app.pendingAttempt.copy.markdown ?? "";
-      let gestureWritePromise = null;
       if (app.pendingAttempt.copy.state === "required") {
         const copyDocument = app.buildCopyMarkdown(app.frameDocument);
         if (copyDocument.state === "locked") {
@@ -162,10 +248,6 @@ export function installCopyController(app) {
           return false;
         }
         markdown = copyDocument.markdown;
-        if (retryFromGesture && app.isIPhoneSafari) {
-          gestureWritePromise = writeMarkdownToClipboard(markdown, true);
-          void gestureWritePromise.catch(() => {});
-        }
         try {
           await app.updatePendingAttempt(operationId, (current) => ({
             ...current,
@@ -177,32 +259,28 @@ export function installCopyController(app) {
         }
       }
 
-      try {
-        await (gestureWritePromise ?? writeMarkdownToClipboard(markdown, retryFromGesture));
-      } catch (error) {
-        showClipboardWriteError(error);
-        return false;
+      const writePromise = writeMarkdownToClipboard(markdown, retryFromGesture);
+      void writePromise.catch(() => {});
+      if (app.isIPhoneSafari) {
+        const completionPromise = completeClipboardWrite(operationId, markdown, writePromise);
+        void completionPromise;
+        void app.maybePreparePendingDestination();
+        return true;
       }
 
-      try {
-        await app.updatePendingAttempt(operationId, (current) => ({
-          ...current,
-          copy: { state: "completed" },
-        }));
-      } catch (error) {
-        showCopyStorageError(error);
-        return false;
+      return completeClipboardWrite(operationId, markdown, writePromise);
+    })();
+    automaticCopyOperation = {
+      dispatchPromise,
+      operationId,
+    };
+    void dispatchPromise.then((dispatched) => {
+      if (!dispatched && automaticCopyOperation?.operationId === operationId) {
+        automaticCopyOperation = null;
+        app.updateSyncDependentControls();
       }
-      if (app.answerCopyOperation?.operationId === operationId) {
-        discardAnswerCopyOperation();
-      }
-      await app.maybePreparePendingDestination();
-      return true;
-    })().finally(() => {
-      app.automaticCopyPromise = null;
-      app.updateSyncDependentControls();
     });
-    return app.automaticCopyPromise;
+    return dispatchPromise;
   }
 
   function retryPendingCopy() {

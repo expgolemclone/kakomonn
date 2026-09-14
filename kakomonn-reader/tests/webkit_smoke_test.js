@@ -15,6 +15,7 @@ const projectRoot = path.resolve(__dirname, "..");
 const defaultScriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const currentQuestionURL = "https://chushoks.kakomonn.com/questions/86956";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
+const secondNextQuestionURL = "https://chushoks.kakomonn.com/questions/86958";
 const reportedQuestionIds = ["48443", "45047"];
 const nextQuestionLauncherURL = "https://chushoks.kakomonn.com/createques#kakomonn-next";
 const iosUserAgent =
@@ -945,12 +946,15 @@ async function main() {
           async write(items) {
             const blob = await items[0].getType("text/plain");
             window.__copiedTexts.push(await blob.text());
+            if (window.__copiedTexts.length === 1) {
+              await new Promise(() => {});
+            }
           },
         },
       });
     });
     await installSyncMock(correctPage, { nextQuestionId: "86957" });
-    await installCorrectFeedbackRandom(correctPage, [111]);
+    await installCorrectFeedbackRandom(correctPage, [111, 111]);
     await correctPage.addScriptTag({ content: script });
     await correctPage.waitForFunction(
       (expectedURL) =>
@@ -1022,13 +1026,44 @@ async function main() {
     await correctPage.evaluate(() => window.__syncMock.releaseHeldRequest());
     await correctPage.waitForFunction(
       (expectedURL) =>
-        window.__copiedTexts.length === 1 &&
         document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href ===
           expectedURL &&
         history.state?.entryType === "current",
       nextQuestionURL,
     );
     await correctFrame.waitForURL(nextQuestionURL);
+    assert.equal(await correctPage.evaluate(() => window.__copiedTexts.length), 1);
+
+    await correctFrame.evaluate((html) => {
+      document.body.innerHTML = html;
+    }, fixtureBody);
+    await correctPage.evaluate(() => {
+      window.__syncMock.nextQuestionId = "86958";
+    });
+    await correctFrame.locator("input[name='answer']").first().tap();
+    await correctFrame.getByRole("button", { name: "解答する" }).tap();
+    await correctFrame.evaluate(() => {
+      document.querySelector("#js-answer-result-box").classList.add("is-correct");
+      for (const lock of document.querySelectorAll("#js-commentary-wrap > .item > .none_text")) {
+        lock.hidden = true;
+      }
+      for (const explanation of document.querySelectorAll("#js-commentary-wrap > .item > .text")) {
+        explanation.hidden = false;
+      }
+    });
+    await correctFrame.waitForURL(secondNextQuestionURL);
+    assert.deepEqual(
+      await correctPage.evaluate(() => ({
+        attempts: window.__syncMock.attemptCount,
+        copiesDispatched: window.__copiedTexts.length,
+      })),
+      { attempts: 2, copiesDispatched: 2 },
+    );
+    await correctPage.waitForTimeout(5_100);
+    assert.equal(
+      (await correctPage.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null,
+      false,
+    );
     assert.deepEqual(correctPageErrors, []);
     await correctPage.close();
     await context.close();

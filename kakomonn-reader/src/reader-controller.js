@@ -432,7 +432,6 @@ export async function startReader() {
   let pendingAttemptTransitionPromise = null;
   let pendingCelebration = null;
   let answerCopyOperation = null;
-  let automaticCopyPromise = null;
 
   const correctFeedbackDocuments = new WeakSet();
   let correctFeedbackPromise = null;
@@ -792,13 +791,6 @@ export async function startReader() {
       get: () => answerCopyOperation,
       set: (value) => {
         answerCopyOperation = value;
-      },
-    },
-    automaticCopyPromise: {
-      enumerable: false,
-      get: () => automaticCopyPromise,
-      set: (value) => {
-        automaticCopyPromise = value;
       },
     },
     correctFeedbackDocuments: { enumerable: false, get: () => correctFeedbackDocuments },

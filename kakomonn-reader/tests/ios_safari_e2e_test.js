@@ -1132,6 +1132,47 @@ async function runTest() {
     }));
     assert.deepEqual(readerDiagnostics, { errors: [], rejections: [] });
 
+    await driver.navigateTo(MARKDOWN_QUESTION_URL);
+    await waitForElement(driver, "#send_exam_btn");
+    await installReader(driver, script);
+    await driver.waitUntil(
+      () =>
+        driver.execute(
+          () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+        ),
+      {
+        interval: 250,
+        timeout: 30_000,
+        timeoutMsg: "The correct-answer speech error dialog did not open",
+      },
+    );
+    await clickWebElementNatively(driver, "#kakomonn-reader-error-close");
+    const correctClipboardNonce = `kakomonn-ios-correct-copy-before-${Date.now()}`;
+    await driver.setClipboardText(correctClipboardNonce);
+    await switchToReaderFrame(driver);
+    await submitAnswer(driver, MARKDOWN_ANSWER_TEXT);
+    await driver.switchToTopFrame();
+    await driver.waitUntil(
+      () =>
+        driver.execute(
+          (expectedURL) =>
+            document.querySelector("#kakomonn-reader-frame")?.contentWindow.location.href ===
+            expectedURL,
+          nextQuestionURL,
+        ),
+      {
+        interval: 250,
+        timeout: 30_000,
+        timeoutMsg: "The correct answer did not advance automatically",
+      },
+    );
+    await driver.waitUntil(async () => (await driver.getClipboardText()) !== correctClipboardNonce, {
+      interval: 250,
+      timeout: 30_000,
+      timeoutMsg: "The correct answer was not copied automatically",
+    });
+    assert.equal(await driver.execute(() => window.__syncMock.attemptCount), 1);
+
     await driver.navigateTo(nextQuestionOpenURL);
     await waitForElement(driver, "#open-bridge");
     await installReader(driver, script);

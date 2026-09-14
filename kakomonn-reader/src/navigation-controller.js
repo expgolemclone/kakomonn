@@ -697,13 +697,27 @@ export function installNavigationController(app) {
     app.syncPromise = (async () => {
       let failedError = null;
       try {
-        const result = await app.requestAttemptResult(app.syncToken, operation);
+        const { result, studyTimeSnapshots } = await app.requestAttemptResult(
+          app.syncToken,
+          operation,
+        );
         if (
           result.attempt.questionId !== operation.questionId ||
           result.attempt.answerResult !== operation.answerResult
         ) {
           throw new app.SyncRequestError("invalid_response");
         }
+        if (app.currentSyncState !== null) {
+          app.currentSyncState = {
+            ...app.currentSyncState,
+            learningMetrics: result.learningMetrics,
+          };
+        }
+        app.reconcileStudyLearningMetrics(
+          result.learningMetrics,
+          app.currentSyncState?.today,
+        );
+        await app.acknowledgeStudyTimeSnapshots(studyTimeSnapshots);
         if (result.celebration !== undefined) {
           await app.savePendingCelebration(result.celebration);
         }

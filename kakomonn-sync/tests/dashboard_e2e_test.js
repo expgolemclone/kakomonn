@@ -27,6 +27,7 @@ const history = Array.from({ length: 31 }, (_, index) => {
       currentWeekIndex < 0 ? 0 : attemptedQuestionCountHistory[currentWeekIndex],
     dailyNewQuestionCount:
       currentWeekIndex < 0 ? 0 : attemptedQuestionCountHistory[currentWeekIndex],
+    dailyStudyTimeMs: currentWeekIndex < 0 ? 0 : (currentWeekIndex + 1) * 30 * 60 * 1000,
     dailyCorrectRatePercent: currentWeekIndex < 0 ? null : correctRateHistory[currentWeekIndex],
   };
 });
@@ -35,6 +36,13 @@ const dailyDetails = {
   date: "2026-08-10",
   timeZone: "Asia/Tokyo",
   tables: {
+    study_time_daily: [
+      {
+        site,
+        date: "2026-08-10",
+        study_time_ms: 210 * 60 * 1000,
+      },
+    ],
     stability_history: [
       {
         site,
@@ -75,6 +83,7 @@ function dashboardFixture(requestedSite) {
         newQuestionGoal: 50,
         newQuestionsRemaining: requestedSite === site ? 0 : 20,
         todayStabilityDaysDelta: requestedSite === site ? 104 : 21,
+        todayStudyTimeMs: requestedSite === site ? 210 * 60 * 1000 : 45 * 60 * 1000,
         attemptedQuestionCount: requestedSite === site ? 640 : 100,
         todayAttemptedQuestionCount: requestedSite === site ? 50 : 30,
         todayCorrectRatePercent: requestedSite === site ? 67 : 0,
@@ -99,6 +108,7 @@ function dashboardFixture(requestedSite) {
                 index < 24 ? null : index === 30 ? 21 : (day.stabilityDaysDelta ?? 0),
               dailyAttemptedQuestionCount: index === 30 ? 30 : day.dailyAttemptedQuestionCount,
               dailyNewQuestionCount: index === 30 ? 30 : day.dailyNewQuestionCount,
+              dailyStudyTimeMs: index === 30 ? 45 * 60 * 1000 : day.dailyStudyTimeMs,
               dailyCorrectRatePercent: index === 30 ? 0 : day.dailyCorrectRatePercent,
             })),
     },
@@ -217,7 +227,7 @@ async function installApiMock(page) {
                   site: requestedSite,
                   date,
                   timeZone: "Asia/Tokyo",
-                  tables: { stability_history: [], attempts: [] },
+                  tables: { study_time_daily: [], stability_history: [], attempts: [] },
                 };
           respond({ data, id: request.id, ok: true });
           return;
@@ -283,11 +293,13 @@ async function assertDashboard(page) {
     "attemptedQuestionCount",
     "todayAttemptedQuestionCount",
     "todayCorrectRatePercent",
+    "todayStudyTimeMs",
   ]);
   assert.equal(await page.locator("#attempted-question-count").innerText(), "640");
   assert.equal(await page.locator("#today-attempted-question-count").innerText(), "50");
   assert.equal(await page.locator("#today-correct-rate-percent").innerText(), "67");
   assert.equal(await page.locator("#today-correct-rate-percent-unit").innerText(), "%");
+  assert.equal(await page.locator("#today-study-time").innerText(), "3時間 30分");
   assert.equal(
     await page.locator("#goal-label, #goal-progress, .stability-card, .stability-meta").count(),
     0,
@@ -308,7 +320,7 @@ async function assertDashboard(page) {
   );
   assert.equal(
     await page.locator("#history-title").innerText(),
-    "stabilityDaysDeltaとdailyCorrectRatePercentの31日推移",
+    "stabilityDaysDelta, dailyCorrectRatePercent, 勉強時間の31日推移",
   );
   assert.equal(await page.locator("#stability-chart .chart-day").count(), 31);
   assert.equal(await page.locator("#stability-chart rect.delta-bar").count(), 6);
@@ -325,6 +337,8 @@ async function assertDashboard(page) {
   );
   assert.equal(await page.locator("#stability-chart .correct-rate-line").count(), 1);
   assert.equal(await page.locator("#stability-chart .correct-rate-point").count(), 5);
+  assert.equal(await page.locator("#stability-chart .study-time-bar").count(), 31);
+  assert.equal(await page.locator("#stability-chart .study-time-value-label").count(), 31);
   assert.match(
     await page.locator("#stability-chart .correct-rate-line").getAttribute("d"),
     /^M[^M]+M/,
@@ -337,11 +351,19 @@ async function assertDashboard(page) {
     await page.locator('[data-chart-date="2026-08-04"] .correct-rate-value-label').textContent(),
     "--",
   );
+  assert.equal(
+    await page.locator('[data-chart-date="2026-08-10"] .study-time-value-label').textContent(),
+    "3h30",
+  );
   assert.match(
     await page.locator('[data-chart-date="2026-08-10"]').getAttribute("aria-label"),
-    /stabilityDaysDelta \+104日, dailyCorrectRatePercent 67%/,
+    /stabilityDaysDelta \+104日, dailyCorrectRatePercent 67%, 勉強時間 3時間 30分/,
   );
   assert.equal((await page.locator("#stability-chart-axis .delta-axis-label").count()) >= 2, true);
+  assert.equal(
+    (await page.locator("#stability-chart-axis .study-time-axis-label").count()) >= 2,
+    true,
+  );
   assert.match(
     await page.locator("#history-chart-description").textContent(),
     /2026-08-04, stabilityDaysDelta 記録なし/,
@@ -353,6 +375,10 @@ async function assertDashboard(page) {
   assert.match(
     await page.locator("#history-chart-description").textContent(),
     /dailyCorrectRatePercent 67%/,
+  );
+  assert.match(
+    await page.locator("#history-chart-description").textContent(),
+    /勉強時間 3時間 30分/,
   );
   await page.waitForFunction(() => {
     const scroller = document.querySelector("#history-scroll");
@@ -423,6 +449,17 @@ async function assertDashboard(page) {
   assert.equal(await page.locator("#daily-details-date").innerText(), "2026-08-10");
   assert.equal(
     await page
+      .locator("#study-time-daily-table th")
+      .allInnerTexts()
+      .then((values) => values.join("\n")),
+    "site\ndate\nstudy_time_ms",
+  );
+  assert.equal(
+    await page.locator("#study-time-daily-table tbody").innerText(),
+    "chushoks.kakomonn.com\t2026-08-10\t12600000",
+  );
+  assert.equal(
+    await page
       .locator("#stability-history-table th")
       .allInnerTexts()
       .then((values) => values.join("\n")),
@@ -459,6 +496,7 @@ async function assertDashboard(page) {
   );
   assert.equal(await page.locator("#stability-history-table tbody").innerText(), "0 rows");
   assert.equal(await page.locator("#attempts-table tbody").innerText(), "0 rows");
+  assert.equal(await page.locator("#study-time-daily-table tbody").innerText(), "0 rows");
 
   await page.evaluate(() => {
     window.__delayedDetailDate = "2026-08-08";
@@ -468,7 +506,7 @@ async function assertDashboard(page) {
   await page.waitForFunction(
     () =>
       document.querySelector("#daily-details-date")?.textContent === "2026-08-10" &&
-      document.querySelector("#daily-details-status")?.textContent === "52 rows",
+      document.querySelector("#daily-details-status")?.textContent === "53 rows",
   );
   await page.evaluate(() => window.__releaseDelayedDetail());
   await page.waitForTimeout(20);
@@ -489,7 +527,7 @@ async function assertDashboard(page) {
   });
   await page.locator('[data-chart-date="2026-08-10"]').click();
   await page.waitForFunction(
-    () => document.querySelector("#daily-details-status")?.textContent === "52 rows",
+    () => document.querySelector("#daily-details-status")?.textContent === "53 rows",
   );
 
   await page.locator("#site-select").selectOption(otherSite);
@@ -501,6 +539,7 @@ async function assertDashboard(page) {
   assert.equal(await page.locator("#new-questions-remaining").innerText(), "20");
   assert.equal(await page.locator("#today-correct-rate-percent").innerText(), "0");
   assert.equal(await page.locator("#today-correct-rate-percent-unit").isHidden(), false);
+  assert.equal(await page.locator("#today-study-time").innerText(), "45分");
   await page.locator("#site-select").selectOption(site);
   await page.waitForFunction(
     () => document.querySelector("#today-stability-days-delta")?.textContent === "+104",

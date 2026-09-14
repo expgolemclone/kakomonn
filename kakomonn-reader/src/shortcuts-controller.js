@@ -408,6 +408,7 @@ export function installShortcutsController(app) {
     app.navigationInProgress = false;
     app.frameDocument = nextDocument;
     app.synchronizeAnswerPresentation(app.frameDocument);
+    app.bindStudyFrame(app.frameDocument);
     applyFrameDarkMode(app.frameDocument);
     app.suppressNextQuestionControls(app.frameDocument);
     if (app.getCurrentAnswerResult() === "correct") {

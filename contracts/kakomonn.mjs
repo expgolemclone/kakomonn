@@ -1,6 +1,7 @@
 export const SITE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/;
 export const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 export const OPERATION_ID_PATTERN = /^[0-9a-f]{32}$/;
+export const STUDY_SESSION_ID_PATTERN = /^[0-9a-f]{32}$/;
 const QUESTION_ID_PATTERN = /^\d+$/;
 const QUESTION_ID_MAX = "9223372036854775807";
 const DAY_MS = 86_400_000;
@@ -18,6 +19,7 @@ export const LEARNING_METRIC_KEYS = Object.freeze([
   "todayCorrectRatePercent",
   "todayNewQuestionCount",
   "todayStabilityDaysDelta",
+  "todayStudyTimeMs",
 ]);
 
 export const CELEBRATION_KEYS = Object.freeze(["dailyKpiCompleted", "date", "site"]);
@@ -33,11 +35,19 @@ export const HISTORY_DAY_KEYS = Object.freeze([
   "dailyAttemptedQuestionCount",
   "dailyCorrectRatePercent",
   "dailyNewQuestionCount",
+  "dailyStudyTimeMs",
   "date",
   "stabilityDaysDelta",
 ]);
 
+export const STUDY_TIME_SNAPSHOT_KEYS = Object.freeze(["activeMs", "date", "sessionId"]);
+
 export const RAW_TABLE_COLUMNS = Object.freeze({
+  study_time_daily: Object.freeze([
+    "site",
+    "date",
+    "study_time_ms",
+  ]),
   stability_history: Object.freeze([
     "site",
     "date",
@@ -85,6 +95,20 @@ export function calendarDateOrdinal(value) {
     return null;
   }
   return Math.floor(Date.parse(`${value}T00:00:00.000Z`) / DAY_MS);
+}
+
+export function isStudyTimeSnapshot(value) {
+  return (
+    hasExactKeys(value, STUDY_TIME_SNAPSHOT_KEYS) &&
+    STUDY_SESSION_ID_PATTERN.test(value.sessionId) &&
+    isCalendarDate(value.date) &&
+    Number.isSafeInteger(value.activeMs) &&
+    value.activeMs >= 0
+  );
+}
+
+export function isStudyTimeSnapshots(value) {
+  return Array.isArray(value) && value.length <= 128 && value.every(isStudyTimeSnapshot);
 }
 
 export function isCorrectRatePercent(value) {
@@ -190,6 +214,8 @@ export function isLearningMetrics(value) {
     value.attemptedQuestionCount >= 0 &&
     Number.isSafeInteger(value.todayAttemptedQuestionCount) &&
     value.todayAttemptedQuestionCount >= 0 &&
+    Number.isSafeInteger(value.todayStudyTimeMs) &&
+    value.todayStudyTimeMs >= 0 &&
     value.todayAttemptedQuestionCount <= value.attemptedQuestionCount &&
     value.todayNewQuestionCount <= value.todayAttemptedQuestionCount &&
     isCorrectRatePercent(value.todayCorrectRatePercent) &&
@@ -343,6 +369,8 @@ export function isHistoryResponse(value, expectedSite, expectedDayCount) {
       day.dailyAttemptedQuestionCount < 0 ||
       !Number.isSafeInteger(day.dailyNewQuestionCount) ||
       day.dailyNewQuestionCount < 0 ||
+      !Number.isSafeInteger(day.dailyStudyTimeMs) ||
+      day.dailyStudyTimeMs < 0 ||
       day.dailyNewQuestionCount > day.dailyAttemptedQuestionCount ||
       !isCorrectRatePercent(day.dailyCorrectRatePercent) ||
       (day.dailyAttemptedQuestionCount === 0) !== (day.dailyCorrectRatePercent === null)
@@ -384,6 +412,7 @@ export function isDashboardResponse(value) {
   return (
     today.dailyAttemptedQuestionCount === metrics.todayAttemptedQuestionCount &&
     today.dailyNewQuestionCount === metrics.todayNewQuestionCount &&
+    today.dailyStudyTimeMs === metrics.todayStudyTimeMs &&
     today.dailyCorrectRatePercent === metrics.todayCorrectRatePercent &&
     (today.closingStabilityDays === null
       ? metrics.stabilityDays === 0 &&
@@ -412,13 +441,23 @@ export function isDailyDetailsResponse(value, expectedSite, expectedDate) {
     !isSite(expectedSite) ||
     !isCalendarDate(expectedDate) ||
     value.timeZone !== "Asia/Tokyo" ||
-    !hasExactKeys(value.tables, ["attempts", "stability_history"]) ||
+    !hasExactKeys(value.tables, ["attempts", "stability_history", "study_time_daily"]) ||
+    !Array.isArray(value.tables.study_time_daily) ||
+    value.tables.study_time_daily.length > 1 ||
     !Array.isArray(value.tables.stability_history) ||
     value.tables.stability_history.length > 1 ||
     !Array.isArray(value.tables.attempts)
   ) {
     return false;
   }
+  const validStudyTimeDaily = value.tables.study_time_daily.every(
+    (row) =>
+      hasExactKeys(row, RAW_TABLE_COLUMNS.study_time_daily) &&
+      row.site === expectedSite &&
+      row.date === expectedDate &&
+      Number.isSafeInteger(row.study_time_ms) &&
+      row.study_time_ms >= 0,
+  );
   const validStabilityHistory = value.tables.stability_history.every(
     (row) =>
       hasExactKeys(row, RAW_TABLE_COLUMNS.stability_history) &&
@@ -457,7 +496,7 @@ export function isDailyDetailsResponse(value, expectedSite, expectedDate) {
       Number.isFinite(row.resulting_card_stability_days) &&
       row.resulting_card_stability_days >= 0,
   );
-  if (!validStabilityHistory || !validAttempts) {
+  if (!validStudyTimeDaily || !validStabilityHistory || !validAttempts) {
     return false;
   }
   const history = value.tables.stability_history[0];
@@ -471,6 +510,10 @@ export function isDailyDetailsResponse(value, expectedSite, expectedDate) {
     history.correct_attempt_count ===
       value.tables.attempts.filter((row) => row.answer_result === "correct").length
   );
+}
+
+export function isStudyTimeResponse(value, expectedSite) {
+  return hasExactKeys(value, ["state"]) && isLearningState(value.state, expectedSite);
 }
 
 export function isSpeechTokenResponse(value) {

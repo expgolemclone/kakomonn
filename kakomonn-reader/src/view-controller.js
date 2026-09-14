@@ -39,13 +39,20 @@ export function installViewController(app) {
   timeLimitProgress.hidden = true;
   timeLimitProgress.setAttribute("aria-label", "問題の制限時間");
 
+  const studyTimeBadge = document.createElement("div");
+  studyTimeBadge.id = "kakomonn-reader-study-time";
+  studyTimeBadge.setAttribute("role", "status");
+  studyTimeBadge.setAttribute("aria-live", "off");
+  studyTimeBadge.setAttribute("aria-label", "今日の勉強時間 0分");
+  studyTimeBadge.textContent = "0m";
+
   const carriedCorrectFeedback = document.createElement("div");
   carriedCorrectFeedback.id = "kakomonn-reader-carried-correct-feedback";
   carriedCorrectFeedback.className = "kakomonn-reader-correct-feedback";
   carriedCorrectFeedback.hidden = true;
   carriedCorrectFeedback.setAttribute("aria-hidden", "true");
 
-  shell.append(frame, timeLimitProgress, carriedCorrectFeedback);
+  shell.append(frame, timeLimitProgress, studyTimeBadge, carriedCorrectFeedback);
   let activeCorrectFeedbackElement = null;
 
   const syncSettings = document.createElement("dialog");
@@ -301,6 +308,7 @@ export function installViewController(app) {
     enforceReaderFrameDimensions: { enumerable: false, get: () => enforceReaderFrameDimensions },
     readerFrameDimensionObserver: { enumerable: false, get: () => readerFrameDimensionObserver },
     timeLimitProgress: { enumerable: false, get: () => timeLimitProgress },
+    studyTimeBadge: { enumerable: false, get: () => studyTimeBadge },
     carriedCorrectFeedback: { enumerable: false, get: () => carriedCorrectFeedback },
     activeCorrectFeedbackElement: {
       enumerable: false,

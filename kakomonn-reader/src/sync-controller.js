@@ -114,13 +114,14 @@ export function installSyncController(app) {
 
   function requestSyncState(token) {
     const parameters = new URLSearchParams({ site: app.SITE_ID });
-    return app.requestSyncResponse("GET", `/v11/state?${parameters}`, token, isSyncState);
+    return app.requestSyncResponse("GET", `/v12/state?${parameters}`, token, isSyncState);
   }
 
-  function requestAttemptResult(token, operation) {
-    return app.requestSyncResponse(
+  async function requestAttemptResult(token, operation) {
+    const studyTimeSnapshots = await app.prepareStudyTimeSnapshots();
+    const result = await app.requestSyncResponse(
       "POST",
-      "/v11/attempts",
+      "/v12/attempts",
       token,
       (value) =>
         isAttemptResponse(value) &&
@@ -131,8 +132,10 @@ export function installSyncController(app) {
         questionId: operation.questionId,
         operationId: operation.operationId,
         answerResult: operation.answerResult,
+        studyTimeSnapshots,
       },
     );
+    return { result, studyTimeSnapshots };
   }
 
   function requestNextQuestion(token, excludeQuestionId = null) {
@@ -140,11 +143,11 @@ export function installSyncController(app) {
     if (excludeQuestionId !== null) {
       parameters.set("excludeQuestionId", excludeQuestionId);
     }
-    return app.requestSyncResponse("GET", `/v11/next?${parameters}`, token, isNextResponse);
+    return app.requestSyncResponse("GET", `/v12/next?${parameters}`, token, isNextResponse);
   }
 
   function requestCatalogUpdate(token, questionIds, expectedGeneration) {
-    return app.requestSyncResponse("POST", "/v11/questions", token, isCatalogResponse, {
+    return app.requestSyncResponse("POST", "/v12/questions", token, isCatalogResponse, {
       site: app.SITE_ID,
       questionIds,
       expectedGeneration,
@@ -152,7 +155,7 @@ export function installSyncController(app) {
   }
 
   function requestSpeechTokenResult(token) {
-    return app.requestSyncResponse("POST", "/v11/speech-token", token, isSpeechTokenResponse);
+    return app.requestSyncResponse("POST", "/v12/speech-token", token, isSpeechTokenResponse);
   }
 
   function clearAzureSpeechToken() {
@@ -212,6 +215,7 @@ export function installSyncController(app) {
   }
 
   function updateSyncDependentControls() {
+    app.refreshStudyTracking?.();
     app.shell.setAttribute(
       "aria-busy",
       String(app.syncInProgress || app.nextQuestionOperationInProgress),
@@ -307,6 +311,7 @@ export function installSyncController(app) {
     app.currentSyncState = state;
     app.syncReady = true;
     app.catalogReady = isCatalogFresh(state.catalog);
+    app.applyStudyServerState(state);
   }
 
   function applyCatalogResult(catalog) {
@@ -437,6 +442,7 @@ export function installSyncController(app) {
           );
         }
         void app.resumePendingLearningFlow();
+        void app.flushStudyTime();
         app.processCurrentPageSpeech();
       }
     })();
@@ -497,6 +503,7 @@ export function installSyncController(app) {
         app.syncTokenInput.disabled = false;
         updateSyncDependentControls();
         void app.resumePendingLearningFlow();
+        void app.flushStudyTime();
         app.processCurrentPageSpeech();
       }
     })();
@@ -568,6 +575,7 @@ export function installSyncController(app) {
         updateSyncDependentControls();
         void refreshQuestionCatalog(app.syncToken, initialState);
         void app.resumePendingLearningFlow();
+        void app.flushStudyTime();
         app.processCurrentPageSpeech();
         return;
       }
@@ -588,6 +596,8 @@ export function installSyncController(app) {
 
   function handlePageResume() {
     app.synchronizeTimeLimitPhase();
+    app.refreshStudyTracking({ engage: true });
+    void app.flushStudyTime();
     if (
       document.visibilityState === "visible" &&
       app.syncToken &&

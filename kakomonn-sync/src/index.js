@@ -8,13 +8,14 @@ import { handleDailyDetails } from "./api/daily-details.js";
 import { handleDashboard } from "./api/dashboard.js";
 import { handleNext } from "./api/next.js";
 import { handleQuestions } from "./api/questions.js";
+import { handleStudyTime } from "./api/study-time.js";
 import { issueSpeechToken } from "./speech.js";
 
 export { LearningState, issueSpeechToken };
 export * from "./fsrs.js";
 export { initializeLearningSchema } from "./learning-store.js";
 
-const API_PREFIX = "/v11";
+const API_PREFIX = "/v12";
 
 export async function handleRequest(request, env, fetcher = fetch) {
   const url = new URL(request.url);
@@ -25,6 +26,7 @@ export async function handleRequest(request, env, fetcher = fetch) {
     ["/daily-details", ["GET"]],
     ["/dashboard", ["GET"]],
     ["/attempts", ["POST"]],
+    ["/study-time", ["POST"]],
     ["/next", ["GET"]],
     ["/questions", ["POST"]],
     ["/speech-token", ["POST"]],
@@ -82,6 +84,9 @@ export async function handleRequest(request, env, fetcher = fetch) {
   }
   if (route === "/attempts") {
     return handleAttempts(request, env);
+  }
+  if (route === "/study-time") {
+    return handleStudyTime(request, env);
   }
   return handleQuestions(request, env);
 }

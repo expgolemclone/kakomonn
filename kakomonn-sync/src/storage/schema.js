@@ -1,7 +1,7 @@
 import { getTokyoDate, tokyoDateRangeMs } from "../dates.js";
 import { canonicalQuestionIds } from "../contracts.js";
 
-const CURRENT_SCHEMA_VERSION = 11;
+const CURRENT_SCHEMA_VERSION = 12;
 
 function tableNames(storage) {
   return new Set(
@@ -73,6 +73,21 @@ function createCurrentTables(storage) {
       question_ids_json TEXT NOT NULL
     ) WITHOUT ROWID;
 
+    CREATE TABLE study_time_sessions (
+      site TEXT NOT NULL,
+      date TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      active_ms INTEGER NOT NULL CHECK (active_ms >= 0),
+      PRIMARY KEY (site, date, session_id)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE study_time_daily (
+      site TEXT NOT NULL,
+      date TEXT NOT NULL,
+      study_time_ms INTEGER NOT NULL CHECK (study_time_ms >= 0),
+      PRIMARY KEY (site, date)
+    ) WITHOUT ROWID;
+
     CREATE TABLE learning_metrics (
       site TEXT PRIMARY KEY,
       stability_days REAL NOT NULL CHECK (stability_days >= 0),
@@ -82,6 +97,7 @@ function createCurrentTables(storage) {
       today_attempt_count INTEGER NOT NULL CHECK (today_attempt_count >= 0),
       today_correct_attempt_count INTEGER NOT NULL CHECK (today_correct_attempt_count >= 0),
       today_new_question_count INTEGER NOT NULL CHECK (today_new_question_count >= 0),
+      today_study_time_ms INTEGER NOT NULL DEFAULT 0 CHECK (today_study_time_ms >= 0),
       CHECK (today_correct_attempt_count <= today_attempt_count)
     ) WITHOUT ROWID;
 
@@ -461,6 +477,31 @@ function migrateSchemaV10ToV11(storage) {
   `);
 }
 
+function migrateSchemaV11ToV12(storage) {
+  storage.sql.exec(`
+    ALTER TABLE learning_metrics
+      ADD COLUMN today_study_time_ms INTEGER NOT NULL DEFAULT 0
+      CHECK (today_study_time_ms >= 0);
+
+    CREATE TABLE study_time_sessions (
+      site TEXT NOT NULL,
+      date TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      active_ms INTEGER NOT NULL CHECK (active_ms >= 0),
+      PRIMARY KEY (site, date, session_id)
+    ) WITHOUT ROWID;
+
+    CREATE TABLE study_time_daily (
+      site TEXT NOT NULL,
+      date TEXT NOT NULL,
+      study_time_ms INTEGER NOT NULL CHECK (study_time_ms >= 0),
+      PRIMARY KEY (site, date)
+    ) WITHOUT ROWID;
+
+    UPDATE schema_metadata SET version = 12 WHERE singleton = 1;
+  `);
+}
+
 function migrateLegacySchema(storage, today) {
   const { startMs, endMs } = tokyoDateRangeMs(today);
   storage.sql.exec(`
@@ -653,7 +694,16 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       "stability_history",
     ];
     const schemaV3Tables = [...versionedCoreTables, "site_settings"];
-    const currentTables = [...versionedCoreTables, "daily_kpi_achievements", "learning_metrics"];
+    const schemaV11Tables = [
+      ...versionedCoreTables,
+      "daily_kpi_achievements",
+      "learning_metrics",
+    ];
+    const currentTables = [
+      ...schemaV11Tables,
+      "study_time_daily",
+      "study_time_sessions",
+    ];
     const dueCardMetricTables = [
       ...versionedCoreTables,
       "daily_due_card_achievements",
@@ -669,7 +719,8 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       [7, dueCardMetricTables],
       [8, dueCardMetricTables],
       [9, dueCardMetricTables],
-      [10, currentTables],
+      [10, schemaV11Tables],
+      [11, schemaV11Tables],
       [CURRENT_SCHEMA_VERSION, currentTables],
     ]);
     const legacyTables = [
@@ -753,6 +804,10 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
     if (version === 10) {
       migrateSchemaV10ToV11(storage);
       version = 11;
+    }
+    if (version === 11) {
+      migrateSchemaV11ToV12(storage);
+      version = 12;
     }
     if (version !== CURRENT_SCHEMA_VERSION) {
       throw new Error("unsupported LearningState schema version");

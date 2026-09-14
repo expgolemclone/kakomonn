@@ -8,6 +8,7 @@
   --border: #2a3444;
   --muted: #99a5b6;
   --accent: #7dd3fc;
+  --study: oklch(0.74 0.13 200);
   --accent-2: #bae6fd;
   --negative: #fb7185;
   --danger: #fca5a5;
@@ -54,7 +55,7 @@ input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px 
 .primary-kpi-remaining strong { display: flex; align-items: baseline; gap: 5px; color: var(--accent-2); font-size: clamp(2rem, 5vw, 3.35rem); font-variant-numeric: tabular-nums; line-height: 1; }
 .primary-kpi-remaining small { color: var(--muted); font-size: .9rem; }
 .metrics-card { margin-top: 18px; padding: 24px 28px; }
-.metric-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; }
+.metric-list { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0; }
 .metric-item { min-width: 0; padding: 0 20px; border-left: 1px solid var(--border); }
 .metric-item:first-child { padding-left: 0; border-left: 0; }
 .metric-item:last-child { padding-right: 0; }
@@ -69,6 +70,7 @@ input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px 
 .chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .chart-legend span::before { width: 18px; height: 3px; border-radius: 999px; background: var(--accent); content: ""; }
 .chart-legend .correct-rate-series::before { background: var(--accent-2); }
+.chart-legend .study-time-series::before { background: var(--study); }
 .chart-layout { display: grid; grid-template-columns: 62px minmax(0, 1fr); }
 .chart-axis { display: block; width: 62px; }
 .chart-scroll { min-width: 0; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; overscroll-behavior-inline: contain; scrollbar-color: var(--border) transparent; }
@@ -76,7 +78,7 @@ input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px 
 #stability-chart { max-width: none; display: block; }
 .chart-hint { margin: 6px 0 0; color: var(--muted); font-size: .78rem; text-align: right; }
 .grid-line { stroke: #2a3444; stroke-width: 1; }
-.correct-rate-grid-line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 5; }
+.correct-rate-grid-line, .study-time-grid-line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 5; }
 .zero-line { stroke: color-mix(in srgb, var(--muted) 72%, transparent); stroke-width: 2; }
 .chart-day { cursor: pointer; }
 .chart-hit-area { fill: transparent; stroke: transparent; stroke-width: 2; }
@@ -90,6 +92,9 @@ input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px 
 .axis-label { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .delta-axis-label { fill: var(--accent); }
 .correct-rate-axis-label { fill: var(--accent-2); }
+.study-time-axis-label { fill: var(--study); }
+.study-time-bar { fill: color-mix(in srgb, var(--study) 24%, transparent); stroke: var(--study); stroke-width: 2; }
+.study-time-value-label { fill: var(--study); font-size: 12px; font-weight: 850; }
 .correct-rate-line { fill: none; stroke: var(--accent-2); stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; }
 .correct-rate-point { fill: var(--surface); stroke: var(--accent-2); stroke-width: 3; }
 .correct-rate-value-label { fill: var(--accent-2); font-size: 12px; font-weight: 850; }

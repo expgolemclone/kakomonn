@@ -1122,7 +1122,7 @@ async function runTest() {
       await driver.execute(
         () =>
           window.__syncMock.calls.filter(
-            (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
+            (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
           ).length,
       ),
       1,

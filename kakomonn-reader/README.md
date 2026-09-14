@@ -53,7 +53,7 @@ Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` mode
 
 同期tokenが未保存または認証失敗の場合だけ, 入力dialogが開きます. Win11とiPhoneへ, Worker Secretの`SYNC_TOKEN`と同じ値を入力してください. tokenはbrowser profileごとのUserscript専用storageを唯一の保存先とし, 問題siteとsync dashboardの`localStorage`には保存されません. 同じprofileのsync dashboardはこのtokenで自動接続します. 接続済みのreaderには設定buttonを表示しません.
 
-remote stateはreader sessionの開始時に取得します. launcherから開いた場合は`/v11/next`が返したstateを引き継ぐため, 追加の`/v11/state`は呼びません. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
+remote stateはreader sessionの開始時に取得します. launcherから開いた場合は`/v12/next`が返したstateを引き継ぐため, 追加の`/v12/state`は呼びません. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
 
 未解答時の`Enter`は解答を実行します. 正解と不正解のどちらでも, 正誤表示時に解答記録を同期し, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でclipboardへ自動copyします. `n`または問題時間切れによるskipではcopyしません. 同期に失敗した場合は同じ解説pageへ留まり, error dialogの`同期を再試行`から再開します. 同じ操作の再送は二重加算されません. Windowsでは同期とcopyの成功後, iPhone Safariでは同期成功後にMarkdownをClipboard APIへ渡した時点で, 正解時は保存responseで取得済みの次問へ自動で移動します. iPhone Safariのclipboard完了通知が失敗またはtimeoutしても次問遷移は取り消さず, 表示された`コピーを再試行`から保存済みMarkdownを再copyできます. 不正解時の`Enter`は次問への移動を予約し, 同期またはcopyの準備中に押した場合も準備完了後に移動します. iPhone Safariでは画面中央から左へのswipeでも次問へ進めます. swipeのedge除外領域と必要移動量はviewport幅に対する比率で判定し, Safariのedge gestureと競合しないようにします. WindowsではBrowser forwardでも移動できます. どの遷移も追加のWorker通信は行いません. 解説時間切れでは移動しません. Browser backまたは`Shift+H`では解答済みのReader履歴を飛ばしてdashboardへ戻り, dashboardからBrowser forwardすると最新の問題へ復帰します.
 

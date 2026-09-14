@@ -22,8 +22,10 @@ const STABILITY_CHART_TOP = 26;
 const STABILITY_CHART_BOTTOM = 218;
 const CORRECT_RATE_CHART_TOP = 276;
 const CORRECT_RATE_CHART_BOTTOM = 400;
-const CHART_DATE_Y = 440;
-const CHART_HEIGHT = 456;
+const STUDY_TIME_CHART_TOP = 440;
+const STUDY_TIME_CHART_BOTTOM = 544;
+const CHART_DATE_Y = 578;
+const CHART_HEIGHT = 594;
 
 const byId = (id) => {
   const element = document.getElementById(id);
@@ -54,6 +56,7 @@ const el = {
   todayAttemptedQuestionCountElement: byId("today-attempted-question-count"),
   todayCorrectRatePercentElement: byId("today-correct-rate-percent"),
   todayCorrectRatePercentUnit: byId("today-correct-rate-percent-unit"),
+  todayStudyTimeElement: byId("today-study-time"),
   stabilityChartAxis: byId("stability-chart-axis"),
   historyScroll: byId("history-scroll"),
   stabilityChart: byId("stability-chart"),
@@ -64,6 +67,7 @@ const el = {
   dailyDetailsInstruction: byId("daily-details-instruction"),
   dailyDetailsStatus: byId("daily-details-status"),
   dailyDetailsTables: byId("daily-details-tables"),
+  studyTimeDailyTable: byId("study-time-daily-table"),
   stabilityHistoryTable: byId("stability-history-table"),
   attemptsTable: byId("attempts-table"),
 };
@@ -187,6 +191,20 @@ function formatted(value) {
 function signed(value) {
   return `${value >= 0 ? "+" : ""}${formatted(value)}`;
 }
+function studyTimeText(ms) {
+  const totalMinutes = Math.floor(ms / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}分`;
+  return minutes === 0 ? `${hours}時間` : `${hours}時間 ${minutes}分`;
+}
+function compactStudyTime(ms) {
+  const totalMinutes = Math.floor(ms / 60_000);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes === 0 ? `${hours}h` : `${hours}h${String(minutes).padStart(2, "0")}`;
+}
 function svgNode(name, attrs = {}, text = "") {
   const node = document.createElementNS(SVG_NS, name);
   for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
@@ -258,6 +276,56 @@ function renderCorrectRateAxis() {
   }
 }
 
+function studyTimeAxis(days) {
+  const maximumMinutes = Math.max(0, ...days.map((day) => day.dailyStudyTimeMs / 60_000));
+  const step = niceStep(Math.max(30, maximumMinutes) / 3);
+  const maximum = Math.max(step, Math.ceil(maximumMinutes / step) * step);
+  return { minimum: 0, maximum, step };
+}
+
+function studyTimeY(axis, studyTimeMs) {
+  return chartY(axis, studyTimeMs / 60_000, STUDY_TIME_CHART_TOP, STUDY_TIME_CHART_BOTTOM);
+}
+
+function renderStudyTimeAxis(axis) {
+  const divisions = Math.round((axis.maximum - axis.minimum) / axis.step);
+  for (let index = 0; index <= divisions; index += 1) {
+    const value = axis.minimum + axis.step * index;
+    const yy = chartY(axis, value, STUDY_TIME_CHART_TOP, STUDY_TIME_CHART_BOTTOM);
+    el.stabilityChartAxis.append(
+      svgNode("line", {
+        x1: 52,
+        y1: yy,
+        x2: 62,
+        y2: yy,
+        class: "study-time-grid-line",
+      }),
+      svgNode(
+        "text",
+        { x: 48, y: yy + 4, class: "axis-label study-time-axis-label", "text-anchor": "end" },
+        compactStudyTime(value * 60_000),
+      ),
+    );
+  }
+}
+
+function renderStudyTimeGrid(axis, right) {
+  const divisions = Math.round((axis.maximum - axis.minimum) / axis.step);
+  for (let index = 0; index <= divisions; index += 1) {
+    const value = axis.minimum + axis.step * index;
+    const yy = chartY(axis, value, STUDY_TIME_CHART_TOP, STUDY_TIME_CHART_BOTTOM);
+    el.stabilityChart.append(
+      svgNode("line", {
+        x1: 0,
+        y1: yy,
+        x2: right,
+        y2: yy,
+        class: "study-time-grid-line",
+      }),
+    );
+  }
+}
+
 function renderGrid(axis, right, top, bottom) {
   const divisions = Math.round((axis.maximum - axis.minimum) / axis.step);
   for (let index = 0; index <= divisions; index += 1) {
@@ -310,6 +378,7 @@ function renderChart(days) {
   el.stabilityChart.replaceChildren();
   const values = days.map((day) => day.stabilityDaysDelta).filter((value) => value !== null);
   const axis = signedAxis(values);
+  const studyAxis = studyTimeAxis(days);
   const left = 0,
     right = CHART_DAY_WIDTH * days.length;
   const chartWidth = right + CHART_RIGHT_PADDING;
@@ -321,7 +390,7 @@ function renderChart(days) {
     svgNode(
       "title",
       { id: "history-chart-title" },
-      `stabilityDaysDeltaとdailyCorrectRatePercentの${DASHBOARD_HISTORY_DAYS}日推移`,
+      `stabilityDaysDelta, dailyCorrectRatePercent, 勉強時間の${DASHBOARD_HISTORY_DAYS}日推移`,
     ),
     svgNode(
       "desc",
@@ -329,15 +398,17 @@ function renderChart(days) {
       days
         .map(
           (day) =>
-            `${day.date}, stabilityDaysDelta ${day.stabilityDaysDelta === null ? "記録なし" : `${signed(day.stabilityDaysDelta)}日`}, dailyCorrectRatePercent ${day.dailyCorrectRatePercent === null ? "記録なし" : `${formatted(day.dailyCorrectRatePercent)}%`}`,
+            `${day.date}, stabilityDaysDelta ${day.stabilityDaysDelta === null ? "記録なし" : `${signed(day.stabilityDaysDelta)}日`}, dailyCorrectRatePercent ${day.dailyCorrectRatePercent === null ? "記録なし" : `${formatted(day.dailyCorrectRatePercent)}%`}, 勉強時間 ${studyTimeText(day.dailyStudyTimeMs)}`,
         )
         .join(". "),
     ),
   );
   renderAxis(axis, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
   renderCorrectRateAxis();
+  renderStudyTimeAxis(studyAxis);
   renderGrid(axis, right, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
   renderCorrectRateGrid(right);
+  renderStudyTimeGrid(studyAxis, right);
   const correctRatePath = correctRateLinePath(days, left, bandWidth);
   if (correctRatePath !== "") {
     el.stabilityChart.append(svgNode("path", { d: correctRatePath, class: "correct-rate-line" }));
@@ -347,6 +418,7 @@ function renderChart(days) {
     const xx = left + bandWidth * (index + 0.5);
     const value = day.stabilityDaysDelta;
     const correctRate = day.dailyCorrectRatePercent;
+    const studyTimeMs = day.dailyStudyTimeMs;
     const selected = day.date === state.selectedDate;
     const group = svgNode("g", {
       class: "chart-day",
@@ -355,7 +427,7 @@ function renderChart(days) {
       focusable: "true",
       "aria-controls": "daily-details",
       "aria-pressed": selected ? "true" : "false",
-      "aria-label": `${day.date}, stabilityDaysDelta ${value === null ? "記録なし" : `${signed(value)}日`}, dailyCorrectRatePercent ${correctRate === null ? "記録なし" : `${formatted(correctRate)}%`}. 日別詳細を表示`,
+      "aria-label": `${day.date}, stabilityDaysDelta ${value === null ? "記録なし" : `${signed(value)}日`}, dailyCorrectRatePercent ${correctRate === null ? "記録なし" : `${formatted(correctRate)}%`}, 勉強時間 ${studyTimeText(studyTimeMs)}. 日別詳細を表示`,
       "data-chart-date": day.date,
     });
     group.append(
@@ -426,6 +498,28 @@ function renderChart(days) {
         ),
       );
     }
+    const studyBarY = studyTimeY(studyAxis, studyTimeMs);
+    const studyBarHeight = Math.max(2, STUDY_TIME_CHART_BOTTOM - studyBarY);
+    group.append(
+      svgNode("rect", {
+        x: xx - barWidth / 2,
+        y: STUDY_TIME_CHART_BOTTOM - studyBarHeight,
+        width: barWidth,
+        height: studyBarHeight,
+        rx: 5,
+        class: "study-time-bar",
+      }),
+      svgNode(
+        "text",
+        {
+          x: xx,
+          y: Math.max(STUDY_TIME_CHART_TOP + 12, STUDY_TIME_CHART_BOTTOM - studyBarHeight - 8),
+          class: "study-time-value-label",
+          "text-anchor": "middle",
+        },
+        compactStudyTime(studyTimeMs),
+      ),
+    );
     const [, month, date] = day.date.split("-");
     group.append(
       svgNode(
@@ -487,6 +581,7 @@ function renderDailyDetailsInitial() {
   el.dailyDetailsInstruction.hidden = false;
   el.dailyDetailsStatus.textContent = "";
   el.dailyDetailsTables.hidden = true;
+  el.studyTimeDailyTable.replaceChildren();
   el.stabilityHistoryTable.replaceChildren();
   el.attemptsTable.replaceChildren();
 }
@@ -508,7 +603,12 @@ function renderDailyDetailsLoading(date) {
 
 function renderDailyDetailsResult(details) {
   el.dailyDetails.removeAttribute("aria-busy");
-  el.dailyDetailsStatus.textContent = `${details.tables.stability_history.length + details.tables.attempts.length} rows`;
+  el.dailyDetailsStatus.textContent = `${details.tables.study_time_daily.length + details.tables.stability_history.length + details.tables.attempts.length} rows`;
+  renderRawTable(
+    el.studyTimeDailyTable,
+    RAW_TABLE_COLUMNS.study_time_daily,
+    details.tables.study_time_daily,
+  );
   renderRawTable(
     el.stabilityHistoryTable,
     RAW_TABLE_COLUMNS.stability_history,
@@ -575,6 +675,7 @@ function renderDashboard() {
   el.todayCorrectRatePercentElement.textContent =
     metrics.todayCorrectRatePercent === null ? "--" : formatted(metrics.todayCorrectRatePercent);
   el.todayCorrectRatePercentUnit.hidden = metrics.todayCorrectRatePercent === null;
+  el.todayStudyTimeElement.textContent = studyTimeText(metrics.todayStudyTimeMs);
   renderChart(state.history.days);
   el.dashboard.hidden = false;
   el.authPanel.hidden = true;

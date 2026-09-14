@@ -9,7 +9,7 @@ import {
   OPERATION_ID_PATTERN,
 } from "./contracts.js";
 import { initializeLearningSchema } from "./storage/schema.js";
-import { isCelebration, isLearningMetrics } from "../../contracts/kakomonn.mjs";
+import { isCelebration, isLearningMetrics, isStudyTimeSnapshots } from "../../contracts/kakomonn.mjs";
 
 export { initializeLearningSchema } from "./storage/schema.js";
 
@@ -82,21 +82,30 @@ function storedLearningMetricsFromRow(row) {
     todayAttemptCount: row.today_attempt_count,
     todayCorrectAttemptCount: row.today_correct_attempt_count,
     todayNewQuestionCount: row.today_new_question_count,
+    todayStudyTimeMs: row.today_study_time_ms,
   };
 }
 
+function findStoredLearningMetrics(storage, site) {
+  const row = storage.sql
+    .exec(
+      `SELECT stability_days, attempted_question_count, daily_metrics_date,
+              today_attempted_question_count, today_attempt_count,
+              today_correct_attempt_count, today_new_question_count,
+              today_study_time_ms
+       FROM learning_metrics WHERE site = ?`,
+      site,
+    )
+    .toArray()[0];
+  return row === undefined ? null : storedLearningMetricsFromRow(row);
+}
+
 function readStoredLearningMetrics(storage, site) {
-  return storedLearningMetricsFromRow(
-    storage.sql
-      .exec(
-        `SELECT stability_days, attempted_question_count, daily_metrics_date,
-                today_attempted_question_count, today_attempt_count,
-                today_correct_attempt_count, today_new_question_count
-         FROM learning_metrics WHERE site = ?`,
-        site,
-      )
-      .toArray()[0],
-  );
+  const metrics = findStoredLearningMetrics(storage, site);
+  if (metrics === null) {
+    throw new Error("missing LearningState learning metrics");
+  }
+  return metrics;
 }
 
 function calculateCurrentCatalogStabilityDays(storage, site) {
@@ -121,14 +130,15 @@ function replaceStoredLearningMetrics(storage, site, metrics, today) {
            site, stability_days, attempted_question_count,
            daily_metrics_date, today_attempted_question_count,
            today_attempt_count, today_correct_attempt_count,
-           today_new_question_count
-         ) VALUES (?, ?, ?, ?, 0, 0, 0, 0)
+           today_new_question_count, today_study_time_ms
+         ) VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0)
          ON CONFLICT(site) DO UPDATE SET
            stability_days = excluded.stability_days,
            attempted_question_count = excluded.attempted_question_count
          RETURNING stability_days, attempted_question_count, daily_metrics_date,
                    today_attempted_question_count, today_attempt_count,
-                   today_correct_attempt_count, today_new_question_count`,
+                   today_correct_attempt_count, today_new_question_count,
+                   today_study_time_ms`,
         site,
         metrics.stabilityDays,
         metrics.attemptedQuestionCount,
@@ -171,11 +181,16 @@ function updateStoredLearningMetrics(
              today_new_question_count =
                CASE WHEN daily_metrics_date = ?
                     THEN today_new_question_count + ?
-                    ELSE ? END
+                    ELSE ? END,
+             today_study_time_ms =
+               CASE WHEN daily_metrics_date = ?
+                    THEN today_study_time_ms
+                    ELSE 0 END
          WHERE site = ?
          RETURNING stability_days, attempted_question_count, daily_metrics_date,
                    today_attempted_question_count, today_attempt_count,
-                   today_correct_attempt_count, today_new_question_count`,
+                   today_correct_attempt_count, today_new_question_count,
+                   today_study_time_ms`,
         previousCardStabilityDays,
         resultingCardStabilityDays,
         attemptedQuestionCountDelta,
@@ -190,6 +205,7 @@ function updateStoredLearningMetrics(
         today,
         todayNewQuestionCountDelta,
         todayNewQuestionCountDelta,
+        today,
         site,
       )
       .toArray()[0],
@@ -321,6 +337,7 @@ function composeLearningMetrics(
     newQuestionGoal: NEW_QUESTION_GOAL,
     newQuestionsRemaining,
     todayStabilityDaysDelta,
+    todayStudyTimeMs: isCurrentDailyMetrics ? storedMetrics.todayStudyTimeMs : 0,
     attemptedQuestionCount: storedMetrics.attemptedQuestionCount,
     todayAttemptedQuestionCount: isCurrentDailyMetrics
       ? storedMetrics.todayAttemptedQuestionCount
@@ -486,15 +503,13 @@ function emptyStoredLearningMetrics(today) {
     todayAttemptCount: 0,
     todayCorrectAttemptCount: 0,
     todayNewQuestionCount: 0,
+    todayStudyTimeMs: 0,
   };
 }
 
 function learningStateFromCatalog(storage, site, nowMs, catalog) {
   const today = getTokyoDate(new Date(nowMs));
-  const storedMetrics =
-    catalog === undefined
-      ? emptyStoredLearningMetrics(today)
-      : readStoredLearningMetrics(storage, site);
+  const storedMetrics = findStoredLearningMetrics(storage, site) ?? emptyStoredLearningMetrics(today);
   return {
     site,
     today,
@@ -520,6 +535,88 @@ function catalogResultWithNextQuestion(storage, site, nowMs, catalog) {
   };
 }
 
+function applyStudyTimeSnapshots(storage, site, snapshots, nowMs) {
+  if (!isSite(site) || !isStudyTimeSnapshots(snapshots) || !Number.isSafeInteger(nowMs) || nowMs <= 0) {
+    throw new TypeError("invalid study time");
+  }
+  if (snapshots.length === 0) {
+    return;
+  }
+  const today = getTokyoDate(new Date(nowMs));
+  storage.sql.exec(
+    `INSERT INTO learning_metrics (
+       site, stability_days, attempted_question_count,
+       daily_metrics_date, today_attempted_question_count,
+       today_attempt_count, today_correct_attempt_count,
+       today_new_question_count, today_study_time_ms
+     ) VALUES (?, 0, 0, ?, 0, 0, 0, 0, 0)
+     ON CONFLICT(site) DO NOTHING`,
+    site,
+    today,
+  );
+  for (const snapshot of snapshots) {
+    const existing = storage.sql
+      .exec(
+        `SELECT active_ms FROM study_time_sessions
+         WHERE site = ? AND date = ? AND session_id = ?`,
+        site,
+        snapshot.date,
+        snapshot.sessionId,
+      )
+      .toArray()[0];
+    const previousActiveMs = existing?.active_ms ?? 0;
+    if (snapshot.activeMs <= previousActiveMs) {
+      continue;
+    }
+    const delta = snapshot.activeMs - previousActiveMs;
+    storage.sql.exec(
+      `INSERT INTO study_time_sessions (site, date, session_id, active_ms)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(site, date, session_id) DO UPDATE SET
+         active_ms = excluded.active_ms`,
+      site,
+      snapshot.date,
+      snapshot.sessionId,
+      snapshot.activeMs,
+    );
+    storage.sql.exec(
+      `INSERT INTO study_time_daily (site, date, study_time_ms)
+       VALUES (?, ?, ?)
+       ON CONFLICT(site, date) DO UPDATE SET
+         study_time_ms = study_time_daily.study_time_ms + excluded.study_time_ms`,
+      site,
+      snapshot.date,
+      delta,
+    );
+    if (snapshot.date === today) {
+      storage.sql.exec(
+        `UPDATE learning_metrics
+         SET daily_metrics_date = ?,
+             today_attempted_question_count =
+               CASE WHEN daily_metrics_date = ? THEN today_attempted_question_count ELSE 0 END,
+             today_attempt_count =
+               CASE WHEN daily_metrics_date = ? THEN today_attempt_count ELSE 0 END,
+             today_correct_attempt_count =
+               CASE WHEN daily_metrics_date = ? THEN today_correct_attempt_count ELSE 0 END,
+             today_new_question_count =
+               CASE WHEN daily_metrics_date = ? THEN today_new_question_count ELSE 0 END,
+             today_study_time_ms =
+               CASE WHEN daily_metrics_date = ? THEN today_study_time_ms + ? ELSE ? END
+         WHERE site = ?`,
+        today,
+        today,
+        today,
+        today,
+        today,
+        today,
+        delta,
+        delta,
+        site,
+      );
+    }
+  }
+}
+
 function assertAttempt(site, questionId, operationId, result) {
   if (
     !isSite(site) ||
@@ -537,13 +634,21 @@ export class LearningState extends DurableObject {
     initializeLearningSchema(this.ctx.storage);
   }
 
-  recordAttempt(site, questionId, operationId, answerResult, nowMs = Date.now()) {
+  recordAttempt(
+    site,
+    questionId,
+    operationId,
+    answerResult,
+    nowMs = Date.now(),
+    studyTimeSnapshots = [],
+  ) {
     assertAttempt(site, questionId, operationId, answerResult);
     if (!Number.isSafeInteger(nowMs) || nowMs <= 0) {
       throw new TypeError("invalid attempt time");
     }
 
     return this.ctx.storage.transactionSync(() => {
+      applyStudyTimeSnapshots(this.ctx.storage, site, studyTimeSnapshots, nowMs);
       const existing = this.ctx.storage.sql
         .exec(
           `SELECT site, question_id, attempted_at_ms, answer_result,
@@ -710,6 +815,22 @@ export class LearningState extends DurableObject {
     });
   }
 
+  recordStudyTime(site, snapshots, nowMs = Date.now()) {
+    if (!isSite(site) || !isStudyTimeSnapshots(snapshots) || !Number.isSafeInteger(nowMs) || nowMs <= 0) {
+      throw new TypeError("invalid study time request");
+    }
+    return this.ctx.storage.transactionSync(() => {
+      applyStudyTimeSnapshots(this.ctx.storage, site, snapshots, nowMs);
+      const catalog = this.ctx.storage.sql
+        .exec(
+          "SELECT question_count, updated_at_ms, generation FROM catalog_metadata WHERE site = ?",
+          site,
+        )
+        .toArray()[0];
+      return { state: learningStateFromCatalog(this.ctx.storage, site, nowMs, catalog) };
+    });
+  }
+
   getState(site, nowMs = Date.now()) {
     if (!isSite(site) || !Number.isSafeInteger(nowMs)) {
       throw new TypeError("invalid state request");
@@ -755,6 +876,19 @@ export class LearningState extends DurableObject {
           .toArray()
           .map((row) => [row.date, row]),
       );
+      const studyRows = new Map(
+        this.ctx.storage.sql
+          .exec(
+            `SELECT date, study_time_ms
+             FROM study_time_daily
+             WHERE site = ? AND date >= ? AND date <= ? ORDER BY date`,
+            site,
+            dates[0],
+            dates.at(-1),
+          )
+          .toArray()
+          .map((row) => [row.date, row.study_time_ms]),
+      );
       let closingStabilityDays = baseline?.closing_stability_days ?? null;
       let trackingStarted = baseline !== undefined;
       const history = dates.map((date) => {
@@ -771,6 +905,7 @@ export class LearningState extends DurableObject {
           stabilityDaysDelta,
           dailyAttemptedQuestionCount: row?.attempted_question_count ?? 0,
           dailyNewQuestionCount: row?.new_question_count ?? 0,
+          dailyStudyTimeMs: studyRows.get(date) ?? 0,
           dailyCorrectRatePercent: correctRatePercent(
             row?.correct_attempt_count ?? 0,
             row?.attempt_count ?? 0,
@@ -787,6 +922,14 @@ export class LearningState extends DurableObject {
     }
     return this.ctx.storage.transactionSync(() => {
       const { startMs, endMs } = tokyoDateRangeMs(date);
+      const studyTimeDaily = this.ctx.storage.sql
+        .exec(
+          `SELECT site, date, study_time_ms
+           FROM study_time_daily WHERE site = ? AND date = ?`,
+          site,
+          date,
+        )
+        .toArray();
       const stabilityHistory = this.ctx.storage.sql
         .exec(
           `SELECT site, date, opening_stability_days, closing_stability_days,
@@ -813,7 +956,7 @@ export class LearningState extends DurableObject {
         site,
         date,
         timeZone: "Asia/Tokyo",
-        tables: { stability_history: stabilityHistory, attempts },
+        tables: { study_time_daily: studyTimeDaily, stability_history: stabilityHistory, attempts },
       };
     });
   }
@@ -927,6 +1070,7 @@ export class LearningState extends DurableObject {
               todayAttemptCount: 0,
               todayCorrectAttemptCount: 0,
               todayNewQuestionCount: 0,
+              todayStudyTimeMs: 0,
             }
           : readStoredLearningMetrics(this.ctx.storage, site);
       const stabilityDaysBefore = integerStabilityDays(storedMetricsBefore);

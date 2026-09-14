@@ -84,6 +84,10 @@
                 <dt>todayCorrectRatePercent</dt>
                 <dd><strong id="today-correct-rate-percent">--</strong><span id="today-correct-rate-percent-unit" hidden>%</span></dd>
               </div>
+              <div class="metric-item">
+                <dt>todayStudyTimeMs</dt>
+                <dd><strong id="today-study-time">--</strong></dd>
+              </div>
             </dl>
           </section>
 
@@ -91,16 +95,17 @@
             <figcaption class="chart-heading">
               <div>
                 <p class="eyebrow">31 DAY LEARNING</p>
-                <h2 id="history-title">stabilityDaysDeltaとdailyCorrectRatePercentの31日推移</h2>
+                <h2 id="history-title">stabilityDaysDelta, dailyCorrectRatePercent, 勉強時間の31日推移</h2>
               </div>
               <div class="chart-legend" aria-label="graph series">
                 <span class="stability-series">stabilityDaysDelta</span>
                 <span class="correct-rate-series">dailyCorrectRatePercent</span>
+                <span class="study-time-series">勉強時間</span>
               </div>
             </figcaption>
             <div class="chart-layout">
-              <svg id="stability-chart-axis" class="chart-axis" viewBox="0 0 62 456" aria-hidden="true"></svg>
-              <div id="history-scroll" class="chart-scroll" tabindex="0" aria-label="stabilityDaysDeltaとdailyCorrectRatePercentの31日履歴. 左右にスワイプまたはスクロールして過去の日付を表示できます.">
+              <svg id="stability-chart-axis" class="chart-axis" viewBox="0 0 62 594" aria-hidden="true"></svg>
+              <div id="history-scroll" class="chart-scroll" tabindex="0" aria-label="stabilityDaysDelta, dailyCorrectRatePercent, 勉強時間の31日履歴. 左右にスワイプまたはスクロールして過去の日付を表示できます.">
                 <svg id="stability-chart" role="group" aria-labelledby="history-chart-title history-chart-description"></svg>
               </div>
             </div>
@@ -116,6 +121,10 @@
               <p id="daily-details-instruction" class="muted">graphの日付を選択すると, DBのraw dataを表示します.</p>
               <p id="daily-details-status" class="message" role="status" aria-live="polite"></p>
               <div id="daily-details-tables" hidden>
+                <section class="raw-table-section" aria-labelledby="study-time-daily-table-title">
+                  <h4 id="study-time-daily-table-title"><code>study_time_daily</code></h4>
+                  <div id="study-time-daily-table" class="table-scroll"></div>
+                </section>
                 <section class="raw-table-section" aria-labelledby="stability-history-table-title">
                   <h4 id="stability-history-table-title"><code>stability_history</code></h4>
                   <div id="stability-history-table" class="table-scroll"></div>

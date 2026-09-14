@@ -545,6 +545,7 @@ async function assertReaderBridge(browser, script) {
     window.__releaseBridgeGetValue = () => releaseGetValue?.();
     window.GM_info = { scriptHandler: "Tampermonkey" };
     window.GM = {
+      async listValues() { return []; },
       getValue(key, defaultValue) {
         window.__bridgeGetValueCalls.push({ key, defaultValue });
         return new Promise((resolve) => {
@@ -576,6 +577,7 @@ async function assertReaderBridge(browser, script) {
                 newQuestionGoal: 50,
                 newQuestionsRemaining: 50,
                 todayStabilityDaysDelta: 0,
+                todayStudyTimeMs: 0,
                 attemptedQuestionCount: 0,
                 todayAttemptedQuestionCount: 0,
                 todayCorrectRatePercent: null,
@@ -625,14 +627,14 @@ async function assertReaderBridge(browser, script) {
   );
   const handoff = await readyPage.evaluate(() => window.__bridgeSetValueCalls);
   assert.equal(handoff.length, 1);
-  assert.equal(handoff[0].key, "kakomonn-reader.v11.launch-handoff");
+  assert.equal(handoff[0].key, "kakomonn-reader.v12.launch-handoff");
   assert.equal(handoff[0].value.questionURL, "https://chushoks.kakomonn.com/questions/45124");
   assert.equal(handoff[0].value.state.site, "chushoks.kakomonn.com");
   assert.deepEqual(await readyPage.evaluate(() => window.__bridgeRequests), [
     {
       authorization: "Bearer private-token",
       method: "GET",
-      url: `${SYNC_API_ORIGIN}/v11/next?site=chushoks.kakomonn.com`,
+      url: `${SYNC_API_ORIGIN}/v12/next?site=chushoks.kakomonn.com`,
     },
   ]);
   assert.equal(await readyPage.locator("#kakomonn-reader-shell").count(), 0);
@@ -645,6 +647,7 @@ async function assertReaderBridge(browser, script) {
   await errorPage.evaluate(() => {
     window.GM_info = { scriptHandler: "Tampermonkey" };
     window.GM = {
+      async listValues() { return []; },
       async getValue() {
         throw new Error("mock storage read failed");
       },
@@ -685,6 +688,7 @@ async function assertDashboardBridge(browser, script) {
     window.__dashboardRequests = [];
     window.GM_info = { scriptHandler: "Tampermonkey" };
     window.GM = {
+      async listValues() { return []; },
       async getValue(key, defaultValue) {
         window.__dashboardGetValueCalls.push({ key, defaultValue });
         if (window.__dashboardStorageError) {
@@ -700,12 +704,12 @@ async function assertDashboardBridge(browser, script) {
         });
         const url = new URL(details.url);
         const responseBody =
-          url.pathname === "/v11/dashboard"
+          url.pathname === "/v12/dashboard"
             ? { history: null, selectedSite: null, sites: [], state: null }
             : {
                 date: url.searchParams.get("date"),
                 site: url.searchParams.get("site"),
-                tables: { attempts: [], stability_history: [] },
+                tables: { attempts: [], stability_history: [], study_time_daily: [] },
                 timeZone: "Asia/Tokyo",
               };
         const status = window.__dashboardResponseStatus;
@@ -824,17 +828,17 @@ async function assertDashboardBridge(browser, script) {
     {
       authorization: "Bearer private-token",
       method: "GET",
-      url: `${SYNC_API_ORIGIN}/v11/dashboard`,
+      url: `${SYNC_API_ORIGIN}/v12/dashboard`,
     },
     {
       authorization: "Bearer private-token",
       method: "GET",
-      url: `${SYNC_API_ORIGIN}/v11/daily-details?date=2026-08-10&site=chushoks.kakomonn.com`,
+      url: `${SYNC_API_ORIGIN}/v12/daily-details?date=2026-08-10&site=chushoks.kakomonn.com`,
     },
     {
       authorization: "Bearer private-token",
       method: "GET",
-      url: `${SYNC_API_ORIGIN}/v11/dashboard`,
+      url: `${SYNC_API_ORIGIN}/v12/dashboard`,
     },
   ]);
   assert.equal(await page.locator("#kakomonn-reader-shell").count(), 0);
@@ -873,7 +877,7 @@ async function azureSpeechCalls(page) {
 async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/speech-token")
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/speech-token")
         .length,
   );
 }
@@ -1156,16 +1160,16 @@ async function runCatalogSinglePassValidationCase(context, script, mismatch) {
       );
       assert.equal(
         await page.evaluate(() =>
-          window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/questions"),
+          window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
         ),
         false,
       );
     } else {
       await page.waitForFunction(() =>
-        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/questions"),
+        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
       );
       const update = await page.evaluate(() =>
-        window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v11/questions"),
+        window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v12/questions"),
       );
       assert.deepEqual(update.body.questionIds, ["1", "2", "3", "4", "5"]);
     }
@@ -1218,14 +1222,14 @@ async function runCatalogDoesNotBlockSpeechCase(context, script) {
     assert.equal(typeof catalogFixture.releaseLastPage, "function");
     assert.equal(
       await page.evaluate(() =>
-        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/questions"),
+        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
       ),
       false,
     );
     catalogFixture.releaseLastPage();
     catalogFixture.releaseLastPage = null;
     await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/questions"),
+      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
     );
     assert.deepEqual([...errors], []);
   } finally {
@@ -1540,7 +1544,7 @@ async function runIncorrectEnterReservationCase(context, script) {
     assert.deepEqual(
       await page.evaluate(() => ({
         attempts: window.__syncMock.calls.filter(
-          (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
+          (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
         ).length,
         copies: window.__copiedTexts.length,
       })),
@@ -1557,10 +1561,10 @@ async function runIncorrectEnterCopyRetryCase(context, script) {
   const errors = await preparePage(page, "audio");
   const childFrame = await loadMockQuestion(page, script);
   try {
-    await page.evaluate(() => {
+    await page.evaluate((pendingAttemptKey) => {
       window.__clipboardWriteFails = true;
-      window.__syncMock.holdNextSetValue = true;
-    });
+      window.__syncMock.holdSetValueKey = pendingAttemptKey;
+    }, PENDING_ATTEMPT_KEY);
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
     await page.waitForFunction(() => window.__syncMock.releaseHeldSetValue !== null);
@@ -1593,7 +1597,7 @@ async function runIncorrectEnterCopyRetryCase(context, script) {
     assert.deepEqual(
       await page.evaluate(() => ({
         attempts: window.__syncMock.calls.filter(
-          (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
+          (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
         ).length,
         copies: window.__copiedTexts.length,
       })),
@@ -1613,9 +1617,9 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
     if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
-    await page.evaluate(() => {
-      window.__syncMock.holdNextSetValue = true;
-    });
+    await page.evaluate((pendingAttemptKey) => {
+      window.__syncMock.holdSetValueKey = pendingAttemptKey;
+    }, PENDING_ATTEMPT_KEY);
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
     await page.waitForFunction(() => window.__syncMock.releaseHeldSetValue !== null);
@@ -1648,7 +1652,7 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
     assert.deepEqual(
       await page.evaluate(() => ({
         attemptCalls: window.__syncMock.calls.filter(
-          (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
+          (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
         ).length,
         attempts: window.__syncMock.attemptCount,
         copies: window.__copiedTexts.length,
@@ -1802,7 +1806,7 @@ async function assertIncorrectSkip(context, script) {
   try {
     await page.waitForFunction(
       () =>
-        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/state") &&
+        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/state") &&
         document.querySelector("#kakomonn-reader-sync-settings")?.open === false,
     );
     if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
@@ -1817,9 +1821,9 @@ async function assertIncorrectSkip(context, script) {
     await page.waitForFunction(() => window.__syncMock.attemptCount === 1);
     const calls = await page.evaluate(() => ({
       attempts: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v11/attempts",
+        (call) => new URL(call.url).pathname === "/v12/attempts",
       ),
-      next: window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/next"),
+      next: window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/next"),
     }));
     assert.equal(calls.attempts.length, 1);
     assert.equal(calls.attempts[0].body.questionId, "45124");
@@ -1908,6 +1912,7 @@ async function main() {
     assert.equal(await page.locator("#kakomonn-reader-copy").count(), 0);
     assert.equal(await page.locator("#kakomonn-reader-actions").count(), 0);
     assert.equal(await page.locator("#kakomonn-reader-skip").count(), 0);
+    const studyBadgeSizes = [];
     for (const viewport of [
       { width: 320, height: 568 },
       { width: 390, height: 844 },
@@ -1919,9 +1924,11 @@ async function main() {
         const shellElement = document.querySelector("#kakomonn-reader-shell");
         const frameElement = document.querySelector("#kakomonn-reader-frame");
         const progressElement = document.querySelector("#kakomonn-reader-time-limit");
+        const studyBadgeElement = document.querySelector("#kakomonn-reader-study-time");
         const shell = shellElement.getBoundingClientRect();
         const frame = frameElement.getBoundingClientRect();
         const progress = progressElement.getBoundingClientRect();
+        const studyBadge = studyBadgeElement.getBoundingClientRect();
         const approximatelyEqual = (left, right) => Math.abs(left - right) <= 1;
         return {
           frameFillsShell:
@@ -1940,20 +1947,30 @@ async function main() {
             approximatelyEqual(progress.left, shell.left) &&
             approximatelyEqual(progress.right, shell.right) &&
             approximatelyEqual(progress.height, 4),
+          studyBadgeCircle:
+            approximatelyEqual(studyBadge.width, studyBadge.height) &&
+            studyBadge.width > 0 &&
+            studyBadge.right <= shell.right &&
+            studyBadge.top >= shell.top,
+          studyBadgeSize: studyBadge.width,
         };
       });
+      studyBadgeSizes.push(readerLayout.studyBadgeSize);
       assert.deepEqual(
-        readerLayout,
+        { ...readerLayout, studyBadgeSize: undefined },
         {
           frameFillsShell: true,
           noHorizontalOverflow: true,
           questionStartsAtTop: true,
           shellFillsViewport: true,
           timeBarOverlay: true,
+          studyBadgeCircle: true,
+          studyBadgeSize: undefined,
         },
         `${JSON.stringify(viewport)} ${JSON.stringify(readerLayout)}`,
       );
     }
+    assert.ok(studyBadgeSizes[0] < studyBadgeSizes.at(-1), JSON.stringify(studyBadgeSizes));
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.evaluate(() => {
       const frame = document.querySelector("#kakomonn-reader-frame");
@@ -2287,7 +2304,7 @@ async function main() {
       await page.evaluate(
         () =>
           window.__syncMock.calls.filter(
-            (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
+            (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
           ).length,
       ),
       0,
@@ -2360,7 +2377,7 @@ async function main() {
 
     const stateCallsAfterAnswer = await page.evaluate(
       () =>
-        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
           .length,
     );
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -2368,7 +2385,7 @@ async function main() {
     assert.equal(
       await page.evaluate(
         () =>
-          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
             .length,
       ),
       stateCallsAfterAnswer,
@@ -2429,7 +2446,7 @@ async function main() {
 
     const stateCallsBeforeResume = await page.evaluate(
       () =>
-        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
           .length,
     );
     await page.evaluate(() => {
@@ -2445,7 +2462,7 @@ async function main() {
     assert.equal(
       await page.evaluate(
         () =>
-          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
             .length,
       ),
       stateCallsBeforeResume,
@@ -2673,9 +2690,9 @@ async function main() {
     await failedSetupPage.waitForSelector("#kakomonn-reader-sync-settings", {
       state: "visible",
     });
-    await failedSetupPage.evaluate(() => {
-      window.__syncMock.failNextSetValue = true;
-    });
+    await failedSetupPage.evaluate((syncTokenKey) => {
+      window.__syncMock.failSetValueKey = syncTokenKey;
+    }, SYNC_TOKEN_KEY);
     await failedSetupPage.locator("#kakomonn-reader-sync-token").fill("test-sync-token");
     await failedSetupPage.locator("#kakomonn-reader-sync-settings-save").click();
     await failedSetupPage.waitForFunction(() =>
@@ -2788,7 +2805,7 @@ async function main() {
     assert.equal(await iosPage.evaluate(() => history.length), iosHistoryLength);
     const iosStateCallsBeforeResume = await iosPage.evaluate(
       () =>
-        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
           .length,
     );
     await iosPage.evaluate(() => {
@@ -2804,7 +2821,7 @@ async function main() {
     assert.equal(
       await iosPage.evaluate(
         () =>
-          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
             .length,
       ),
       iosStateCallsBeforeResume,
@@ -2814,7 +2831,7 @@ async function main() {
       await iosPage.evaluate(
         () =>
           window.__syncMock.calls.filter(
-            (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
+            (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
           ).length,
       ),
       1,

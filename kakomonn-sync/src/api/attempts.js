@@ -1,4 +1,5 @@
 import { OPERATION_ID_PATTERN, isAnswerResult, isQuestionId } from "../contracts.js";
+import { isStudyTimeSnapshots } from "../../../contracts/kakomonn.mjs";
 import { getLearningStateStub } from "../learning-store.js";
 import { isSite } from "../auth.js";
 import { errorResponse, jsonResponse } from "../http.js";
@@ -15,16 +16,18 @@ export async function handleAttempts(request, env) {
   }
   const keys = Object.keys(body).sort();
   if (
-    keys.length !== 4 ||
+    keys.length !== 5 ||
     keys[0] !== "answerResult" ||
     keys[1] !== "operationId" ||
     keys[2] !== "questionId" ||
     keys[3] !== "site" ||
+    keys[4] !== "studyTimeSnapshots" ||
     !isSite(body.site) ||
     !isQuestionId(body.questionId) ||
     typeof body.operationId !== "string" ||
     !OPERATION_ID_PATTERN.test(body.operationId) ||
-    !isAnswerResult(body.answerResult)
+    !isAnswerResult(body.answerResult) ||
+    !isStudyTimeSnapshots(body.studyTimeSnapshots)
   ) {
     return errorResponse("invalid_request", 400);
   }
@@ -33,6 +36,8 @@ export async function handleAttempts(request, env) {
     body.questionId,
     body.operationId,
     body.answerResult,
+    Date.now(),
+    body.studyTimeSnapshots,
   );
   if (result?.error === "operation_conflict") {
     return errorResponse("operation_conflict", 409);

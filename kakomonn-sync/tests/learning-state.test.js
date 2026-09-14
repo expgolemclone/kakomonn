@@ -34,6 +34,8 @@ async function reset() {
     `);
     for (const table of [
       "daily_kpi_achievements",
+      "study_time_sessions",
+      "study_time_daily",
       "attempts",
       "stability_history",
       "cards",
@@ -49,6 +51,8 @@ async function reset() {
 
 function rebuildUsageTablesAsV8(storage) {
   storage.sql.exec(`
+    DROP TABLE study_time_sessions;
+    DROP TABLE study_time_daily;
     DROP INDEX IF EXISTS cards_by_site_due;
     DROP INDEX IF EXISTS cards_by_site_due_number;
     DROP INDEX IF EXISTS attempts_by_site_attempted_at_operation;
@@ -238,6 +242,8 @@ describe("LearningState schema", () => {
       "stability_history",
       "daily_kpi_achievements",
       "learning_metrics",
+      "study_time_daily",
+      "study_time_sessions",
     ];
     const storage = {
       transactionSync(callback) {
@@ -250,7 +256,7 @@ describe("LearningState schema", () => {
           if (statement.includes("WHERE type = 'table'")) {
             rows = currentTables.map((name) => ({ name }));
           } else if (statement.includes("SELECT version")) {
-            rows = [{ version: 11 }];
+            rows = [{ version: 12 }];
           } else if (statement.includes("WHERE type = 'index'")) {
             rows = [
               { name: "attempts_by_site_attempted_at_operation" },
@@ -307,6 +313,26 @@ describe("LearningState schema", () => {
         )
         .toArray()[0];
       state.storage.sql.exec(`
+        DROP TABLE study_time_sessions;
+        DROP TABLE study_time_daily;
+        ALTER TABLE learning_metrics RENAME TO learning_metrics_v12;
+        CREATE TABLE learning_metrics (
+          site TEXT PRIMARY KEY,
+          stability_days REAL NOT NULL CHECK (stability_days >= 0),
+          attempted_question_count INTEGER NOT NULL CHECK (attempted_question_count >= 0),
+          daily_metrics_date TEXT NOT NULL,
+          today_attempted_question_count INTEGER NOT NULL CHECK (today_attempted_question_count >= 0),
+          today_attempt_count INTEGER NOT NULL CHECK (today_attempt_count >= 0),
+          today_correct_attempt_count INTEGER NOT NULL CHECK (today_correct_attempt_count >= 0),
+          today_new_question_count INTEGER NOT NULL CHECK (today_new_question_count >= 0),
+          CHECK (today_correct_attempt_count <= today_attempt_count)
+        ) WITHOUT ROWID;
+        INSERT INTO learning_metrics
+        SELECT site, stability_days, attempted_question_count, daily_metrics_date,
+               today_attempted_question_count, today_attempt_count,
+               today_correct_attempt_count, today_new_question_count
+        FROM learning_metrics_v12;
+        DROP TABLE learning_metrics_v12;
         DROP INDEX cards_by_site_due_number;
         CREATE INDEX cards_by_site_due ON cards (site, due_ms, question_id);
         UPDATE schema_metadata SET version = 10 WHERE singleton = 1;
@@ -315,7 +341,7 @@ describe("LearningState schema", () => {
       initializeLearningSchema(state.storage, NOW);
 
       expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
-        version: 11,
+        version: 12,
       });
       expect(
         state.storage.sql
@@ -388,7 +414,7 @@ describe("LearningState schema", () => {
       initializeLearningSchema(state.storage, NOW);
 
       expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
-        version: 11,
+        version: 12,
       });
       expect(
         state.storage.sql
@@ -495,7 +521,7 @@ describe("LearningState schema", () => {
       `);
       initializeLearningSchema(state.storage, NOW);
       expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
-        version: 11,
+        version: 12,
       });
       expect(
         state.storage.sql
@@ -556,7 +582,7 @@ describe("LearningState schema", () => {
       initializeLearningSchema(state.storage, NOW);
 
       expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
-        version: 11,
+        version: 12,
       });
       expect(
         state.storage.sql
@@ -578,10 +604,12 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates legacy data to schema v11 without retaining threshold-based fields", async () => {
+  it("migrates legacy data to schema v12 without retaining threshold-based fields", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
         DROP TABLE daily_kpi_achievements;
+        DROP TABLE study_time_sessions;
+        DROP TABLE study_time_daily;
         DROP TABLE attempts;
         DROP TABLE stability_history;
         DROP TABLE cards;
@@ -641,7 +669,7 @@ describe("LearningState schema", () => {
       initializeLearningSchema(state.storage, NOW);
 
       expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
-        version: 11,
+        version: 12,
       });
       expect(state.storage.sql.exec("SELECT * FROM daily_kpi_achievements").toArray()).toEqual([]);
       expect(state.storage.sql.exec("SELECT * FROM stability_history").toArray()[0]).toEqual({
@@ -663,6 +691,7 @@ describe("LearningState schema", () => {
         today_attempt_count: 1,
         today_correct_attempt_count: 1,
         today_new_question_count: 1,
+        today_study_time_ms: 0,
       });
       expect(state.storage.sql.exec("SELECT * FROM attempts").toArray()[0]).toEqual({
         site: SITE,
@@ -683,10 +712,12 @@ describe("LearningState schema", () => {
     });
   });
 
-  it("migrates schema v2 data to v11 without losing rows", async () => {
+  it("migrates schema v2 data to v12 without losing rows", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec(`
         DROP TABLE daily_kpi_achievements;
+        DROP TABLE study_time_sessions;
+        DROP TABLE study_time_daily;
         DROP TABLE attempts;
         DROP TABLE stability_history;
         DROP TABLE cards;
@@ -749,7 +780,7 @@ describe("LearningState schema", () => {
       initializeLearningSchema(state.storage, NOW);
 
       expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
-        version: 11,
+        version: 12,
       });
       expect(state.storage.sql.exec("SELECT * FROM daily_kpi_achievements").toArray()).toEqual([]);
       expect(state.storage.sql.exec("SELECT * FROM attempts").toArray()[0]).toEqual({
@@ -775,6 +806,7 @@ describe("LearningState schema", () => {
         today_attempt_count: 1,
         today_correct_attempt_count: 0,
         today_new_question_count: 1,
+        today_study_time_ms: 0,
       });
       expect(state.storage.sql.exec("SELECT * FROM stability_history").toArray()[0]).toEqual({
         site: SITE,
@@ -829,7 +861,7 @@ describe("LearningState schema", () => {
       initializeLearningSchema(state.storage, NOW);
 
       expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
-        version: 11,
+        version: 12,
       });
       const cursor = state.storage.sql.exec(
         `SELECT stability_days, attempted_question_count,
@@ -879,6 +911,7 @@ describe("learning metrics", () => {
       learningMetrics: {
         stabilityDays: 3,
         todayStabilityDaysDelta: 3,
+        todayStudyTimeMs: 0,
         attemptedQuestionCount: 2,
       },
       catalog: { questionCount: 3, generation: 2 },
@@ -1019,7 +1052,7 @@ describe("learning metrics", () => {
     });
   });
 
-  it("returns the v11 attempt contract for correct and incorrect answers", async () => {
+  it("returns the v12 attempt contract for correct and incorrect answers", async () => {
     const correct = await stub().recordAttempt(SITE, "1", operationId(1), "correct", NOW);
     expect(correct.attempt).toMatchObject({
       questionId: "1",
@@ -1102,6 +1135,7 @@ describe("attempt idempotency and attempted question totals", () => {
     expect(repeated.learningMetrics).toMatchObject({
       stabilityDays: 35,
       todayStabilityDaysDelta: 0,
+      todayStudyTimeMs: 0,
       attemptedQuestionCount: 1,
       todayAttemptedQuestionCount: 1,
       todayCorrectRatePercent: 50,
@@ -1140,6 +1174,7 @@ describe("attempt idempotency and attempted question totals", () => {
     expect(correct.learningMetrics).toMatchObject({
       stabilityDays: 35,
       todayStabilityDaysDelta: 0,
+      todayStudyTimeMs: 0,
       attemptedQuestionCount: 1,
       todayAttemptedQuestionCount: 1,
       todayCorrectRatePercent: 100,
@@ -1161,6 +1196,7 @@ describe("attempt idempotency and attempted question totals", () => {
     expect(incorrect.learningMetrics).toMatchObject({
       stabilityDays: 35,
       todayStabilityDaysDelta: 0,
+      todayStudyTimeMs: 0,
       attemptedQuestionCount: 1,
       todayAttemptedQuestionCount: 1,
       todayCorrectRatePercent: 50,
@@ -1349,6 +1385,121 @@ describe("attempt idempotency and attempted question totals", () => {
     await expect(
       stub().recordAttempt(SITE, "1", operationId(9), "incorrect", NOW),
     ).resolves.toEqual({ error: "operation_conflict" });
+  });
+});
+
+describe("study time", () => {
+  it("keeps study time recorded before the first catalog registration", async () => {
+    const sessionId = operationId(499);
+    const initial = await stub().recordStudyTime(
+      OTHER_SITE,
+      [{ sessionId, date: "2026-08-10", activeMs: 90_000 }],
+      NOW,
+    );
+    expect(initial.state).toMatchObject({
+      site: OTHER_SITE,
+      catalog: null,
+      learningMetrics: { todayStudyTimeMs: 90_000 },
+    });
+
+    await stub().replaceCatalog(OTHER_SITE, ["1"], 0, NOW + 1);
+    await expect(stub().getState(OTHER_SITE, NOW + 2)).resolves.toMatchObject({
+      catalog: { questionCount: 1 },
+      learningMetrics: { todayStudyTimeMs: 90_000 },
+    });
+  });
+
+  it("applies cumulative session snapshots exactly once and isolates sites", async () => {
+    const sessionId = operationId(500);
+    const first = await stub().recordStudyTime(
+      SITE,
+      [{ sessionId, date: "2026-08-10", activeMs: 2 * 60_000 }],
+      NOW,
+    );
+    expect(first.state.learningMetrics.todayStudyTimeMs).toBe(2 * 60_000);
+
+    const advanced = await stub().recordStudyTime(
+      SITE,
+      [{ sessionId, date: "2026-08-10", activeMs: 5 * 60_000 }],
+      NOW + 1,
+    );
+    expect(advanced.state.learningMetrics.todayStudyTimeMs).toBe(5 * 60_000);
+
+    const stale = await stub().recordStudyTime(
+      SITE,
+      [{ sessionId, date: "2026-08-10", activeMs: 3 * 60_000 }],
+      NOW + 2,
+    );
+    expect(stale.state.learningMetrics.todayStudyTimeMs).toBe(5 * 60_000);
+
+    await stub().replaceCatalog(OTHER_SITE, ["1"], 0, NOW);
+    const other = await stub().recordStudyTime(
+      OTHER_SITE,
+      [{ sessionId, date: "2026-08-10", activeMs: 7 * 60_000 }],
+      NOW + 3,
+    );
+    expect(other.state.learningMetrics.todayStudyTimeMs).toBe(7 * 60_000);
+    expect((await stub().getState(SITE, NOW + 3)).learningMetrics.todayStudyTimeMs).toBe(5 * 60_000);
+
+    expect((await stub().getHistory(SITE, 1, NOW + 3)).days[0].dailyStudyTimeMs).toBe(5 * 60_000);
+  });
+
+  it("keeps delayed past-day study time out of today's metric and supports study-only days", async () => {
+    await stub().recordStudyTime(
+      SITE,
+      [{ sessionId: operationId(501), date: "2026-08-10", activeMs: 2 * 60_000 }],
+      NOW,
+    );
+    const result = await stub().recordStudyTime(
+      SITE,
+      [{ sessionId: operationId(502), date: "2026-08-09", activeMs: 10 * 60_000 }],
+      NOW + 1,
+    );
+    expect(result.state.learningMetrics.todayStudyTimeMs).toBe(2 * 60_000);
+
+    const history = await stub().getHistory(SITE, 2, NOW + 1);
+    expect(history.days.map((day) => [day.date, day.dailyStudyTimeMs])).toEqual([
+      ["2026-08-09", 10 * 60_000],
+      ["2026-08-10", 2 * 60_000],
+    ]);
+
+    const details = await stub().getDailyDetails(SITE, "2026-08-09");
+    expect(details.tables.study_time_daily).toEqual([
+      { site: SITE, date: "2026-08-09", study_time_ms: 10 * 60_000 },
+    ]);
+    expect(details.tables.stability_history).toEqual([]);
+    expect(details.tables.attempts).toEqual([]);
+  });
+
+  it("advances study time on an attempt retry without duplicating the attempt", async () => {
+    const sessionId = operationId(503);
+    const first = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(504),
+      "correct",
+      NOW,
+      [{ sessionId, date: "2026-08-10", activeMs: 4 * 60_000 }],
+    );
+    const retry = await stub().recordAttempt(
+      SITE,
+      "1",
+      operationId(504),
+      "correct",
+      NOW + 1,
+      [{ sessionId, date: "2026-08-10", activeMs: 6 * 60_000 }],
+    );
+    expect(first.learningMetrics.todayStudyTimeMs).toBe(4 * 60_000);
+    expect(retry.learningMetrics.todayStudyTimeMs).toBe(6 * 60_000);
+
+    await runInRawDurableObject(stub(), (_instance, state) => {
+      expect(state.storage.sql.exec("SELECT COUNT(*) AS count FROM attempts").toArray()[0].count).toBe(1);
+      expect(
+        state.storage.sql
+          .exec("SELECT study_time_ms FROM study_time_daily WHERE site = ? AND date = ?", SITE, "2026-08-10")
+          .toArray()[0],
+      ).toEqual({ study_time_ms: 6 * 60_000 });
+    });
   });
 });
 
@@ -1613,6 +1764,7 @@ describe("daily raw details", () => {
       date: "2026-08-10",
       timeZone: "Asia/Tokyo",
       tables: {
+        study_time_daily: [],
         stability_history: [
           {
             site: SITE,
@@ -1654,7 +1806,7 @@ describe("daily raw details", () => {
       site: SITE,
       date: "2026-08-09",
       timeZone: "Asia/Tokyo",
-      tables: { stability_history: [], attempts: [] },
+      tables: { study_time_daily: [], stability_history: [], attempts: [] },
     });
   });
 
@@ -1677,7 +1829,7 @@ describe("daily raw details", () => {
   });
 });
 
-describe("v11 HTTP contract", () => {
+describe("v12 HTTP contract", () => {
   it("does not expose older API versions", async () => {
     for (const version of ["v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"]) {
       const response = await SELF.fetch(`https://example.test/${version}/state?site=${SITE}`, {
@@ -1689,8 +1841,8 @@ describe("v11 HTTP contract", () => {
 
   it("requires the configured bearer token", async () => {
     for (const url of [
-      "https://example.test/v11/sites",
-      `https://example.test/v11/daily-details?site=${SITE}&date=2026-08-10`,
+      "https://example.test/v12/sites",
+      `https://example.test/v12/daily-details?site=${SITE}&date=2026-08-10`,
     ]) {
       const missing = await SELF.fetch(url);
       const incorrect = await SELF.fetch(url, {
@@ -1702,12 +1854,12 @@ describe("v11 HTTP contract", () => {
   });
 
   it("lists sites and returns state and history", async () => {
-    const sites = await SELF.fetch("https://example.test/v11/sites", {
+    const sites = await SELF.fetch("https://example.test/v12/sites", {
       headers: AUTHORIZATION,
     });
     await expect(sites.json()).resolves.toEqual({ sites: [SITE] });
 
-    const state = await SELF.fetch(`https://example.test/v11/state?site=${SITE}`, {
+    const state = await SELF.fetch(`https://example.test/v12/state?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(state.status).toBe(200);
@@ -1724,6 +1876,7 @@ describe("v11 HTTP contract", () => {
         newQuestionGoal: 10,
         newQuestionsRemaining: 10,
         todayStabilityDaysDelta: 0,
+        todayStudyTimeMs: 0,
         attemptedQuestionCount: 0,
         todayAttemptedQuestionCount: 0,
         todayCorrectRatePercent: null,
@@ -1732,7 +1885,7 @@ describe("v11 HTTP contract", () => {
     });
     expect(stateBody.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
-    const history = await SELF.fetch(`https://example.test/v11/history?site=${SITE}&days=7`, {
+    const history = await SELF.fetch(`https://example.test/v12/history?site=${SITE}&days=7`, {
       headers: AUTHORIZATION,
     });
     expect(history.status).toBe(200);
@@ -1744,11 +1897,12 @@ describe("v11 HTTP contract", () => {
       stabilityDaysDelta: 0,
       dailyAttemptedQuestionCount: 0,
       dailyNewQuestionCount: 0,
+      dailyStudyTimeMs: 0,
       dailyCorrectRatePercent: null,
     });
 
     const details = await SELF.fetch(
-      `https://example.test/v11/daily-details?site=${SITE}&date=2026-08-10`,
+      `https://example.test/v12/daily-details?site=${SITE}&date=2026-08-10`,
       { headers: AUTHORIZATION },
     );
     expect(details.status).toBe(200);
@@ -1756,12 +1910,12 @@ describe("v11 HTTP contract", () => {
       site: SITE,
       date: "2026-08-10",
       timeZone: "Asia/Tokyo",
-      tables: { stability_history: [expect.any(Object)], attempts: [] },
+      tables: { study_time_daily: [], stability_history: [expect.any(Object)], attempts: [] },
     });
   });
 
   it("returns all dashboard reads through one endpoint", async () => {
-    const response = await SELF.fetch(`https://example.test/v11/dashboard?site=${SITE}`, {
+    const response = await SELF.fetch(`https://example.test/v12/dashboard?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(response.status).toBe(200);
@@ -1774,7 +1928,7 @@ describe("v11 HTTP contract", () => {
     });
     expect(dashboardBody.history.days).toHaveLength(31);
 
-    const selectedDefault = await SELF.fetch("https://example.test/v11/dashboard", {
+    const selectedDefault = await SELF.fetch("https://example.test/v12/dashboard", {
       headers: AUTHORIZATION,
     });
     await expect(selectedDefault.json()).resolves.toMatchObject({
@@ -1783,7 +1937,7 @@ describe("v11 HTTP contract", () => {
     });
 
     for (const search of ["site=invalid.example", `site=${SITE}&site=${SITE}`, "extra=true"]) {
-      const invalid = await SELF.fetch(`https://example.test/v11/dashboard?${search}`, {
+      const invalid = await SELF.fetch(`https://example.test/v12/dashboard?${search}`, {
         headers: AUTHORIZATION,
       });
       expect(invalid.status).toBe(400);
@@ -1792,7 +1946,7 @@ describe("v11 HTTP contract", () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       state.storage.sql.exec("DELETE FROM catalog_metadata");
     });
-    const empty = await SELF.fetch("https://example.test/v11/dashboard", {
+    const empty = await SELF.fetch("https://example.test/v12/dashboard", {
       headers: AUTHORIZATION,
     });
     await expect(empty.json()).resolves.toEqual({
@@ -1811,7 +1965,7 @@ describe("v11 HTTP contract", () => {
       `site=invalid.example&date=2026-08-10`,
       `site=${SITE}&date=2026-08-10&extra=true`,
     ]) {
-      const response = await SELF.fetch(`https://example.test/v11/daily-details?${search}`, {
+      const response = await SELF.fetch(`https://example.test/v12/daily-details?${search}`, {
         headers: AUTHORIZATION,
       });
       expect(response.status).toBe(400);
@@ -1819,7 +1973,7 @@ describe("v11 HTTP contract", () => {
   });
 
   it("replaces the catalog and serves the canonical next URL", async () => {
-    const replace = await SELF.fetch("https://example.test/v11/questions", {
+    const replace = await SELF.fetch("https://example.test/v12/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1830,7 +1984,7 @@ describe("v11 HTTP contract", () => {
     });
     expect(replace.status).toBe(200);
 
-    const next = await SELF.fetch(`https://example.test/v11/next?site=${SITE}`, {
+    const next = await SELF.fetch(`https://example.test/v12/next?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     const nextBody = await next.json();
@@ -1851,7 +2005,7 @@ describe("v11 HTTP contract", () => {
     });
     expect(nextBody.state.learningMetrics.newQuestionGoal).toBe(10);
 
-    const conflict = await SELF.fetch("https://example.test/v11/questions", {
+    const conflict = await SELF.fetch("https://example.test/v12/questions", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1884,7 +2038,7 @@ describe("v11 HTTP contract", () => {
       { site: SITE, questionIds: ["1"], expectedGeneration: -1 },
       { site: SITE, questionIds: ["1"] },
     ]) {
-      const invalid = await SELF.fetch("https://example.test/v11/questions", {
+      const invalid = await SELF.fetch("https://example.test/v12/questions", {
         method: "POST",
         headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1894,7 +2048,7 @@ describe("v11 HTTP contract", () => {
   });
 
   it("rejects unknown questions and non-canonical attempt fields", async () => {
-    const unknown = await SELF.fetch("https://example.test/v11/attempts", {
+    const unknown = await SELF.fetch("https://example.test/v12/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1902,12 +2056,13 @@ describe("v11 HTTP contract", () => {
         questionId: "999",
         operationId: operationId(14),
         answerResult: "correct",
+        studyTimeSnapshots: [],
       }),
     });
     expect(unknown.status).toBe(409);
     await expect(unknown.json()).resolves.toEqual({ error: "unknown_question" });
 
-    const extra = await SELF.fetch("https://example.test/v11/attempts", {
+    const extra = await SELF.fetch("https://example.test/v12/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1915,12 +2070,13 @@ describe("v11 HTTP contract", () => {
         questionId: "1",
         operationId: operationId(15),
         answerResult: "correct",
+        studyTimeSnapshots: [],
         attemptedAtMs: NOW,
       }),
     });
     expect(extra.status).toBe(400);
 
-    const legacyKey = await SELF.fetch("https://example.test/v11/attempts", {
+    const legacyKey = await SELF.fetch("https://example.test/v12/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1933,8 +2089,51 @@ describe("v11 HTTP contract", () => {
     expect(legacyKey.status).toBe(400);
   });
 
-  it("returns the exact v11 attempt contract", async () => {
-    const response = await SELF.fetch("https://example.test/v11/attempts", {
+  it("records study time through the exact v12 endpoint", async () => {
+    const body = {
+      site: SITE,
+      studyTimeSnapshots: [
+        { sessionId: operationId(600), date: getTokyoDate(new Date()), activeMs: 90_000 },
+      ],
+    };
+    const response = await SELF.fetch("https://example.test/v12/study-time", {
+      method: "POST",
+      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      state: {
+        site: SITE,
+        learningMetrics: { todayStudyTimeMs: 90_000 },
+      },
+    });
+
+    const replay = await SELF.fetch("https://example.test/v12/study-time", {
+      method: "POST",
+      headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    await expect(replay.json()).resolves.toMatchObject({
+      state: { learningMetrics: { todayStudyTimeMs: 90_000 } },
+    });
+
+    for (const invalidBody of [
+      { site: SITE, studyTimeSnapshots: [] },
+      { site: SITE, studyTimeSnapshots: [{ ...body.studyTimeSnapshots[0], extra: true }] },
+      { site: SITE, studyTimeSnapshots: [{ ...body.studyTimeSnapshots[0], activeMs: -1 }] },
+    ]) {
+      const invalid = await SELF.fetch("https://example.test/v12/study-time", {
+        method: "POST",
+        headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
+        body: JSON.stringify(invalidBody),
+      });
+      expect(invalid.status).toBe(400);
+    }
+  });
+
+  it("returns the exact v12 attempt contract", async () => {
+    const response = await SELF.fetch("https://example.test/v12/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1942,6 +2141,7 @@ describe("v11 HTTP contract", () => {
         questionId: "1",
         operationId: operationId(21),
         answerResult: "correct",
+        studyTimeSnapshots: [],
       }),
     });
     expect(response.status).toBe(200);
@@ -1964,6 +2164,7 @@ describe("v11 HTTP contract", () => {
         newQuestionGoal: 10,
         newQuestionsRemaining: 9,
         todayStabilityDaysDelta: expect.any(Number),
+        todayStudyTimeMs: 0,
         attemptedQuestionCount: 1,
         todayAttemptedQuestionCount: 1,
         todayCorrectRatePercent: 100,
@@ -1986,8 +2187,9 @@ describe("v11 HTTP contract", () => {
       questionId: "1",
       operationId: operationId(22),
       answerResult: "correct",
+      studyTimeSnapshots: [],
     };
-    const response = await SELF.fetch("https://example.test/v11/attempts", {
+    const response = await SELF.fetch("https://example.test/v12/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -2001,7 +2203,7 @@ describe("v11 HTTP contract", () => {
       dailyKpiCompleted: true,
     });
 
-    const retry = await SELF.fetch("https://example.test/v11/attempts", {
+    const retry = await SELF.fetch("https://example.test/v12/attempts", {
       method: "POST",
       headers: { ...AUTHORIZATION, "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -2017,7 +2219,7 @@ describe("v11 HTTP contract", () => {
       state.storage.sql.exec("DELETE FROM questions WHERE site = ?", SITE);
       state.storage.sql.exec("DELETE FROM catalog_metadata WHERE site = ?", SITE);
     });
-    const response = await SELF.fetch(`https://example.test/v11/next?site=${SITE}`, {
+    const response = await SELF.fetch(`https://example.test/v12/next?site=${SITE}`, {
       headers: AUTHORIZATION,
     });
     expect(response.status).toBe(409);

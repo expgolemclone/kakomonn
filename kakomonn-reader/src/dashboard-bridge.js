@@ -59,7 +59,7 @@ export function installDashboardBridge({ gm, requestSyncResponse, syncTokenKey }
         const suffix = parameters.size === 0 ? "" : `?${parameters}`;
         data = await requestSyncResponse(
           "GET",
-          `/v11/dashboard${suffix}`,
+          `/v12/dashboard${suffix}`,
           token,
           isDashboardResponse,
         );
@@ -70,7 +70,7 @@ export function installDashboardBridge({ gm, requestSyncResponse, syncTokenKey }
         });
         data = await requestSyncResponse(
           "GET",
-          `/v11/daily-details?${parameters}`,
+          `/v12/daily-details?${parameters}`,
           token,
           (value) => isDailyDetailsResponse(value, request.site, request.date),
         );

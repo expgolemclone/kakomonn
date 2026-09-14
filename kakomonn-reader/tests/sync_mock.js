@@ -63,6 +63,35 @@ function installSyncMockInWindow({
   const attemptedQuestionIds = new Set(
     initialProcessedOperations.map((item) => item.questionId ?? "45124"),
   );
+  const studySessions = new Map();
+
+  const applyStudyTimeSnapshots = (snapshots) => {
+    if (!Array.isArray(snapshots)) return false;
+    for (const snapshot of snapshots) {
+      if (
+        snapshot === null ||
+        typeof snapshot !== "object" ||
+        Object.keys(snapshot).sort().join(",") !== "activeMs,date,sessionId" ||
+        !/^[0-9a-f]{32}$/.test(snapshot.sessionId ?? "") ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(snapshot.date ?? "") ||
+        !Number.isSafeInteger(snapshot.activeMs) ||
+        snapshot.activeMs < 0
+      ) {
+        return false;
+      }
+    }
+    for (const snapshot of snapshots) {
+      const key = `${snapshot.sessionId}\0${snapshot.date}`;
+      const previous = studySessions.get(key) ?? 0;
+      if (snapshot.activeMs > previous) {
+        if (snapshot.date === mock.date) {
+          mock.todayStudyTimeMs += snapshot.activeMs - previous;
+        }
+        studySessions.set(key, snapshot.activeMs);
+      }
+    }
+    return true;
+  };
 
   const mock = {
     stabilityDays: initialStabilityDays,
@@ -73,6 +102,7 @@ function installSyncMockInWindow({
     todayAttemptedQuestionCount: initialTodayAttemptedQuestionCount,
     todayNewQuestionCount: initialTodayNewQuestionCount,
     todayStabilityDaysDelta: initialTodayStabilityDaysDelta,
+    todayStudyTimeMs: 0,
     dueCardsCompleted: initialDueCardsCompleted,
     dueCardsRemaining: initialDueCardsRemaining,
     date: initialDate,
@@ -80,9 +110,9 @@ function installSyncMockInWindow({
     calls: [],
     abortedRequestCount: 0,
     failNextRequest: false,
-    failNextSetValue: false,
+    failSetValueKey: null,
     failNextDeleteValue: false,
-    holdNextSetValue: false,
+    holdSetValueKey: null,
     releaseHeldSetValue: null,
     commitThenFailNextAttempt: false,
     holdNextRequest: false,
@@ -113,6 +143,7 @@ function installSyncMockInWindow({
       newQuestionGoal,
       newQuestionsRemaining,
       todayStabilityDaysDelta: mock.todayStabilityDaysDelta,
+      todayStudyTimeMs: mock.todayStudyTimeMs,
       attemptedQuestionCount: mock.attemptedQuestionCount,
       todayAttemptedQuestionCount: mock.todayAttemptedQuestionCount,
       todayCorrectRatePercent:
@@ -139,6 +170,9 @@ function installSyncMockInWindow({
   window.__syncMock = mock;
   window.GM_info = { scriptHandler: "Tampermonkey" };
   window.GM = {
+    async listValues() {
+      return Array.from(values.keys());
+    },
     async getValue(key, defaultValue) {
       return values.has(key) ? structuredClone(values.get(key)) : defaultValue;
     },
@@ -150,12 +184,12 @@ function installSyncMockInWindow({
       return true;
     },
     async setValue(key, value) {
-      if (mock.failNextSetValue) {
-        mock.failNextSetValue = false;
+      if (mock.failSetValueKey === key) {
+        mock.failSetValueKey = null;
         throw new Error("mock storage write failed");
       }
-      if (mock.holdNextSetValue) {
-        mock.holdNextSetValue = false;
+      if (mock.holdSetValueKey === key) {
+        mock.holdSetValueKey = null;
         await new Promise((resolve) => {
           mock.releaseHeldSetValue = () => {
             mock.releaseHeldSetValue = null;
@@ -255,19 +289,19 @@ function installSyncMockInWindow({
       const pathname = requestURL.pathname;
       if (
         call.method === "GET" &&
-        pathname === "/v11/state" &&
+        pathname === "/v12/state" &&
         requestURL.searchParams.get("site") === expectedSite
       ) {
         respondJSON(200, syncState());
         return;
       }
-      if (call.method === "POST" && pathname === "/v11/speech-token") {
+      if (call.method === "POST" && pathname === "/v12/speech-token") {
         respondJSON(200, { token: expectedSpeechToken, expiresInSeconds: 600 });
         return;
       }
       if (
         call.method === "GET" &&
-        pathname === "/v11/next" &&
+        pathname === "/v12/next" &&
         requestURL.searchParams.get("site") === expectedSite &&
         requestURL.searchParams.getAll("site").length === 1 &&
         requestURL.searchParams.getAll("excludeQuestionId").length <= 1
@@ -291,7 +325,7 @@ function installSyncMockInWindow({
         });
         return;
       }
-      if (call.method === "POST" && pathname === "/v11/questions") {
+      if (call.method === "POST" && pathname === "/v12/questions") {
         if (mock.conflictNextCatalogUpdate) {
           mock.conflictNextCatalogUpdate = false;
           mock.catalogUpdatedAtMs = Date.now();
@@ -376,7 +410,19 @@ function installSyncMockInWindow({
         });
         return;
       }
-      if (call.method === "POST" && pathname === "/v11/attempts") {
+      if (call.method === "POST" && pathname === "/v12/study-time") {
+        if (
+          call.body?.site !== expectedSite ||
+          Object.keys(call.body ?? {}).sort().join(",") !== "site,studyTimeSnapshots" ||
+          !applyStudyTimeSnapshots(call.body.studyTimeSnapshots)
+        ) {
+          respondJSON(400, { error: "invalid_request" });
+          return;
+        }
+        respondJSON(200, { state: syncState() });
+        return;
+      }
+      if (call.method === "POST" && pathname === "/v12/attempts") {
         const operationId = call.body?.operationId;
         const questionId = call.body?.questionId;
         const answerResult = call.body?.answerResult;
@@ -387,7 +433,8 @@ function installSyncMockInWindow({
           (answerResult !== "correct" && answerResult !== "incorrect") ||
           Object.keys(call.body ?? {})
             .sort()
-            .join(",") !== "answerResult,operationId,questionId,site"
+            .join(",") !== "answerResult,operationId,questionId,site,studyTimeSnapshots" ||
+          !applyStudyTimeSnapshots(call.body.studyTimeSnapshots)
         ) {
           respondJSON(400, { error: "invalid_request" });
           return;

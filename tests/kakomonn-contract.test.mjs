@@ -9,6 +9,9 @@ import {
   isLearningState,
   isNextResponse,
   isQuestionId,
+  isStudyTimeResponse,
+  isStudyTimeSnapshot,
+  isStudyTimeSnapshots,
   scheduledQuestionId,
 } from "../contracts/kakomonn.mjs";
 import {
@@ -30,6 +33,7 @@ const learningMetrics = Object.freeze({
   todayCorrectRatePercent: 100,
   todayNewQuestionCount: 1,
   todayStabilityDaysDelta: 2,
+  todayStudyTimeMs: 0,
 });
 const state = Object.freeze({
   site,
@@ -129,6 +133,21 @@ test("sync responses are exact and bound to the requested site", () => {
   );
 });
 
+test("study time snapshots and responses are exact", () => {
+  const snapshot = {
+    activeMs: 120_000,
+    date: "2026-08-10",
+    sessionId: "00000000000000000000000000000001",
+  };
+  assert.equal(isStudyTimeSnapshot(snapshot), true);
+  assert.equal(isStudyTimeSnapshots([snapshot]), true);
+  assert.equal(isStudyTimeSnapshot({ ...snapshot, extra: true }), false);
+  assert.equal(isStudyTimeSnapshot({ ...snapshot, activeMs: -1 }), false);
+  assert.equal(isStudyTimeSnapshots(Array.from({ length: 129 }, () => snapshot)), false);
+  assert.equal(isStudyTimeResponse({ state }, site), true);
+  assert.equal(isStudyTimeResponse({ state, extra: true }, site), false);
+});
+
 test("history responses require consecutive Tokyo dates and coherent rows", () => {
   const history = {
     site,
@@ -141,6 +160,7 @@ test("history responses require consecutive Tokyo dates and coherent rows", () =
         stabilityDaysDelta: null,
         dailyAttemptedQuestionCount: 0,
         dailyNewQuestionCount: 0,
+        dailyStudyTimeMs: 0,
         dailyCorrectRatePercent: null,
       },
       {
@@ -149,6 +169,7 @@ test("history responses require consecutive Tokyo dates and coherent rows", () =
         stabilityDaysDelta: 8,
         dailyAttemptedQuestionCount: 1,
         dailyNewQuestionCount: 1,
+        dailyStudyTimeMs: 0,
         dailyCorrectRatePercent: 100,
       },
       {
@@ -157,6 +178,7 @@ test("history responses require consecutive Tokyo dates and coherent rows", () =
         stabilityDaysDelta: 2,
         dailyAttemptedQuestionCount: 1,
         dailyNewQuestionCount: 0,
+        dailyStudyTimeMs: 0,
         dailyCorrectRatePercent: 0,
       },
     ],
@@ -183,6 +205,13 @@ test("daily details rows are bound to the requested Tokyo date", () => {
     date: "2026-08-10",
     timeZone: "Asia/Tokyo",
     tables: {
+      study_time_daily: [
+        {
+          site,
+          date: "2026-08-10",
+          study_time_ms: 120_000,
+        },
+      ],
       stability_history: [
         {
           site,

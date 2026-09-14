@@ -128,6 +128,7 @@ export function installLauncherController(app) {
     app.mountReaderUI();
     if (!readerInitializationStarted) {
       readerInitializationStarted = true;
+      void app.initializeStudyTime();
       void app.initializeSync();
     }
   }

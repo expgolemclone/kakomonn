@@ -100,7 +100,7 @@ test("production /open serves the repository dashboard bridge", async () => {
   assert.equal(sha256(actual), sha256(expected));
 });
 
-test("production serves only the authenticated v11 API backed by LearningState", async () => {
+test("production serves only the authenticated v12 API backed by LearningState", async () => {
   const {
     isDailyDetailsResponse,
     isDashboardResponse,
@@ -108,7 +108,7 @@ test("production serves only the authenticated v11 API backed by LearningState",
     isLearningState,
     isSitesResponse,
   } = await contracts;
-  const unauthorized = await fetch(new URL("/v11/sites", productionOrigin));
+  const unauthorized = await fetch(new URL("/v12/sites", productionOrigin));
   assert.equal(unauthorized.status, 401);
   assert.equal(unauthorized.headers.get("cache-control"), "no-store");
   assert.deepEqual(await unauthorized.json(), { error: "unauthorized" });
@@ -118,7 +118,7 @@ test("production serves only the authenticated v11 API backed by LearningState",
     assert.equal(removed.status, 404, `/${version}/sites must be removed`);
   }
 
-  const sitesResponse = await authorizedGet("/v11/sites");
+  const sitesResponse = await authorizedGet("/v12/sites");
   assert.equal(sitesResponse.status, 200);
   const sitesBody = await sitesResponse.json();
   assert.equal(isSitesResponse(sitesBody), true);
@@ -128,28 +128,28 @@ test("production serves only the authenticated v11 API backed by LearningState",
   }
 
   const site = sitesBody.sites[0];
-  const dashboardResponse = await authorizedGet(`/v11/dashboard?${new URLSearchParams({ site })}`);
+  const dashboardResponse = await authorizedGet(`/v12/dashboard?${new URLSearchParams({ site })}`);
   assert.equal(dashboardResponse.status, 200);
   const dashboardBody = await dashboardResponse.json();
   assert.equal(isDashboardResponse(dashboardBody), true);
   assert.deepEqual(dashboardBody.sites, sitesBody.sites);
   assert.equal(dashboardBody.selectedSite, site);
 
-  const stateResponse = await authorizedGet(`/v11/state?${new URLSearchParams({ site })}`);
+  const stateResponse = await authorizedGet(`/v12/state?${new URLSearchParams({ site })}`);
   assert.equal(stateResponse.status, 200);
   const stateBody = await stateResponse.json();
   assert.equal(isLearningState(stateBody, site), true);
   assert.equal(stateBody.learningMetrics.newQuestionGoal, 10);
 
   const historyResponse = await authorizedGet(
-    `/v11/history?${new URLSearchParams({ site, days: "7" })}`,
+    `/v12/history?${new URLSearchParams({ site, days: "7" })}`,
   );
   assert.equal(historyResponse.status, 200);
   const historyBody = await historyResponse.json();
   assert.equal(isHistoryResponse(historyBody, site, 7), true);
 
   const detailsResponse = await authorizedGet(
-    `/v11/daily-details?${new URLSearchParams({ site, date: historyBody.today })}`,
+    `/v12/daily-details?${new URLSearchParams({ site, date: historyBody.today })}`,
   );
   assert.equal(detailsResponse.status, 200);
   const detailsBody = await detailsResponse.json();
@@ -158,12 +158,12 @@ test("production serves only the authenticated v11 API backed by LearningState",
 
 test("production issues Azure speech tokens with the configured key", async () => {
   const { isSpeechTokenResponse } = await contracts;
-  const unauthorized = await fetch(new URL("/v11/speech-token", productionOrigin), {
+  const unauthorized = await fetch(new URL("/v12/speech-token", productionOrigin), {
     method: "POST",
   });
   assert.equal(unauthorized.status, 401);
 
-  const response = await fetch(new URL("/v11/speech-token", productionOrigin), {
+  const response = await fetch(new URL("/v12/speech-token", productionOrigin), {
     method: "POST",
     headers: { Authorization: `Bearer ${syncToken()}` },
   });

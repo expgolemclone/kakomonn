@@ -8,7 +8,7 @@ const {
   kakomonnFreeEnvironment,
   readKakomonnConfiguration,
 } = require("../../scripts/kakomonn-config.cjs");
-const { installSyncMock, SYNC_API_ORIGIN } = require("./sync_mock");
+const { installSyncMock, SYNC_API_ORIGIN, SYNC_TOKEN_KEY } = require("./sync_mock");
 const { dispatchNextQuestionSwipe, installReaderInChildFrames } = require("./support/frame_reader");
 
 const projectRoot = path.resolve(__dirname, "..");
@@ -402,7 +402,7 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
         });
         assert.equal(await questionFrame.evaluate(() => document.readyState), "interactive");
         await page.waitForFunction(() =>
-          window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/state"),
+          window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/state"),
         );
         await page.waitForFunction(
           () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
@@ -462,7 +462,7 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
         }
         const attemptCalls = await page.evaluate(() =>
           window.__syncMock.calls.filter(
-            (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
+            (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
           ),
         );
         assert.equal(attemptCalls.length, 1);
@@ -553,7 +553,7 @@ async function main() {
           {
             authorization: "Bearer test-sync-token",
             method: "GET",
-            url: `${SYNC_API_ORIGIN}/v11/next?site=chushoks.kakomonn.com`,
+            url: `${SYNC_API_ORIGIN}/v12/next?site=chushoks.kakomonn.com`,
           },
         ],
       );
@@ -589,7 +589,7 @@ async function main() {
       await retryLauncher.page.evaluate(() =>
         window.__syncMock.calls.map((call) => new URL(call.url).pathname),
       ),
-      ["/v11/next", "/v11/next"],
+      ["/v12/next", "/v12/next"],
     );
     assert.deepEqual(retryLauncher.errors, []);
     await retryLauncher.page.close();
@@ -686,9 +686,9 @@ async function main() {
     assert.equal(settingsLayout.panelInsideViewport, true, JSON.stringify(settingsLayout));
     assert.equal(settingsLayout.inputHeight >= 44, true, JSON.stringify(settingsLayout));
     assert.equal(settingsLayout.saveHeight >= 44, true, JSON.stringify(settingsLayout));
-    await settingsEntryPage.evaluate(() => {
-      window.__syncMock.holdNextSetValue = true;
-    });
+    await settingsEntryPage.evaluate((syncTokenKey) => {
+      window.__syncMock.holdSetValueKey = syncTokenKey;
+    }, SYNC_TOKEN_KEY);
     await settingsEntryPage.locator("#kakomonn-reader-sync-token").fill("test-sync-token");
     await settingsEntryPage.locator("#kakomonn-reader-sync-settings-save").click();
     await settingsEntryPage.waitForFunction(() => window.__syncMock.releaseHeldSetValue !== null);
@@ -770,7 +770,7 @@ async function main() {
       });
     }, fixtureBody);
     await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/state"),
+      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/state"),
     );
     await page.waitForTimeout(1_000);
     await page.evaluate(() => {
@@ -930,7 +930,7 @@ async function main() {
       await page.evaluate(
         () =>
           window.__syncMock.calls.filter(
-            (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
+            (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
           ).length,
       ),
       1,
@@ -980,7 +980,7 @@ async function main() {
       document.body.innerHTML = html;
     }, fixtureBody);
     await correctPage.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/state"),
+      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/state"),
     );
     await correctPage.waitForTimeout(1_000);
     await correctPage.evaluate(() => {

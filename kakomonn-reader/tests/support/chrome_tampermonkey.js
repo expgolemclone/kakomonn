@@ -215,7 +215,7 @@ async function validateSyncToken(
   token,
   { fetchImpl = fetch, syncApiOrigin = DEFAULT_SYNC_API_ORIGIN } = {},
 ) {
-  const response = await fetchImpl(`${syncApiOrigin}/v11/sites`, {
+  const response = await fetchImpl(`${syncApiOrigin}/v12/sites`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });

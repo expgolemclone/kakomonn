@@ -30,6 +30,10 @@ export function installReaderStyles(correctFeedbackCSS) {
       --kakomonn-reader-time-track: oklch(0.32 0.02 255);
       --kakomonn-reader-time-question: oklch(0.72 0.16 245);
       --kakomonn-reader-time-explanation: oklch(0.74 0.16 150);
+      --kakomonn-reader-study-badge-bg: oklch(0.08 0 0 / 0.94);
+      --kakomonn-reader-study-badge-text: oklch(0.62 0 0);
+      --kakomonn-reader-study-badge-size: clamp(1.45rem, 4.5vw, 1.7rem);
+      --kakomonn-reader-study-badge-font-size: clamp(0.46rem, 1.55vw, 0.56rem);
       --kakomonn-reader-control-gap: 8px;
       --kakomonn-reader-control-gutter: 8px;
       --kakomonn-reader-control-radius: 16px;
@@ -322,6 +326,27 @@ export function installReaderStyles(correctFeedbackCSS) {
       background: var(--kakomonn-reader-time-fill);
     }
   
+    #kakomonn-reader-study-time {
+      position: absolute;
+      z-index: 4;
+      top: max(0.5rem, env(safe-area-inset-top));
+      right: max(0.5rem, env(safe-area-inset-right));
+      inline-size: var(--kakomonn-reader-study-badge-size);
+      block-size: var(--kakomonn-reader-study-badge-size);
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--kakomonn-reader-study-badge-bg);
+      color: var(--kakomonn-reader-study-badge-text);
+      font: 700 var(--kakomonn-reader-study-badge-font-size)/1 -apple-system, BlinkMacSystemFont, sans-serif;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      box-shadow: 0 0.08rem 0.32rem oklch(0 0 0 / 0.24);
+      pointer-events: none;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
     #kakomonn-reader-carried-correct-feedback {
       position: absolute;
       z-index: 2;

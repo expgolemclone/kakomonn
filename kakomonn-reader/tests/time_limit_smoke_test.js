@@ -116,7 +116,7 @@ async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
     await page.clock.runFor(300_100);
     await waitForNextQuestion(page);
     const answerCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/attempts"),
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/attempts"),
     );
     assert.equal(answerCalls.length, 1);
     assert.equal(answerCalls[0].body.answerResult, "incorrect");
@@ -124,7 +124,7 @@ async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
     assert.equal(await page.evaluate(() => window.__syncMock.attemptCount), 1);
     assert.equal(
       await page.evaluate(() =>
-        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/next"),
+        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/next"),
       ),
       false,
     );
@@ -150,12 +150,12 @@ async function explanationExpiryRecordsAndStays(browser, script) {
     );
     await page.waitForFunction(
       () =>
-        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/attempts")
+        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/attempts")
           .length === 1,
     );
     const recorded = await page.evaluate(() => ({
       answered: window.__syncMock.attemptCount,
-      body: window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v11/attempts")
+      body: window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v12/attempts")
         .body,
     }));
     assert.equal(recorded.answered, 1);

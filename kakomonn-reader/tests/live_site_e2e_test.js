@@ -134,7 +134,7 @@ async function darkModeImageFilters(locator) {
 async function waitForSyncReady(page) {
   await page.waitForFunction(
     () =>
-      window.__syncMock?.calls.some((call) => new URL(call.url).pathname === "/v11/state") === true,
+      window.__syncMock?.calls.some((call) => new URL(call.url).pathname === "/v12/state") === true,
     null,
     { timeout: readerReadyTimeout },
   );
@@ -378,12 +378,12 @@ async function runLiveCatalogCrawlCase(browser, script) {
     await injectReader(page, script);
 
     await page.waitForFunction(
-      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/questions"),
+      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
       null,
       { timeout: 180_000 },
     );
     const catalogCall = await page.evaluate(() =>
-      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v11/questions"),
+      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v12/questions"),
     );
     assert.equal(Array.isArray(catalogCall.body.questionIds), true);
     assert.equal(catalogCall.body.expectedGeneration, 0);
@@ -587,14 +587,14 @@ async function runCase(
     assert.equal(
       await page.evaluate(
         () =>
-          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/attempts")
+          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/attempts")
             .length,
       ),
       1,
     );
     assert.equal(
       await page.evaluate(() =>
-        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/next"),
+        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/next"),
       ),
       false,
     );
@@ -1085,7 +1085,7 @@ async function runCrossDomainActivationCase(browser, script) {
       );
       const stateSites = await page.evaluate(() =>
         window.__syncMock.calls
-          .filter((call) => new URL(call.url).pathname === "/v11/state")
+          .filter((call) => new URL(call.url).pathname === "/v12/state")
           .map((call) => new URL(call.url).searchParams.get("site")),
       );
       assert.equal(stateSites.length >= 1, true);

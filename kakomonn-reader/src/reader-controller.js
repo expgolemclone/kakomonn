@@ -33,6 +33,7 @@ import { installNavigationController } from "./navigation-controller.js";
 import { installLifecycleController } from "./lifecycle-controller.js";
 import { installSpeechController } from "./speech-controller.js";
 import { installShortcutsController } from "./shortcuts-controller.js";
+import { installStudyTimeController } from "./study-time-controller.js";
 import { installDashboardBridge } from "./dashboard-bridge.js";
 import { DASHBOARD_BRIDGE_STATE_ATTRIBUTE } from "../../contracts/dashboard-bridge.mjs";
 
@@ -70,7 +71,7 @@ export async function startReader() {
     !/(?:CriOS|FxiOS|EdgiOS|OPiOS)\//.test(userAgent);
   const SYNC_API_URL = "https://kakomonn-sync.kakomonn.workers.dev";
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
-  const LAUNCH_HANDOFF_KEY = "kakomonn-reader.v11.launch-handoff";
+  const LAUNCH_HANDOFF_KEY = "kakomonn-reader.v12.launch-handoff";
   const LAUNCH_HANDOFF_MAX_AGE_MS = 60000;
   const SYNC_TIMEOUT_MS = 15000;
   const isReaderBridge =
@@ -168,6 +169,7 @@ export async function startReader() {
     typeof GM === "object" &&
     GM !== null &&
     typeof GM.getValue === "function" &&
+    typeof GM.listValues === "function" &&
     typeof GM.xmlHttpRequest === "function";
   if (isDashboardBridge) {
     if (!hasDashboardBridgeRuntime) {
@@ -187,6 +189,7 @@ export async function startReader() {
     typeof GM !== "object" ||
     GM === null ||
     typeof GM.getValue !== "function" ||
+    typeof GM.listValues !== "function" ||
     typeof GM.setValue !== "function" ||
     typeof GM.deleteValue !== "function" ||
     typeof GM.xmlHttpRequest !== "function" ||
@@ -204,7 +207,7 @@ export async function startReader() {
       const parameters = new URLSearchParams({ site: NEXT_QUESTION_SITE_ID });
       const result = await requestSyncResponse(
         "GET",
-        `/v11/next?${parameters}`,
+        `/v12/next?${parameters}`,
         token,
         isReaderBridgeNextResponse,
       );
@@ -843,6 +846,7 @@ export async function startReader() {
   installSyncController(app);
   installLauncherController(app);
   installViewController(app);
+  installStudyTimeController(app);
   installCopyController(app);
   installNavigationController(app);
   installLifecycleController(app);

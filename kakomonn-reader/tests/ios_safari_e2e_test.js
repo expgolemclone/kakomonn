@@ -1129,6 +1129,17 @@ async function runTest() {
     await switchToReaderFrame(driver);
     await waitForElement(driver, "#send_exam_btn");
     await waitForElementPresent(driver, "#kakomonn-reader-dark-mode");
+    assert.deepEqual(
+      await driver.execute(() =>
+        Array.from(
+          document.querySelectorAll(
+            ".p-post > .fixed_btn, .p-post > .fixed_btn_menu",
+          ),
+          (element) => getComputedStyle(element).display,
+        ),
+      ),
+      ["none", "none"],
+    );
     const { choices, heading, questionImageURLs, questionText } =
       await readQuestionContent(driver);
     assert.equal(heading, MARKDOWN_QUESTION_HEADING);

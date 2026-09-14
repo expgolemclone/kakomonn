@@ -32,6 +32,13 @@ const kakomonnConfiguration = readKakomonnConfiguration();
 
 const fixtureBody = `
   <header class="l-header">元サイトヘッダー</header>
+  <div class="p-post">
+    <div class="fixed_btn">
+      <button type="button">右側の問題文ボタン</button>
+      <button type="button">右側のメモボタン</button>
+    </div>
+    <button type="button" class="fixed_btn_menu">右側の操作メニュー</button>
+  </div>
   <div class="problem_detail">
     <p class="when">
       中小企業診断士試験 令和2年度（2020年） 問19（経済学・経済政策 問19）
@@ -960,6 +967,12 @@ async function main() {
           problemBackground: getComputedStyle(
             document.querySelector(".problem_detail")
           ).backgroundColor,
+          fixedButtonDisplays: Array.from(
+            document.querySelectorAll(
+              ".p-post > .fixed_btn, .p-post > .fixed_btn_menu",
+            ),
+            (element) => getComputedStyle(element).display,
+          ),
           siteHeaderDisplay: getComputedStyle(
             document.querySelector("header.l-header")
           ).display,
@@ -979,6 +992,7 @@ async function main() {
         colorScheme: "dark",
         imageFilters: Array(3).fill("invert(1) hue-rotate(180deg)"),
         problemBackground: "rgb(21, 25, 30)",
+        fixedButtonDisplays: ["none", "none"],
         siteHeaderDisplay: "none",
         styleCount: 1,
         toggleCount: 0,

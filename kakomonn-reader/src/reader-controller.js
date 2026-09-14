@@ -277,6 +277,11 @@ export async function startReader() {
     header.l-header {
       display: none !important;
     }
+
+    .p-post > .fixed_btn,
+    .p-post > .fixed_btn_menu {
+      display: none !important;
+    }
   
     html,
     body,

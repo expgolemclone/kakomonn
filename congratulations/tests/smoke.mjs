@@ -89,7 +89,7 @@ const perigeeSource = await readFile(
 assert.match(perigeeSource, /const STARFIELD_DPR_CAP = 1\.5;/);
 assert.match(perigeeSource, /const STARFIELD_MOBILE_PARTICLE_COUNT = 21000;/);
 assert.match(perigeeSource, /const STARFIELD_FRAME_INTERVAL_MS = 1000 \/ 30;/);
-assert.match(perigeeSource, /requestAnimationFrame\(\(\) => requestAnimationFrame\(\(\) => \{/);
+assert.match(perigeeSource, /requestAnimationFrame\(\(\) =>\s*requestAnimationFrame\(\(\) => \{/);
 assert.match(perigeeSource, /if \(document\.hidden\) return;/);
 assert.match(perigeeSource, /!running && !document\.hidden/);
 

@@ -12,6 +12,7 @@ const {
 const { createSyncMockConfiguration, installSyncMockInWindow } = require("./sync_mock");
 const {
   assertMarkdownCopy,
+  MARKDOWN_ANSWER_TEXT,
   MARKDOWN_CHOICES,
   MARKDOWN_INCORRECT_ANSWER_SUMMARY,
   MARKDOWN_INCORRECT_ANSWER_TEXT,

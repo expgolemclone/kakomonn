@@ -612,14 +612,17 @@ async function prepareSafariInitialPage(driver) {
       nativeSource,
     );
 
-    if (showsStartPageOnboarding) {
+    // Safari can retain an inactive StartPageCollectionView in the native
+    // accessibility tree after the configured page has finished loading.
+    // The loaded tab is authoritative and does not need onboarding dismissal.
+    if (!showsLoadedPage && showsStartPageOnboarding) {
       assert.equal(showsStartPage, true);
       const closeButton = await driver.findElement("accessibility id", "close");
       await closeButton.waitForDisplayed();
       await closeButton.click();
     } else {
       assert.equal(
-        showsLoadedPage && !showsStartPage,
+        showsLoadedPage,
         true,
         "Safari must show either the configured page or its known start-page onboarding",
       );
@@ -641,10 +644,6 @@ async function prepareSafariInitialPage(driver) {
     assert.match(
       loadedNativeSource,
       /name="TabDocument[^"]*IsPageLoaded=true/,
-    );
-    assert.equal(
-      loadedNativeSource.includes("StartPageCollectionView"),
-      false,
     );
     await closeSafariToolbarTip(loadedNativeSource);
   } finally {

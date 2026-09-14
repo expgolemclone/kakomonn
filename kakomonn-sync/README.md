@@ -88,7 +88,7 @@ runtimeで共有するvalidationとcelebration contractの正本はrepository ro
 | `dueCardsCompleted` | `dueCardsRemaining`が0なら`true`. |
 | `dueCardsRemaining` | 現在の問題catalogにあり, `due_ms`が現在時刻以前であるcardの件数. |
 | `todayNewQuestionCount` | site内で初めて解答した問題IDのうち, 初回解答日が当日である件数. 正誤を問わず1問だけ数え, 再解答は同日でも別日でも加算しない. |
-| `newQuestionGoal` | serverが定める正の整数. 現在は50. Consumerはこのfieldをgoalのsource of truthとして使用する. |
+| `newQuestionGoal` | serverが定める正の整数. 現在は10. Consumerはこのfieldをgoalのsource of truthとして使用する. |
 | `newQuestionsRemaining` | `max(0, newQuestionGoal - todayNewQuestionCount)`. |
 | `stabilityDays` | 現在の問題catalogに含まれる全cardのFSRS stabilityを合計して整数へ切り捨てた値. 未回答問題は0日とし, catalog外のcardは含めない. |
 | `todayStabilityDaysDelta` | 当日の`closing_stability_days - opening_stability_days`. Primary KPIには使用しない. |
@@ -124,7 +124,7 @@ runtimeで共有するvalidationとcelebration contractの正本はrepository ro
 
 ### Celebration contract
 
-解答によって`dailyKpiCompleted`が`false`から`true`へ変わった場合だけ, `POST /v11/attempts`は`site`, `date`, `dailyKpiCompleted`を`celebration`として返します. 50問目の新規問題と最後の期限到達cardのどちらが後になっても同じです. siteと日本時間の日付ごとに1回だけ記録し, 同じ`operationId`の再送では同じeventを返します. catalog変更, schema移行, すでに達成済みの状態での解答では祝福を作成しません.
+解答によって`dailyKpiCompleted`が`false`から`true`へ変わった場合だけ, `POST /v11/attempts`は`site`, `date`, `dailyKpiCompleted`を`celebration`として返します. 10問目の新規問題と最後の期限到達cardのどちらが後になっても同じです. siteと日本時間の日付ごとに1回だけ記録し, 同じ`operationId`の再送では同じeventを返します. catalog変更, schema移行, すでに達成済みの状態での解答では祝福を作成しません.
 
 ## Acknowledgements
 

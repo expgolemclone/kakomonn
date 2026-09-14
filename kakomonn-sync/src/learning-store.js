@@ -14,7 +14,7 @@ import { isCelebration, isLearningMetrics } from "../../contracts/kakomonn.mjs";
 export { initializeLearningSchema } from "./storage/schema.js";
 
 export const LEARNING_STATE_OBJECT_NAME = "primary";
-export const NEW_QUESTION_GOAL = 50;
+export const NEW_QUESTION_GOAL = 10;
 export { OPERATION_ID_PATTERN } from "./contracts.js";
 
 function rowToCard(row) {

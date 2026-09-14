@@ -139,6 +139,7 @@ test("production serves only the authenticated v11 API backed by LearningState",
   assert.equal(stateResponse.status, 200);
   const stateBody = await stateResponse.json();
   assert.equal(isLearningState(stateBody, site), true);
+  assert.equal(stateBody.learningMetrics.newQuestionGoal, 10);
 
   const historyResponse = await authorizedGet(
     `/v11/history?${new URLSearchParams({ site, days: "7" })}`,

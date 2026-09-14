@@ -1353,14 +1353,14 @@ describe("attempt idempotency and attempted question totals", () => {
 });
 
 describe("daily KPI celebrations", () => {
-  it("counts the first answer regardless of correctness and celebrates question 50", async () => {
-    await seedTodayNewQuestionCount(49);
+  it("counts the first answer regardless of correctness and celebrates question 10", async () => {
+    await seedTodayNewQuestionCount(9);
 
     await expect(stub().getState(SITE, NOW)).resolves.toMatchObject({
       learningMetrics: {
         dailyKpiCompleted: false,
-        todayNewQuestionCount: 49,
-        newQuestionGoal: 50,
+        todayNewQuestionCount: 9,
+        newQuestionGoal: 10,
         newQuestionsRemaining: 1,
       },
     });
@@ -1371,8 +1371,8 @@ describe("daily KPI celebrations", () => {
       dailyKpiCompleted: true,
       dueCardsCompleted: true,
       dueCardsRemaining: 0,
-      todayNewQuestionCount: 50,
-      newQuestionGoal: 50,
+      todayNewQuestionCount: 10,
+      newQuestionGoal: 10,
       newQuestionsRemaining: 0,
     });
     expect(result.celebration).toEqual({
@@ -1382,13 +1382,13 @@ describe("daily KPI celebrations", () => {
     });
 
     const repeated = await stub().recordAttempt(SITE, "1", operationId(27), "correct", NOW + 1);
-    expect(repeated.learningMetrics.todayNewQuestionCount).toBe(50);
+    expect(repeated.learningMetrics.todayNewQuestionCount).toBe(10);
     expect(repeated).not.toHaveProperty("celebration");
   });
 
   it("isolates the daily new-question goal by site", async () => {
     await stub().replaceCatalog(OTHER_SITE, ["1"], 0, NOW);
-    await seedTodayNewQuestionCount(49, "2026-08-10", OTHER_SITE);
+    await seedTodayNewQuestionCount(9, "2026-08-10", OTHER_SITE);
 
     const otherResult = await stub().recordAttempt(
       OTHER_SITE,
@@ -1403,20 +1403,20 @@ describe("daily KPI celebrations", () => {
       learningMetrics: {
         dailyKpiCompleted: false,
         todayNewQuestionCount: 0,
-        newQuestionsRemaining: 50,
+        newQuestionsRemaining: 10,
       },
     });
   });
 
   it("does not celebrate when the daily KPI was already complete", async () => {
-    await seedTodayNewQuestionCount(50);
+    await seedTodayNewQuestionCount(10);
 
     const result = await stub().recordAttempt(SITE, "1", operationId(25), "correct", NOW);
 
     expect(result.learningMetrics).toMatchObject({
       dailyKpiCompleted: true,
-      todayNewQuestionCount: 51,
-      newQuestionGoal: 50,
+      todayNewQuestionCount: 11,
+      newQuestionGoal: 10,
       newQuestionsRemaining: 0,
     });
     expect(result).not.toHaveProperty("celebration");
@@ -1456,7 +1456,7 @@ describe("daily KPI celebrations", () => {
   });
 
   it("returns one celebration when the final due card is answered", async () => {
-    await seedTodayNewQuestionCount(50);
+    await seedTodayNewQuestionCount(10);
     await seedReviewCard("1", 30);
     await seedReviewCard("2", 30);
     const partial = await stub().recordAttempt(SITE, "1", operationId(29), "correct", NOW);
@@ -1490,7 +1490,7 @@ describe("daily KPI celebrations", () => {
   });
 
   it("does not celebrate a second completion on the same site and Tokyo date", async () => {
-    await seedTodayNewQuestionCount(50);
+    await seedTodayNewQuestionCount(10);
     await seedReviewCard("1", 30);
     const first = await stub().recordAttempt(SITE, "1", operationId(31), "correct", NOW);
     expect(first).toHaveProperty("celebration");
@@ -1511,11 +1511,11 @@ describe("daily KPI celebrations", () => {
   });
 
   it("allows another celebration on the next Tokyo date", async () => {
-    await seedTodayNewQuestionCount(50);
+    await seedTodayNewQuestionCount(10);
     await seedReviewCard("1", 30);
     const first = await stub().recordAttempt(SITE, "1", operationId(33), "correct", NOW);
     await seedReviewCard("2", 30, NOW + DAY_MS);
-    await seedTodayNewQuestionCount(50, "2026-08-11");
+    await seedTodayNewQuestionCount(10, "2026-08-11");
     const nextDay = await stub().recordAttempt(SITE, "2", operationId(34), "correct", NOW + DAY_MS);
 
     expect(first.celebration.date).toBe("2026-08-10");
@@ -1721,8 +1721,8 @@ describe("v11 HTTP contract", () => {
         dueCardsCompleted: true,
         dueCardsRemaining: 0,
         todayNewQuestionCount: 0,
-        newQuestionGoal: 50,
-        newQuestionsRemaining: 50,
+        newQuestionGoal: 10,
+        newQuestionsRemaining: 10,
         todayStabilityDaysDelta: 0,
         attemptedQuestionCount: 0,
         todayAttemptedQuestionCount: 0,
@@ -1849,7 +1849,7 @@ describe("v11 HTTP contract", () => {
         },
       },
     });
-    expect(nextBody.state.learningMetrics.newQuestionGoal).toBe(50);
+    expect(nextBody.state.learningMetrics.newQuestionGoal).toBe(10);
 
     const conflict = await SELF.fetch("https://example.test/v11/questions", {
       method: "POST",
@@ -1961,8 +1961,8 @@ describe("v11 HTTP contract", () => {
         dueCardsCompleted: true,
         dueCardsRemaining: 0,
         todayNewQuestionCount: 1,
-        newQuestionGoal: 50,
-        newQuestionsRemaining: 49,
+        newQuestionGoal: 10,
+        newQuestionsRemaining: 9,
         todayStabilityDaysDelta: expect.any(Number),
         attemptedQuestionCount: 1,
         todayAttemptedQuestionCount: 1,
@@ -1979,7 +1979,7 @@ describe("v11 HTTP contract", () => {
 
   it("returns and replays the exact primary KPI celebration contract", async () => {
     await seedReviewCard("1", 30);
-    await seedTodayNewQuestionCount(50, getTokyoDate(new Date()));
+    await seedTodayNewQuestionCount(10, getTokyoDate(new Date()));
 
     const body = {
       site: SITE,

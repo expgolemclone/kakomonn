@@ -12,7 +12,6 @@ const {
 const { createSyncMockConfiguration, installSyncMockInWindow } = require("./sync_mock");
 const {
   assertMarkdownCopy,
-  MARKDOWN_ANSWER_TEXT,
   MARKDOWN_CHOICES,
   MARKDOWN_INCORRECT_ANSWER_SUMMARY,
   MARKDOWN_INCORRECT_ANSWER_TEXT,
@@ -42,6 +41,8 @@ const kakomonnConfiguration = readKakomonnConfiguration();
 const expectedXcodeVersion = kakomonnConfiguration.KAKOMONN_XCODE_VERSION ?? "26.6";
 const simulatorPlatformVersion = kakomonnConfiguration.KAKOMONN_IOS_VERSION ?? "26.5";
 const simulatorDeviceName = kakomonnConfiguration.KAKOMONN_IOS_DEVICE ?? "iPhone 17";
+const correctQuestionURL = "https://chushoks.kakomonn.com/questions/86956";
+const correctAnswerText = "輸入の減少は、GDPを増加させる。";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
 const testTimeout = 60_000;
 const webDriverElementKey = "element-6066-11e4-a52e-4f735466cecf";
@@ -1133,7 +1134,7 @@ async function runTest() {
     }));
     assert.deepEqual(readerDiagnostics, { errors: [], rejections: [] });
 
-    await driver.navigateTo(MARKDOWN_QUESTION_URL);
+    await driver.navigateTo(correctQuestionURL);
     await waitForElement(driver, "#send_exam_btn");
     await installReader(driver, script);
     await driver.waitUntil(
@@ -1151,7 +1152,7 @@ async function runTest() {
     const correctClipboardNonce = `kakomonn-ios-correct-copy-before-${Date.now()}`;
     await driver.setClipboardText(correctClipboardNonce);
     await switchToReaderFrame(driver);
-    await submitAnswer(driver, MARKDOWN_ANSWER_TEXT);
+    await submitAnswer(driver, correctAnswerText);
     await driver.switchToTopFrame();
     await driver.waitUntil(
       () =>

@@ -41,6 +41,7 @@ const imageChoiceQuestionUrl = "https://chushoks.kakomonn.com/questions/73379";
 const reportedCopyQuestionUrl = "https://chushoks.kakomonn.com/questions/73497";
 const createQuestionUrl = "https://chushoks.kakomonn.com/createques";
 const randomQuestionUrl = "https://chushoks.kakomonn.com/questions";
+const randomQuestionCategoryValue = "91012-910001";
 const readerReadyTimeout = 30_000;
 const darkModeImageFilter = "invert(1) hue-rotate(180deg)";
 const answerShortcutKeys = "qwert";
@@ -663,8 +664,9 @@ async function runRandomNavigationCase(browser, script) {
     await createQuestionForm.waitFor({ state: "visible" });
     assert.equal(
       await createQuestionForm
-        .locator('input[name="aryCreateCategory[]"]')
-        .first()
+        .locator(
+          `input[name="aryCreateCategory[]"][value="${randomQuestionCategoryValue}"]`,
+        )
         .evaluate((input) => {
           input.checked = true;
           input.dispatchEvent(new Event("change", { bubbles: true }));

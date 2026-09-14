@@ -1044,11 +1044,13 @@ async function runTest() {
     assert.deepEqual(
       await driver.execute(() =>
         Array.from(
-          document.querySelectorAll(".p-post > .fixed_btn, .p-post > .fixed_btn_menu"),
+          document.querySelectorAll(
+            ".p-post > .fixed_btn, .p-post > .fixed_btn_menu, .l-footer > .pagetop",
+          ),
           (element) => getComputedStyle(element).display,
         ),
       ),
-      ["none", "none"],
+      ["none", "none", "none"],
     );
     const { choices, heading, questionImageURLs, questionText } = await readQuestionContent(driver);
     assert.equal(heading, MARKDOWN_QUESTION_HEADING);

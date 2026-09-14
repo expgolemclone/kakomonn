@@ -107,6 +107,11 @@ const mockBody = `
     </div>
     <button type="button" class="fixed_btn_menu">右側の操作メニュー</button>
   </div>
+  <footer class="l-footer">
+    <div class="pagetop">
+      <button type="button"><span>TOP</span></button>
+    </div>
+  </footer>
   <div id="mock-page-header" style="height: 360px">ページ上部</div>
   <div class="sect_problem">
     <div class="ttl_box03"><h2 class="main">問題</h2></div>
@@ -1873,7 +1878,9 @@ async function main() {
         commentaryDisplay: getComputedStyle(document.querySelector(".sect_commentary")).display,
         explanationText: document.querySelector("#explanation").textContent,
         fixedButtonDisplays: Array.from(
-          document.querySelectorAll(".p-post > .fixed_btn, .p-post > .fixed_btn_menu"),
+          document.querySelectorAll(
+            ".p-post > .fixed_btn, .p-post > .fixed_btn_menu, .l-footer > .pagetop",
+          ),
           (element) => getComputedStyle(element).display,
         ),
         headingTop: problemHeading.getBoundingClientRect().top,
@@ -1883,7 +1890,7 @@ async function main() {
     });
     assert.equal(initialProblemPresentation.answerRightDisplay, "none");
     assert.equal(initialProblemPresentation.commentaryDisplay, "none");
-    assert.deepEqual(initialProblemPresentation.fixedButtonDisplays, ["none", "none"]);
+    assert.deepEqual(initialProblemPresentation.fixedButtonDisplays, ["none", "none", "none"]);
     assert.equal(
       initialProblemPresentation.explanationText.includes("これは動作確認用の解説です."),
       true,

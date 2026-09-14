@@ -13,7 +13,7 @@
 - WindowsとiPhoneの起動経路は, [`kakomonn-sync`の次の問題を開く手順](../kakomonn-sync/README.md#次の問題を開く)を使用します. bridgeからreaderと問題iframeまでは同じuserscript session内で切り替えます.
 - 解答操作と解答後の処理は[学習記録の同期設定](#学習記録の同期設定)を参照してください.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
-- 問題画面は元サイトのheaderと右側固定操作button, topのstatus, KPI, 同期設定, copy button, 次問buttonを表示せず, 問題iframeを画面全体へ広げます. 5分の残り時間は問題iframe上端の4px barへ重ねて表示します.
+- 問題画面は元サイトのheader, 右側固定操作button, `TOP` button, topのstatus, KPI, 同期設定, copy button, 次問buttonを表示せず, 問題iframeを画面全体へ広げます. 5分の残り時間は問題iframe上端の4px barへ重ねて表示します.
 - 通常進行のstatusは表示せず, 処理に失敗した場合だけerror内容, context, code, HTTP statusをdialogへ表示します. tokenとresponse bodyは表示しません.
 - 問題catalogは固定の`question/no`範囲を持ちません. 24時間ごとに`/createques`と`/list`から年度listを再発見し, 各listの全paginationにある実在の問題IDを1回取得します. 各pageの位置, 件数, 重複を同じ1巡内で検証して同期します. catalog更新はreader起動と読み上げを待たせず, 解答送信またはskipまでに完了させます. サイトが同じ構造で新年度を追加する限り, コード変更は不要です.
 

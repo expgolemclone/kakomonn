@@ -256,7 +256,8 @@ export async function startReader() {
     }
 
     .p-post > .fixed_btn,
-    .p-post > .fixed_btn_menu {
+    .p-post > .fixed_btn_menu,
+    .l-footer > .pagetop {
       display: none !important;
     }
   

@@ -481,7 +481,9 @@ async function runCase(
           problemBackground: getComputedStyle(documentNode.querySelector(".problem_detail"))
             .backgroundColor,
           fixedButtonDisplays: Array.from(
-            documentNode.querySelectorAll(".p-post > .fixed_btn, .p-post > .fixed_btn_menu"),
+            documentNode.querySelectorAll(
+              ".p-post > .fixed_btn, .p-post > .fixed_btn_menu, .l-footer > .pagetop",
+            ),
             (element) => getComputedStyle(element).display,
           ),
           siteHeaderDisplay: getComputedStyle(documentNode.querySelector("header.l-header"))
@@ -494,7 +496,7 @@ async function runCase(
         bodyBackground: "rgb(11, 13, 16)",
         bodyColor: "rgb(243, 244, 246)",
         problemBackground: "rgb(21, 25, 30)",
-        fixedButtonDisplays: ["none", "none"],
+        fixedButtonDisplays: ["none", "none", "none"],
         siteHeaderDisplay: "none",
         styleCount: 1,
         toggleCount: 0,

@@ -140,21 +140,12 @@ test("retired runtime names stay out of production code and support files", asyn
           violations.push(`${relativePath}:${index + 1}: ${pattern} => ${line.trim()}`);
         }
       }
-      if (
-        line.includes("Userscripts") &&
-        !UNSUPPORTED_HANDLER_FIXTURES.has(relativePath)
-      ) {
-        violations.push(
-          `${relativePath}:${index + 1}: unsupported handler => ${line.trim()}`,
-        );
+      if (line.includes("Userscripts") && !UNSUPPORTED_HANDLER_FIXTURES.has(relativePath)) {
+        violations.push(`${relativePath}:${index + 1}: unsupported handler => ${line.trim()}`);
       }
     });
   }
-  assert.deepEqual(
-    violations,
-    [],
-    `retired runtime names were found:\n${violations.join("\n")}`,
-  );
+  assert.deepEqual(violations, [], `retired runtime names were found:\n${violations.join("\n")}`);
 });
 
 test("Kakomonn settings are read only through the repository env loader", async () => {
@@ -166,9 +157,7 @@ test("Kakomonn settings are read only through the repository env loader", async 
     lines.forEach((line, index) => {
       for (const pattern of RETIRED_CONFIGURATION_PATTERNS) {
         if (pattern.test(line)) {
-          violations.push(
-            `${relativePath}:${index + 1}: ${pattern} => ${line.trim()}`,
-          );
+          violations.push(`${relativePath}:${index + 1}: ${pattern} => ${line.trim()}`);
         }
       }
     });

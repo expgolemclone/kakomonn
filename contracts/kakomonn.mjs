@@ -1,5 +1,4 @@
-export const SITE_PATTERN =
-  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/;
+export const SITE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/;
 export const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 export const OPERATION_ID_PATTERN = /^[0-9a-f]{32}$/;
 const QUESTION_ID_PATTERN = /^\d+$/;
@@ -21,31 +20,13 @@ export const LEARNING_METRIC_KEYS = Object.freeze([
   "todayStabilityDaysDelta",
 ]);
 
-export const CELEBRATION_KEYS = Object.freeze([
-  "dailyKpiCompleted",
-  "date",
-  "site",
-]);
+export const CELEBRATION_KEYS = Object.freeze(["dailyKpiCompleted", "date", "site"]);
 
-export const CATALOG_SUMMARY_KEYS = Object.freeze([
-  "generation",
-  "questionCount",
-  "updatedAtMs",
-]);
+export const CATALOG_SUMMARY_KEYS = Object.freeze(["generation", "questionCount", "updatedAtMs"]);
 
-export const LEARNING_STATE_KEYS = Object.freeze([
-  "catalog",
-  "learningMetrics",
-  "site",
-  "today",
-]);
+export const LEARNING_STATE_KEYS = Object.freeze(["catalog", "learningMetrics", "site", "today"]);
 
-export const NEXT_QUESTION_KEYS = Object.freeze([
-  "dueMs",
-  "kind",
-  "questionId",
-  "url",
-]);
+export const NEXT_QUESTION_KEYS = Object.freeze(["dueMs", "kind", "questionId", "url"]);
 
 export const HISTORY_DAY_KEYS = Object.freeze([
   "closingStabilityDays",
@@ -107,10 +88,7 @@ export function calendarDateOrdinal(value) {
 }
 
 export function isCorrectRatePercent(value) {
-  return (
-    value === null ||
-    (Number.isSafeInteger(value) && value >= 0 && value <= 100)
-  );
+  return value === null || (Number.isSafeInteger(value) && value >= 0 && value <= 100);
 }
 
 export function isQuestionId(value) {
@@ -124,8 +102,7 @@ export function isQuestionId(value) {
   const normalized = normalizedQuestionNumber(value);
   return (
     normalized.length < QUESTION_ID_MAX.length ||
-    (normalized.length === QUESTION_ID_MAX.length &&
-      normalized <= QUESTION_ID_MAX)
+    (normalized.length === QUESTION_ID_MAX.length && normalized <= QUESTION_ID_MAX)
   );
 }
 
@@ -207,9 +184,7 @@ export function isLearningMetrics(value) {
     value.newQuestionsRemaining ===
       Math.max(0, value.newQuestionGoal - value.todayNewQuestionCount) &&
     (!value.dailyKpiCompleted || value.newQuestionsRemaining === 0) &&
-    (value.dailyKpiCompleted ||
-      value.newQuestionsRemaining > 0 ||
-      value.dueCardsRemaining > 0) &&
+    (value.dailyKpiCompleted || value.newQuestionsRemaining > 0 || value.dueCardsRemaining > 0) &&
     Number.isSafeInteger(value.todayStabilityDaysDelta) &&
     Number.isSafeInteger(value.attemptedQuestionCount) &&
     value.attemptedQuestionCount >= 0 &&
@@ -218,8 +193,7 @@ export function isLearningMetrics(value) {
     value.todayAttemptedQuestionCount <= value.attemptedQuestionCount &&
     value.todayNewQuestionCount <= value.todayAttemptedQuestionCount &&
     isCorrectRatePercent(value.todayCorrectRatePercent) &&
-    (value.todayAttemptedQuestionCount === 0) ===
-      (value.todayCorrectRatePercent === null)
+    (value.todayAttemptedQuestionCount === 0) === (value.todayCorrectRatePercent === null)
   );
 }
 
@@ -257,11 +231,7 @@ export function isNextQuestion(value, expectedSite) {
   if (value.kind === "new") {
     return value.dueMs === null;
   }
-  return (
-    value.kind === "review" &&
-    Number.isSafeInteger(value.dueMs) &&
-    value.dueMs > 0
-  );
+  return value.kind === "review" && Number.isSafeInteger(value.dueMs) && value.dueMs > 0;
 }
 
 export function isNextResponse(value, expectedSite) {
@@ -273,9 +243,10 @@ export function isNextResponse(value, expectedSite) {
 }
 
 export function isAttemptResponse(value, expectedSite) {
-  const keys = value?.celebration === undefined
-    ? ["attempt", "learningMetrics", "nextQuestion"]
-    : ["attempt", "celebration", "learningMetrics", "nextQuestion"];
+  const keys =
+    value?.celebration === undefined
+      ? ["attempt", "learningMetrics", "nextQuestion"]
+      : ["attempt", "celebration", "learningMetrics", "nextQuestion"];
   const attempt = value?.attempt;
   return (
     hasExactKeys(value, keys) &&
@@ -302,20 +273,13 @@ export function isAttemptResponse(value, expectedSite) {
     attempt.resultingStabilityDays >= 0 &&
     isLearningMetrics(value.learningMetrics) &&
     isNextQuestion(value.nextQuestion, expectedSite) &&
-    (value.celebration === undefined ||
-      isCelebration(value.celebration, expectedSite))
+    (value.celebration === undefined || isCelebration(value.celebration, expectedSite))
   );
 }
 
 export function isCatalogResponse(value, expectedSite) {
   return (
-    hasExactKeys(value, [
-      "generation",
-      "question",
-      "questionCount",
-      "site",
-      "updatedAtMs",
-    ]) &&
+    hasExactKeys(value, ["generation", "question", "questionCount", "site", "updatedAtMs"]) &&
     value.site === expectedSite &&
     isCatalogSummary({
       generation: value.generation,
@@ -328,12 +292,7 @@ export function isCatalogResponse(value, expectedSite) {
 
 export function isCatalogConflictResponse(value, expectedSite) {
   if (
-    !hasExactKeys(value, [
-      "catalog",
-      "currentGeneration",
-      "error",
-      "question",
-    ]) ||
+    !hasExactKeys(value, ["catalog", "currentGeneration", "error", "question"]) ||
     value.error !== "catalog_conflict" ||
     !Number.isSafeInteger(value.currentGeneration) ||
     value.currentGeneration < 0
@@ -344,12 +303,7 @@ export function isCatalogConflictResponse(value, expectedSite) {
     return value.catalog === null && value.question === null;
   }
   return (
-    hasExactKeys(value.catalog, [
-      "generation",
-      "questionCount",
-      "site",
-      "updatedAtMs",
-    ]) &&
+    hasExactKeys(value.catalog, ["generation", "questionCount", "site", "updatedAtMs"]) &&
     value.catalog.site === expectedSite &&
     value.catalog.generation === value.currentGeneration &&
     isCatalogSummary({
@@ -381,21 +335,17 @@ export function isHistoryResponse(value, expectedSite, expectedDayCount) {
   return value.days.every((day, index) => {
     if (
       !hasExactKeys(day, HISTORY_DAY_KEYS) ||
-      calendarDateOrdinal(day.date) !==
-        todayOrdinal - expectedDayCount + index + 1 ||
+      calendarDateOrdinal(day.date) !== todayOrdinal - expectedDayCount + index + 1 ||
       (day.closingStabilityDays !== null &&
-        (!Number.isSafeInteger(day.closingStabilityDays) ||
-          day.closingStabilityDays < 0)) ||
-      (day.stabilityDaysDelta !== null &&
-        !Number.isSafeInteger(day.stabilityDaysDelta)) ||
+        (!Number.isSafeInteger(day.closingStabilityDays) || day.closingStabilityDays < 0)) ||
+      (day.stabilityDaysDelta !== null && !Number.isSafeInteger(day.stabilityDaysDelta)) ||
       !Number.isSafeInteger(day.dailyAttemptedQuestionCount) ||
       day.dailyAttemptedQuestionCount < 0 ||
       !Number.isSafeInteger(day.dailyNewQuestionCount) ||
       day.dailyNewQuestionCount < 0 ||
       day.dailyNewQuestionCount > day.dailyAttemptedQuestionCount ||
       !isCorrectRatePercent(day.dailyCorrectRatePercent) ||
-      (day.dailyAttemptedQuestionCount === 0) !==
-        (day.dailyCorrectRatePercent === null)
+      (day.dailyAttemptedQuestionCount === 0) !== (day.dailyCorrectRatePercent === null)
     ) {
       return false;
     }
@@ -418,9 +368,7 @@ export function isDashboardResponse(value) {
     return false;
   }
   if (value.sites.length === 0) {
-    return (
-      value.selectedSite === null && value.state === null && value.history === null
-    );
+    return value.selectedSite === null && value.state === null && value.history === null;
   }
   if (
     !value.sites.includes(value.selectedSite) ||
@@ -451,8 +399,7 @@ export function isSitesResponse(value) {
     hasExactKeys(value, ["sites"]) &&
     Array.isArray(value.sites) &&
     value.sites.every(
-      (site, index) =>
-        isSite(site) && (index === 0 || value.sites[index - 1] < site),
+      (site, index) => isSite(site) && (index === 0 || value.sites[index - 1] < site),
     )
   );
 }

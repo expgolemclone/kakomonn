@@ -32,8 +32,7 @@ function findFirstIndex(lines, startIndex, predicate) {
 
 // BEGIN QUESTION EXTRACTION
 export const QUESTION_META_PATTERN = /(?:問\s*\d+|第\s*\d+)/;
-const ANSWER_CHOICE_SELECTOR =
-  "input[type='radio'], input[type='checkbox'], [role='radio']";
+const ANSWER_CHOICE_SELECTOR = "input[type='radio'], input[type='checkbox'], [role='radio']";
 export const BLOCK_TAG_NAMES = new Set([
   "ADDRESS",
   "ARTICLE",
@@ -73,13 +72,7 @@ export const BLOCK_TAG_NAMES = new Set([
   "TR",
   "UL",
 ]);
-const CONTROL_BREAK_TAG_NAMES = new Set([
-  "A",
-  "BUTTON",
-  "INPUT",
-  "SELECT",
-  "TEXTAREA",
-]);
+const CONTROL_BREAK_TAG_NAMES = new Set(["A", "BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
 
 export function isVisibleElement(element) {
   const view = element.ownerDocument.defaultView;
@@ -93,22 +86,22 @@ export function isVisibleElement(element) {
 }
 
 export function findQuestionMetadataElement(documentNode) {
-  const candidates = Array.from(
-    documentNode.querySelectorAll(".problem_detail > .when")
-  ).filter((element) => {
-    const text = normalizeInlineText(element.innerText ?? "");
-    const problemElement = element.closest(".problem_detail");
-    const answerButton = findAnswerButtonAfter(element);
-    return (
-      text.length > 0 &&
-      text.length <= 220 &&
-      QUESTION_META_PATTERN.test(text) &&
-      isVisibleElement(element) &&
-      problemElement !== null &&
-      answerButton !== null &&
-      problemElement.contains(answerButton)
-    );
-  });
+  const candidates = Array.from(documentNode.querySelectorAll(".problem_detail > .when")).filter(
+    (element) => {
+      const text = normalizeInlineText(element.innerText ?? "");
+      const problemElement = element.closest(".problem_detail");
+      const answerButton = findAnswerButtonAfter(element);
+      return (
+        text.length > 0 &&
+        text.length <= 220 &&
+        QUESTION_META_PATTERN.test(text) &&
+        isVisibleElement(element) &&
+        problemElement !== null &&
+        answerButton !== null &&
+        problemElement.contains(answerButton)
+      );
+    },
+  );
 
   return candidates.length === 1 ? candidates[0] : null;
 }
@@ -117,13 +110,13 @@ function isFollowingNode(referenceNode, candidateNode) {
   const NodeConstructor = referenceNode.ownerDocument.defaultView.Node;
   return Boolean(
     referenceNode.compareDocumentPosition(candidateNode) &
-      NodeConstructor.DOCUMENT_POSITION_FOLLOWING
+    NodeConstructor.DOCUMENT_POSITION_FOLLOWING,
   );
 }
 
 export function findAnswerButtonAfter(metadataElement) {
   const controls = metadataElement.ownerDocument.querySelectorAll(
-    "a, button, input[type='button'], input[type='submit']"
+    "a, button, input[type='button'], input[type='submit']",
   );
 
   for (const control of controls) {
@@ -136,7 +129,7 @@ export function findAnswerButtonAfter(metadataElement) {
         control.textContent ||
         control.value ||
         control.getAttribute("aria-label") ||
-        ""
+        "",
     ).replace(/\s+/g, "");
 
     if (label === "解答する") {
@@ -150,13 +143,8 @@ export function findAnswerButtonAfter(metadataElement) {
 export function findAnswerChoiceControls(metadataElement, answerButton) {
   const controls = [];
 
-  for (const control of metadataElement.ownerDocument.querySelectorAll(
-    ANSWER_CHOICE_SELECTOR
-  )) {
-    if (
-      isFollowingNode(metadataElement, control) &&
-      isFollowingNode(control, answerButton)
-    ) {
+  for (const control of metadataElement.ownerDocument.querySelectorAll(ANSWER_CHOICE_SELECTOR)) {
+    if (isFollowingNode(metadataElement, control) && isFollowingNode(control, answerButton)) {
       controls.push(control);
     }
   }
@@ -202,9 +190,7 @@ function isRenderedTextNode(textNode) {
 function visibleStructuredText(rootNode) {
   const parts = [];
   const documentNode =
-    rootNode.nodeType === rootNode.DOCUMENT_NODE
-      ? rootNode
-      : rootNode.ownerDocument;
+    rootNode.nodeType === rootNode.DOCUMENT_NODE ? rootNode : rootNode.ownerDocument;
   const NodeConstructor = documentNode.defaultView.Node;
 
   function appendBreak() {
@@ -238,8 +224,7 @@ function visibleStructuredText(rootNode) {
     }
 
     const createsBreak =
-      BLOCK_TAG_NAMES.has(node.tagName) ||
-      CONTROL_BREAK_TAG_NAMES.has(node.tagName);
+      BLOCK_TAG_NAMES.has(node.tagName) || CONTROL_BREAK_TAG_NAMES.has(node.tagName);
     if (createsBreak) {
       appendBreak();
     }
@@ -278,13 +263,9 @@ export function extractQuestionTextFromDocument(documentNode) {
   }
 
   const questionElement =
-    Array.from(problemElement.children).find((child) =>
-      child.matches(".ttl")
-    ) ?? null;
+    Array.from(problemElement.children).find((child) => child.matches(".ttl")) ?? null;
   const choicesElement =
-    Array.from(problemElement.children).find((child) =>
-      child.matches("ul.list")
-    ) ?? null;
+    Array.from(problemElement.children).find((child) => child.matches("ul.list")) ?? null;
   if (
     !questionElement ||
     !choicesElement ||
@@ -295,17 +276,9 @@ export function extractQuestionTextFromDocument(documentNode) {
     return "";
   }
 
-  const choiceControls = findAnswerChoiceControls(
-    metadataElement,
-    answerButton
-  );
-  const choiceElements = Array.from(choicesElement.children).filter(
-    (child) => child.matches("li")
-  );
-  if (
-    choiceElements.length < 2 ||
-    choiceElements.length !== choiceControls.length
-  ) {
+  const choiceControls = findAnswerChoiceControls(metadataElement, answerButton);
+  const choiceElements = Array.from(choicesElement.children).filter((child) => child.matches("li"));
+  if (choiceElements.length < 2 || choiceElements.length !== choiceControls.length) {
     return "";
   }
 
@@ -325,9 +298,7 @@ function normalizePageStateText(rawText) {
 }
 
 export function hasVisibleExplanationLock(documentNode) {
-  for (const lock of documentNode.querySelectorAll(
-    "#js-commentary-wrap > .item > .none_text"
-  )) {
+  for (const lock of documentNode.querySelectorAll("#js-commentary-wrap > .item > .none_text")) {
     const text = normalizePageStateText(lock.textContent ?? "");
     if (text === EXPLANATION_LOCK_TEXT && isVisibleElement(lock)) {
       return true;
@@ -357,11 +328,7 @@ export function splitText(text, maxChunkLength = 1500) {
       continue;
     }
 
-    for (
-      let offset = 0;
-      offset < sentence.length;
-      offset += maxChunkLength
-    ) {
+    for (let offset = 0; offset < sentence.length; offset += maxChunkLength) {
       chunks.push(sentence.slice(offset, offset + maxChunkLength));
     }
   }

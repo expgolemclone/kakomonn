@@ -38,13 +38,9 @@ function resolveInvocation(command, args, platform, commandShell) {
     throw new ReleaseError("ComSpec is required to execute Windows command wrappers");
   }
   const commandParts = [command, ...args];
-  const unsafePart = commandParts.find(
-    (value) => !WINDOWS_CMD_SAFE_PATTERN.test(value),
-  );
+  const unsafePart = commandParts.find((value) => !WINDOWS_CMD_SAFE_PATTERN.test(value));
   if (unsafePart !== undefined) {
-    throw new ReleaseError(
-      `Unsafe Windows command-wrapper argument was rejected: ${unsafePart}`,
-    );
+    throw new ReleaseError(`Unsafe Windows command-wrapper argument was rejected: ${unsafePart}`);
   }
   return {
     args: ["/d", "/s", "/c", commandParts.join(" ")],
@@ -61,9 +57,7 @@ export function createCommandRunner({
 } = {}) {
   const childEnvironment = {
     ...kakomonnFreeEnvironment(environment),
-    NODE_OPTIONS: [environment.NODE_OPTIONS, "--use-system-ca"]
-      .filter(Boolean)
-      .join(" "),
+    NODE_OPTIONS: [environment.NODE_OPTIONS, "--use-system-ca"].filter(Boolean).join(" "),
   };
   return (command, args = [], { capture = false } = {}) => {
     const invocation = resolveInvocation(command, args, platform, commandShell);
@@ -114,11 +108,7 @@ function parseSha(output, label) {
 
 function readJjSha(runCommand, revision) {
   return parseSha(
-    runCommand(
-      "jj",
-      ["log", "--no-graph", "-r", revision, "-T", "commit_id"],
-      { capture: true },
-    ),
+    runCommand("jj", ["log", "--no-graph", "-r", revision, "-T", "commit_id"], { capture: true }),
     `jj revision ${revision}`,
   );
 }
@@ -139,17 +129,9 @@ function readOriginUrl(runCommand) {
 
 function readGitHubRepository(runCommand, originUrl) {
   const repository = parseJson(
-    runCommand(
-      "gh",
-      [
-        "repo",
-        "view",
-        originUrl,
-        "--json",
-        "nameWithOwner,url,defaultBranchRef",
-      ],
-      { capture: true },
-    ),
+    runCommand("gh", ["repo", "view", originUrl, "--json", "nameWithOwner,url,defaultBranchRef"], {
+      capture: true,
+    }),
     "gh repo view",
   );
 
@@ -162,16 +144,9 @@ function readGitHubRepository(runCommand, originUrl) {
   }
 
   const mainSha = parseSha(
-    runCommand(
-      "gh",
-      [
-        "api",
-        `repos/${repository.nameWithOwner}/commits/main`,
-        "--jq",
-        ".sha",
-      ],
-      { capture: true },
-    ),
+    runCommand("gh", ["api", `repos/${repository.nameWithOwner}/commits/main`, "--jq", ".sha"], {
+      capture: true,
+    }),
     "GitHub main",
   );
 
@@ -185,23 +160,17 @@ function readGitHubRepository(runCommand, originUrl) {
 function assertReleaseState(runCommand, expectedSha = null) {
   runCommand("jj", ["git", "fetch", "--remote", "origin"]);
 
-  const workingCopyDiff = runCommand(
-    "jj",
-    ["diff", "--from", "main", "--to", "@", "--summary"],
-    { capture: true },
-  );
+  const workingCopyDiff = runCommand("jj", ["diff", "--from", "main", "--to", "@", "--summary"], {
+    capture: true,
+  });
   if (workingCopyDiff !== "") {
-    throw new ReleaseError(
-      `The working copy content differs from main:\n${workingCopyDiff}`,
-    );
+    throw new ReleaseError(`The working copy content differs from main:\n${workingCopyDiff}`);
   }
 
   const mainSha = readJjSha(runCommand, "main");
   const originMainSha = readJjSha(runCommand, "main@origin");
   if (mainSha !== originMainSha) {
-    throw new ReleaseError(
-      `Local main ${mainSha} does not match main@origin ${originMainSha}`,
-    );
+    throw new ReleaseError(`Local main ${mainSha} does not match main@origin ${originMainSha}`);
   }
   if (expectedSha !== null && mainSha !== expectedSha) {
     throw new ReleaseError(
@@ -242,9 +211,7 @@ export async function runRelease({
 
   logger("Building the release asset");
   runCommand("npm", ["run", "build:kakomonn-reader"]);
-  const version = readUserscriptVersion(
-    readFile(path.join(PROJECT_ROOT, RELEASE_ASSET), "utf8"),
-  );
+  const version = readUserscriptVersion(readFile(path.join(PROJECT_ROOT, RELEASE_ASSET), "utf8"));
 
   logger("Rechecking main immediately before publishing");
   const finalState = assertReleaseState(runCommand, commitSha);

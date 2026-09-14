@@ -3,24 +3,16 @@ const { readFile } = require("node:fs/promises");
 const { resolve } = require("node:path");
 
 const { chromium } = require("playwright");
-const {
-  kakomonnFreeEnvironment,
-} = require("../../scripts/kakomonn-config.cjs");
+const { kakomonnFreeEnvironment } = require("../../scripts/kakomonn-config.cjs");
 const {
   createSyncMockConfiguration,
   installSyncMockInWindow,
   PENDING_ATTEMPT_KEY,
 } = require("./sync_mock.js");
-const {
-  installReaderInChildFrames,
-} = require("./support/frame_reader.js");
+const { installReaderInChildFrames } = require("./support/frame_reader.js");
 
 const projectRoot = resolve(__dirname, "..", "..");
-const scriptPath = resolve(
-  projectRoot,
-  "kakomonn-reader",
-  "kakomonn-reader.user.js"
-);
+const scriptPath = resolve(projectRoot, "kakomonn-reader", "kakomonn-reader.user.js");
 const currentURL = "https://chushoks.kakomonn.com/questions/100";
 const nextURL = "https://chushoks.kakomonn.com/questions/101";
 
@@ -65,7 +57,7 @@ async function preparePage(browser, script) {
   await page.goto(currentURL, { waitUntil: "domcontentloaded" });
   await page.evaluate(
     installSyncMockInWindow,
-    createSyncMockConfiguration({ configured: true, nextQuestionId: "101" })
+    createSyncMockConfiguration({ configured: true, nextQuestionId: "101" }),
   );
   await installReaderInChildFrames(page, script);
   await page.addScriptTag({ content: script });
@@ -87,20 +79,22 @@ async function waitForNextQuestion(page) {
   try {
     await page.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          ?.location.href === "https://chushoks.kakomonn.com/questions/101"
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href ===
+        "https://chushoks.kakomonn.com/questions/101",
     );
   } catch (error) {
-    error.readerState = await page.evaluate((pendingAttemptKey) => ({
-      calls: window.__syncMock.calls,
-      frameURL: document.querySelector("#kakomonn-reader-frame")
-        ?.contentWindow?.location.href,
-      pendingAttempt: window.__getGMValue(pendingAttemptKey),
-      timeLimit: {
-        phase: document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase,
-        value: document.querySelector("#kakomonn-reader-time-limit")?.value,
-      },
-    }), PENDING_ATTEMPT_KEY);
+    error.readerState = await page.evaluate(
+      (pendingAttemptKey) => ({
+        calls: window.__syncMock.calls,
+        frameURL: document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href,
+        pendingAttempt: window.__getGMValue(pendingAttemptKey),
+        timeLimit: {
+          phase: document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase,
+          value: document.querySelector("#kakomonn-reader-time-limit")?.value,
+        },
+      }),
+      PENDING_ATTEMPT_KEY,
+    );
     throw error;
   }
 }
@@ -110,7 +104,7 @@ async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
   try {
     assert.equal(
       await page.locator("#kakomonn-reader-time-limit").getAttribute("data-phase"),
-      "question"
+      "question",
     );
     await page.evaluate(() => {
       Object.defineProperty(document, "visibilityState", {
@@ -122,9 +116,7 @@ async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
     await page.clock.runFor(300_100);
     await waitForNextQuestion(page);
     const answerCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v11/attempts"
-      )
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/attempts"),
     );
     assert.equal(answerCalls.length, 1);
     assert.equal(answerCalls[0].body.answerResult, "incorrect");
@@ -132,11 +124,9 @@ async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
     assert.equal(await page.evaluate(() => window.__syncMock.attemptCount), 1);
     assert.equal(
       await page.evaluate(() =>
-        window.__syncMock.calls.some(
-          (call) => new URL(call.url).pathname === "/v11/next"
-        )
+        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/next"),
       ),
-      false
+      false,
     );
     assert.deepEqual(browserErrors, []);
   } finally {
@@ -156,34 +146,25 @@ async function explanationExpiryRecordsAndStays(browser, script) {
     });
     await page.clock.runFor(1_000);
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase ===
-        "explanation"
+      () => document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase === "explanation",
     );
     await page.waitForFunction(
       () =>
-        window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v11/attempts"
-        ).length === 1
+        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/attempts")
+          .length === 1,
     );
     const recorded = await page.evaluate(() => ({
       answered: window.__syncMock.attemptCount,
-      body: window.__syncMock.calls.find(
-        (call) => new URL(call.url).pathname === "/v11/attempts"
-      ).body,
+      body: window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v11/attempts")
+        .body,
     }));
     assert.equal(recorded.answered, 1);
     assert.equal(recorded.body.answerResult, "incorrect");
     assert.equal(recorded.body.site, "chushoks.kakomonn.com");
     await page.clock.runFor(300_100);
+    assert.equal(await frame.evaluate(() => location.href), currentURL);
     assert.equal(
-      await frame.evaluate(() => location.href),
-      currentURL,
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-time-limit").evaluate(
-        (progress) => progress.value,
-      ),
+      await page.locator("#kakomonn-reader-time-limit").evaluate((progress) => progress.value),
       0,
     );
     assert.deepEqual(browserErrors, []);

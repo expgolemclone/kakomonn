@@ -4,9 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const { chromium } = require("playwright");
-const {
-  kakomonnFreeEnvironment,
-} = require("../../scripts/kakomonn-config.cjs");
+const { kakomonnFreeEnvironment } = require("../../scripts/kakomonn-config.cjs");
 const {
   installSyncMock,
   PENDING_ATTEMPT_KEY,
@@ -14,10 +12,7 @@ const {
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,
 } = require("./sync_mock");
-const {
-  dispatchNextQuestionSwipe,
-  installReaderInChildFrames,
-} = require("./support/frame_reader");
+const { dispatchNextQuestionSwipe, installReaderInChildFrames } = require("./support/frame_reader");
 
 const projectRoot = path.resolve(__dirname, "..");
 const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
@@ -34,8 +29,7 @@ const iosUserAgent =
   "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 " +
   "Mobile/15E148 Safari/604.1";
 const windowsFirefoxUserAgent =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) " +
-  "Gecko/20100101 Firefox/141.0";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) " + "Gecko/20100101 Firefox/141.0";
 const KPI_COMPLETION_SYNC_OPTIONS = Object.freeze({
   attemptCount: 49,
   attemptedQuestionCount: 49,
@@ -47,8 +41,7 @@ const iosChromeUserAgent =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/150.0.0.0 " +
   "Mobile/15E148 Safari/604.1";
-const azureSpeechUrl =
-  "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
+const azureSpeechUrl = "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
 const azureSpeechVoiceName = "ja-JP-NanamiNeural";
 const azureSpeechOutputFormat = "audio-24khz-48kbitrate-mono-mp3";
 const catalogRequestsByErrors = new WeakMap();
@@ -56,18 +49,19 @@ const catalogRequestsByErrors = new WeakMap();
 function expectedSpeechSSML(
   text,
   rate,
-  {
-    locale = "ja-JP",
-    voiceName = azureSpeechVoiceName,
-  } = {},
+  { locale = "ja-JP", voiceName = azureSpeechVoiceName } = {},
 ) {
-  const escapedText = text.replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&apos;",
-  })[character]);
+  const escapedText = text.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&apos;",
+      })[character],
+  );
   return (
     `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${locale}">` +
     `<voice name="${voiceName}">` +
@@ -242,11 +236,7 @@ const expectedCopiedMarkdown = `# 中小企業診断士試験 令和2年度（20
 ![解説画像 1](https://cdn.example.test/explanation-2.png)`;
 
 async function preparePage(page, speechMode, syncOptions = {}) {
-  const {
-    catalogFixture = null,
-    historyDashboard = false,
-    ...syncMockOptions
-  } = syncOptions;
+  const { catalogFixture = null, historyDashboard = false, ...syncMockOptions } = syncOptions;
   const errors = [];
   const catalogRequests = [];
   catalogRequestsByErrors.set(errors, catalogRequests);
@@ -436,34 +426,25 @@ async function loadMockQuestion(page, script, body = mockBody) {
   await page.addScriptTag({ content: script });
   await page.waitForSelector("#kakomonn-reader-frame");
 
-  const childFrames = page
-    .frames()
-    .filter((frame) => frame !== page.mainFrame());
+  const childFrames = page.frames().filter((frame) => frame !== page.mainFrame());
   assert.equal(childFrames.length, 1);
   const childFrame = childFrames[0];
-  await childFrame.evaluate(
-    (html) => {
-      document.body.innerHTML = html;
-      Object.defineProperty(document.querySelector("#next"), "getClientRects", {
-        configurable: true,
-        value: () => [],
+  await childFrame.evaluate((html) => {
+    document.body.innerHTML = html;
+    Object.defineProperty(document.querySelector("#next"), "getClientRects", {
+      configurable: true,
+      value: () => [],
+    });
+    window.__answerButtonClicks = 0;
+    document.querySelector(".problem_detail button").addEventListener("click", () => {
+      window.__answerButtonClicks += 1;
+    });
+    for (const choice of document.querySelectorAll(".problem_detail > ul.list > li")) {
+      choice.addEventListener("click", () => {
+        choice.classList.toggle("is-active");
       });
-      window.__answerButtonClicks = 0;
-      document
-        .querySelector(".problem_detail button")
-        .addEventListener("click", () => {
-          window.__answerButtonClicks += 1;
-        });
-      for (const choice of document.querySelectorAll(
-        ".problem_detail > ul.list > li",
-      )) {
-        choice.addEventListener("click", () => {
-          choice.classList.toggle("is-active");
-        });
-      }
-    },
-    body,
-  );
+    }
+  }, body);
   await page.evaluate(() => {
     window.__readerPopstateCount = 0;
     window.addEventListener("popstate", () => {
@@ -504,11 +485,7 @@ async function installCorrectFeedbackRandom(page, values) {
 async function assertRuntimeRejected(
   browser,
   script,
-  {
-    userAgent,
-    scriptHandler = "Tampermonkey",
-    missingAPI = null,
-  },
+  { userAgent, scriptHandler = "Tampermonkey", missingAPI = null },
 ) {
   const context = await browser.newContext({ userAgent });
   const page = await context.newPage();
@@ -547,7 +524,7 @@ async function assertReaderBridge(browser, script) {
   await context.route(`${SYNC_API_ORIGIN}/open`, (route) =>
     route.fulfill({
       contentType: "text/html; charset=utf-8",
-      body: "<!doctype html><html lang=\"ja\"><body></body></html>",
+      body: '<!doctype html><html lang="ja"><body></body></html>',
     }),
   );
 
@@ -625,10 +602,9 @@ async function assertReaderBridge(browser, script) {
     await readyPage.locator("html").getAttribute("data-kakomonn-reader-bridge-state"),
     null,
   );
-  assert.deepEqual(
-    await readyPage.evaluate(() => window.__bridgeGetValueCalls),
-    [{ key: "kakomonn-reader.sync-token", defaultValue: "" }],
-  );
+  assert.deepEqual(await readyPage.evaluate(() => window.__bridgeGetValueCalls), [
+    { key: "kakomonn-reader.sync-token", defaultValue: "" },
+  ]);
   assert.equal(await readyPage.locator("#kakomonn-reader-shell").count(), 0);
   await readyPage.evaluate(() => window.__releaseBridgeGetValue());
   await readyPage.waitForFunction(
@@ -645,19 +621,15 @@ async function assertReaderBridge(browser, script) {
   const handoff = await readyPage.evaluate(() => window.__bridgeSetValueCalls);
   assert.equal(handoff.length, 1);
   assert.equal(handoff[0].key, "kakomonn-reader.v11.launch-handoff");
-  assert.equal(
-    handoff[0].value.questionURL,
-    "https://chushoks.kakomonn.com/questions/45124",
-  );
+  assert.equal(handoff[0].value.questionURL, "https://chushoks.kakomonn.com/questions/45124");
   assert.equal(handoff[0].value.state.site, "chushoks.kakomonn.com");
-  assert.deepEqual(
-    await readyPage.evaluate(() => window.__bridgeRequests),
-    [{
+  assert.deepEqual(await readyPage.evaluate(() => window.__bridgeRequests), [
+    {
       authorization: "Bearer private-token",
       method: "GET",
       url: `${SYNC_API_ORIGIN}/v11/next?site=chushoks.kakomonn.com`,
-    }],
-  );
+    },
+  ]);
   assert.equal(await readyPage.locator("#kakomonn-reader-shell").count(), 0);
   assert.deepEqual(readyErrors, []);
 
@@ -693,7 +665,7 @@ async function assertDashboardBridge(browser, script) {
   await context.route(`${SYNC_API_ORIGIN}/`, (route) =>
     route.fulfill({
       contentType: "text/html; charset=utf-8",
-      body: "<!doctype html><html lang=\"ja\"><body></body></html>",
+      body: '<!doctype html><html lang="ja"><body></body></html>',
     }),
   );
   const page = await context.newPage();
@@ -722,66 +694,77 @@ async function assertDashboardBridge(browser, script) {
           url: details.url,
         });
         const url = new URL(details.url);
-        const responseBody = url.pathname === "/v11/dashboard"
-          ? { history: null, selectedSite: null, sites: [], state: null }
-          : {
-              date: url.searchParams.get("date"),
-              site: url.searchParams.get("site"),
-              tables: { attempts: [], stability_history: [] },
-              timeZone: "Asia/Tokyo",
-            };
+        const responseBody =
+          url.pathname === "/v11/dashboard"
+            ? { history: null, selectedSite: null, sites: [], state: null }
+            : {
+                date: url.searchParams.get("date"),
+                site: url.searchParams.get("site"),
+                tables: { attempts: [], stability_history: [] },
+                timeZone: "Asia/Tokyo",
+              };
         const status = window.__dashboardResponseStatus;
-        queueMicrotask(() => details.onload({
-          responseText: JSON.stringify(
-            status === 200 ? responseBody : { error: "unauthorized" },
-          ),
-          status,
-        }));
+        queueMicrotask(() =>
+          details.onload({
+            responseText: JSON.stringify(status === 200 ? responseBody : { error: "unauthorized" }),
+            status,
+          }),
+        );
         return { abort() {} };
       },
     };
   });
   await page.addScriptTag({ content: script });
-  await page.waitForFunction(() =>
-    document.documentElement.dataset.kakomonnDashboardBridgeState === "ready");
+  await page.waitForFunction(
+    () => document.documentElement.dataset.kakomonnDashboardBridgeState === "ready",
+  );
   await page.evaluate(() => {
-    window.__callDashboardBridge = (request) => new Promise((resolve) => {
-      const receive = (event) => {
-        const response = JSON.parse(event.detail);
-        if (response.id !== request.id) return;
-        document.removeEventListener("kakomonn-dashboard:response", receive);
-        resolve({ response, serialized: event.detail });
-      };
-      document.addEventListener("kakomonn-dashboard:response", receive);
-      document.dispatchEvent(new CustomEvent("kakomonn-dashboard:request", {
-        detail: JSON.stringify(request),
-      }));
-    });
+    window.__callDashboardBridge = (request) =>
+      new Promise((resolve) => {
+        const receive = (event) => {
+          const response = JSON.parse(event.detail);
+          if (response.id !== request.id) return;
+          document.removeEventListener("kakomonn-dashboard:response", receive);
+          resolve({ response, serialized: event.detail });
+        };
+        document.addEventListener("kakomonn-dashboard:response", receive);
+        document.dispatchEvent(
+          new CustomEvent("kakomonn-dashboard:request", {
+            detail: JSON.stringify(request),
+          }),
+        );
+      });
   });
 
-  const dashboard = await page.evaluate(() => window.__callDashboardBridge({
-    id: 1,
-    operation: "dashboard",
-    site: null,
-  }));
+  const dashboard = await page.evaluate(() =>
+    window.__callDashboardBridge({
+      id: 1,
+      operation: "dashboard",
+      site: null,
+    }),
+  );
   assert.equal(dashboard.response.ok, true);
   assert.deepEqual(dashboard.response.data.sites, []);
   assert.equal(dashboard.serialized.includes("private-token"), false);
 
-  const details = await page.evaluate(() => window.__callDashboardBridge({
-    date: "2026-08-10",
-    id: 2,
-    operation: "daily-details",
-    site: "chushoks.kakomonn.com",
-  }));
+  const details = await page.evaluate(() =>
+    window.__callDashboardBridge({
+      date: "2026-08-10",
+      id: 2,
+      operation: "daily-details",
+      site: "chushoks.kakomonn.com",
+    }),
+  );
   assert.equal(details.response.ok, true);
   assert.equal(details.response.data.date, "2026-08-10");
 
-  const invalid = await page.evaluate(() => window.__callDashboardBridge({
-    id: 3,
-    operation: "state",
-    site: "chushoks.kakomonn.com",
-  }));
+  const invalid = await page.evaluate(() =>
+    window.__callDashboardBridge({
+      id: 3,
+      operation: "state",
+      site: "chushoks.kakomonn.com",
+    }),
+  );
   assert.deepEqual(invalid.response, {
     code: "invalid_request",
     id: 3,
@@ -789,34 +772,42 @@ async function assertDashboardBridge(browser, script) {
     status: 0,
   });
 
-  await page.evaluate(() => { window.__dashboardToken = ""; });
-  const missing = await page.evaluate(() => window.__callDashboardBridge({
-    id: 4,
-    operation: "dashboard",
-    site: null,
-  }));
+  await page.evaluate(() => {
+    window.__dashboardToken = "";
+  });
+  const missing = await page.evaluate(() =>
+    window.__callDashboardBridge({
+      id: 4,
+      operation: "dashboard",
+      site: null,
+    }),
+  );
   assert.equal(missing.response.code, "token_missing");
 
   await page.evaluate(() => {
     window.__dashboardToken = "private-token";
     window.__dashboardStorageError = true;
   });
-  const storageError = await page.evaluate(() => window.__callDashboardBridge({
-    id: 5,
-    operation: "dashboard",
-    site: null,
-  }));
+  const storageError = await page.evaluate(() =>
+    window.__callDashboardBridge({
+      id: 5,
+      operation: "dashboard",
+      site: null,
+    }),
+  );
   assert.equal(storageError.response.code, "storage_unavailable");
 
   await page.evaluate(() => {
     window.__dashboardStorageError = false;
     window.__dashboardResponseStatus = 401;
   });
-  const unauthorized = await page.evaluate(() => window.__callDashboardBridge({
-    id: 6,
-    operation: "dashboard",
-    site: null,
-  }));
+  const unauthorized = await page.evaluate(() =>
+    window.__callDashboardBridge({
+      id: 6,
+      operation: "dashboard",
+      site: null,
+    }),
+  );
   assert.deepEqual(unauthorized.response, {
     code: "unauthorized",
     id: 6,
@@ -824,39 +815,31 @@ async function assertDashboardBridge(browser, script) {
     status: 401,
   });
 
-  assert.deepEqual(
-    await page.evaluate(() => window.__dashboardRequests),
-    [
-      {
-        authorization: "Bearer private-token",
-        method: "GET",
-        url: `${SYNC_API_ORIGIN}/v11/dashboard`,
-      },
-      {
-        authorization: "Bearer private-token",
-        method: "GET",
-        url: `${SYNC_API_ORIGIN}/v11/daily-details?date=2026-08-10&site=chushoks.kakomonn.com`,
-      },
-      {
-        authorization: "Bearer private-token",
-        method: "GET",
-        url: `${SYNC_API_ORIGIN}/v11/dashboard`,
-      },
-    ],
-  );
-  assert.equal(
-    await page.locator("#kakomonn-reader-shell").count(),
-    0,
-  );
+  assert.deepEqual(await page.evaluate(() => window.__dashboardRequests), [
+    {
+      authorization: "Bearer private-token",
+      method: "GET",
+      url: `${SYNC_API_ORIGIN}/v11/dashboard`,
+    },
+    {
+      authorization: "Bearer private-token",
+      method: "GET",
+      url: `${SYNC_API_ORIGIN}/v11/daily-details?date=2026-08-10&site=chushoks.kakomonn.com`,
+    },
+    {
+      authorization: "Bearer private-token",
+      method: "GET",
+      url: `${SYNC_API_ORIGIN}/v11/dashboard`,
+    },
+  ]);
+  assert.equal(await page.locator("#kakomonn-reader-shell").count(), 0);
   assert.deepEqual(errors, []);
   await context.close();
 }
 
 async function markAnswerResult(childFrame, answerResult) {
   await childFrame.evaluate((result) => {
-    const selectedAnswer = document.querySelector(
-      "input[name='answer']:checked",
-    );
+    const selectedAnswer = document.querySelector("input[name='answer']:checked");
     if (selectedAnswer === null) {
       document.querySelector("input[name='answer']").checked = true;
     }
@@ -866,14 +849,10 @@ async function markAnswerResult(childFrame, answerResult) {
     document
       .querySelector("#js-answer-result-box")
       .classList.add(result === "correct" ? "is-correct" : "is-wrong");
-    for (const lock of document.querySelectorAll(
-      "#js-commentary-wrap > .item > .none_text"
-    )) {
+    for (const lock of document.querySelectorAll("#js-commentary-wrap > .item > .none_text")) {
       lock.hidden = true;
     }
-    for (const explanation of document.querySelectorAll(
-      "#js-commentary-wrap > .item > .text"
-    )) {
+    for (const explanation of document.querySelectorAll("#js-commentary-wrap > .item > .text")) {
       explanation.hidden = false;
     }
   }, answerResult);
@@ -889,9 +868,8 @@ async function azureSpeechCalls(page) {
 async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
-      window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v11/speech-token",
-      ).length,
+      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/speech-token")
+        .length,
   );
 }
 
@@ -918,36 +896,25 @@ async function runCorrectFeedbackCase(context, script) {
       () => window.__audioPlayCalls >= 2 && typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
-    await page.waitForFunction(
-      () => window.__audioInstance?.src === "",
-    );
+    await page.waitForFunction(() => window.__audioInstance?.src === "");
 
     await markAnswerResult(childFrame, "correct");
     await childFrame.waitForSelector(".kakomonn-reader-correct-feedback");
     assert.deepEqual(
-      await childFrame.locator(".kakomonn-reader-correct-feedback").evaluate(
-        (element) => {
-          const rect = element.getBoundingClientRect();
-          const style = getComputedStyle(element);
-          return {
-            animationName: style.animationName,
-            badge: element.querySelector(
-              ".kakomonn-reader-correct-feedback-badge",
-            )?.textContent,
-            display: style.display,
-            message: element.querySelector(
-              ".kakomonn-reader-correct-feedback-message",
-            )?.textContent,
-            pointerEvents: style.pointerEvents,
-            rarity: element.dataset.rarity,
-            withinViewport:
-              rect.left >= 0 &&
-              rect.right <= innerWidth &&
-              rect.width > 0 &&
-              rect.height > 0,
-          };
-        },
-      ),
+      await childFrame.locator(".kakomonn-reader-correct-feedback").evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          animationName: style.animationName,
+          badge: element.querySelector(".kakomonn-reader-correct-feedback-badge")?.textContent,
+          display: style.display,
+          message: element.querySelector(".kakomonn-reader-correct-feedback-message")?.textContent,
+          pointerEvents: style.pointerEvents,
+          rarity: element.dataset.rarity,
+          withinViewport:
+            rect.left >= 0 && rect.right <= innerWidth && rect.width > 0 && rect.height > 0,
+        };
+      }),
       {
         animationName: "none",
         badge: "NORMAL",
@@ -964,9 +931,7 @@ async function runCorrectFeedbackCase(context, script) {
       element.dataset.duplicateMutationProbe = "true";
     });
     await page.waitForFunction(
-      () =>
-        window.__syncMock.attemptCount === 1 &&
-        window.__copiedTexts.length === 1,
+      () => window.__syncMock.attemptCount === 1 && window.__copiedTexts.length === 1,
     );
     assert.equal(
       await childFrame.evaluate(() => location.href),
@@ -981,10 +946,7 @@ async function runCorrectFeedbackCase(context, script) {
     );
     const speechCalls = await azureSpeechCalls(page);
     assert.equal(speechCalls.length, 2);
-    assert.equal(
-      speechCalls[1].body,
-      expectedSpeechSSML("61", "+70%"),
-    );
+    assert.equal(speechCalls[1].body, expectedSpeechSSML("61", "+70%"));
     await finishManualAudio(page);
     await page.waitForFunction(
       () =>
@@ -997,19 +959,15 @@ async function runCorrectFeedbackCase(context, script) {
       state: "hidden",
     });
     assert.equal(
-      (await azureSpeechCalls(page)).filter((call) =>
-        call.body.includes("en-US-JennyNeural"),
-      ).length,
+      (await azureSpeechCalls(page)).filter((call) => call.body.includes("en-US-JennyNeural"))
+        .length,
       0,
     );
-    assert.deepEqual(
-      await page.evaluate(() => window.__audioBlobs),
-      [
-        { size: 4, type: "audio/mpeg" },
-        { size: 31_796, type: "audio/wav" },
-        { size: 4, type: "audio/mpeg" },
-      ],
-    );
+    assert.deepEqual(await page.evaluate(() => window.__audioBlobs), [
+      { size: 4, type: "audio/mpeg" },
+      { size: 31_796, type: "audio/wav" },
+      { size: 4, type: "audio/mpeg" },
+    ]);
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
@@ -1036,9 +994,7 @@ async function runRestoredCorrectFeedbackKpiCase(context, script) {
   const childFrame = await loadMockQuestion(page, script);
   try {
     await page.waitForFunction(
-      () =>
-        window.__audioPlayCalls >= 2 &&
-        typeof window.__audioInstance?.onended === "function",
+      () => window.__audioPlayCalls >= 2 && typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
     await page.waitForFunction(() => window.__audioInstance?.src === "");
@@ -1067,10 +1023,7 @@ async function runRestoredCorrectFeedbackKpiCase(context, script) {
     const speechCalls = await azureSpeechCalls(page);
     assert.equal(speechCalls.length, 2);
     assert.equal(speechCalls[1].body, expectedSpeechSSML("42", "+70%"));
-    assert.equal(
-      await page.evaluate(() => window.__syncMock.attemptCount),
-      0,
-    );
+    assert.equal(await page.evaluate(() => window.__syncMock.attemptCount), 0);
     await finishManualAudio(page);
     assert.deepEqual(errors, []);
   } finally {
@@ -1087,9 +1040,7 @@ async function runCorrectFeedbackSyncRetryCase(context, script) {
   const childFrame = await loadMockQuestion(page, script);
   try {
     await page.waitForFunction(
-      () =>
-        window.__audioPlayCalls >= 2 &&
-        typeof window.__audioInstance?.onended === "function",
+      () => window.__audioPlayCalls >= 2 && typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
     await page.waitForFunction(() => window.__audioInstance?.src === "");
@@ -1102,13 +1053,11 @@ async function runCorrectFeedbackSyncRetryCase(context, script) {
       state: "visible",
     });
     await page.waitForFunction(
-      () =>
-        window.__audioBlobs.length === 2 &&
-        window.__audioInstance?.src.startsWith("blob:"),
+      () => window.__audioBlobs.length === 2 && window.__audioInstance?.src.startsWith("blob:"),
     );
     await finishManualAudio(page);
-    await page.waitForFunction(
-      () => window.__audioInstance?.src.startsWith("data:audio/mpeg;base64,"),
+    await page.waitForFunction(() =>
+      window.__audioInstance?.src.startsWith("data:audio/mpeg;base64,"),
     );
     await finishManualAudio(page);
     await page.waitForFunction(() => window.__audioInstance?.src === "");
@@ -1124,10 +1073,7 @@ async function runCorrectFeedbackSyncRetryCase(context, script) {
     const speechCalls = await azureSpeechCalls(page);
     assert.equal(speechCalls.length, 2);
     assert.equal(speechCalls[1].body, expectedSpeechSSML("61", "+70%"));
-    assert.equal(
-      await page.evaluate(() => window.__syncMock.attemptCount),
-      1,
-    );
+    assert.equal(await page.evaluate(() => window.__syncMock.attemptCount), 1);
     await finishManualAudio(page);
     assert.deepEqual(errors, []);
   } finally {
@@ -1141,10 +1087,7 @@ async function runSpeechLookaheadCase(context, script) {
   await page.evaluate(() => {
     window.__syncMock.holdSpeechRequestNumber = 2;
   });
-  const longBody = mockBody.replace(
-    "これは動作確認用の問題文です.",
-    `${"あ".repeat(1_600)}.`,
-  );
+  const longBody = mockBody.replace("これは動作確認用の問題文です.", `${"あ".repeat(1_600)}.`);
   const childFrame = await loadMockQuestion(page, script, longBody);
   try {
     await page.waitForFunction(
@@ -1159,9 +1102,7 @@ async function runSpeechLookaheadCase(context, script) {
     await markAnswerResult(childFrame, "correct");
     try {
       await page.waitForFunction(
-        () =>
-          window.__audioBlobs.length >= 2 &&
-          window.__audioInstance?.src.startsWith("blob:"),
+        () => window.__audioBlobs.length >= 2 && window.__audioInstance?.src.startsWith("blob:"),
       );
     } catch (error) {
       const state = await page.evaluate(() => ({
@@ -1179,8 +1120,7 @@ async function runSpeechLookaheadCase(context, script) {
     assert.deepEqual(
       await page.evaluate(() => ({
         abortedRequestCount: window.__syncMock.abortedRequestCount,
-        releaseHeldSpeechRequest:
-          window.__syncMock.releaseHeldSpeechRequest !== null,
+        releaseHeldSpeechRequest: window.__syncMock.releaseHeldSpeechRequest !== null,
       })),
       { abortedRequestCount: 1, releaseHeldSpeechRequest: false },
     );
@@ -1211,22 +1151,16 @@ async function runCatalogSinglePassValidationCase(context, script, mismatch) {
       );
       assert.equal(
         await page.evaluate(() =>
-          window.__syncMock.calls.some(
-            (call) => new URL(call.url).pathname === "/v11/questions",
-          ),
+          window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/questions"),
         ),
         false,
       );
     } else {
       await page.waitForFunction(() =>
-        window.__syncMock.calls.some(
-          (call) => new URL(call.url).pathname === "/v11/questions",
-        ),
+        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/questions"),
       );
       const update = await page.evaluate(() =>
-        window.__syncMock.calls.find(
-          (call) => new URL(call.url).pathname === "/v11/questions",
-        ),
+        window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v11/questions"),
       );
       assert.deepEqual(update.body.questionIds, ["1", "2", "3", "4", "5"]);
     }
@@ -1275,24 +1209,18 @@ async function runCatalogDoesNotBlockSpeechCase(context, script) {
     } finally {
       clearTimeout(lastPageTimeout);
     }
-    await page.waitForFunction(
-      () => window.__syncMock.speechRequestCount === 1,
-    );
+    await page.waitForFunction(() => window.__syncMock.speechRequestCount === 1);
     assert.equal(typeof catalogFixture.releaseLastPage, "function");
     assert.equal(
       await page.evaluate(() =>
-        window.__syncMock.calls.some(
-          (call) => new URL(call.url).pathname === "/v11/questions",
-        ),
+        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/questions"),
       ),
       false,
     );
     catalogFixture.releaseLastPage();
     catalogFixture.releaseLastPage = null;
     await page.waitForFunction(() =>
-      window.__syncMock.calls.some(
-        (call) => new URL(call.url).pathname === "/v11/questions",
-      ),
+      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/questions"),
     );
     assert.deepEqual([...errors], []);
   } finally {
@@ -1327,21 +1255,18 @@ async function runContinuousMutationCase(context, script) {
     });
     await markAnswerResult(childFrame, "incorrect");
     await page.waitForFunction(
-      () =>
-        window.__syncMock.attemptCount === 1 &&
-        window.__copiedTexts.length === 1,
+      () => window.__syncMock.attemptCount === 1 && window.__copiedTexts.length === 1,
       null,
       { timeout: 500 },
     );
-    assert.equal(
-      await childFrame.evaluate(() => window.__unrelatedLockProbeVisited),
-      false,
-    );
+    assert.equal(await childFrame.evaluate(() => window.__unrelatedLockProbeVisited), false);
     assert.deepEqual(errors, []);
   } finally {
-    await childFrame.evaluate(() => {
-      window.clearInterval(window.__unrelatedMutationInterval);
-    }).catch(() => {});
+    await childFrame
+      .evaluate(() => {
+        window.clearInterval(window.__unrelatedMutationInterval);
+      })
+      .catch(() => {});
     await page.close();
   }
 }
@@ -1367,25 +1292,18 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
         const style = getComputedStyle(element);
         return {
           animationName: style.animationName,
-          badge: element.querySelector(
-            ".kakomonn-reader-correct-feedback-badge",
-          )?.textContent,
+          badge: element.querySelector(".kakomonn-reader-correct-feedback-badge")?.textContent,
           coversViewport:
             Math.abs(rect.left) <= 1 &&
             Math.abs(rect.top) <= 1 &&
             rect.right >= innerWidth - 1 &&
             rect.bottom >= innerHeight - 1,
-          message: element.querySelector(
-            ".kakomonn-reader-correct-feedback-message",
-          )?.textContent,
+          message: element.querySelector(".kakomonn-reader-correct-feedback-message")?.textContent,
           pointerEvents: style.pointerEvents,
           position: style.position,
           rarity: element.dataset.rarity,
           withinViewport:
-            rect.left >= -1 &&
-            rect.right <= innerWidth + 1 &&
-            rect.width > 0 &&
-            rect.height > 0,
+            rect.left >= -1 && rect.right <= innerWidth + 1 && rect.width > 0 && rect.height > 0,
         };
       }),
       {
@@ -1403,22 +1321,16 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
     await feedback.waitFor({ state: "hidden" });
     const speechCalls = await azureSpeechCalls(page);
     assert.equal(speechCalls.length, 2);
-    assert.equal(
-      speechCalls[1].body,
-      expectedSpeechSSML("61", "+70%"),
-    );
+    assert.equal(speechCalls[1].body, expectedSpeechSSML("61", "+70%"));
     assert.equal(
       speechCalls.some((call) => call.body.includes("en-US-JennyNeural")),
       false,
     );
-    assert.deepEqual(
-      await page.evaluate(() => window.__audioBlobs.slice(0, 3)),
-      [
-        { size: 4, type: "audio/mpeg" },
-        { size: expected.waveSize, type: "audio/wav" },
-        { size: 4, type: "audio/mpeg" },
-      ],
-    );
+    assert.deepEqual(await page.evaluate(() => window.__audioBlobs.slice(0, 3)), [
+      { size: 4, type: "audio/mpeg" },
+      { size: expected.waveSize, type: "audio/wav" },
+      { size: 4, type: "audio/mpeg" },
+    ]);
     assert.deepEqual(
       await page.evaluate(() => window.__correctFeedbackRandomCalls),
       expected.randomValues,
@@ -1440,18 +1352,15 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
       () => window.__audioPlayCalls >= 2 && typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
-    await page.waitForFunction(
-      () => window.__audioInstance?.src === "",
-    );
+    await page.waitForFunction(() => window.__audioInstance?.src === "");
 
     await markAnswerResult(childFrame, "correct");
     await page.waitForFunction(
       () =>
         window.__syncMock.attemptCount === 1 &&
         window.__copiedTexts.length === 1 &&
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          ?.location.href ===
-        "https://chushoks.kakomonn.com/questions/45125",
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href ===
+          "https://chushoks.kakomonn.com/questions/45125",
     );
 
     await childFrame.evaluate((html) => {
@@ -1462,9 +1371,7 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
       window.__syncMock.nextQuestionId = null;
     });
     await markAnswerResult(childFrame, "correct");
-    await page.waitForFunction(
-      () => window.__correctFeedbackRandomCalls.length === 2,
-    );
+    await page.waitForFunction(() => window.__correctFeedbackRandomCalls.length === 2);
 
     await finishManualAudio(page);
     await page.waitForFunction(
@@ -1495,9 +1402,7 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
     );
     await queuedFeedback.waitFor();
     assert.equal(
-      await queuedFeedback
-        .locator(".kakomonn-reader-correct-feedback-message")
-        .innerText(),
+      await queuedFeedback.locator(".kakomonn-reader-correct-feedback-message").innerText(),
       "Legendary! That's Right!!",
     );
     await finishManualAudio(page);
@@ -1515,17 +1420,12 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
         typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
-    await page.waitForFunction(
-      () => window.__audioInstance?.src === "",
-    );
+    await page.waitForFunction(() => window.__audioInstance?.src === "");
     const speechCalls = await azureSpeechCalls(page);
     assert.equal(speechCalls.length, 3);
     assert.equal(speechCalls[1].body, expectedSpeechSSML("61", "+70%"));
     assert.equal(speechCalls[2].body, expectedSpeechSSML("60", "+70%"));
-    assert.deepEqual(
-      await page.evaluate(() => window.__correctFeedbackRandomCalls),
-      [11, 0],
-    );
+    assert.deepEqual(await page.evaluate(() => window.__correctFeedbackRandomCalls), [11, 0]);
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
@@ -1534,19 +1434,13 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
 
 async function runCorrectCelebrationFeedbackCase(context, script) {
   const page = await context.newPage();
-  await page.route(
-    "https://kakomonn-congratulations.kakomonn.workers.dev/**",
-    (route) =>
-      route.fulfill({
-        contentType: "text/html; charset=utf-8",
-        body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
-      }),
+  await page.route("https://kakomonn-congratulations.kakomonn.workers.dev/**", (route) =>
+    route.fulfill({
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
+    }),
   );
-  const errors = await preparePage(
-    page,
-    "audio-manual",
-    KPI_COMPLETION_SYNC_OPTIONS,
-  );
+  const errors = await preparePage(page, "audio-manual", KPI_COMPLETION_SYNC_OPTIONS);
   await installCorrectFeedbackRandom(page, [111]);
   const childFrame = await loadMockQuestion(page, script);
   try {
@@ -1567,19 +1461,13 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
         window.__syncMock.attemptCount === 50 &&
         window.__copiedTexts.length === 1 &&
         history.state?.entryType === "current" &&
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          ?.location.href ===
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href ===
           "https://chushoks.kakomonn.com/questions/45124",
     );
     await page.waitForTimeout(200);
+    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
     assert.equal(
-      page.url(),
-      "https://chushoks.kakomonn.com/questions/45124",
-    );
-    assert.equal(
-      await childFrame
-        .locator(".kakomonn-reader-correct-feedback-message")
-        .innerText(),
+      await childFrame.locator(".kakomonn-reader-correct-feedback-message").innerText(),
       "That's Right!!",
     );
 
@@ -1590,10 +1478,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
         window.__audioInstance?.src.startsWith("data:audio/mpeg;base64,") &&
         typeof window.__audioInstance?.onended === "function",
     );
-    assert.equal(
-      page.url(),
-      "https://chushoks.kakomonn.com/questions/45124",
-    );
+    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
     await finishManualAudio(page);
     await page.waitForFunction(
       () =>
@@ -1605,8 +1490,8 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
     assert.equal(speechCalls.length, 2);
     assert.equal(speechCalls[1].body, expectedSpeechSSML("0", "+70%"));
     await finishManualAudio(page);
-    await page.waitForURL((url) =>
-      url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
+    await page.waitForURL(
+      (url) => url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
     assert.equal(new URL(page.url()).searchParams.get("dailyKpiCompleted"), "true");
     assert.deepEqual(errors, []);
@@ -1620,11 +1505,7 @@ async function runIncorrectEnterReservationCase(context, script) {
   const errors = await preparePage(page, "none");
   const childFrame = await loadMockQuestion(page, script);
   try {
-    if (
-      await page
-        .locator("#kakomonn-reader-error-dialog")
-        .getAttribute("open") !== null
-    ) {
+    if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate(() => {
@@ -1632,26 +1513,20 @@ async function runIncorrectEnterReservationCase(context, script) {
     });
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
-    await page.waitForFunction(
-      () => window.__syncMock.releaseHeldRequest !== null,
-    );
+    await page.waitForFunction(() => window.__syncMock.releaseHeldRequest !== null);
 
     await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
     await page.waitForTimeout(100);
-    assert.equal(
-      page.url(),
-      "https://chushoks.kakomonn.com/questions/45124",
-    );
+    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
 
     await page.evaluate(() => window.__syncMock.releaseHeldRequest());
     await page.waitForFunction(
       ({ pendingAttemptKey, nextURL }) =>
         window.__getGMValue(pendingAttemptKey) === null &&
         location.href === nextURL &&
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          ?.location.href === nextURL,
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href === nextURL,
       {
         pendingAttemptKey: PENDING_ATTEMPT_KEY,
         nextURL: "https://chushoks.kakomonn.com/questions/45125",
@@ -1660,9 +1535,7 @@ async function runIncorrectEnterReservationCase(context, script) {
     assert.deepEqual(
       await page.evaluate(() => ({
         attempts: window.__syncMock.calls.filter(
-          (call) =>
-            call.method === "POST" &&
-            new URL(call.url).pathname === "/v11/attempts",
+          (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
         ).length,
         copies: window.__copiedTexts.length,
       })),
@@ -1685,9 +1558,7 @@ async function runIncorrectEnterCopyRetryCase(context, script) {
     });
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
-    await page.waitForFunction(
-      () => window.__syncMock.releaseHeldSetValue !== null,
-    );
+    await page.waitForFunction(() => window.__syncMock.releaseHeldSetValue !== null);
     await page.keyboard.press("Enter");
     await page.evaluate(() => window.__syncMock.releaseHeldSetValue());
 
@@ -1698,10 +1569,7 @@ async function runIncorrectEnterCopyRetryCase(context, script) {
       await page.locator("#kakomonn-reader-error-title").innerText(),
       "クリップボードへコピーできません",
     );
-    assert.equal(
-      page.url(),
-      "https://chushoks.kakomonn.com/questions/45124",
-    );
+    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
 
     await page.evaluate(() => {
       window.__clipboardWriteFails = false;
@@ -1711,8 +1579,7 @@ async function runIncorrectEnterCopyRetryCase(context, script) {
       ({ pendingAttemptKey, nextURL }) =>
         window.__getGMValue(pendingAttemptKey) === null &&
         location.href === nextURL &&
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          ?.location.href === nextURL,
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href === nextURL,
       {
         pendingAttemptKey: PENDING_ATTEMPT_KEY,
         nextURL: "https://chushoks.kakomonn.com/questions/45125",
@@ -1721,9 +1588,7 @@ async function runIncorrectEnterCopyRetryCase(context, script) {
     assert.deepEqual(
       await page.evaluate(() => ({
         attempts: window.__syncMock.calls.filter(
-          (call) =>
-            call.method === "POST" &&
-            new URL(call.url).pathname === "/v11/attempts",
+          (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
         ).length,
         copies: window.__copiedTexts.length,
       })),
@@ -1740,11 +1605,7 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
   const errors = await preparePage(page, "none");
   const childFrame = await loadMockQuestion(page, script);
   try {
-    if (
-      await page
-        .locator("#kakomonn-reader-error-dialog")
-        .getAttribute("open") !== null
-    ) {
+    if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate(() => {
@@ -1752,9 +1613,7 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
     });
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
-    await page.waitForFunction(
-      () => window.__syncMock.releaseHeldSetValue !== null,
-    );
+    await page.waitForFunction(() => window.__syncMock.releaseHeldSetValue !== null);
     await page.keyboard.press("Enter");
     await page.evaluate(() => {
       window.__syncMock.failNextRequest = true;
@@ -1768,18 +1627,14 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
       await page.locator("#kakomonn-reader-error-title").innerText(),
       "解答記録を同期できません",
     );
-    assert.equal(
-      page.url(),
-      "https://chushoks.kakomonn.com/questions/45124",
-    );
+    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
 
     await page.locator("#kakomonn-reader-error-retry").click();
     await page.waitForFunction(
       ({ pendingAttemptKey, nextURL }) =>
         window.__getGMValue(pendingAttemptKey) === null &&
         location.href === nextURL &&
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          ?.location.href === nextURL,
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href === nextURL,
       {
         pendingAttemptKey: PENDING_ATTEMPT_KEY,
         nextURL: "https://chushoks.kakomonn.com/questions/45125",
@@ -1788,9 +1643,7 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
     assert.deepEqual(
       await page.evaluate(() => ({
         attemptCalls: window.__syncMock.calls.filter(
-          (call) =>
-            call.method === "POST" &&
-            new URL(call.url).pathname === "/v11/attempts",
+          (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
         ).length,
         attempts: window.__syncMock.attemptCount,
         copies: window.__copiedTexts.length,
@@ -1808,11 +1661,7 @@ async function runMismatchedCelebrationRejectedCase(context, script) {
   const errors = await preparePage(page, "none", KPI_COMPLETION_SYNC_OPTIONS);
   const childFrame = await loadMockQuestion(page, script);
   try {
-    if (
-      await page
-        .locator("#kakomonn-reader-error-dialog")
-        .getAttribute("open") !== null
-    ) {
+    if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate(() => {
@@ -1837,17 +1686,11 @@ async function runMismatchedCelebrationRejectedCase(context, script) {
     );
     assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
     assert.equal(
-      await page.evaluate(
-        (key) => window.__getGMValue(key)?.phase,
-        PENDING_ATTEMPT_KEY,
-      ),
+      await page.evaluate((key) => window.__getGMValue(key)?.phase, PENDING_ATTEMPT_KEY),
       "queued",
     );
     assert.equal(
-      await page.evaluate(
-        (key) => window.__getGMValue(key),
-        PENDING_CELEBRATION_KEY,
-      ),
+      await page.evaluate((key) => window.__getGMValue(key), PENDING_CELEBRATION_KEY),
       null,
     );
     assert.deepEqual(errors, []);
@@ -1858,13 +1701,11 @@ async function runMismatchedCelebrationRejectedCase(context, script) {
 
 async function runIncorrectCelebrationEnterCase(context, script) {
   const page = await context.newPage();
-  await page.route(
-    "https://kakomonn-congratulations.kakomonn.workers.dev/**",
-    (route) =>
-      route.fulfill({
-        contentType: "text/html; charset=utf-8",
-        body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
-      }),
+  await page.route("https://kakomonn-congratulations.kakomonn.workers.dev/**", (route) =>
+    route.fulfill({
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
+    }),
   );
   const errors = await preparePage(page, "audio", KPI_COMPLETION_SYNC_OPTIONS);
   const childFrame = await loadMockQuestion(page, script);
@@ -1879,8 +1720,8 @@ async function runIncorrectCelebrationEnterCase(context, script) {
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
     await page.keyboard.press("Enter");
-    await page.waitForURL((url) =>
-      url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
+    await page.waitForURL(
+      (url) => url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
     assert.equal(new URL(page.url()).searchParams.get("dailyKpiCompleted"), "true");
     assert.deepEqual(errors, []);
@@ -1891,13 +1732,11 @@ async function runIncorrectCelebrationEnterCase(context, script) {
 
 async function runOrphanedCelebrationRecoveryCase(context, script) {
   const page = await context.newPage();
-  await page.route(
-    "https://kakomonn-congratulations.kakomonn.workers.dev/**",
-    (route) =>
-      route.fulfill({
-        contentType: "text/html; charset=utf-8",
-        body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
-      }),
+  await page.route("https://kakomonn-congratulations.kakomonn.workers.dev/**", (route) =>
+    route.fulfill({
+      contentType: "text/html; charset=utf-8",
+      body: "<!doctype html><html><body><h1>dailyKpiCompleted達成</h1></body></html>",
+    }),
   );
   const errors = await preparePage(page, "none", {
     pendingCelebration: {
@@ -1908,8 +1747,8 @@ async function runOrphanedCelebrationRecoveryCase(context, script) {
   });
   try {
     await page.addScriptTag({ content: script });
-    await page.waitForURL((url) =>
-      url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
+    await page.waitForURL(
+      (url) => url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
     assert.equal(new URL(page.url()).searchParams.get("dailyKpiCompleted"), "true");
     assert.deepEqual(errors, []);
@@ -1925,11 +1764,7 @@ async function runIncorrectEnterNoNextCase(context, script) {
   });
   const childFrame = await loadMockQuestion(page, script);
   try {
-    if (
-      await page
-        .locator("#kakomonn-reader-error-dialog")
-        .getAttribute("open") !== null
-    ) {
+    if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate(() => {
@@ -1937,9 +1772,7 @@ async function runIncorrectEnterNoNextCase(context, script) {
     });
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
-    await page.waitForFunction(
-      () => window.__syncMock.releaseHeldRequest !== null,
-    );
+    await page.waitForFunction(() => window.__syncMock.releaseHeldRequest !== null);
     await page.keyboard.press("Enter");
     await page.evaluate(() => window.__syncMock.releaseHeldRequest());
 
@@ -1950,10 +1783,7 @@ async function runIncorrectEnterNoNextCase(context, script) {
       await page.locator("#kakomonn-reader-error-title").innerText(),
       "出題できる問題はありません",
     );
-    assert.equal(
-      page.url(),
-      "https://chushoks.kakomonn.com/questions/45124",
-    );
+    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
@@ -1963,15 +1793,14 @@ async function runIncorrectEnterNoNextCase(context, script) {
 async function assertIncorrectSkip(context, script) {
   const page = await context.newPage();
   const errors = await preparePage(page, "none");
-    const frame = await loadMockQuestion(page, script);
+  const frame = await loadMockQuestion(page, script);
   try {
     await page.waitForFunction(
       () =>
-        window.__syncMock.calls.some(
-          (call) => new URL(call.url).pathname === "/v11/state",
-        ) && document.querySelector("#kakomonn-reader-sync-settings")?.open === false,
+        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/state") &&
+        document.querySelector("#kakomonn-reader-sync-settings")?.open === false,
     );
-    if (await page.locator("#kakomonn-reader-error-dialog").getAttribute("open") !== null) {
+    if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await frame.evaluate(() => {
@@ -1980,16 +1809,12 @@ async function assertIncorrectSkip(context, script) {
     });
     await frame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("n");
-    await page.waitForFunction(
-      () => window.__syncMock.attemptCount === 1,
-    );
+    await page.waitForFunction(() => window.__syncMock.attemptCount === 1);
     const calls = await page.evaluate(() => ({
       attempts: window.__syncMock.calls.filter(
         (call) => new URL(call.url).pathname === "/v11/attempts",
       ),
-      next: window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v11/next",
-      ),
+      next: window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/next"),
     }));
     assert.equal(calls.attempts.length, 1);
     assert.equal(calls.attempts[0].body.questionId, "45124");
@@ -1997,8 +1822,8 @@ async function assertIncorrectSkip(context, script) {
     assert.equal(calls.next.length, 0);
     await page.waitForFunction(
       () =>
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          ?.location.href === "https://chushoks.kakomonn.com/questions/45125",
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href ===
+        "https://chushoks.kakomonn.com/questions/45125",
     );
     assert.deepEqual(errors, []);
   } finally {
@@ -2019,10 +1844,7 @@ async function main() {
     /^\/\/ @updateURL\s+https:\/\/github\.com\/expgolemclone\/kakomonn\/releases\/latest\/download\/kakomonn-reader\.user\.js\s*$/m,
   );
   assert.equal(script.includes(SYNC_API_ORIGIN), true);
-  assert.equal(
-    script.includes(`// @connect      ${new URL(SYNC_API_ORIGIN).host}`),
-    true,
-  );
+  assert.equal(script.includes(`// @connect      ${new URL(SYNC_API_ORIGIN).host}`), true);
   assert.equal(script.includes("speechSynthesis"), false);
   assert.equal(script.includes("SpeechSynthesisUtterance"), false);
   assert.equal(script.includes("Microsoft Ayumi"), false);
@@ -2041,27 +1863,17 @@ async function main() {
     });
     const childFrame = await loadMockQuestion(page, script);
     await childFrame.waitForFunction(() => {
-      const heading = document.querySelector(
-        ".sect_problem > .ttl_box03 > h2.main",
-      );
+      const heading = document.querySelector(".sect_problem > .ttl_box03 > h2.main");
       return heading !== null && Math.abs(heading.getBoundingClientRect().top) <= 1;
     });
     const initialProblemPresentation = await childFrame.evaluate(() => {
-      const problemHeading = document.querySelector(
-        ".sect_problem > .ttl_box03 > h2.main",
-      );
+      const problemHeading = document.querySelector(".sect_problem > .ttl_box03 > h2.main");
       return {
-        answerRightDisplay: getComputedStyle(
-          document.querySelector(".answer-right"),
-        ).display,
-        commentaryDisplay: getComputedStyle(
-          document.querySelector(".sect_commentary"),
-        ).display,
+        answerRightDisplay: getComputedStyle(document.querySelector(".answer-right")).display,
+        commentaryDisplay: getComputedStyle(document.querySelector(".sect_commentary")).display,
         explanationText: document.querySelector("#explanation").textContent,
         fixedButtonDisplays: Array.from(
-          document.querySelectorAll(
-            ".p-post > .fixed_btn, .p-post > .fixed_btn_menu",
-          ),
+          document.querySelectorAll(".p-post > .fixed_btn, .p-post > .fixed_btn_menu"),
           (element) => getComputedStyle(element).display,
         ),
         headingTop: problemHeading.getBoundingClientRect().top,
@@ -2071,14 +1883,9 @@ async function main() {
     });
     assert.equal(initialProblemPresentation.answerRightDisplay, "none");
     assert.equal(initialProblemPresentation.commentaryDisplay, "none");
-    assert.deepEqual(initialProblemPresentation.fixedButtonDisplays, [
-      "none",
-      "none",
-    ]);
+    assert.deepEqual(initialProblemPresentation.fixedButtonDisplays, ["none", "none"]);
     assert.equal(
-      initialProblemPresentation.explanationText.includes(
-        "これは動作確認用の解説です.",
-      ),
+      initialProblemPresentation.explanationText.includes("これは動作確認用の解説です."),
       true,
     );
     assert.equal(Math.abs(initialProblemPresentation.headingTop) <= 1, true);
@@ -2089,10 +1896,7 @@ async function main() {
     assert.equal(await page.locator("#kakomonn-reader-status").count(), 0);
     assert.equal(await page.locator("#kakomonn-reader-learning-metrics").count(), 0);
     assert.equal(await page.locator("#kakomonn-reader-sync-settings-button").count(), 0);
-    assert.equal(
-      await page.locator("#kakomonn-reader-start").count(),
-      0,
-    );
+    assert.equal(await page.locator("#kakomonn-reader-start").count(), 0);
     assert.equal(await page.locator("#kakomonn-reader-next").count(), 0);
     assert.equal(await page.locator("#kakomonn-reader-copy").count(), 0);
     assert.equal(await page.locator("#kakomonn-reader-actions").count(), 0);
@@ -2106,17 +1910,12 @@ async function main() {
       await page.setViewportSize(viewport);
       const readerLayout = await page.evaluate(() => {
         const shellElement = document.querySelector("#kakomonn-reader-shell");
-        const frameElement = document.querySelector(
-          "#kakomonn-reader-frame",
-        );
-        const progressElement = document.querySelector(
-          "#kakomonn-reader-time-limit",
-        );
+        const frameElement = document.querySelector("#kakomonn-reader-frame");
+        const progressElement = document.querySelector("#kakomonn-reader-time-limit");
         const shell = shellElement.getBoundingClientRect();
         const frame = frameElement.getBoundingClientRect();
         const progress = progressElement.getBoundingClientRect();
-        const approximatelyEqual = (left, right) =>
-          Math.abs(left - right) <= 1;
+        const approximatelyEqual = (left, right) => Math.abs(left - right) <= 1;
         return {
           frameFillsShell:
             approximatelyEqual(frame.top, shell.top) &&
@@ -2124,8 +1923,7 @@ async function main() {
             approximatelyEqual(frame.bottom, shell.bottom) &&
             approximatelyEqual(frame.left, shell.left) &&
             frame.height > 0,
-          noHorizontalOverflow:
-            shellElement.scrollWidth <= shellElement.clientWidth,
+          noHorizontalOverflow: shellElement.scrollWidth <= shellElement.clientWidth,
           questionStartsAtTop: approximatelyEqual(shell.top, 0),
           shellFillsViewport:
             approximatelyEqual(shell.right, innerWidth) &&
@@ -2191,57 +1989,40 @@ async function main() {
       await childFrame.evaluate(() => {
         const choiceImage = document.createElement("img");
         choiceImage.id = "dynamic-choice-image";
-        document
-          .querySelector(".problem_detail > ul.list > li > div")
-          .appendChild(choiceImage);
-        const darkModeStyle = document.querySelector(
-          "#kakomonn-reader-dark-mode"
-        );
+        document.querySelector(".problem_detail > ul.list > li > div").appendChild(choiceImage);
+        const darkModeStyle = document.querySelector("#kakomonn-reader-dark-mode");
         window.__darkModeStyleNode = darkModeStyle;
         window.__darkModeStyleText = darkModeStyle?.textContent;
-        const darkSurface = document.querySelector(
-          "#dark-mode-dark-surface",
-        );
+        const darkSurface = document.querySelector("#dark-mode-dark-surface");
         return {
           bodyBackground: getComputedStyle(document.body).backgroundColor,
           bodyColor: getComputedStyle(document.body).color,
           choiceBackground: getComputedStyle(
-            document.querySelector(".problem_detail > ul.list > li > div")
+            document.querySelector(".problem_detail > ul.list > li > div"),
           ).backgroundColor,
           choiceColor: getComputedStyle(
-            document.querySelector(".problem_detail > ul.list > li > div")
+            document.querySelector(".problem_detail > ul.list > li > div"),
           ).color,
           colorScheme: getComputedStyle(document.documentElement).colorScheme,
           darkFilter: getComputedStyle(darkSurface).filter,
           explanationBackground: getComputedStyle(
-            document.querySelector("#js-commentary-wrap > .item > .text")
+            document.querySelector("#js-commentary-wrap > .item > .text"),
           ).backgroundColor,
           imageFilters: [
             choiceImage,
             document.querySelector(".problem_detail > .zoomin img"),
             document.querySelector("#js-commentary-wrap > .item .text img"),
           ].map((image) => getComputedStyle(image).filter),
-          inputBackground: getComputedStyle(
-            document.querySelector(".problem_detail input")
-          ).backgroundColor,
-          linkColor: getComputedStyle(
-            document.querySelector(".problem_detail a")
-          ).color,
-          nonContentFilter: getComputedStyle(
-            document.querySelector("body > div[hidden] > img")
-          ).filter,
-          problemBackground: getComputedStyle(
-            document.querySelector(".problem_detail")
-          ).backgroundColor,
-          siteHeaderDisplay: getComputedStyle(
-            document.querySelector("header.l-header")
-          ).display,
-          styleCount: document.querySelectorAll(
-            "#kakomonn-reader-dark-mode"
-          ).length,
-          toggleCount: document.querySelectorAll(
-            "[data-kakomonn-reader-dark-toggle]"
-          ).length,
+          inputBackground: getComputedStyle(document.querySelector(".problem_detail input"))
+            .backgroundColor,
+          linkColor: getComputedStyle(document.querySelector(".problem_detail a")).color,
+          nonContentFilter: getComputedStyle(document.querySelector("body > div[hidden] > img"))
+            .filter,
+          problemBackground: getComputedStyle(document.querySelector(".problem_detail"))
+            .backgroundColor,
+          siteHeaderDisplay: getComputedStyle(document.querySelector("header.l-header")).display,
+          styleCount: document.querySelectorAll("#kakomonn-reader-dark-mode").length,
+          toggleCount: document.querySelectorAll("[data-kakomonn-reader-dark-toggle]").length,
         };
       }),
       {
@@ -2263,36 +2044,25 @@ async function main() {
       },
     );
     await childFrame.evaluate(() => {
-      document.querySelector(".problem_detail").classList.add(
-        "dark-mode-stability-probe"
-      );
+      document.querySelector(".problem_detail").classList.add("dark-mode-stability-probe");
       document.querySelector("#dark-mode-dark-surface").style.backgroundColor =
         "rgb(255, 255, 255)";
     });
     await page.waitForTimeout(100);
     assert.deepEqual(
       await childFrame.evaluate(() => ({
-        darkBackground: getComputedStyle(
-          document.querySelector("#dark-mode-dark-surface")
-        ).backgroundColor,
-        darkFilter: getComputedStyle(
-          document.querySelector("#dark-mode-dark-surface")
-        ).filter,
-        dynamicChoiceFilter: getComputedStyle(
-          document.querySelector("#dynamic-choice-image")
-        ).filter,
+        darkBackground: getComputedStyle(document.querySelector("#dark-mode-dark-surface"))
+          .backgroundColor,
+        darkFilter: getComputedStyle(document.querySelector("#dark-mode-dark-surface")).filter,
+        dynamicChoiceFilter: getComputedStyle(document.querySelector("#dynamic-choice-image"))
+          .filter,
         sameStyleNode:
-          window.__darkModeStyleNode ===
-          document.querySelector("#kakomonn-reader-dark-mode"),
+          window.__darkModeStyleNode === document.querySelector("#kakomonn-reader-dark-mode"),
         sameStyleText:
           window.__darkModeStyleText ===
           document.querySelector("#kakomonn-reader-dark-mode").textContent,
-        styleCount: document.querySelectorAll(
-          "#kakomonn-reader-dark-mode"
-        ).length,
-        toggleCount: document.querySelectorAll(
-          "[data-kakomonn-reader-dark-toggle]"
-        ).length,
+        styleCount: document.querySelectorAll("#kakomonn-reader-dark-mode").length,
+        toggleCount: document.querySelectorAll("[data-kakomonn-reader-dark-toggle]").length,
       })),
       {
         darkBackground: "rgb(255, 255, 255)",
@@ -2304,18 +2074,14 @@ async function main() {
         toggleCount: 0,
       },
     );
-    await childFrame.locator("#dynamic-choice-image").evaluate(
-      (element) => element.remove()
-    );
+    await childFrame.locator("#dynamic-choice-image").evaluate((element) => element.remove());
     await page.waitForFunction(
       () => window.__audioPlayCalls >= 1 && window.__audioInstance?.src === "",
     );
     assert.equal(await childFrame.locator("#scroll-next").isHidden(), true);
     assert.equal(await childFrame.locator("#next").isHidden(), true);
     const answerInputs = childFrame.locator("input[name='answer']");
-    const displayChoices = childFrame.locator(
-      ".problem_detail > ul.list > li",
-    );
+    const displayChoices = childFrame.locator(".problem_detail > ul.list > li");
     await page.locator("#kakomonn-reader-frame").focus();
 
     await page.keyboard.press("q");
@@ -2325,17 +2091,25 @@ async function main() {
     assert.equal(await answerInputs.first().isChecked(), false);
 
     await page.keyboard.press("a");
-    assert.equal(await displayChoices.first().evaluate((choice) =>
-      choice.classList.contains("is-active")), true);
+    assert.equal(
+      await displayChoices.first().evaluate((choice) => choice.classList.contains("is-active")),
+      true,
+    );
     await page.keyboard.press("a");
-    assert.equal(await displayChoices.first().evaluate((choice) =>
-      choice.classList.contains("is-active")), false);
+    assert.equal(
+      await displayChoices.first().evaluate((choice) => choice.classList.contains("is-active")),
+      false,
+    );
     await page.keyboard.press("s");
-    assert.equal(await displayChoices.nth(1).evaluate((choice) =>
-      choice.classList.contains("is-active")), true);
+    assert.equal(
+      await displayChoices.nth(1).evaluate((choice) => choice.classList.contains("is-active")),
+      true,
+    );
     await page.waitForTimeout(500);
-    assert.equal(await displayChoices.nth(1).evaluate((choice) =>
-      choice.classList.contains("is-active")), true);
+    assert.equal(
+      await displayChoices.nth(1).evaluate((choice) => choice.classList.contains("is-active")),
+      true,
+    );
 
     await childFrame.evaluate(() => {
       const list = document.querySelector(".problem_detail > ul.list");
@@ -2350,9 +2124,7 @@ async function main() {
           `<li data-shortcut-fixture><label><input type="radio" name="answer">${choiceNumber}</label></li>`,
         );
       }
-      for (const choice of list.querySelectorAll(
-        "li[data-shortcut-fixture]",
-      )) {
+      for (const choice of list.querySelectorAll("li[data-shortcut-fixture]")) {
         choice.addEventListener("click", () => {
           choice.classList.toggle("is-active");
         });
@@ -2361,20 +2133,21 @@ async function main() {
 
     await page.keyboard.press("g");
     await page.waitForTimeout(500);
-    assert.equal(await displayChoices.nth(4).evaluate((choice) =>
-      choice.classList.contains("is-active")), true);
+    assert.equal(
+      await displayChoices.nth(4).evaluate((choice) => choice.classList.contains("is-active")),
+      true,
+    );
     await childFrame.locator("body").evaluate(() => window.scrollTo(0, 600));
     await page.keyboard.press("g");
     await page.keyboard.press("g");
-    await childFrame.locator("body").evaluate(() =>
-      new Promise((resolve) => requestAnimationFrame(() => resolve())),
-    );
+    await childFrame
+      .locator("body")
+      .evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
+    assert.equal(await childFrame.locator("body").evaluate(() => window.scrollY), 0);
     assert.equal(
-      await childFrame.locator("body").evaluate(() => window.scrollY),
-      0,
+      await displayChoices.nth(4).evaluate((choice) => choice.classList.contains("is-active")),
+      true,
     );
-    assert.equal(await displayChoices.nth(4).evaluate((choice) =>
-      choice.classList.contains("is-active")), true);
 
     await page.keyboard.press("y");
     await page.keyboard.press("y");
@@ -2385,11 +2158,13 @@ async function main() {
         { ctrlKey: true, key: "y" },
         { isComposing: true, key: "y" },
       ]) {
-        body.dispatchEvent(new KeyboardEvent("keydown", {
-          bubbles: true,
-          cancelable: true,
-          ...init,
-        }));
+        body.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            ...init,
+          }),
+        );
       }
     });
     await page.waitForTimeout(500);
@@ -2408,10 +2183,7 @@ async function main() {
     assert.equal(await answerInputs.first().isChecked(), true);
 
     await page.keyboard.press("Enter");
-    assert.equal(
-      await childFrame.evaluate(() => window.__answerButtonClicks),
-      1,
-    );
+    assert.equal(await childFrame.evaluate(() => window.__answerButtonClicks), 1);
     await childFrame.evaluate(() => {
       const target = document.querySelector("input[name='answer']");
       target.dispatchEvent(
@@ -2439,32 +2211,25 @@ async function main() {
         }),
       );
     });
-    assert.equal(
-      await childFrame.evaluate(() => window.__answerButtonClicks),
-      1,
-    );
+    assert.equal(await childFrame.evaluate(() => window.__answerButtonClicks), 1);
     assert.equal(await answerInputs.first().isChecked(), true);
-    assert.equal(await displayChoices.first().evaluate((choice) =>
-      choice.classList.contains("is-active")), false);
+    assert.equal(
+      await displayChoices.first().evaluate((choice) => choice.classList.contains("is-active")),
+      false,
+    );
 
     await childFrame.locator("body").evaluate(() => window.scrollTo(0, 100));
     await answerInputs.first().focus();
     await page.keyboard.press("z");
-    await childFrame.locator("body").evaluate(() =>
-      new Promise((resolve) => requestAnimationFrame(() => resolve())),
-    );
-    assert.equal(
-      await childFrame.locator("body").evaluate(() => window.scrollY),
-      200,
-    );
+    await childFrame
+      .locator("body")
+      .evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
+    assert.equal(await childFrame.locator("body").evaluate(() => window.scrollY), 200);
     await page.keyboard.press("x");
-    await childFrame.locator("body").evaluate(() =>
-      new Promise((resolve) => requestAnimationFrame(() => resolve())),
-    );
-    assert.equal(
-      await childFrame.locator("body").evaluate(() => window.scrollY),
-      100,
-    );
+    await childFrame
+      .locator("body")
+      .evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
+    assert.equal(await childFrame.locator("body").evaluate(() => window.scrollY), 100);
     await childFrame.locator("body").evaluate((body) => {
       body.dispatchEvent(
         new KeyboardEvent("keydown", {
@@ -2475,10 +2240,7 @@ async function main() {
         }),
       );
     });
-    assert.equal(
-      await childFrame.locator("body").evaluate(() => window.scrollY),
-      200,
-    );
+    assert.equal(await childFrame.locator("body").evaluate(() => window.scrollY), 200);
     await childFrame.locator("body").evaluate((body) => {
       body.dispatchEvent(
         new KeyboardEvent("keydown", {
@@ -2489,59 +2251,44 @@ async function main() {
         }),
       );
     });
-    assert.equal(
-      await childFrame.locator("body").evaluate(() => window.scrollY),
-      100,
-    );
+    assert.equal(await childFrame.locator("body").evaluate(() => window.scrollY), 100);
 
     const shortcutTextInput = childFrame.locator("#shortcut-text-input");
     await shortcutTextInput.focus();
-    const scrollBeforeTextInput = await childFrame
-      .locator("body")
-      .evaluate(() => window.scrollY);
+    const scrollBeforeTextInput = await childFrame.locator("body").evaluate(() => window.scrollY);
     await page.keyboard.type("qwert asdfg n gg yy xz ");
     await page.keyboard.press("Shift+H");
-    assert.equal(
-      await shortcutTextInput.inputValue(),
-      "qwert asdfg n gg yy xz H",
-    );
-    assert.equal(
-      page.url(),
-      "https://chushoks.kakomonn.com/questions/45124",
-    );
+    assert.equal(await shortcutTextInput.inputValue(), "qwert asdfg n gg yy xz H");
+    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
     assert.equal(await answerInputs.first().isChecked(), true);
-    assert.equal(await displayChoices.first().evaluate((choice) =>
-      choice.classList.contains("is-active")), false);
+    assert.equal(
+      await displayChoices.first().evaluate((choice) => choice.classList.contains("is-active")),
+      false,
+    );
     assert.equal(
       await childFrame.locator("body").evaluate(() => window.scrollY),
       scrollBeforeTextInput,
     );
-    assert.equal(
-      await childFrame.evaluate(() => window.__answerButtonClicks),
-      1,
-    );
-    await page.evaluate(() => { window.__syncMock.nextAttemptStabilityDaysDelta = 31; });
+    assert.equal(await childFrame.evaluate(() => window.__answerButtonClicks), 1);
+    await page.evaluate(() => {
+      window.__syncMock.nextAttemptStabilityDaysDelta = 31;
+    });
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
-    assert.equal(
-      await childFrame.evaluate(() => window.__answerButtonClicks),
-      2,
-    );
+    assert.equal(await childFrame.evaluate(() => window.__answerButtonClicks), 2);
     assert.equal(
       await page.evaluate(
         () =>
           window.__syncMock.calls.filter(
-            (call) =>
-              call.method === "POST" &&
-              new URL(call.url).pathname === "/v11/attempts",
+            (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
           ).length,
       ),
       0,
     );
 
-    await childFrame.locator("[data-shortcut-fixture]").evaluateAll(
-      (elements) => elements.forEach((element) => element.remove()),
-    );
+    await childFrame
+      .locator("[data-shortcut-fixture]")
+      .evaluateAll((elements) => elements.forEach((element) => element.remove()));
 
     assert.deepEqual((await azureSpeechCalls(page))[0], {
       method: "POST",
@@ -2593,9 +2340,7 @@ async function main() {
     }
     assert.deepEqual(
       await childFrame.evaluate(() => ({
-        commentaryDisplay: getComputedStyle(
-          document.querySelector(".sect_commentary"),
-        ).display,
+        commentaryDisplay: getComputedStyle(document.querySelector(".sect_commentary")).display,
         phase: document.documentElement.dataset.kakomonnReaderPhase ?? null,
       })),
       { commentaryDisplay: "block", phase: null },
@@ -2606,34 +2351,30 @@ async function main() {
     assert.equal((await azureSpeechCalls(page)).length, 1);
     assert.equal(await speechTokenCallCount(page), 1);
 
-    const stateCallsAfterAnswer = await page.evaluate(() =>
-      window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v11/state",
-      ).length,
+    const stateCallsAfterAnswer = await page.evaluate(
+      () =>
+        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+          .length,
     );
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.waitForTimeout(100);
     assert.equal(
-      await page.evaluate(() =>
-        window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v11/state",
-        ).length,
+      await page.evaluate(
+        () =>
+          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+            .length,
       ),
       stateCallsAfterAnswer,
     );
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 1);
-    assert.equal(
-      await page.evaluate(() => window.__copiedTexts[0]),
-      expectedCopiedMarkdown,
-    );
+    assert.equal(await page.evaluate(() => window.__copiedTexts[0]), expectedCopiedMarkdown);
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
     await page.waitForFunction(
       ({ pendingAttemptKey, nextURL }) =>
         window.__getGMValue(pendingAttemptKey) === null &&
         location.href === nextURL &&
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          ?.location.href === nextURL,
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href === nextURL,
       {
         pendingAttemptKey: PENDING_ATTEMPT_KEY,
         nextURL: "https://chushoks.kakomonn.com/questions/45125",
@@ -2651,43 +2392,38 @@ async function main() {
       });
     });
     await page.keyboard.press("h");
-    assert.equal(
-      page.url(),
-      "https://chushoks.kakomonn.com/questions/45125",
-    );
+    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45125");
     await childFrame.locator("body").evaluate((body) => {
       for (const init of [
         { key: "H", repeat: true, shiftKey: true },
         { ctrlKey: true, key: "H", shiftKey: true },
       ]) {
-        body.dispatchEvent(new KeyboardEvent("keydown", {
-          bubbles: true,
-          cancelable: true,
-          ...init,
-        }));
+        body.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            ...init,
+          }),
+        );
       }
     });
-    assert.equal(
-      page.url(),
-      "https://chushoks.kakomonn.com/questions/45125",
-    );
+    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45125");
     await page.locator("#kakomonn-reader-frame").focus();
     await page.keyboard.press("Shift+H");
     await page.waitForURL("https://chushoks.kakomonn.com/dashboard");
     await page.evaluate(() => history.forward());
     await page.waitForFunction(
       () =>
-        location.href ===
-          "https://chushoks.kakomonn.com/questions/45125" &&
+        location.href === "https://chushoks.kakomonn.com/questions/45125" &&
         history.state?.owner === "kakomonn-reader" &&
         history.state.entryType === "current" &&
         history.state.index === 2,
     );
 
-    const stateCallsBeforeResume = await page.evaluate(() =>
-      window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v11/state",
-      ).length,
+    const stateCallsBeforeResume = await page.evaluate(
+      () =>
+        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+          .length,
     );
     await page.evaluate(() => {
       window.__syncMock.stabilityDays = 7;
@@ -2700,10 +2436,10 @@ async function main() {
     });
     await page.waitForTimeout(100);
     assert.equal(
-      await page.evaluate(() =>
-        window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v11/state",
-        ).length,
+      await page.evaluate(
+        () =>
+          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+            .length,
       ),
       stateCallsBeforeResume,
     );
@@ -2755,23 +2491,13 @@ async function main() {
     await runCorrectCelebrationFeedbackCase(context, script);
 
     const speechShortcutPage = await context.newPage();
-    const speechShortcutErrors = await preparePage(
-      speechShortcutPage,
-      "audio-manual",
-    );
-    const speechShortcutFrame = await loadMockQuestion(
-      speechShortcutPage,
-      script,
-    );
+    const speechShortcutErrors = await preparePage(speechShortcutPage, "audio-manual");
+    const speechShortcutFrame = await loadMockQuestion(speechShortcutPage, script);
     await speechShortcutPage.waitForFunction(
       () => window.__audioPlayCalls >= 2 && window.__audioInstance?.paused === false,
     );
-    const speechShortcutInput = speechShortcutFrame.locator(
-      "#shortcut-text-input",
-    );
-    const pauseCallsBeforeInput = await speechShortcutPage.evaluate(
-      () => window.__audioPauseCalls,
-    );
+    const speechShortcutInput = speechShortcutFrame.locator("#shortcut-text-input");
+    const pauseCallsBeforeInput = await speechShortcutPage.evaluate(() => window.__audioPauseCalls);
     await speechShortcutInput.focus();
     await speechShortcutPage.keyboard.type("n ");
     assert.equal(await speechShortcutInput.inputValue(), "n ");
@@ -2782,23 +2508,19 @@ async function main() {
     );
 
     await speechShortcutFrame.locator("input[name='answer']").first().focus();
-    const playCallsBeforePause = await speechShortcutPage.evaluate(
-      () => window.__audioPlayCalls,
-    );
+    const playCallsBeforePause = await speechShortcutPage.evaluate(() => window.__audioPlayCalls);
     await speechShortcutPage.keyboard.press("Space");
     assert.equal(await speechShortcutPage.evaluate(() => window.__audioInstance.paused), true);
     assert.equal(
       await speechShortcutPage.evaluate(() => window.__audioPauseCalls),
       pauseCallsBeforeInput + 1,
     );
-    assert.equal(
-      await speechShortcutPage.locator("#kakomonn-reader-skip").count(),
-      0,
-    );
+    assert.equal(await speechShortcutPage.locator("#kakomonn-reader-skip").count(), 0);
 
     await speechShortcutPage.keyboard.press("Space");
     await speechShortcutPage.waitForFunction(
-      (expected) => window.__audioPlayCalls === expected && window.__audioInstance?.paused === false,
+      (expected) =>
+        window.__audioPlayCalls === expected && window.__audioInstance?.paused === false,
       playCallsBeforePause + 1,
     );
     assert.equal(
@@ -2808,9 +2530,10 @@ async function main() {
 
     await speechShortcutPage.keyboard.press("s");
     assert.equal(
-      await speechShortcutFrame.locator(".problem_detail > ul.list > li").nth(1).evaluate(
-        (choice) => choice.classList.contains("is-active"),
-      ),
+      await speechShortcutFrame
+        .locator(".problem_detail > ul.list > li")
+        .nth(1)
+        .evaluate((choice) => choice.classList.contains("is-active")),
       true,
     );
     assert.equal(
@@ -2823,10 +2546,7 @@ async function main() {
     await speechShortcutPage.close();
 
     const gestureRetryPage = await context.newPage();
-    const gestureRetryErrors = await preparePage(
-      gestureRetryPage,
-      "audio-gesture-required",
-    );
+    const gestureRetryErrors = await preparePage(gestureRetryPage, "audio-gesture-required");
     const gestureRetryFrame = await loadMockQuestion(gestureRetryPage, script);
     await gestureRetryPage.waitForFunction(
       () => window.__audioPlayCalls === 1 && window.__audioInstance?.src === "",
@@ -2837,9 +2557,7 @@ async function main() {
     );
     assert.equal((await azureSpeechCalls(gestureRetryPage)).length, 0);
     assert.equal(await speechTokenCallCount(gestureRetryPage), 0);
-    const gestureRetryAnswer = gestureRetryFrame
-      .locator("input[name='answer']")
-      .first();
+    const gestureRetryAnswer = gestureRetryFrame.locator("input[name='answer']").first();
     await gestureRetryAnswer.click();
     assert.equal(await gestureRetryAnswer.isChecked(), true);
     await gestureRetryPage.waitForFunction(
@@ -2860,18 +2578,11 @@ async function main() {
     await gestureRetryPage.close();
 
     const autoplayBlockedPage = await context.newPage();
-    const autoplayBlockedErrors = await preparePage(
-      autoplayBlockedPage,
-      "audio-autoplay-blocked",
-      { historyDashboard: true },
-    );
-    const autoplayBlockedFrame = await loadMockQuestion(
-      autoplayBlockedPage,
-      script,
-    );
-    const autoplayBlockedHistoryLength = await autoplayBlockedPage.evaluate(
-      () => history.length,
-    );
+    const autoplayBlockedErrors = await preparePage(autoplayBlockedPage, "audio-autoplay-blocked", {
+      historyDashboard: true,
+    });
+    const autoplayBlockedFrame = await loadMockQuestion(autoplayBlockedPage, script);
+    const autoplayBlockedHistoryLength = await autoplayBlockedPage.evaluate(() => history.length);
     await autoplayBlockedPage.waitForFunction(
       () => window.__audioPlayCalls === 1 && window.__audioInstance?.src === "",
     );
@@ -2881,8 +2592,8 @@ async function main() {
         window.__syncMock.attemptCount === 1 &&
         window.__copiedTexts.length === 1 &&
         location.href === "https://chushoks.kakomonn.com/questions/45125" &&
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          ?.location.href === "https://chushoks.kakomonn.com/questions/45125" &&
+        document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href ===
+          "https://chushoks.kakomonn.com/questions/45125" &&
         history.state?.entryType === "current" &&
         window.__getGMValue(pendingAttemptKey) === null,
       PENDING_ATTEMPT_KEY,
@@ -2892,41 +2603,28 @@ async function main() {
       autoplayBlockedHistoryLength,
     );
     assert.equal(
-      await autoplayBlockedPage
-        .locator("#kakomonn-reader-error-dialog")
-        .getAttribute("open"),
+      await autoplayBlockedPage.locator("#kakomonn-reader-error-dialog").getAttribute("open"),
       null,
     );
     assert.deepEqual(autoplayBlockedErrors, []);
     await autoplayBlockedPage.close();
 
     const delayedSyncPage = await context.newPage();
-    const delayedSyncErrors = await preparePage(
-      delayedSyncPage,
-      "audio",
-    );
+    const delayedSyncErrors = await preparePage(delayedSyncPage, "audio");
     await delayedSyncPage.evaluate(() => {
       window.__syncMock.holdNextRequest = true;
     });
     await loadMockQuestion(delayedSyncPage, script);
-    await delayedSyncPage.waitForFunction(
-      () => window.__syncMock.releaseHeldRequest !== null,
-    );
+    await delayedSyncPage.waitForFunction(() => window.__syncMock.releaseHeldRequest !== null);
     assert.equal((await azureSpeechCalls(delayedSyncPage)).length, 0);
     assert.equal(await speechTokenCallCount(delayedSyncPage), 0);
     await delayedSyncPage.evaluate(() => window.__syncMock.releaseHeldRequest());
     await delayedSyncPage.waitForFunction(
-      (url) =>
-        window.__syncMock.calls.filter((call) => call.url === url).length === 1,
+      (url) => window.__syncMock.calls.filter((call) => call.url === url).length === 1,
       azureSpeechUrl,
     );
-    await delayedSyncPage.waitForFunction(
-      () => window.__audioInstance?.src === "",
-    );
-    assert.equal(
-      await delayedSyncPage.locator("#kakomonn-reader-start").count(),
-      0,
-    );
+    await delayedSyncPage.waitForFunction(() => window.__audioInstance?.src === "");
+    assert.equal(await delayedSyncPage.locator("#kakomonn-reader-start").count(), 0);
     assert.equal((await azureSpeechCalls(delayedSyncPage)).length, 1);
     assert.equal(await speechTokenCallCount(delayedSyncPage), 1);
     assert.deepEqual(delayedSyncErrors, []);
@@ -2954,10 +2652,7 @@ async function main() {
     });
     assert.equal(await setupPage.locator("#kakomonn-reader-controls").count(), 0);
     assert.equal(
-      await setupPage.evaluate(
-        (key) => window.__getGMValue(key),
-        SYNC_TOKEN_KEY,
-      ),
+      await setupPage.evaluate((key) => window.__getGMValue(key), SYNC_TOKEN_KEY),
       "test-sync-token",
     );
     assert.deepEqual(setupErrors, []);
@@ -2974,44 +2669,25 @@ async function main() {
     await failedSetupPage.evaluate(() => {
       window.__syncMock.failNextSetValue = true;
     });
-    await failedSetupPage
-      .locator("#kakomonn-reader-sync-token")
-      .fill("test-sync-token");
-    await failedSetupPage
-      .locator("#kakomonn-reader-sync-settings-save")
-      .click();
-    await failedSetupPage.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-sync-settings-error")
-          .textContent.startsWith("学習記録を同期できません."),
+    await failedSetupPage.locator("#kakomonn-reader-sync-token").fill("test-sync-token");
+    await failedSetupPage.locator("#kakomonn-reader-sync-settings-save").click();
+    await failedSetupPage.waitForFunction(() =>
+      document
+        .querySelector("#kakomonn-reader-sync-settings-error")
+        .textContent.startsWith("学習記録を同期できません."),
     );
+    assert.equal(await failedSetupPage.locator("#kakomonn-reader-sync-settings").isVisible(), true);
     assert.equal(
-      await failedSetupPage.locator("#kakomonn-reader-sync-settings").isVisible(),
-      true,
-    );
-    assert.equal(
-      await failedSetupPage.evaluate(
-        (key) => window.__getGMValue(key),
-        SYNC_TOKEN_KEY,
-      ),
+      await failedSetupPage.evaluate((key) => window.__getGMValue(key), SYNC_TOKEN_KEY),
       null,
     );
-    assert.equal(
-      await failedSetupPage.locator("#kakomonn-reader-start").count(),
-      0,
-    );
-    assert.equal(
-      await failedSetupPage.locator("#kakomonn-reader-next").count(),
-      0,
-    );
+    assert.equal(await failedSetupPage.locator("#kakomonn-reader-start").count(), 0);
+    assert.equal(await failedSetupPage.locator("#kakomonn-reader-next").count(), 0);
     assert.deepEqual(failedSetupErrors, []);
     await failedSetupPage.close();
 
     const unsupportedPage = await context.newPage();
-    const unsupportedErrors = await preparePage(
-      unsupportedPage,
-      "none",
-    );
+    const unsupportedErrors = await preparePage(unsupportedPage, "none");
     await loadMockQuestion(unsupportedPage, script);
     await unsupportedPage.waitForFunction(
       () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
@@ -3020,18 +2696,9 @@ async function main() {
       await unsupportedPage.locator("#kakomonn-reader-error-title").innerText(),
       "読み上げを利用できません",
     );
-    assert.equal(
-      await unsupportedPage.locator("#kakomonn-reader-start").count(),
-      0,
-    );
-    assert.equal(
-      await unsupportedPage.locator("#kakomonn-reader-next").count(),
-      0,
-    );
-    assert.equal(
-      await unsupportedPage.evaluate(() => typeof window.Audio),
-      "undefined",
-    );
+    assert.equal(await unsupportedPage.locator("#kakomonn-reader-start").count(), 0);
+    assert.equal(await unsupportedPage.locator("#kakomonn-reader-next").count(), 0);
+    assert.equal(await unsupportedPage.evaluate(() => typeof window.Audio), "undefined");
     assert.equal((await azureSpeechCalls(unsupportedPage)).length, 0);
     assert.equal(await speechTokenCallCount(unsupportedPage), 0);
     assert.deepEqual(unsupportedErrors, []);
@@ -3067,13 +2734,10 @@ async function main() {
     const firstAnswer = iosFrame.locator("input[name='answer']").first();
     assert.equal(await firstAnswer.isChecked(), false);
     await iosPage.waitForFunction(
-      (url) =>
-        window.__syncMock.calls.filter((call) => call.url === url).length === 1,
+      (url) => window.__syncMock.calls.filter((call) => call.url === url).length === 1,
       azureSpeechUrl,
     );
-    await iosPage.waitForFunction(
-      () => window.__audioInstance?.src === "",
-    );
+    await iosPage.waitForFunction(() => window.__audioInstance?.src === "");
     assert.deepEqual((await azureSpeechCalls(iosPage))[0], {
       method: "POST",
       url: azureSpeechUrl,
@@ -3100,33 +2764,25 @@ async function main() {
         window.__copiedTexts.length === 1 &&
         history.state?.entryType === "current",
     );
-    assert.equal(
-      await iosPage.evaluate(() => window.__readerPopstateCount),
-      0,
-    );
+    assert.equal(await iosPage.evaluate(() => window.__readerPopstateCount), 0);
     assert.equal(await iosPage.evaluate(() => history.length), iosHistoryLength);
-    await iosPage.waitForFunction(
-      () => window.__audioInstance?.src === "",
-    );
+    await iosPage.waitForFunction(() => window.__audioInstance?.src === "");
     assert.equal((await azureSpeechCalls(iosPage)).length, 1);
     assert.equal(await speechTokenCallCount(iosPage), 1);
-    await iosPage.evaluate(() => { window.__syncMock.nextAttemptStabilityDaysDelta = 31; });
-    assert.equal(
-      await iosPage.evaluate(() => window.__copiedTexts[0]),
-      expectedCopiedMarkdown,
-    );
+    await iosPage.evaluate(() => {
+      window.__syncMock.nextAttemptStabilityDaysDelta = 31;
+    });
+    assert.equal(await iosPage.evaluate(() => window.__copiedTexts[0]), expectedCopiedMarkdown);
     assert.deepEqual(await dispatchNextQuestionSwipe(iosFrame), {
       dispatchResult: false,
       endDefaultPrevented: true,
     });
-    await iosFrame.waitForURL(
-      "https://chushoks.kakomonn.com/questions/45125",
-    );
+    await iosFrame.waitForURL("https://chushoks.kakomonn.com/questions/45125");
     assert.equal(await iosPage.evaluate(() => history.length), iosHistoryLength);
-    const iosStateCallsBeforeResume = await iosPage.evaluate(() =>
-      window.__syncMock.calls.filter(
-        (call) => new URL(call.url).pathname === "/v11/state",
-      ).length,
+    const iosStateCallsBeforeResume = await iosPage.evaluate(
+      () =>
+        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+          .length,
     );
     await iosPage.evaluate(() => {
       window.__syncMock.stabilityDays = 6;
@@ -3139,10 +2795,10 @@ async function main() {
     });
     await iosPage.waitForTimeout(100);
     assert.equal(
-      await iosPage.evaluate(() =>
-        window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v11/state",
-        ).length,
+      await iosPage.evaluate(
+        () =>
+          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/state")
+            .length,
       ),
       iosStateCallsBeforeResume,
     );
@@ -3151,9 +2807,7 @@ async function main() {
       await iosPage.evaluate(
         () =>
           window.__syncMock.calls.filter(
-            (call) =>
-              call.method === "POST" &&
-              new URL(call.url).pathname === "/v11/attempts",
+            (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
           ).length,
       ),
       1,
@@ -3161,14 +2815,8 @@ async function main() {
     assert.deepEqual(iosErrors, []);
 
     const iosGestureRetryPage = await iosContext.newPage();
-    const iosGestureRetryErrors = await preparePage(
-      iosGestureRetryPage,
-      "audio-gesture-required",
-    );
-    const iosGestureRetryFrame = await loadMockQuestion(
-      iosGestureRetryPage,
-      script,
-    );
+    const iosGestureRetryErrors = await preparePage(iosGestureRetryPage, "audio-gesture-required");
+    const iosGestureRetryFrame = await loadMockQuestion(iosGestureRetryPage, script);
     await iosGestureRetryPage.waitForFunction(
       () => window.__audioPlayCalls === 1 && window.__audioInstance?.src === "",
     );
@@ -3178,19 +2826,14 @@ async function main() {
     );
     assert.equal((await azureSpeechCalls(iosGestureRetryPage)).length, 0);
     assert.equal(await speechTokenCallCount(iosGestureRetryPage), 0);
-    const iosGestureRetryAnswer = iosGestureRetryFrame
-      .locator("input[name='answer']")
-      .first();
+    const iosGestureRetryAnswer = iosGestureRetryFrame.locator("input[name='answer']").first();
     await iosGestureRetryAnswer.tap();
     assert.equal(await iosGestureRetryAnswer.isChecked(), true);
     await iosGestureRetryPage.waitForFunction(
-      (url) =>
-        window.__syncMock.calls.filter((call) => call.url === url).length === 1,
+      (url) => window.__syncMock.calls.filter((call) => call.url === url).length === 1,
       azureSpeechUrl,
     );
-    await iosGestureRetryPage.waitForFunction(
-      () => window.__audioInstance?.src === "",
-    );
+    await iosGestureRetryPage.waitForFunction(() => window.__audioInstance?.src === "");
     assert.equal(await speechTokenCallCount(iosGestureRetryPage), 1);
     assert.deepEqual(iosGestureRetryErrors, []);
     await iosContext.close();

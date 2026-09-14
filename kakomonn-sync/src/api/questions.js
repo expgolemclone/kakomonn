@@ -33,7 +33,7 @@ export async function handleQuestions(request, env) {
   const result = await getLearningStateStub(env).replaceCatalog(
     body.site,
     body.questionIds,
-    body.expectedGeneration
+    body.expectedGeneration,
   );
   if (result?.error === "catalog_conflict") {
     return jsonResponse(result, 409);

@@ -21,7 +21,7 @@ for (const experience of manifest.experiences) {
     }
     throw error;
   }
-  if (source.includes(marker) || source.includes('/shared/experience-runtime.js')) {
+  if (source.includes(marker) || source.includes("/shared/experience-runtime.js")) {
     continue;
   }
   const closingBody = source.lastIndexOf("</body>");

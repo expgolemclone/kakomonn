@@ -14,15 +14,11 @@ const KAKOMONN_CONFIGURATION_KEYS = Object.freeze([
   "KAKOMONN_IOS_VERSION",
   "KAKOMONN_IOS_DEVICE",
 ]);
-const KAKOMONN_CONFIGURATION_KEY_SET = new Set(
-  KAKOMONN_CONFIGURATION_KEYS,
-);
+const KAKOMONN_CONFIGURATION_KEY_SET = new Set(KAKOMONN_CONFIGURATION_KEYS);
 
 function configuredKeyOccurrences(contents) {
   const occurrences = new Map();
-  for (const match of contents.matchAll(
-    /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/gm,
-  )) {
+  for (const match of contents.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/gm)) {
     const key = match[1];
     occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
   }

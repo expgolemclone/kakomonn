@@ -25,7 +25,7 @@ export async function issueSpeechToken(env, fetcher = fetch) {
       response.status === 401 || response.status === 403
         ? "server_misconfigured"
         : "speech_service_unavailable",
-      response.status === 401 || response.status === 403 ? 500 : 502
+      response.status === 401 || response.status === 403 ? 500 : 502,
     );
   }
   let token;

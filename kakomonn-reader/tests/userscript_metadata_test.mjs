@@ -8,7 +8,8 @@ const expectedMatches = new Set([
   "https://kakomonn-sync.kakomonn.workers.dev/",
   "https://kakomonn-sync.kakomonn.workers.dev/open",
 ]);
-const updateURL = "https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js";
+const updateURL =
+  "https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js";
 
 function metadataEntries(source) {
   const lines = source.replaceAll("\r\n", "\n").split("\n");

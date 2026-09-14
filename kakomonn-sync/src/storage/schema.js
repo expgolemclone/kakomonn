@@ -8,7 +8,7 @@ function tableNames(storage) {
     storage.sql
       .exec("SELECT name FROM sqlite_master WHERE type = 'table'")
       .toArray()
-      .map((row) => row.name)
+      .map((row) => row.name),
   );
 }
 
@@ -162,7 +162,8 @@ function migrateSchemaV3ToV4(storage) {
 }
 
 function migrateSchemaV4ToV5(storage, today, startMs, endMs) {
-  storage.sql.exec(`
+  storage.sql.exec(
+    `
     CREATE TABLE learning_metrics (
       site TEXT PRIMARY KEY,
       stability_days REAL NOT NULL CHECK (stability_days >= 0),
@@ -200,7 +201,7 @@ function migrateSchemaV4ToV5(storage, today, startMs, endMs) {
     FROM catalog_metadata metadata`,
     today,
     startMs,
-    endMs
+    endMs,
   );
 
   storage.sql.exec(`
@@ -283,7 +284,7 @@ function migrateSchemaV7ToV8(storage, today, startMs, endMs) {
     startMs,
     endMs,
     startMs,
-    endMs
+    endMs,
   );
   storage.sql.exec(`
     DROP TABLE learning_metrics_v7;
@@ -323,7 +324,7 @@ function migrateSchemaV8ToV9(storage) {
   const attempts = storage.sql
     .exec(
       `SELECT site, question_id, attempted_at_ms, answer_result
-       FROM attempts ORDER BY site, attempted_at_ms, operation_id`
+       FROM attempts ORDER BY site, attempted_at_ms, operation_id`,
     )
     .toArray();
   const lastAttemptDates = new Map();
@@ -359,7 +360,7 @@ function migrateSchemaV8ToV9(storage) {
        WHERE site = ? AND question_id = ?`,
       value.date,
       value.site,
-      value.questionId
+      value.questionId,
     );
   }
   for (const metrics of dailyMetrics.values()) {
@@ -372,7 +373,7 @@ function migrateSchemaV8ToV9(storage) {
       metrics.attemptCount,
       metrics.correctAttemptCount,
       metrics.site,
-      metrics.date
+      metrics.date,
     );
   }
 
@@ -384,17 +385,15 @@ function migrateSchemaV8ToV9(storage) {
       storage.sql
         .exec("SELECT question_id FROM questions WHERE site = ?", site)
         .toArray()
-        .map((row) => row.question_id)
+        .map((row) => row.question_id),
     );
     storage.sql.exec(
       `UPDATE catalog_metadata SET question_ids_json = ? WHERE site = ?`,
       JSON.stringify(questionIds),
-      site
+      site,
     );
   }
-  storage.sql.exec(
-    "UPDATE schema_metadata SET version = 9 WHERE singleton = 1"
-  );
+  storage.sql.exec("UPDATE schema_metadata SET version = 9 WHERE singleton = 1");
 }
 
 function migrateSchemaV9ToV10(storage, today) {
@@ -422,7 +421,7 @@ function migrateSchemaV9ToV10(storage, today) {
       `SELECT site, question_id, MIN(attempted_at_ms) AS first_attempted_at_ms
        FROM attempts
        GROUP BY site, question_id
-       ORDER BY site, question_id`
+       ORDER BY site, question_id`,
     )
     .toArray();
   for (const attempt of firstAttempts) {
@@ -439,20 +438,18 @@ function migrateSchemaV9ToV10(storage, today) {
        WHERE site = ? AND date = ?`,
       count,
       site,
-      date
+      date,
     );
     if (date === today) {
       storage.sql.exec(
         `UPDATE learning_metrics SET today_new_question_count = ?
          WHERE site = ?`,
         count,
-        site
+        site,
       );
     }
   }
-  storage.sql.exec(
-    "UPDATE schema_metadata SET version = 10 WHERE singleton = 1"
-  );
+  storage.sql.exec("UPDATE schema_metadata SET version = 10 WHERE singleton = 1");
 }
 
 function migrateSchemaV10ToV11(storage) {
@@ -574,7 +571,7 @@ function migrateLegacySchema(storage, today) {
         endMs,
         site,
         startMs,
-        endMs
+        endMs,
       )
       .toArray()[0];
     storage.sql.exec(
@@ -589,7 +586,7 @@ function migrateLegacySchema(storage, today) {
       today,
       learningMetrics.today_attempted_question_count,
       learningMetrics.today_attempt_count,
-      learningMetrics.today_correct_attempt_count
+      learningMetrics.today_correct_attempt_count,
     );
     const stabilityDays = Math.trunc(learningMetrics.stability_days);
     storage.sql.exec(
@@ -599,7 +596,7 @@ function migrateLegacySchema(storage, today) {
       site,
       today,
       stabilityDays,
-      stabilityDays
+      stabilityDays,
     );
   }
 }
@@ -621,7 +618,7 @@ function ensureCanonicalIndexes(storage) {
        FROM sqlite_master
        WHERE type = 'index'
          AND tbl_name IN ('attempts', 'cards', 'questions')
-         AND name NOT LIKE 'sqlite_%'`
+         AND name NOT LIKE 'sqlite_%'`,
     )
     .toArray();
   for (const { name } of managedIndexes) {
@@ -656,20 +653,13 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
       "stability_history",
     ];
     const schemaV3Tables = [...versionedCoreTables, "site_settings"];
-    const currentTables = [
-      ...versionedCoreTables,
-      "daily_kpi_achievements",
-      "learning_metrics",
-    ];
+    const currentTables = [...versionedCoreTables, "daily_kpi_achievements", "learning_metrics"];
     const dueCardMetricTables = [
       ...versionedCoreTables,
       "daily_due_card_achievements",
       "learning_metrics",
     ];
-    const thresholdMetricTables = [
-      ...schemaV3Tables,
-      "daily_stability_days_delta_achievements",
-    ];
+    const thresholdMetricTables = [...schemaV3Tables, "daily_stability_days_delta_achievements"];
     const requiredTablesByVersion = new Map([
       [2, schemaV3Tables],
       [3, schemaV3Tables],
@@ -709,12 +699,8 @@ export function initializeLearningSchema(storage, nowMs = Date.now()) {
         return;
       }
     } else {
-      const existingSchemaV3 = schemaV3Tables.filter(
-        (name) => existingTables.has(name)
-      );
-      const existingLegacy = legacyTables.filter(
-        (name) => existingTables.has(name)
-      );
+      const existingSchemaV3 = schemaV3Tables.filter((name) => existingTables.has(name));
+      const existingLegacy = legacyTables.filter((name) => existingTables.has(name));
       if (existingSchemaV3.length === 0 && existingLegacy.length === 0) {
         createCurrentTables(storage);
         version = CURRENT_SCHEMA_VERSION;

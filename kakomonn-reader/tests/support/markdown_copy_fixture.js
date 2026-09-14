@@ -1,7 +1,6 @@
 const assert = require("node:assert/strict");
 
-const MARKDOWN_QUESTION_URL =
-  "https://chushoks.kakomonn.com/questions/54914";
+const MARKDOWN_QUESTION_URL = "https://chushoks.kakomonn.com/questions/54914";
 const MARKDOWN_QUESTION_HEADING =
   "中小企業診断士試験 令和2年度（2020年） 問19（経済学・経済政策 問19）";
 const MARKDOWN_QUESTION_TEXT =
@@ -26,7 +25,10 @@ const MARKDOWN_EXPLANATION_IMAGE_URLS = [
 ];
 
 function normalizeContent(value) {
-  return value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function compactCopiedContent(markdown) {
@@ -51,36 +53,19 @@ function assertMarkdownCopy({
   explanationSegments = [],
   questionText,
 }) {
-  assert.equal(
-    copiedMarkdown.startsWith(`# ${MARKDOWN_QUESTION_HEADING}\n\n`),
-    true,
-  );
+  assert.equal(copiedMarkdown.startsWith(`# ${MARKDOWN_QUESTION_HEADING}\n\n`), true);
   assert.equal(copiedMarkdown.includes("\n\n## 問題文\n\n"), true);
   assert.equal(copiedMarkdown.includes("\n\n### 選択肢\n\n"), true);
-  assert.equal(
-    copiedMarkdown.includes(
-      `\n\n### 自分の回答\n\n${answerSummary}\n\n`,
-    ),
-    true,
-  );
+  assert.equal(copiedMarkdown.includes(`\n\n### 自分の回答\n\n${answerSummary}\n\n`), true);
   assert.equal(copiedMarkdown.includes("\n\n## 解説\n\n"), true);
   for (const choice of choices) {
-    assert.equal(
-      copiedMarkdown.includes(`- ${choice.replace(/\s+/g, " ").trim()}`),
-      true,
-    );
+    assert.equal(copiedMarkdown.includes(`- ${choice.replace(/\s+/g, " ").trim()}`), true);
   }
 
   const compactMarkdown = compactCopiedContent(copiedMarkdown);
-  assert.equal(
-    compactMarkdown.includes(questionText.replace(/\s+/g, "")),
-    true,
-  );
+  assert.equal(compactMarkdown.includes(questionText.replace(/\s+/g, "")), true);
   for (const explanationContent of explanationContents) {
-    assert.equal(
-      compactMarkdown.includes(explanationContent.replace(/\s+/g, "")),
-      true,
-    );
+    assert.equal(compactMarkdown.includes(explanationContent.replace(/\s+/g, "")), true);
   }
   for (const segments of explanationSegments) {
     let searchIndex = 0;
@@ -99,10 +84,7 @@ function assertMarkdownCopy({
     }
   }
 
-  const expectedImageURLs = [
-    ...MARKDOWN_QUESTION_IMAGE_URLS,
-    ...MARKDOWN_EXPLANATION_IMAGE_URLS,
-  ];
+  const expectedImageURLs = [...MARKDOWN_QUESTION_IMAGE_URLS, ...MARKDOWN_EXPLANATION_IMAGE_URLS];
   const copiedImageURLs = Array.from(
     copiedMarkdown.matchAll(/!\[[^\]]*]\((https:\/\/[^)]+)\)/g),
     (match) => match[1],

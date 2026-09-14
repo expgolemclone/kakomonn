@@ -7,9 +7,7 @@ const {
   readKakomonnConfiguration,
 } = require("../../scripts/kakomonn-config.cjs");
 const { installSyncMock } = require("./sync_mock");
-const {
-  installReaderInChildFrames,
-} = require("./support/frame_reader");
+const { installReaderInChildFrames } = require("./support/frame_reader");
 const {
   assertMarkdownCopy,
   MARKDOWN_CHOICES,
@@ -33,17 +31,14 @@ const chromeUserAgent =
 const kakomonnConfiguration = readKakomonnConfiguration();
 const fixedQuestionUrl = "https://chushoks.kakomonn.com/questions/86956";
 const fixedNextQuestionUrl = "https://chushoks.kakomonn.com/questions/86957";
-const randomScheduledQuestionUrl =
-  "https://chushoks.kakomonn.com/questions/45125";
+const randomScheduledQuestionUrl = "https://chushoks.kakomonn.com/questions/45125";
 const crossDomainQuestionUrls = [
   "https://nurse.kakomonn.com/questions/84233",
   "https://ktjoho.kakomonn.com/questions/87404",
   "https://kyosai.kakomonn.com/questions/51358",
 ];
-const imageChoiceQuestionUrl =
-  "https://chushoks.kakomonn.com/questions/73379";
-const reportedCopyQuestionUrl =
-  "https://chushoks.kakomonn.com/questions/73497";
+const imageChoiceQuestionUrl = "https://chushoks.kakomonn.com/questions/73379";
+const reportedCopyQuestionUrl = "https://chushoks.kakomonn.com/questions/73497";
 const createQuestionUrl = "https://chushoks.kakomonn.com/createques";
 const randomQuestionUrl = "https://chushoks.kakomonn.com/questions";
 const readerReadyTimeout = 30_000;
@@ -53,13 +48,7 @@ const pageErrorLocationPrefix = "__KAKOMONN_PAGE_ERROR_LOCATION__";
 const readerSourceURL = "kakomonn-reader.user.js";
 
 function formatPageError(error) {
-  return (
-    error?.stack ||
-    error?.message ||
-    error?.name ||
-    String(error) ||
-    "Unknown page error"
-  );
+  return error?.stack || error?.message || error?.name || String(error) || "Unknown page error";
 }
 
 function collectPageErrors(page) {
@@ -70,23 +59,19 @@ function collectPageErrors(page) {
     if (!message.text().startsWith(pageErrorLocationPrefix)) {
       return;
     }
-    pageErrorLocations.push(
-      JSON.parse(message.text().slice(pageErrorLocationPrefix.length)),
-    );
+    pageErrorLocations.push(JSON.parse(message.text().slice(pageErrorLocationPrefix.length)));
   });
   return { pageErrorLocations, pageErrors };
 }
 
 function assertNoReaderPageErrors(pageErrors, pageErrorLocations, details = {}) {
   const readerPageErrors = pageErrorLocations.filter(
-    ({ filename }) =>
-      filename === readerSourceURL || filename.endsWith(`/${readerSourceURL}`),
+    ({ filename }) => filename === readerSourceURL || filename.endsWith(`/${readerSourceURL}`),
   );
   const unlocatedPageErrors = pageErrors.filter(
     (pageError) =>
       !pageErrorLocations.some(
-        ({ message }) =>
-          pageError.includes(message) || message.includes(pageError),
+        ({ message }) => pageError.includes(message) || message.includes(pageError),
       ),
   );
   assert.deepEqual(
@@ -148,9 +133,7 @@ async function darkModeImageFilters(locator) {
 async function waitForSyncReady(page) {
   await page.waitForFunction(
     () =>
-      window.__syncMock?.calls.some(
-        (call) => new URL(call.url).pathname === "/v11/state",
-      ) === true,
+      window.__syncMock?.calls.some((call) => new URL(call.url).pathname === "/v11/state") === true,
     null,
     { timeout: readerReadyTimeout },
   );
@@ -167,17 +150,13 @@ async function dismissReaderErrorForTest(page) {
 async function submitAnswer(page, frame, answerText, inputMethod = "click") {
   const historyLengthBefore = await page.evaluate(() => history.length);
   const normalize = (value) => value.replace(/\s+/g, "").trim();
-  const choiceTexts = await frame
-    .locator(".problem_detail ul.list > li")
-    .allInnerTexts();
+  const choiceTexts = await frame.locator(".problem_detail ul.list > li").allInnerTexts();
   const choiceIndex = choiceTexts.findIndex(
     (choiceText) => normalize(choiceText) === normalize(answerText),
   );
   assert.notEqual(choiceIndex, -1, `answer choice was not found: ${answerText}`);
 
-  const answerInputs = frame.locator(
-    ".problem_detail ul.check input[name='intAnswerData']",
-  );
+  const answerInputs = frame.locator(".problem_detail ul.check input[name='intAnswerData']");
   assert.equal(await answerInputs.count(), choiceTexts.length);
 
   const answerInput = answerInputs.nth(choiceIndex);
@@ -187,52 +166,40 @@ async function submitAnswer(page, frame, answerText, inputMethod = "click") {
       true,
       `keyboard shortcut is unavailable for choice ${choiceIndex + 1}`,
     );
-    const displayedChoice = frame
-      .locator(".problem_detail > ul.list > li")
-      .first();
+    const displayedChoice = frame.locator(".problem_detail > ul.list > li").first();
     await answerInputs.first().focus();
     await page.keyboard.press("a");
     assert.equal(
-      await displayedChoice.evaluate((choice) =>
-        choice.classList.contains("is-active"),
-      ),
+      await displayedChoice.evaluate((choice) => choice.classList.contains("is-active")),
       true,
     );
     await page.keyboard.press("a");
     assert.equal(
-      await displayedChoice.evaluate((choice) =>
-        choice.classList.contains("is-active"),
-      ),
+      await displayedChoice.evaluate((choice) => choice.classList.contains("is-active")),
       false,
     );
 
     assert.equal(
-      await frame.locator("body").evaluate(() =>
-        document.scrollingElement.scrollHeight > window.innerHeight + 100),
+      await frame
+        .locator("body")
+        .evaluate(() => document.scrollingElement.scrollHeight > window.innerHeight + 100),
       true,
     );
     await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
     await page.keyboard.press("z");
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          .scrollY === 100,
+      () => document.querySelector("#kakomonn-reader-frame")?.contentWindow.scrollY === 100,
     );
     await page.keyboard.press("x");
     await page.waitForFunction(
-      () =>
-        document.querySelector("#kakomonn-reader-frame")?.contentWindow
-          .scrollY === 0,
+      () => document.querySelector("#kakomonn-reader-frame")?.contentWindow.scrollY === 0,
     );
 
     await page.locator("#kakomonn-reader-frame").focus();
     await page.keyboard.press(answerShortcutKeys[choiceIndex]);
   } else {
     assert.equal(inputMethod, "click");
-    await frame
-      .locator(".problem_detail ul.check > li > label")
-      .nth(choiceIndex)
-      .click();
+    await frame.locator(".problem_detail ul.check > li > label").nth(choiceIndex).click();
   }
   assert.equal(await answerInput.isChecked(), true);
   if (inputMethod === "keyboard") {
@@ -277,13 +244,10 @@ async function advanceToNextQuestion(
   await page.waitForFunction(
     (expectedUrl) =>
       location.href === expectedUrl &&
-      document.querySelector("#kakomonn-reader-frame")?.contentWindow.location
-        .href === expectedUrl,
+      document.querySelector("#kakomonn-reader-frame")?.contentWindow.location.href === expectedUrl,
     expectedNextUrl,
   );
-  const nextFrameUrl = await frame
-    .locator("body")
-    .evaluate(() => location.href);
+  const nextFrameUrl = await frame.locator("body").evaluate(() => location.href);
   assert.equal(nextFrameUrl, expectedNextUrl);
   assert.notEqual(nextFrameUrl, initialFrameUrl);
   console.log(
@@ -361,11 +325,9 @@ async function runLiveCatalogCrawlCase(browser, script) {
           requestedPage,
           totalPages: Number(marker[1]),
           currentPage: Number(marker[2]),
-          questionIds: [...collectSameOriginPaths(
-            html,
-            url.href,
-            /^\/questions\/\d+$/,
-          )].map((questionPath) => questionPath.slice("/questions/".length)),
+          questionIds: [...collectSameOriginPaths(html, url.href, /^\/questions\/\d+$/)].map(
+            (questionPath) => questionPath.slice("/questions/".length),
+          ),
         };
       }),
     );
@@ -432,7 +394,10 @@ async function runLiveCatalogCrawlCase(browser, script) {
       assert.equal(pageInfo.currentPage, pageInfo.requestedPage);
       assert.equal(pageInfo.totalPages >= pageInfo.currentPage, true);
       assert.equal(pageInfo.questionIds.length > 0, true);
-      const group = groups.get(pageInfo.listPath) ?? { totalPages: pageInfo.totalPages, pages: new Set() };
+      const group = groups.get(pageInfo.listPath) ?? {
+        totalPages: pageInfo.totalPages,
+        pages: new Set(),
+      };
       assert.equal(group.totalPages, pageInfo.totalPages);
       group.pages.add(pageInfo.currentPage);
       groups.set(pageInfo.listPath, group);
@@ -449,20 +414,22 @@ async function runLiveCatalogCrawlCase(browser, script) {
         `incomplete live catalog crawl: ${listPath}`,
       );
     }
-    const observedQuestionIds = [...new Set(
-      catalogPages.flatMap(({ questionIds }) => questionIds),
-    )].sort((left, right) => Number(left) - Number(right));
+    const observedQuestionIds = [
+      ...new Set(catalogPages.flatMap(({ questionIds }) => questionIds)),
+    ].sort((left, right) => Number(left) - Number(right));
     assert.deepEqual(
       catalogCall.body.questionIds,
       observedQuestionIds,
       "live catalog pages and uploaded question IDs differ",
     );
-    console.log(JSON.stringify({
-      phase: "catalog-crawl",
-      listCount: groups.size,
-      questionCount: observedQuestionIds.length,
-      status: "passed",
-    }));
+    console.log(
+      JSON.stringify({
+        phase: "catalog-crawl",
+        listCount: groups.size,
+        questionCount: observedQuestionIds.length,
+        status: "passed",
+      }),
+    );
     assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
       questionURL: fixedQuestionUrl,
     });
@@ -494,11 +461,7 @@ async function runCase(
       timeout: 60_000,
     });
     assert.notEqual(response, null);
-    assert.equal(
-      response.ok(),
-      true,
-      `live page returned HTTP ${response.status()}`,
-    );
+    assert.equal(response.ok(), true, `live page returned HTTP ${response.status()}`);
     await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
@@ -515,24 +478,16 @@ async function runCase(
         return {
           bodyBackground: getComputedStyle(body).backgroundColor,
           bodyColor: getComputedStyle(body).color,
-          problemBackground: getComputedStyle(
-            documentNode.querySelector(".problem_detail")
-          ).backgroundColor,
+          problemBackground: getComputedStyle(documentNode.querySelector(".problem_detail"))
+            .backgroundColor,
           fixedButtonDisplays: Array.from(
-            documentNode.querySelectorAll(
-              ".p-post > .fixed_btn, .p-post > .fixed_btn_menu",
-            ),
+            documentNode.querySelectorAll(".p-post > .fixed_btn, .p-post > .fixed_btn_menu"),
             (element) => getComputedStyle(element).display,
           ),
-          siteHeaderDisplay: getComputedStyle(
-            documentNode.querySelector("header.l-header")
-          ).display,
-          styleCount: documentNode.querySelectorAll(
-            "#kakomonn-reader-dark-mode"
-          ).length,
-          toggleCount: documentNode.querySelectorAll(
-            "[data-kakomonn-reader-dark-toggle]"
-          ).length,
+          siteHeaderDisplay: getComputedStyle(documentNode.querySelector("header.l-header"))
+            .display,
+          styleCount: documentNode.querySelectorAll("#kakomonn-reader-dark-mode").length,
+          toggleCount: documentNode.querySelectorAll("[data-kakomonn-reader-dark-toggle]").length,
         };
       }),
       {
@@ -547,15 +502,10 @@ async function runCase(
     );
     await page.waitForFunction(
       () => {
-        const documentNode = document.querySelector(
-          "#kakomonn-reader-frame",
-        )?.contentDocument;
-        const problemHeading = documentNode?.querySelector(
-          ".sect_problem > .ttl_box03 > h2.main",
-        );
+        const documentNode = document.querySelector("#kakomonn-reader-frame")?.contentDocument;
+        const problemHeading = documentNode?.querySelector(".sect_problem > .ttl_box03 > h2.main");
         return (
-          documentNode?.documentElement.dataset.kakomonnReaderPhase ===
-            "question" &&
+          documentNode?.documentElement.dataset.kakomonnReaderPhase === "question" &&
           problemHeading?.textContent.trim() === "問題" &&
           Math.abs(problemHeading.getBoundingClientRect().top) <= 1
         );
@@ -566,14 +516,9 @@ async function runCase(
     const initialPresentation = await frame.locator("body").evaluate((body) => {
       const documentNode = body.ownerDocument;
       return {
-        answerDisplay: getComputedStyle(
-          documentNode.querySelector(".answer-right"),
-        ).display,
-        commentaryDisplay: getComputedStyle(
-          documentNode.querySelector(".sect_commentary"),
-        ).display,
-        explanationExists:
-          documentNode.querySelector("#js-commentary-wrap .text") !== null,
+        answerDisplay: getComputedStyle(documentNode.querySelector(".answer-right")).display,
+        commentaryDisplay: getComputedStyle(documentNode.querySelector(".sect_commentary")).display,
+        explanationExists: documentNode.querySelector("#js-commentary-wrap .text") !== null,
         scrollY: documentNode.defaultView.scrollY,
       };
     });
@@ -594,12 +539,7 @@ async function runCase(
     await page.evaluate((delta) => {
       window.__syncMock.nextAttemptStabilityDaysDelta = delta;
     }, attemptStabilityDaysDelta);
-    const historyLengthBefore = await submitAnswer(
-      page,
-      frame,
-      answerText,
-      inputMethod,
-    );
+    const historyLengthBefore = await submitAnswer(page, frame, answerText, inputMethod);
     console.log(JSON.stringify({ phase: "answer-submitted", answerText }));
     await frame.getByText(expectedBanner, { exact: true }).waitFor({
       state: "visible",
@@ -621,25 +561,17 @@ async function runCase(
       .locator("#js-answer-result-box")
       .evaluate((element, resultClass) => {
         const style = getComputedStyle(element, "::before");
-        return resultClass === "is-correct"
-          ? style.borderTopColor
-          : style.backgroundColor;
+        return resultClass === "is-correct" ? style.borderTopColor : style.backgroundColor;
       }, expectedResultClass);
     assert.equal(
       semanticResultColor,
-      expectedResultClass === "is-correct"
-        ? "rgb(82, 225, 182)"
-        : "rgb(232, 146, 146)",
+      expectedResultClass === "is-correct" ? "rgb(82, 225, 182)" : "rgb(232, 146, 146)",
     );
 
     if (expectedResultClass === "is-wrong") {
-      assert.equal(
-        await frame.locator("body").evaluate(() => location.href),
-        fixedQuestionUrl,
-      );
+      assert.equal(await frame.locator("body").evaluate(() => location.href), fixedQuestionUrl);
     }
-    const navigationMode =
-      expectedResultClass === "is-correct" ? "automatic" : "enter";
+    const navigationMode = expectedResultClass === "is-correct" ? "automatic" : "enter";
     await advanceToNextQuestion(
       page,
       frame,
@@ -648,22 +580,18 @@ async function runCase(
       historyLengthBefore,
       navigationMode,
     );
-    console.log(
-      JSON.stringify({ phase: "next-navigation-complete", answerText, navigationMode }),
-    );
+    console.log(JSON.stringify({ phase: "next-navigation-complete", answerText, navigationMode }));
     assert.equal(
-      await page.evaluate(() =>
-        window.__syncMock.calls.filter(
-          (call) => new URL(call.url).pathname === "/v11/attempts",
-        ).length,
+      await page.evaluate(
+        () =>
+          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v11/attempts")
+            .length,
       ),
       1,
     );
     assert.equal(
       await page.evaluate(() =>
-        window.__syncMock.calls.some(
-          (call) => new URL(call.url).pathname === "/v11/next",
-        ),
+        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v11/next"),
       ),
       false,
     );
@@ -689,11 +617,20 @@ async function runCase(
         phase: "failed",
         answerText,
         pageUrl: page.url(),
-        errorTitle: await page.locator("#kakomonn-reader-error-title").textContent().catch(() => null),
-        errorDetail: await page.locator("#kakomonn-reader-error-detail").textContent().catch(() => null),
-        resultClasses: await page.locator("#kakomonn-reader-frame").evaluate((frame) => [
-          ...(frame.contentDocument?.querySelector("#js-answer-result-box")?.classList ?? []),
-        ]).catch(() => null),
+        errorTitle: await page
+          .locator("#kakomonn-reader-error-title")
+          .textContent()
+          .catch(() => null),
+        errorDetail: await page
+          .locator("#kakomonn-reader-error-detail")
+          .textContent()
+          .catch(() => null),
+        resultClasses: await page
+          .locator("#kakomonn-reader-frame")
+          .evaluate((frame) => [
+            ...(frame.contentDocument?.querySelector("#js-answer-result-box")?.classList ?? []),
+          ])
+          .catch(() => null),
         storedStabilityDays: await readStoredStabilityDays(page).catch(() => null),
         syncCalls: await page.evaluate(() => window.__syncMock?.calls ?? []).catch(() => []),
         pageErrorLocations,
@@ -719,11 +656,7 @@ async function runRandomNavigationCase(browser, script) {
       timeout: 60_000,
     });
     assert.notEqual(response, null);
-    assert.equal(
-      response.ok(),
-      true,
-      `live page returned HTTP ${response.status()}`,
-    );
+    assert.equal(response.ok(), true, `live page returned HTTP ${response.status()}`);
     const createQuestionForm = page.locator("#new_create_ques_form");
     await createQuestionForm.waitFor({ state: "visible" });
     assert.equal(
@@ -745,16 +678,12 @@ async function runRandomNavigationCase(browser, script) {
       }),
       true,
     );
-    await createQuestionForm
-      .locator('input[name="maxCreateNumber"]')
-      .fill("2");
+    await createQuestionForm.locator('input[name="maxCreateNumber"]').fill("2");
     await Promise.all([
       page.waitForURL(randomQuestionUrl, { timeout: 30_000 }),
       createQuestionForm.locator("a.question_all").click(),
     ]);
-    await page
-      .getByText("解答する", { exact: true })
-      .waitFor({ state: "visible" });
+    await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
     await installSyncMock(page, { nextQuestionId: "45125" });
@@ -763,19 +692,14 @@ async function runRandomNavigationCase(browser, script) {
     const frame = await getQuestionFrame(page);
     await waitForSyncReady(page);
 
-    const initialQuestion = (
-      await frame.locator(".problem_detail .when").innerText()
-    ).replace(/\s+/g, " ").trim();
+    const initialQuestion = (await frame.locator(".problem_detail .when").innerText())
+      .replace(/\s+/g, " ")
+      .trim();
     const initialFrameUrl = await frame.locator("body").evaluate(() => location.href);
-    const firstAnswer = await frame
-      .locator(".problem_detail ul.list > li")
-      .first()
-      .innerText();
+    const firstAnswer = await frame.locator(".problem_detail ul.list > li").first().innerText();
     const historyLengthBefore = await submitAnswer(page, frame, firstAnswer);
     await frame
-      .locator(
-        "#js-answer-result-box.is-correct, #js-answer-result-box.is-wrong",
-      )
+      .locator("#js-answer-result-box.is-correct, #js-answer-result-box.is-wrong")
       .waitFor({ state: "visible", timeout: 15_000 });
 
     const resultClasses = (
@@ -786,23 +710,20 @@ async function runRandomNavigationCase(browser, script) {
 
     let nextQuestionUrl = null;
     if (!isCorrect) {
-      const nextQuestionUrls = await frame.locator("a[href]").evaluateAll(
-        (links) =>
+      const nextQuestionUrls = await frame
+        .locator("a[href]")
+        .evaluateAll((links) =>
           links
             .filter(
               (link) =>
-                (link.innerText || link.textContent || "")
-                  .replace(/\s+/g, "")
-                  .trim() === "次の問題へ",
+                (link.innerText || link.textContent || "").replace(/\s+/g, "").trim() ===
+                "次の問題へ",
             )
             .map((link) => link.href),
-      );
+        );
       assert.equal(nextQuestionUrls.length, 1);
       [nextQuestionUrl] = nextQuestionUrls;
-      assert.match(
-        new URL(nextQuestionUrl).pathname,
-        /^\/questions\/next\/\d+$/,
-      );
+      assert.match(new URL(nextQuestionUrl).pathname, /^\/questions\/next\/\d+$/);
     }
     const navigationMode = isCorrect ? "automatic" : "enter";
     await advanceToNextQuestion(
@@ -813,10 +734,7 @@ async function runRandomNavigationCase(browser, script) {
       historyLengthBefore,
       navigationMode,
     );
-    assert.notEqual(
-      await frame.locator("body").evaluate(() => location.href),
-      initialFrameUrl,
-    );
+    assert.notEqual(await frame.locator("body").evaluate(() => location.href), initialFrameUrl);
 
     await page.waitForFunction(
       (previousQuestion) => {
@@ -830,16 +748,14 @@ async function runRandomNavigationCase(browser, script) {
       initialQuestion,
       { timeout: 30_000 },
     );
-    const nextQuestion = (
-      await frame.locator(".problem_detail .when").innerText()
-    ).replace(/\s+/g, " ").trim();
+    const nextQuestion = (await frame.locator(".problem_detail .when").innerText())
+      .replace(/\s+/g, " ")
+      .trim();
     assert.notEqual(nextQuestion, initialQuestion);
 
-    await page.waitForFunction(
-      () => window.__syncMock?.attemptCount === 1,
-      null,
-      { timeout: 10_000 },
-    );
+    await page.waitForFunction(() => window.__syncMock?.attemptCount === 1, null, {
+      timeout: 10_000,
+    });
     assert.equal(await readStoredAttemptCount(page), 1);
     assert.equal(await readStoredStabilityDays(page), 0);
     assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
@@ -861,8 +777,14 @@ async function runRandomNavigationCase(browser, script) {
       JSON.stringify({
         phase: "random-failed",
         pageUrl: page.url(),
-        errorTitle: await page.locator("#kakomonn-reader-error-title").textContent().catch(() => null),
-        errorDetail: await page.locator("#kakomonn-reader-error-detail").textContent().catch(() => null),
+        errorTitle: await page
+          .locator("#kakomonn-reader-error-title")
+          .textContent()
+          .catch(() => null),
+        errorDetail: await page
+          .locator("#kakomonn-reader-error-detail")
+          .textContent()
+          .catch(() => null),
         frameUrl: await page
           .locator("#kakomonn-reader-frame")
           .evaluate((frame) => frame.contentWindow?.location.href ?? null)
@@ -874,13 +796,9 @@ async function runRandomNavigationCase(browser, script) {
           ])
           .catch(() => null),
         storedStabilityDays: await readStoredStabilityDays(page).catch(() => null),
-        storedAttemptCount: await readStoredAttemptCount(page).catch(
-          () => null,
-        ),
+        storedAttemptCount: await readStoredAttemptCount(page).catch(() => null),
         syncCallPaths: await page
-          .evaluate(() =>
-            window.__syncMock?.calls.map((call) => new URL(call.url).pathname) ?? [],
-          )
+          .evaluate(() => window.__syncMock?.calls.map((call) => new URL(call.url).pathname) ?? [])
           .catch(() => null),
         pageErrorLocations,
         pageErrors,
@@ -908,14 +826,8 @@ async function runMarkdownCopyCase(browser, script) {
       timeout: 60_000,
     });
     assert.notEqual(response, null);
-    assert.equal(
-      response.ok(),
-      true,
-      `live page returned HTTP ${response.status()}`,
-    );
-    await page
-      .getByText("解答する", { exact: true })
-      .waitFor({ state: "visible" });
+    assert.equal(response.ok(), true, `live page returned HTTP ${response.status()}`);
+    await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
     await installSyncMock(page, { systemClipboard: true });
@@ -924,25 +836,21 @@ async function runMarkdownCopyCase(browser, script) {
     const frame = await getQuestionFrame(page);
     await waitForSyncReady(page);
 
-    const heading = await frame
-      .locator(".problem_detail > .when")
-      .evaluate((element) =>
-        Array.from(element.childNodes)
-          .filter((node) => node.nodeType === Node.TEXT_NODE)
-          .map((node) => node.nodeValue || "")
-          .join(" ")
-          .replace(/\s+/g, " ")
-          .trim(),
-      );
+    const heading = await frame.locator(".problem_detail > .when").evaluate((element) =>
+      Array.from(element.childNodes)
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.nodeValue || "")
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    );
     assert.equal(heading, markdownQuestionHeading);
     const questionText = normalizeContent(
       await frame.locator(".problem_detail > .ttl").innerText(),
     );
     assert.equal(questionText, markdownQuestionText);
 
-    const choices = await frame
-      .locator(".problem_detail > ul.list > li")
-      .allInnerTexts();
+    const choices = await frame.locator(".problem_detail > ul.list > li").allInnerTexts();
     assert.deepEqual(
       choices.map((choice) => choice.replace(/\s+/g, " ").trim()),
       MARKDOWN_CHOICES,
@@ -953,29 +861,19 @@ async function runMarkdownCopyCase(browser, script) {
       .evaluateAll((images) => images.map((image) => image.src));
     assert.deepEqual(questionImageURLs, markdownQuestionImageURLs);
     assert.deepEqual(
-      await darkModeImageFilters(
-        frame.locator(".problem_detail > .zoomin img[src]"),
-      ),
+      await darkModeImageFilters(frame.locator(".problem_detail > .zoomin img[src]")),
       markdownQuestionImageURLs.map(() => darkModeImageFilter),
     );
 
     const clipboardNonce = `kakomonn-copy-before-${Date.now()}`;
-    await page.evaluate(
-      (value) => navigator.clipboard.writeText(value),
-      clipboardNonce,
-    );
-    assert.equal(
-      await page.evaluate(() => navigator.clipboard.readText()),
-      clipboardNonce,
-    );
+    await page.evaluate((value) => navigator.clipboard.writeText(value), clipboardNonce);
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), clipboardNonce);
     await submitAnswer(page, frame, MARKDOWN_INCORRECT_ANSWER_TEXT);
     await frame.getByText("残念...", { exact: true }).waitFor({
       state: "visible",
       timeout: 15_000,
     });
-    const explanationTexts = frame.locator(
-      "#js-commentary-wrap > .item > .text",
-    );
+    const explanationTexts = frame.locator("#js-commentary-wrap > .item > .text");
     await explanationTexts.last().waitFor({
       state: "visible",
       timeout: 15_000,
@@ -988,40 +886,27 @@ async function runMarkdownCopyCase(browser, script) {
       explanationNumbers.map((number) => number.trim()),
       ["01", "02", "03"],
     );
-    const explanationContents = (
-      await explanationTexts.allInnerTexts()
-    ).map(normalizeContent);
+    const explanationContents = (await explanationTexts.allInnerTexts()).map(normalizeContent);
     for (let index = 0; index < markdownExplanationPrefixes.length; index += 1) {
-      assert.equal(
-        explanationContents[index].startsWith(
-          markdownExplanationPrefixes[index],
-        ),
-        true,
-      );
+      assert.equal(explanationContents[index].startsWith(markdownExplanationPrefixes[index]), true);
     }
 
     const explanationImageURLs = await frame
       .locator("#js-commentary-wrap > .item .text img[src]")
       .evaluateAll((images) => images.map((image) => image.src));
+    assert.deepEqual(explanationImageURLs, markdownExplanationImageURLs);
     assert.deepEqual(
-      explanationImageURLs,
-      markdownExplanationImageURLs,
-    );
-    assert.deepEqual(
-      await darkModeImageFilters(
-        frame.locator("#js-commentary-wrap > .item .text img[src]"),
-      ),
+      await darkModeImageFilters(frame.locator("#js-commentary-wrap > .item .text img[src]")),
       markdownExplanationImageURLs.map(() => darkModeImageFilter),
     );
 
-    await page.waitForFunction(
-      () => window.__syncMock.clipboardWrites.length === 1,
-      null,
-      { timeout: 15_000 },
+    await page.waitForFunction(() => window.__syncMock.clipboardWrites.length === 1, null, {
+      timeout: 15_000,
+    });
+    const copiedMarkdown = (await page.evaluate(() => navigator.clipboard.readText())).replace(
+      /\r\n/g,
+      "\n",
     );
-    const copiedMarkdown = (
-      await page.evaluate(() => navigator.clipboard.readText())
-    ).replace(/\r\n/g, "\n");
     assert.notEqual(copiedMarkdown, clipboardNonce);
 
     assertMarkdownCopy({
@@ -1048,8 +933,14 @@ async function runMarkdownCopyCase(browser, script) {
       JSON.stringify({
         phase: "markdown-copy-failed",
         pageUrl: page.url(),
-        errorTitle: await page.locator("#kakomonn-reader-error-title").textContent().catch(() => null),
-        errorDetail: await page.locator("#kakomonn-reader-error-detail").textContent().catch(() => null),
+        errorTitle: await page
+          .locator("#kakomonn-reader-error-title")
+          .textContent()
+          .catch(() => null),
+        errorDetail: await page
+          .locator("#kakomonn-reader-error-detail")
+          .textContent()
+          .catch(() => null),
         pageErrorLocations,
         pageErrors,
       }),
@@ -1075,14 +966,8 @@ async function runReportedCopyCase(browser, script) {
       timeout: 60_000,
     });
     assert.notEqual(response, null);
-    assert.equal(
-      response.ok(),
-      true,
-      `live page returned HTTP ${response.status()}`,
-    );
-    await page
-      .getByText("解答する", { exact: true })
-      .waitFor({ state: "visible" });
+    assert.equal(response.ok(), true, `live page returned HTTP ${response.status()}`);
+    await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
     await installSyncMock(page, { systemClipboard: true });
@@ -1095,40 +980,25 @@ async function runReportedCopyCase(browser, script) {
       .nth(1)
       .innerText();
     const clipboardNonce = `kakomonn-reported-copy-before-${Date.now()}`;
-    await page.evaluate(
-      (value) => navigator.clipboard.writeText(value),
-      clipboardNonce,
-    );
-    await submitAnswer(
-      page,
-      frame,
-      incorrectAnswerText,
-    );
+    await page.evaluate((value) => navigator.clipboard.writeText(value), clipboardNonce);
+    await submitAnswer(page, frame, incorrectAnswerText);
     await frame.getByText("残念...", { exact: true }).waitFor({
       state: "visible",
       timeout: 15_000,
     });
-    const explanationTexts = frame.locator(
-      "#js-commentary-wrap > .item > .text",
-    );
+    const explanationTexts = frame.locator("#js-commentary-wrap > .item > .text");
     await explanationTexts.last().waitFor({
       state: "visible",
       timeout: 15_000,
     });
     assert.equal(await explanationTexts.count(), 2);
 
-    await page.waitForFunction(
-      () => window.__syncMock.clipboardWrites.length === 1,
-      null,
-      { timeout: 15_000 },
-    );
-    const copiedMarkdown = await page.evaluate(() =>
-      navigator.clipboard.readText(),
-    );
+    await page.waitForFunction(() => window.__syncMock.clipboardWrites.length === 1, null, {
+      timeout: 15_000,
+    });
+    const copiedMarkdown = await page.evaluate(() => navigator.clipboard.readText());
     assert.equal(
-      copiedMarkdown.startsWith(
-        "# 中小企業診断士試験 令和5年度（2023年） 問145（経営法務 問10）",
-      ),
+      copiedMarkdown.startsWith("# 中小企業診断士試験 令和5年度（2023年） 問145（経営法務 問10）"),
       true,
     );
     assert.equal(copiedMarkdown.includes("### 解説 01"), true);
@@ -1153,28 +1023,17 @@ async function runImageChoiceInversionCase(browser, script) {
       timeout: 60_000,
     });
     assert.notEqual(response, null);
-    assert.equal(
-      response.ok(),
-      true,
-      `live page returned HTTP ${response.status()}`,
-    );
-    await page
-      .getByText("解答する", { exact: true })
-      .waitFor({ state: "visible" });
+    assert.equal(response.ok(), true, `live page returned HTTP ${response.status()}`);
+    await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
     await installSyncMock(page);
     await injectReader(page, script);
 
     const frame = await getQuestionFrame(page);
-    const choiceImages = frame.locator(
-      ".problem_detail > ul.list > li img",
-    );
+    const choiceImages = frame.locator(".problem_detail > ul.list > li img");
     assert.equal(await choiceImages.count(), 4);
-    assert.deepEqual(
-      await darkModeImageFilters(choiceImages),
-      Array(4).fill(darkModeImageFilter),
-    );
+    assert.deepEqual(await darkModeImageFilters(choiceImages), Array(4).fill(darkModeImageFilter));
     assertNoReaderPageErrors(pageErrors, pageErrorLocations, {
       questionURL: imageChoiceQuestionUrl,
     });
@@ -1213,20 +1072,23 @@ async function runCrossDomainActivationCase(browser, script) {
       });
       assert.equal(
         await page.locator("#kakomonn-reader-time-limit").getAttribute("data-phase"),
-        "question"
+        "question",
       );
       assert.equal(
         await frame.locator(".problem_detail > .when").count(),
         1,
-        `question metadata must be unique on ${site}`
+        `question metadata must be unique on ${site}`,
       );
       const stateSites = await page.evaluate(() =>
         window.__syncMock.calls
           .filter((call) => new URL(call.url).pathname === "/v11/state")
-          .map((call) => new URL(call.url).searchParams.get("site"))
+          .map((call) => new URL(call.url).searchParams.get("site")),
       );
       assert.equal(stateSites.length >= 1, true);
-      assert.equal(stateSites.every((requestedSite) => requestedSite === site), true);
+      assert.equal(
+        stateSites.every((requestedSite) => requestedSite === site),
+        true,
+      );
       assertNoReaderPageErrors(pageErrors, pageErrorLocations, { questionURL });
     } finally {
       await context.close();
@@ -1236,8 +1098,7 @@ async function runCrossDomainActivationCase(browser, script) {
 
 async function main() {
   const script = fs.readFileSync(scriptPath, "utf8");
-  const executablePath =
-    kakomonnConfiguration.KAKOMONN_CHROMIUM_EXECUTABLE;
+  const executablePath = kakomonnConfiguration.KAKOMONN_CHROMIUM_EXECUTABLE;
   const browser = await chromium.launch({
     env: kakomonnFreeEnvironment(),
     headless: true,

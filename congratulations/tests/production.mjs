@@ -52,9 +52,7 @@ async function assertProductionCachePolicy() {
 
   const builtAssets = await readdir(resolve(projectRoot, "dist", "assets"));
   assert.notEqual(builtAssets.length, 0);
-  const immutableResponse = await fetch(
-    `${origin}/assets/${builtAssets.sort()[0]}`,
-  );
+  const immutableResponse = await fetch(`${origin}/assets/${builtAssets.sort()[0]}`);
   assert.equal(immutableResponse.status, 200);
   assert.equal(
     immutableResponse.headers.get("cache-control"),
@@ -72,16 +70,10 @@ try {
   const response = await shell.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
   assert.equal(response?.status(), 200);
   assert.equal(response?.headers()["cache-control"], "no-cache");
-  assert.match(
-    response?.headers()["content-security-policy"] ?? "",
-    /frame-ancestors 'self'/,
-  );
+  assert.match(response?.headers()["content-security-policy"] ?? "", /frame-ancestors 'self'/);
   await shell.waitForSelector('html[data-state="ready"]');
   assert.equal(await shell.locator("#celebration-frame").isVisible(), true);
-  assert.equal(
-    new URL(await shell.locator("#celebration-frame").getAttribute("src")).search,
-    "",
-  );
+  assert.equal(new URL(await shell.locator("#celebration-frame").getAttribute("src")).search, "");
   assert.deepEqual(shellErrors, []);
   await shell.close();
 
@@ -97,10 +89,9 @@ try {
       });
     });
     try {
-      const experienceResponse = await page.goto(
-        `${origin}/${experience.entry}?${search}`,
-        { waitUntil: "domcontentloaded" },
-      );
+      const experienceResponse = await page.goto(`${origin}/${experience.entry}?${search}`, {
+        waitUntil: "domcontentloaded",
+      });
       assert.equal(experienceResponse?.status(), 200);
       assert.equal(experienceResponse?.headers()["cache-control"], "no-cache");
       await page.waitForFunction(

@@ -2,9 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const {
-  readKakomonnConfiguration,
-} = require("../../scripts/kakomonn-config.cjs");
+const { readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
 
 const {
   CURRENT_QUESTION_URL,
@@ -14,17 +12,12 @@ const {
   resolveSyncToken,
 } = require("./support/chrome_tampermonkey");
 
-const userscriptPath = path.resolve(
-  __dirname,
-  "..",
-  "kakomonn-reader.user.js",
-);
+const userscriptPath = path.resolve(__dirname, "..", "kakomonn-reader.user.js");
 const repositoryEnvPath = path.resolve(__dirname, "..", "..", ".env");
 const correctAnswerText = "輸入の減少は、GDPを増加させる。";
 const chromeViewport = { height: 900, width: 1440 };
 const chromeViewportTolerancePx = 1;
-const buildFingerprintPattern =
-  /const BUILD_FINGERPRINT = "([0-9a-f]{64})";/g;
+const buildFingerprintPattern = /const BUILD_FINGERPRINT = "([0-9a-f]{64})";/g;
 
 function extractBuildFingerprint(userscript) {
   const matches = [...userscript.matchAll(buildFingerprintPattern)];
@@ -38,9 +31,7 @@ function extractBuildFingerprint(userscript) {
 
 function readExpectedBuildFingerprint() {
   if (!fs.existsSync(userscriptPath)) {
-    throw new Error(
-      `Built userscript was not found. Run the build first: ${userscriptPath}`,
-    );
+    throw new Error(`Built userscript was not found. Run the build first: ${userscriptPath}`);
   }
   return extractBuildFingerprint(fs.readFileSync(userscriptPath, "utf8"));
 }
@@ -51,11 +42,7 @@ function assertRuntimeIdentity(state, expectedBuildFingerprint) {
     "string",
     "The connected browser did not expose a user agent",
   );
-  assert.match(
-    state.userAgent,
-    /Windows NT/,
-    "The remote-debugging target must run on Windows",
-  );
+  assert.match(state.userAgent, /Windows NT/, "The remote-debugging target must run on Windows");
   assert.match(
     state.userAgent,
     /\bChrome\/\d+/,
@@ -206,11 +193,7 @@ async function readReaderState(page) {
   );
 }
 
-async function configureSyncToken(
-  page,
-  token,
-  expectedBuildFingerprint,
-) {
+async function configureSyncToken(page, token, expectedBuildFingerprint) {
   const ready = await waitUntil(
     "the installed Tampermonkey userscript",
     async () => {
@@ -232,15 +215,12 @@ async function configureSyncToken(
 
   if (connectionState.settingsOpen) {
     await page.getByRole("textbox", { name: "同期トークン" }).fill(token);
-    await page
-      .getByRole("button", { name: "確認して保存" })
-      .evaluate((button) => button.click());
+    await page.getByRole("button", { name: "確認して保存" }).evaluate((button) => button.click());
   }
 
   return waitUntil("the production sync baseline", async () => {
     const state = await readReaderState(page);
-    return state.settingsOpen === false && state.topControlsPresent === false
-      ? state : null;
+    return state.settingsOpen === false && state.topControlsPresent === false ? state : null;
   });
 }
 
@@ -395,29 +375,25 @@ async function submitCorrectAnswer(page) {
   );
   assert.equal(selected, true, "The visible answer 5 control was not selected");
 
-  await frame
-    .getByRole("button", { name: "解答する", exact: true })
-    .click();
+  await frame.getByRole("button", { name: "解答する", exact: true }).click();
 
   await waitUntil("the real site correct result or automatic transition", async () => {
     const state = await readReaderState(page);
     if (state.answerResult === "incorrect") {
       throw new Error("The selected real-site answer was marked incorrect");
     }
-    return state.answerResult === "correct" ||
+    return (
+      state.answerResult === "correct" ||
       state.outerURL !== CURRENT_QUESTION_URL ||
-      state.frameURL !== CURRENT_QUESTION_URL;
+      state.frameURL !== CURRENT_QUESTION_URL
+    );
   });
 }
 
 async function waitForAutomaticTransition(page) {
   return waitUntil("the scheduled next question or primary KPI celebration", async () => {
     const outerURL = await evaluate(page, "() => location.href");
-    if (
-      outerURL.startsWith(
-        "https://kakomonn-congratulations.kakomonn.workers.dev/",
-      )
-    ) {
+    if (outerURL.startsWith("https://kakomonn-congratulations.kakomonn.workers.dev/")) {
       const ready = await evaluate(
         page,
         `() => document.documentElement.dataset.state === "ready"`,
@@ -429,9 +405,7 @@ async function waitForAutomaticTransition(page) {
       state.outerURL !== state.frameURL ||
       state.outerURL === CURRENT_QUESTION_URL ||
       state.answerResult !== "unknown" ||
-      !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
-        state.outerURL,
-      )
+      !/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(state.outerURL)
     ) {
       return null;
     }
@@ -469,10 +443,7 @@ async function waitForSynchronizedQuestionState(page, token, frameURL) {
 }
 
 async function writeFailureDiagnostics(page) {
-  const screenshotPath = path.join(
-    os.tmpdir(),
-    `kakomonn-live-e2e-${Date.now()}.png`,
-  );
+  const screenshotPath = path.join(os.tmpdir(), `kakomonn-live-e2e-${Date.now()}.png`);
   const diagnostics = await readReaderState(page).catch((error) => ({
     error: String(error),
   }));
@@ -499,10 +470,8 @@ async function resizeToExactViewport(page) {
     })`,
   );
   assert.equal(
-    Math.abs(actualViewport.height - chromeViewport.height) <=
-      chromeViewportTolerancePx &&
-      Math.abs(actualViewport.width - chromeViewport.width) <=
-        chromeViewportTolerancePx,
+    Math.abs(actualViewport.height - chromeViewport.height) <= chromeViewportTolerancePx &&
+      Math.abs(actualViewport.width - chromeViewport.width) <= chromeViewportTolerancePx,
     true,
     JSON.stringify({ actualViewport, chromeViewport }),
   );
@@ -536,11 +505,7 @@ async function main() {
     });
     await resizeToExactViewport(page);
 
-    const configuredState = await configureSyncToken(
-      page,
-      token,
-      expectedBuildFingerprint,
-    );
+    const configuredState = await configureSyncToken(page, token, expectedBuildFingerprint);
     assert.equal(configuredState.settingsOpen, false);
     assert.equal(configuredState.topControlsPresent, false);
     await completeStoredDestinationIfAvailable(page);

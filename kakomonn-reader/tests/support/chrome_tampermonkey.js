@@ -24,8 +24,7 @@ const TAMPERMONKEY_EXTENSION_ID = TAMPERMONKEY_BETA_EXTENSION_ID;
 const LEGACY_TAMPERMONKEY_EXTENSION_ID = "dhdgffkkebhmkfjojejmpbldmpobfkfo";
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SYNC_TOKEN_PATTERN = /^[0-9a-f]{64}$/i;
-const DEFAULT_SYNC_API_ORIGIN =
-  "https://kakomonn-sync.kakomonn.workers.dev";
+const DEFAULT_SYNC_API_ORIGIN = "https://kakomonn-sync.kakomonn.workers.dev";
 const CURRENT_QUESTION_URL = "https://chushoks.kakomonn.com/questions/86956";
 const DEFAULT_CHROME_E2E_DIRECTORY_NAME = "kakomonn-chrome-e2e";
 
@@ -37,10 +36,7 @@ function platformPath(platform = process.platform) {
   return platform === "win32" ? path.win32 : path;
 }
 
-function defaultChromeUserDataDir(
-  environment = process.env,
-  platform = process.platform,
-) {
+function defaultChromeUserDataDir(environment = process.env, platform = process.platform) {
   const pathApi = platformPath(platform);
   if (platform === "win32") {
     const localAppData = environment.LOCALAPPDATA;
@@ -50,21 +46,12 @@ function defaultChromeUserDataDir(
     return pathApi.join(localAppData, "Google", "Chrome", "User Data");
   }
   if (platform === "darwin") {
-    return pathApi.join(
-      os.homedir(),
-      "Library",
-      "Application Support",
-      "Google",
-      "Chrome",
-    );
+    return pathApi.join(os.homedir(), "Library", "Application Support", "Google", "Chrome");
   }
   return pathApi.join(os.homedir(), ".config", "google-chrome");
 }
 
-function defaultChromeE2EUserDataDir(
-  environment = process.env,
-  platform = process.platform,
-) {
+function defaultChromeE2EUserDataDir(environment = process.env, platform = process.platform) {
   const pathApi = platformPath(platform);
   if (platform === "win32") {
     const localAppData = environment.LOCALAPPDATA;
@@ -80,9 +67,7 @@ function isSameOrDescendantPath(parentPath, candidatePath, pathApi = path) {
   const relative = pathApi.relative(parentPath, candidatePath);
   return (
     relative === "" ||
-    (!relative.startsWith(`..${pathApi.sep}`) &&
-      relative !== ".." &&
-      !pathApi.isAbsolute(relative))
+    (!relative.startsWith(`..${pathApi.sep}`) && relative !== ".." && !pathApi.isAbsolute(relative))
   );
 }
 
@@ -96,8 +81,7 @@ function readChromeUserDataDir({
 } = {}) {
   const pathApi = platformPath(platform);
   const kakomonnConfiguration =
-    configuration ??
-    readKakomonnConfiguration({ envFilePath, existsSync, readFileSync });
+    configuration ?? readKakomonnConfiguration({ envFilePath, existsSync, readFileSync });
   const configuredPath =
     kakomonnConfiguration.KAKOMONN_CHROME_USER_DATA_DIR ??
     defaultChromeE2EUserDataDir(systemEnvironment, platform);
@@ -120,8 +104,7 @@ function readConfiguredToken({
   readFileSync = fs.readFileSync,
 } = {}) {
   const kakomonnConfiguration =
-    configuration ??
-    readKakomonnConfiguration({ envFilePath, existsSync, readFileSync });
+    configuration ?? readKakomonnConfiguration({ envFilePath, existsSync, readFileSync });
   const token = kakomonnConfiguration.KAKOMONN_SYNC_TOKEN;
   if (token === undefined) {
     return null;
@@ -131,9 +114,7 @@ function readConfiguredToken({
 
 function assertTokenShape(token, source) {
   if (!SYNC_TOKEN_PATTERN.test(token)) {
-    throw new Error(
-      `KAKOMONN_SYNC_TOKEN from ${source} must be a 64-character hexadecimal token`,
-    );
+    throw new Error(`KAKOMONN_SYNC_TOKEN from ${source} must be a 64-character hexadecimal token`);
   }
 }
 
@@ -152,18 +133,17 @@ function extractSyncTokenCandidates(buffers) {
   return candidates;
 }
 
-function listProfileDirectories(userDataRoot, {
-  existsSync = fs.existsSync,
-  readdirSync = fs.readdirSync,
-} = {}) {
+function listProfileDirectories(
+  userDataRoot,
+  { existsSync = fs.existsSync, readdirSync = fs.readdirSync } = {},
+) {
   if (!existsSync(userDataRoot)) {
     return [];
   }
   return readdirSync(userDataRoot, { withFileTypes: true })
     .filter(
       (entry) =>
-        entry.isDirectory() &&
-        (entry.name === "Default" || /^Profile \d+$/.test(entry.name)),
+        entry.isDirectory() && (entry.name === "Default" || /^Profile \d+$/.test(entry.name)),
     )
     .map((entry) => path.join(userDataRoot, entry.name));
 }
@@ -175,20 +155,14 @@ function discoverTampermonkeyStorageDirectories({
   existsSync = fs.existsSync,
   readdirSync = fs.readdirSync,
 } = {}) {
-  const roots = [
-    dedicatedUserDataDir,
-    defaultChromeUserDataDir(environment, platform),
-  ];
+  const roots = [dedicatedUserDataDir, defaultChromeUserDataDir(environment, platform)];
   const directories = new Set();
   for (const root of roots) {
     for (const profileDirectory of listProfileDirectories(root, {
       existsSync,
       readdirSync,
     })) {
-      for (const extensionId of [
-        TAMPERMONKEY_EXTENSION_ID,
-        LEGACY_TAMPERMONKEY_EXTENSION_ID,
-      ]) {
+      for (const extensionId of [TAMPERMONKEY_EXTENSION_ID, LEGACY_TAMPERMONKEY_EXTENSION_ID]) {
         const storageDirectory = path.join(
           profileDirectory,
           "Local Extension Settings",
@@ -203,10 +177,10 @@ function discoverTampermonkeyStorageDirectories({
   return [...directories];
 }
 
-function readDirectoryBuffers(directory, {
-  readdirSync = fs.readdirSync,
-  readFileSync = fs.readFileSync,
-} = {}) {
+function readDirectoryBuffers(
+  directory,
+  { readdirSync = fs.readdirSync, readFileSync = fs.readFileSync } = {},
+) {
   const buffers = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (!entry.isFile()) {
@@ -239,10 +213,7 @@ function scanStoredSyncTokenCandidates({
 
 async function validateSyncToken(
   token,
-  {
-    fetchImpl = fetch,
-    syncApiOrigin = DEFAULT_SYNC_API_ORIGIN,
-  } = {},
+  { fetchImpl = fetch, syncApiOrigin = DEFAULT_SYNC_API_ORIGIN } = {},
 ) {
   const response = await fetchImpl(`${syncApiOrigin}/v11/sites`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -262,9 +233,7 @@ function writeEnvToken(
     renameSync = fs.renameSync,
   } = {},
 ) {
-  const current = existsSync(envFilePath)
-    ? readFileSync(envFilePath, "utf8")
-    : "";
+  const current = existsSync(envFilePath) ? readFileSync(envFilePath, "utf8") : "";
   const newline = current.includes("\r\n") ? "\r\n" : "\n";
   const assignment = `KAKOMONN_SYNC_TOKEN=${token}`;
   let next;
@@ -292,8 +261,7 @@ async function resolveSyncToken({
   saveToken = writeEnvToken,
 } = {}) {
   assert.ok(envFilePath, "envFilePath is required");
-  const kakomonnConfiguration =
-    configuration ?? readKakomonnConfiguration({ envFilePath });
+  const kakomonnConfiguration = configuration ?? readKakomonnConfiguration({ envFilePath });
   const configured = readConfigured({
     configuration: kakomonnConfiguration,
     envFilePath,
@@ -326,14 +294,10 @@ async function resolveSyncToken({
   }
   const distinctValidTokens = [...new Set(validTokens)];
   if (distinctValidTokens.length === 0) {
-    throw new Error(
-      "No production sync token was found in Chrome Tampermonkey storage",
-    );
+    throw new Error("No production sync token was found in Chrome Tampermonkey storage");
   }
   if (distinctValidTokens.length > 1) {
-    throw new Error(
-      "Multiple production sync tokens were found in Chrome Tampermonkey storage",
-    );
+    throw new Error("Multiple production sync tokens were found in Chrome Tampermonkey storage");
   }
   saveToken(envFilePath, distinctValidTokens[0]);
   return distinctValidTokens[0];
@@ -351,37 +315,23 @@ function chromeExecutablePath(
   if (!programFiles) {
     throw new Error("ProgramFiles is not set");
   }
-  return path.join(
-    programFiles,
-    "Google",
-    "Chrome",
-    "Application",
-    "chrome.exe",
-  );
+  return path.join(programFiles, "Google", "Chrome", "Application", "chrome.exe");
 }
 
-function locateTampermonkeyExtension(userDataDir, {
-  existsSync = fs.existsSync,
-  readdirSync = fs.readdirSync,
-} = {}) {
-  const extensionsRoot = path.join(
-    userDataDir,
-    "Default",
-    "Extensions",
-  );
+function locateTampermonkeyExtension(
+  userDataDir,
+  { existsSync = fs.existsSync, readdirSync = fs.readdirSync } = {},
+) {
+  const extensionsRoot = path.join(userDataDir, "Default", "Extensions");
   if (!existsSync(extensionsRoot)) {
-    throw new Error(
-      "Tampermonkey Beta must be installed in the dedicated Chrome E2E profile",
-    );
+    throw new Error("Tampermonkey Beta must be installed in the dedicated Chrome E2E profile");
   }
   const extensionIds = readdirSync(extensionsRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();
   if (!extensionIds.includes(TAMPERMONKEY_EXTENSION_ID)) {
-    throw new Error(
-      "Tampermonkey Beta must be installed in the dedicated Chrome E2E profile",
-    );
+    throw new Error("Tampermonkey Beta must be installed in the dedicated Chrome E2E profile");
   }
   const extensionRoot = path.join(extensionsRoot, TAMPERMONKEY_EXTENSION_ID);
   const versions = readdirSync(extensionRoot, { withFileTypes: true })
@@ -389,9 +339,7 @@ function locateTampermonkeyExtension(userDataDir, {
     .map((entry) => entry.name)
     .sort((left, right) => right.localeCompare(left, undefined, { numeric: true }));
   if (versions.length === 0) {
-    throw new Error(
-      "Tampermonkey Beta must be installed in the dedicated Chrome E2E profile",
-    );
+    throw new Error("Tampermonkey Beta must be installed in the dedicated Chrome E2E profile");
   }
   return path.join(extensionRoot, versions[0]);
 }
@@ -451,8 +399,7 @@ async function launchDedicatedChrome({
   userDataDir,
 } = {}) {
   const resolvedUserDataDir =
-    userDataDir ??
-    readChromeUserDataDir({ configuration, systemEnvironment });
+    userDataDir ?? readChromeUserDataDir({ configuration, systemEnvironment });
   const executablePath = chromeExecutablePath(configuration, systemEnvironment);
   if (!fs.existsSync(executablePath)) {
     throw new Error(`Google Chrome was not found: ${executablePath}`);
@@ -461,20 +408,13 @@ async function launchDedicatedChrome({
   stopDedicatedChrome(resolvedUserDataDir, { systemEnvironment });
   const activePortPath = path.join(resolvedUserDataDir, "DevToolsActivePort");
   fs.rmSync(activePortPath, { force: true });
-  const browserProcess = spawn(
-    executablePath,
-    chromeLaunchArguments(resolvedUserDataDir),
-    {
-      env: kakomonnFreeEnvironment(systemEnvironment),
-      stdio: "ignore",
-      windowsHide: true,
-    },
-  );
+  const browserProcess = spawn(executablePath, chromeLaunchArguments(resolvedUserDataDir), {
+    env: kakomonnFreeEnvironment(systemEnvironment),
+    stdio: "ignore",
+    windowsHide: true,
+  });
   try {
-    const port = await waitForDevToolsActivePort(
-      resolvedUserDataDir,
-      browserProcess,
-    );
+    const port = await waitForDevToolsActivePort(resolvedUserDataDir, browserProcess);
     await waitForTampermonkeyExtension(resolvedUserDataDir);
     return await connectDedicatedChrome({
       browserProcess,
@@ -511,20 +451,12 @@ async function connectDedicatedChrome({
       if (pages.length > 0) {
         const session = await contexts[0].newCDPSession(pages[0]).catch(() => null);
         if (session) {
-          await Promise.race([
-            session.send("Browser.close").catch(() => null),
-            delay(3_000),
-          ]);
+          await Promise.race([session.send("Browser.close").catch(() => null), delay(3_000)]);
         }
       }
-      let exited = browserProcess === null
-        ? false
-        : await waitForProcessExit(browserProcess, 3_000);
-      if (
-        browserProcess !== null &&
-        !exited &&
-        !browserProcess.killed
-      ) {
+      let exited =
+        browserProcess === null ? false : await waitForProcessExit(browserProcess, 3_000);
+      if (browserProcess !== null && !exited && !browserProcess.killed) {
         browserProcess.kill();
         exited = await waitForProcessExit(browserProcess, 3_000);
       }
@@ -535,11 +467,7 @@ async function connectDedicatedChrome({
   };
 }
 
-async function readStoredUserscriptState(
-  extensionPage,
-  userscriptName,
-  buildFingerprint,
-) {
+async function readStoredUserscriptState(extensionPage, userscriptName, buildFingerprint) {
   return extensionPage.evaluate(
     async ({ expectedFingerprint, expectedName }) => {
       const records = await chrome.storage.local.get(null);
@@ -563,9 +491,7 @@ async function readStoredUserscriptState(
         count: 1,
         enabled: metadata.enabled === true,
         reviewed: metadata.evilness === 0,
-        sourceIsCurrent: JSON.stringify(source ?? "").includes(
-          expectedFingerprint,
-        ),
+        sourceIsCurrent: JSON.stringify(source ?? "").includes(expectedFingerprint),
       };
     },
     { expectedFingerprint: buildFingerprint, expectedName: userscriptName },
@@ -625,9 +551,7 @@ async function updateInstalledUserscript(context, userscriptPath) {
     `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=dashboard`,
     { waitUntil: "commit", timeout: 30_000 },
   );
-  const scriptRows = dashboardPage
-    .locator("tr.scripttr")
-    .filter({ hasText: userscriptName });
+  const scriptRows = dashboardPage.locator("tr.scripttr").filter({ hasText: userscriptName });
   await scriptRows.first().waitFor({ state: "visible", timeout: 30_000 });
   const scriptCount = await scriptRows.count();
   if (scriptCount !== 1) {
@@ -703,9 +627,7 @@ async function updateInstalledUserscript(context, userscriptPath) {
     `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=dashboard`,
     { waitUntil: "commit", timeout: 30_000 },
   );
-  const enabledRow = dashboardPage
-    .locator("tr.scripttr")
-    .filter({ hasText: userscriptName });
+  const enabledRow = dashboardPage.locator("tr.scripttr").filter({ hasText: userscriptName });
   await enabledRow.waitFor({ state: "visible", timeout: 30_000 });
   let storedState = await readStoredUserscriptState(
     dashboardPage,
@@ -739,11 +661,7 @@ async function updateInstalledUserscript(context, userscriptPath) {
       );
     }
   }
-  assert.equal(
-    storedState.enabled,
-    true,
-    "Tampermonkey did not enable the current userscript",
-  );
+  assert.equal(storedState.enabled, true, "Tampermonkey did not enable the current userscript");
 }
 
 async function launchChromeWithCurrentUserscript({

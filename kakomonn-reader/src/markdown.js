@@ -9,10 +9,7 @@ import {
   normalizeInlineText,
 } from "./content.js";
 
-const MARKDOWN_BLOCK_TAG_NAMES = new Set([
-  ...BLOCK_TAG_NAMES,
-  "FIGURE",
-]);
+const MARKDOWN_BLOCK_TAG_NAMES = new Set([...BLOCK_TAG_NAMES, "FIGURE"]);
 
 function normalizeMarkdown(rawMarkdown) {
   return rawMarkdown
@@ -49,18 +46,9 @@ function escapeMarkdownText(text) {
     .replace(/>/g, "&gt;")
     .replace(/\\/g, "\\\\")
     .replace(/[*_`~\[\]]/g, "\\$&")
-    .replace(
-      /(^|\n)([ \t]*)([-=])(?=[-=]{2,}[ \t]*(?:\n|$))/g,
-      "$1$2\\$3"
-    )
-    .replace(
-      /(^|\n)([ \t]*)([#>+-])(?=\s)/g,
-      "$1$2\\$3"
-    )
-    .replace(
-      /(^|\n)([ \t]*)(\d+)\.(?=\s)/g,
-      "$1$2$3\\."
-    );
+    .replace(/(^|\n)([ \t]*)([-=])(?=[-=]{2,}[ \t]*(?:\n|$))/g, "$1$2\\$3")
+    .replace(/(^|\n)([ \t]*)([#>+-])(?=\s)/g, "$1$2\\$3")
+    .replace(/(^|\n)([ \t]*)(\d+)\.(?=\s)/g, "$1$2$3\\.");
 }
 
 function renderMarkdownChildren(element, state) {
@@ -71,9 +59,7 @@ function renderMarkdownChildren(element, state) {
 
 function renderMarkdownList(element, state) {
   const ordered = element.tagName === "OL";
-  const items = Array.from(element.children).filter(
-    (child) => child.tagName === "LI"
-  );
+  const items = Array.from(element.children).filter((child) => child.tagName === "LI");
   const renderedItems = items
     .map((item, index) => {
       const content = normalizeMarkdown(renderMarkdownChildren(item, state));
@@ -84,9 +70,7 @@ function renderMarkdownList(element, state) {
     })
     .filter(Boolean);
 
-  return renderedItems.length > 0
-    ? `\n\n${renderedItems.join("\n")}\n\n`
-    : "";
+  return renderedItems.length > 0 ? `\n\n${renderedItems.join("\n")}\n\n` : "";
 }
 
 function renderMarkdownImage(element, state) {
@@ -108,22 +92,13 @@ function renderMarkdownImage(element, state) {
 function markdownTableCells(row, state) {
   const cells = [];
   for (const cell of Array.from(row.cells)) {
-    const content = normalizeMarkdown(
-      renderMarkdownChildren(cell, state)
-    )
+    const content = normalizeMarkdown(renderMarkdownChildren(cell, state))
       .replace(/\|/g, "\\|")
       .replace(/\n+/g, "<br>");
     cells.push(content);
 
-    const columnSpan = Number.parseInt(
-      cell.getAttribute("colspan") ?? "1",
-      10
-    );
-    for (
-      let index = 1;
-      Number.isSafeInteger(columnSpan) && index < columnSpan;
-      index += 1
-    ) {
+    const columnSpan = Number.parseInt(cell.getAttribute("colspan") ?? "1", 10);
+    for (let index = 1; Number.isSafeInteger(columnSpan) && index < columnSpan; index += 1) {
       cells.push("");
     }
   }
@@ -136,12 +111,8 @@ function renderMarkdownTable(element, state) {
     return "";
   }
 
-  const renderedRows = rows.map((row) =>
-    markdownTableCells(row, state)
-  );
-  const columnCount = Math.max(
-    ...renderedRows.map((row) => row.length)
-  );
+  const renderedRows = rows.map((row) => markdownTableCells(row, state));
+  const columnCount = Math.max(...renderedRows.map((row) => row.length));
   if (columnCount === 0) {
     return "";
   }
@@ -149,15 +120,11 @@ function renderMarkdownTable(element, state) {
     ...row,
     ...Array(Math.max(0, columnCount - row.length)).fill(""),
   ]);
-  const firstRowIsHeader = Array.from(rows[0].cells).every(
-    (cell) => cell.tagName === "TH"
-  );
-  const header = firstRowIsHeader
-    ? normalizedRows.shift()
-    : Array(columnCount).fill("");
+  const firstRowIsHeader = Array.from(rows[0].cells).every((cell) => cell.tagName === "TH");
+  const header = firstRowIsHeader ? normalizedRows.shift() : Array(columnCount).fill("");
   const separator = Array(columnCount).fill("---");
   const markdownRows = [header, separator, ...normalizedRows].map(
-    (row) => `| ${row.join(" | ")} |`
+    (row) => `| ${row.join(" | ")} |`,
   );
   return `\n\n${markdownRows.join("\n")}\n\n`;
 }
@@ -197,9 +164,7 @@ function imageOnlyLinkURL(element) {
   for (const child of Array.from(element.childNodes)) {
     inspect(child);
   }
-  return containsOtherContent || imageElement === null
-    ? ""
-    : markdownURL(imageElement, "src");
+  return containsOtherContent || imageElement === null ? "" : markdownURL(imageElement, "src");
 }
 
 function renderMarkdownLink(element, state) {
@@ -246,9 +211,7 @@ function renderMarkdownNode(node, state) {
   if (node.tagName === "SUP" || node.tagName === "SUB") {
     const scriptText = normalizeMarkdown(content);
     const tagName = node.tagName.toLowerCase();
-    return scriptText
-      ? `<${tagName}>${scriptText}</${tagName}>`
-      : "";
+    return scriptText ? `<${tagName}>${scriptText}</${tagName}>` : "";
   }
   if (/^H[1-6]$/.test(node.tagName)) {
     const heading = normalizeMarkdown(content);
@@ -269,23 +232,15 @@ function renderMarkdownNode(node, state) {
 }
 
 export function directChild(element, selector) {
-  return (
-    Array.from(element.children).find((child) =>
-      child.matches(selector)
-    ) ?? null
-  );
+  return Array.from(element.children).find((child) => child.matches(selector)) ?? null;
 }
 
 function questionMetadataText(metadataElement) {
   return normalizeInlineText(
     Array.from(metadataElement.childNodes)
-      .filter(
-        (node) =>
-          node.nodeType ===
-          metadataElement.ownerDocument.defaultView.Node.TEXT_NODE
-      )
+      .filter((node) => node.nodeType === metadataElement.ownerDocument.defaultView.Node.TEXT_NODE)
       .map((node) => node.nodeValue ?? "")
-      .join(" ")
+      .join(" "),
   );
 }
 
@@ -298,9 +253,7 @@ function markdownState(defaultImageLabel, seenImageURLs) {
 }
 
 export function isSelectedAnswerChoice(control) {
-  if (
-    control.matches("input[type='radio'], input[type='checkbox']")
-  ) {
+  if (control.matches("input[type='radio'], input[type='checkbox']")) {
     return control.checked === true;
   }
 
@@ -320,8 +273,7 @@ export function buildCopyMarkdown(documentNode) {
   }
 
   const problemElement = documentNode.querySelector(".problem_detail");
-  const explanationElement =
-    documentNode.querySelector("#js-commentary-wrap");
+  const explanationElement = documentNode.querySelector("#js-commentary-wrap");
   if (!problemElement || !explanationElement) {
     return { state: "unavailable", markdown: "" };
   }
@@ -329,9 +281,7 @@ export function buildCopyMarkdown(documentNode) {
   const metadataElement = directChild(problemElement, ".when");
   const questionElement = directChild(problemElement, ".ttl");
   const choicesElement = directChild(problemElement, "ul.list");
-  const metadataText = metadataElement
-    ? questionMetadataText(metadataElement)
-    : "";
+  const metadataText = metadataElement ? questionMetadataText(metadataElement) : "";
   if (
     !metadataElement ||
     !questionElement ||
@@ -342,22 +292,17 @@ export function buildCopyMarkdown(documentNode) {
   }
 
   const answerButton = findAnswerButtonAfter(metadataElement);
-  const choiceElements = Array.from(choicesElement.children).filter(
-    (child) => child.matches("li")
-  );
+  const choiceElements = Array.from(choicesElement.children).filter((child) => child.matches("li"));
   const answerChoiceControls =
     answerButton !== null && problemElement.contains(answerButton)
       ? findAnswerChoiceControls(metadataElement, answerButton)
       : [];
-  const selectedAnswerIndexes = answerChoiceControls.reduce(
-    (indexes, control, index) => {
-      if (isSelectedAnswerChoice(control)) {
-        indexes.push(index);
-      }
-      return indexes;
-    },
-    []
-  );
+  const selectedAnswerIndexes = answerChoiceControls.reduce((indexes, control, index) => {
+    if (isSelectedAnswerChoice(control)) {
+      indexes.push(index);
+    }
+    return indexes;
+  }, []);
   if (
     choiceElements.length === 0 ||
     choiceElements.length !== answerChoiceControls.length ||
@@ -370,44 +315,32 @@ export function buildCopyMarkdown(documentNode) {
   const selectedAnswerMarkdown = normalizeMarkdown(
     renderMarkdownChildren(
       choiceElements[selectedAnswerIndex],
-      markdownState("回答の画像", new Set())
-    )
+      markdownState("回答の画像", new Set()),
+    ),
   );
   if (!selectedAnswerMarkdown) {
     return { state: "unavailable", markdown: "" };
   }
 
   const seenImageURLs = new Set();
-  const questionState = markdownState(
-    "問題文の画像",
-    seenImageURLs
-  );
-  const questionMarkdown = normalizeMarkdown(
-    renderMarkdownNode(questionElement, questionState)
-  );
+  const questionState = markdownState("問題文の画像", seenImageURLs);
+  const questionMarkdown = normalizeMarkdown(renderMarkdownNode(questionElement, questionState));
   const questionImagesMarkdown = normalizeMarkdown(
     Array.from(problemElement.children)
       .filter((child) => child.matches(".zoomin"))
-      .map((container) =>
-        renderMarkdownNode(container, questionState)
-      )
-      .join("")
+      .map((container) => renderMarkdownNode(container, questionState))
+      .join(""),
   );
-  const choicesMarkdown = normalizeMarkdown(
-    renderMarkdownNode(choicesElement, questionState)
-  );
+  const choicesMarkdown = normalizeMarkdown(renderMarkdownNode(choicesElement, questionState));
   if (!questionMarkdown || !choicesMarkdown) {
     return { state: "unavailable", markdown: "" };
   }
 
-  const explanationState = markdownState(
-    "解説画像",
-    seenImageURLs
-  );
+  const explanationState = markdownState("解説画像", seenImageURLs);
   const explanationParts = [];
-  const explanationItems = Array.from(
-    explanationElement.children
-  ).filter((item) => item.matches(".item"));
+  const explanationItems = Array.from(explanationElement.children).filter((item) =>
+    item.matches(".item"),
+  );
   if (explanationItems.length === 0) {
     return { state: "unavailable", markdown: "" };
   }
@@ -420,9 +353,7 @@ export function buildCopyMarkdown(documentNode) {
     }
 
     const number = normalizeInlineText(numberElement.innerText ?? "");
-    const text = normalizeMarkdown(
-      renderMarkdownChildren(textElement, explanationState)
-    );
+    const text = normalizeMarkdown(renderMarkdownChildren(textElement, explanationState));
     if (!/^\d{2}$/.test(number) || !text) {
       return { state: "unavailable", markdown: "" };
     }

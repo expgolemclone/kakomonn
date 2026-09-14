@@ -46,7 +46,8 @@ async function bundleReader() {
   });
   const outputs = Array.isArray(result) ? result.flatMap((entry) => entry.output) : result.output;
   const chunks = outputs.filter((output) => output.type === "chunk");
-  if (chunks.length !== 1) throw new Error(`reader build must emit one chunk, found ${chunks.length}`);
+  if (chunks.length !== 1)
+    throw new Error(`reader build must emit one chunk, found ${chunks.length}`);
   return chunks[0].code.replaceAll("\r\n", "\n").trimEnd();
 }
 

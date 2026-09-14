@@ -49,8 +49,7 @@ test("keeps Safari edge gestures outside the reader gesture by viewport ratio", 
 test("uses viewport-relative minimum distance", () => {
   for (const viewportWidth of [320, 402, 768]) {
     const baseSwipe = swipeForWidth(viewportWidth);
-    const minimumDistance =
-      viewportWidth * IPHONE_NEXT_SWIPE_MIN_DISTANCE_RATIO;
+    const minimumDistance = viewportWidth * IPHONE_NEXT_SWIPE_MIN_DISTANCE_RATIO;
     assert.equal(
       isIPhoneNextQuestionSwipe({
         ...baseSwipe,
@@ -70,10 +69,7 @@ test("uses viewport-relative minimum distance", () => {
 
 test("rejects vertical, rightward, and slow gestures", () => {
   const baseSwipe = swipeForWidth(402);
-  assert.equal(
-    isIPhoneNextQuestionSwipe({ ...baseSwipe, endY: 650 }),
-    false,
-  );
+  assert.equal(isIPhoneNextQuestionSwipe({ ...baseSwipe, endY: 650 }), false);
   assert.equal(
     isIPhoneNextQuestionSwipe({
       ...baseSwipe,

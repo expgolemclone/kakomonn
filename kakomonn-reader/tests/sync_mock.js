@@ -61,7 +61,7 @@ function installSyncMockInWindow({
     ]),
   );
   const attemptedQuestionIds = new Set(
-    initialProcessedOperations.map((item) => item.questionId ?? "45124")
+    initialProcessedOperations.map((item) => item.questionId ?? "45124"),
   );
 
   const mock = {
@@ -103,14 +103,10 @@ function installSyncMockInWindow({
   };
 
   const learningMetrics = () => {
-    const newQuestionsRemaining = Math.max(
-      0,
-      newQuestionGoal - mock.todayNewQuestionCount,
-    );
+    const newQuestionsRemaining = Math.max(0, newQuestionGoal - mock.todayNewQuestionCount);
     return {
       stabilityDays: mock.stabilityDays,
-      dailyKpiCompleted:
-        mock.dueCardsCompleted && newQuestionsRemaining === 0,
+      dailyKpiCompleted: mock.dueCardsCompleted && newQuestionsRemaining === 0,
       dueCardsCompleted: mock.dueCardsCompleted,
       dueCardsRemaining: mock.dueCardsRemaining,
       todayNewQuestionCount: mock.todayNewQuestionCount,
@@ -122,9 +118,7 @@ function installSyncMockInWindow({
       todayCorrectRatePercent:
         mock.todayAttemptCount === 0
           ? null
-          : Math.round(
-              (mock.todayCorrectAttemptCount * 100) / mock.todayAttemptCount
-            ),
+          : Math.round((mock.todayCorrectAttemptCount * 100) / mock.todayAttemptCount),
     };
   };
 
@@ -183,354 +177,347 @@ function installSyncMockInWindow({
     let aborted = false;
     let releaseHeldRequest = null;
     const request = {};
-      const respondJSON = (status, body) => {
-        window.setTimeout(() => {
-          if (aborted) {
-            return;
-          }
-          const response = { status, responseText: JSON.stringify(body) };
-          details.onload(response);
-        }, 0);
-      };
-      const respondAudio = () => {
-        window.setTimeout(() => {
-          if (aborted) {
-            return;
-          }
-          const response = {
-            status: 200,
-            response: new Uint8Array([0x49, 0x44, 0x33, 0x04]).buffer,
-            responseHeaders: "content-type: audio/mpeg",
-          };
-          details.onload(response);
-        }, 0);
-      };
-      const failRequest = () => {
+    const respondJSON = (status, body) => {
+      window.setTimeout(() => {
         if (aborted) {
           return;
         }
-        details.onerror(new Error("mock network error"));
-      };
-      const contentType = details.headers?.["Content-Type"] ?? "";
-      const call = {
-        method: details.method,
-        url: details.url,
-        authorization: details.headers?.Authorization ?? "",
-        headers: { ...(details.headers ?? {}) },
-        body:
-          details.data === undefined
-            ? null
-            : contentType === "application/json"
-              ? JSON.parse(details.data)
-              : details.data,
-      };
-      mock.calls.push(call);
-      const isSpeechRequest =
-        new URL(call.url).origin === expectedSpeechOrigin;
-      if (isSpeechRequest) {
-        mock.speechRequestCount += 1;
+        const response = { status, responseText: JSON.stringify(body) };
+        details.onload(response);
+      }, 0);
+    };
+    const respondAudio = () => {
+      window.setTimeout(() => {
+        if (aborted) {
+          return;
+        }
+        const response = {
+          status: 200,
+          response: new Uint8Array([0x49, 0x44, 0x33, 0x04]).buffer,
+          responseHeaders: "content-type: audio/mpeg",
+        };
+        details.onload(response);
+      }, 0);
+    };
+    const failRequest = () => {
+      if (aborted) {
+        return;
+      }
+      details.onerror(new Error("mock network error"));
+    };
+    const contentType = details.headers?.["Content-Type"] ?? "";
+    const call = {
+      method: details.method,
+      url: details.url,
+      authorization: details.headers?.Authorization ?? "",
+      headers: { ...(details.headers ?? {}) },
+      body:
+        details.data === undefined
+          ? null
+          : contentType === "application/json"
+            ? JSON.parse(details.data)
+            : details.data,
+    };
+    mock.calls.push(call);
+    const isSpeechRequest = new URL(call.url).origin === expectedSpeechOrigin;
+    if (isSpeechRequest) {
+      mock.speechRequestCount += 1;
+    }
+
+    const executeRequest = () => {
+      if (mock.failNextRequest) {
+        mock.failNextRequest = false;
+        failRequest();
+        return;
+      }
+      const requestURL = new URL(call.url);
+      if (requestURL.origin === expectedSpeechOrigin) {
+        if (
+          call.method !== "POST" ||
+          requestURL.pathname !== "/cognitiveservices/v1" ||
+          call.authorization !== `Bearer ${expectedSpeechToken}`
+        ) {
+          respondJSON(401, { error: "invalid_speech_request" });
+          return;
+        }
+        respondAudio();
+        return;
+      }
+      if (requestURL.origin !== expectedOrigin) {
+        respondJSON(404, { error: "unexpected_origin" });
+        return;
+      }
+      if (call.authorization !== `Bearer ${mock.token}`) {
+        respondJSON(401, { error: "unauthorized" });
+        return;
       }
 
-      const executeRequest = () => {
-        if (mock.failNextRequest) {
-          mock.failNextRequest = false;
+      const pathname = requestURL.pathname;
+      if (
+        call.method === "GET" &&
+        pathname === "/v11/state" &&
+        requestURL.searchParams.get("site") === expectedSite
+      ) {
+        respondJSON(200, syncState());
+        return;
+      }
+      if (call.method === "POST" && pathname === "/v11/speech-token") {
+        respondJSON(200, { token: expectedSpeechToken, expiresInSeconds: 600 });
+        return;
+      }
+      if (
+        call.method === "GET" &&
+        pathname === "/v11/next" &&
+        requestURL.searchParams.get("site") === expectedSite &&
+        requestURL.searchParams.getAll("site").length === 1 &&
+        requestURL.searchParams.getAll("excludeQuestionId").length <= 1
+      ) {
+        if (mock.nextError !== null) {
+          respondJSON(409, { error: mock.nextError });
+          return;
+        }
+        const questionId = mock.nextQuestionId;
+        respondJSON(200, {
+          state: syncState(),
+          question:
+            questionId === null
+              ? null
+              : {
+                  questionId,
+                  url: `https://${expectedSite}/questions/${questionId}`,
+                  kind: "new",
+                  dueMs: null,
+                },
+        });
+        return;
+      }
+      if (call.method === "POST" && pathname === "/v11/questions") {
+        if (mock.conflictNextCatalogUpdate) {
+          mock.conflictNextCatalogUpdate = false;
+          mock.catalogUpdatedAtMs = Date.now();
+          mock.catalogQuestionCount = call.body?.questionIds?.length ?? 1;
+          mock.catalogGeneration += 1;
+          respondJSON(409, {
+            error: "catalog_conflict",
+            currentGeneration: mock.catalogGeneration,
+            catalog: {
+              site: expectedSite,
+              questionCount: mock.catalogQuestionCount,
+              updatedAtMs: mock.catalogUpdatedAtMs,
+              generation: mock.catalogGeneration,
+            },
+            question:
+              mock.nextQuestionId === null
+                ? null
+                : {
+                    questionId: mock.nextQuestionId,
+                    url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
+                    kind: "new",
+                    dueMs: null,
+                  },
+          });
+          return;
+        }
+        if (
+          call.body?.site !== expectedSite ||
+          !Array.isArray(call.body?.questionIds) ||
+          call.body.questionIds.length === 0 ||
+          !Number.isSafeInteger(call.body?.expectedGeneration) ||
+          call.body.expectedGeneration < 0 ||
+          Object.keys(call.body ?? {})
+            .sort()
+            .join(",") !== "expectedGeneration,questionIds,site"
+        ) {
+          respondJSON(400, { error: "invalid_request" });
+          return;
+        }
+        if (call.body.expectedGeneration !== mock.catalogGeneration) {
+          respondJSON(409, {
+            error: "catalog_conflict",
+            currentGeneration: mock.catalogGeneration,
+            catalog:
+              mock.catalogQuestionCount === null
+                ? null
+                : {
+                    site: expectedSite,
+                    questionCount: mock.catalogQuestionCount,
+                    updatedAtMs: mock.catalogUpdatedAtMs,
+                    generation: mock.catalogGeneration,
+                  },
+            question:
+              mock.catalogQuestionCount === null || mock.nextQuestionId === null
+                ? null
+                : {
+                    questionId: mock.nextQuestionId,
+                    url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
+                    kind: "new",
+                    dueMs: null,
+                  },
+          });
+          return;
+        }
+        mock.catalogUpdatedAtMs = Date.now();
+        mock.catalogQuestionCount = call.body.questionIds.length;
+        mock.catalogGeneration += 1;
+        respondJSON(200, {
+          site: expectedSite,
+          questionCount: call.body.questionIds.length,
+          updatedAtMs: mock.catalogUpdatedAtMs,
+          generation: mock.catalogGeneration,
+          question:
+            mock.nextQuestionId === null
+              ? null
+              : {
+                  questionId: mock.nextQuestionId,
+                  url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
+                  kind: "new",
+                  dueMs: null,
+                },
+        });
+        return;
+      }
+      if (call.method === "POST" && pathname === "/v11/attempts") {
+        const operationId = call.body?.operationId;
+        const questionId = call.body?.questionId;
+        const answerResult = call.body?.answerResult;
+        if (
+          !/^[0-9a-f]{32}$/.test(operationId ?? "") ||
+          !/^\d+$/.test(questionId ?? "") ||
+          call.body?.site !== expectedSite ||
+          (answerResult !== "correct" && answerResult !== "incorrect") ||
+          Object.keys(call.body ?? {})
+            .sort()
+            .join(",") !== "answerResult,operationId,questionId,site"
+        ) {
+          respondJSON(400, { error: "invalid_request" });
+          return;
+        }
+        let item = processed.get(operationId);
+        if (
+          item !== undefined &&
+          (item.answerResult !== answerResult || item.questionId !== questionId)
+        ) {
+          respondJSON(409, { error: "operation_conflict" });
+          return;
+        }
+        if (item === undefined) {
+          mock.attemptCount += 1;
+          mock.todayAttemptCount += 1;
+          if (answerResult === "correct") {
+            mock.todayCorrectAttemptCount += 1;
+          }
+          if (!attemptedQuestionIds.has(questionId)) {
+            attemptedQuestionIds.add(questionId);
+            mock.attemptedQuestionCount += 1;
+            mock.todayAttemptedQuestionCount += 1;
+            mock.todayNewQuestionCount += 1;
+          }
+          const nextAttemptStabilityDaysDelta = mock.nextAttemptStabilityDaysDelta;
+          mock.nextAttemptStabilityDaysDelta = 0;
+          const previousStabilityDays = mock.stabilityDays;
+          mock.stabilityDays += nextAttemptStabilityDaysDelta;
+          mock.todayStabilityDaysDelta += nextAttemptStabilityDaysDelta;
+          if (mock.nextAttemptDueCardsRemaining !== null) {
+            mock.dueCardsRemaining = mock.nextAttemptDueCardsRemaining;
+            mock.dueCardsCompleted = mock.dueCardsRemaining === 0;
+            mock.nextAttemptDueCardsRemaining = null;
+          }
+          item = {
+            questionId,
+            answerResult,
+            attemptedAtMs: Date.now(),
+            previousCardStabilityDays:
+              nextAttemptStabilityDaysDelta === -1
+                ? 35
+                : nextAttemptStabilityDaysDelta === 1
+                  ? 29
+                  : 10,
+            resultingCardStabilityDays:
+              nextAttemptStabilityDaysDelta === -1
+                ? 5
+                : nextAttemptStabilityDaysDelta === 1
+                  ? 31
+                  : 11,
+            previousStabilityDays,
+            resultingStabilityDays: mock.stabilityDays,
+            celebration: mock.nextCelebration ?? undefined,
+          };
+          if (item.celebration?.dailyKpiCompleted === true) {
+            mock.dueCardsCompleted = true;
+            mock.dueCardsRemaining = 0;
+            mock.todayNewQuestionCount = Math.max(newQuestionGoal, mock.todayNewQuestionCount);
+          }
+          mock.nextCelebration = null;
+          processed.set(operationId, item);
+        }
+        if (mock.commitThenFailNextAttempt) {
+          mock.commitThenFailNextAttempt = false;
           failRequest();
           return;
         }
-        const requestURL = new URL(call.url);
-        if (requestURL.origin === expectedSpeechOrigin) {
-          if (
-            call.method !== "POST" ||
-            requestURL.pathname !== "/cognitiveservices/v1" ||
-            call.authorization !== `Bearer ${expectedSpeechToken}`
-          ) {
-            respondJSON(401, { error: "invalid_speech_request" });
-            return;
-          }
-          respondAudio();
-          return;
-        }
-        if (requestURL.origin !== expectedOrigin) {
-          respondJSON(404, { error: "unexpected_origin" });
-          return;
-        }
-        if (call.authorization !== `Bearer ${mock.token}`) {
-          respondJSON(401, { error: "unauthorized" });
-          return;
-        }
-
-        const pathname = requestURL.pathname;
-        if (
-          call.method === "GET" &&
-          pathname === "/v11/state" &&
-          requestURL.searchParams.get("site") === expectedSite
-        ) {
-          respondJSON(200, syncState());
-          return;
-        }
-        if (call.method === "POST" && pathname === "/v11/speech-token") {
-          respondJSON(200, { token: expectedSpeechToken, expiresInSeconds: 600 });
-          return;
-        }
-        if (
-          call.method === "GET" &&
-          pathname === "/v11/next" &&
-          requestURL.searchParams.get("site") === expectedSite &&
-          requestURL.searchParams.getAll("site").length === 1 &&
-          requestURL.searchParams.getAll("excludeQuestionId").length <= 1
-        ) {
-          if (mock.nextError !== null) {
-            respondJSON(409, { error: mock.nextError });
-            return;
-          }
-          const questionId = mock.nextQuestionId;
-          respondJSON(200, {
-            state: syncState(),
-            question:
-              questionId === null
-                ? null
-                : {
-                    questionId,
-                    url: `https://${expectedSite}/questions/${questionId}`,
-                    kind: "new",
-                    dueMs: null,
-                  },
-          });
-          return;
-        }
-        if (call.method === "POST" && pathname === "/v11/questions") {
-          if (mock.conflictNextCatalogUpdate) {
-            mock.conflictNextCatalogUpdate = false;
-            mock.catalogUpdatedAtMs = Date.now();
-            mock.catalogQuestionCount = call.body?.questionIds?.length ?? 1;
-            mock.catalogGeneration += 1;
-            respondJSON(409, {
-              error: "catalog_conflict",
-              currentGeneration: mock.catalogGeneration,
-              catalog: {
-                site: expectedSite,
-                questionCount: mock.catalogQuestionCount,
-                updatedAtMs: mock.catalogUpdatedAtMs,
-                generation: mock.catalogGeneration,
-              },
-              question:
-                mock.nextQuestionId === null
-                  ? null
-                  : {
-                      questionId: mock.nextQuestionId,
-                      url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
-                      kind: "new",
-                      dueMs: null,
-                    },
-            });
-            return;
-          }
-          if (
-            call.body?.site !== expectedSite ||
-            !Array.isArray(call.body?.questionIds) ||
-            call.body.questionIds.length === 0 ||
-            !Number.isSafeInteger(call.body?.expectedGeneration) ||
-            call.body.expectedGeneration < 0 ||
-            Object.keys(call.body ?? {}).sort().join(",") !==
-              "expectedGeneration,questionIds,site"
-          ) {
-            respondJSON(400, { error: "invalid_request" });
-            return;
-          }
-          if (call.body.expectedGeneration !== mock.catalogGeneration) {
-            respondJSON(409, {
-              error: "catalog_conflict",
-              currentGeneration: mock.catalogGeneration,
-              catalog:
-                mock.catalogQuestionCount === null
-                  ? null
-                  : {
-                      site: expectedSite,
-                      questionCount: mock.catalogQuestionCount,
-                      updatedAtMs: mock.catalogUpdatedAtMs,
-                      generation: mock.catalogGeneration,
-                    },
-              question:
-                mock.catalogQuestionCount === null || mock.nextQuestionId === null
-                  ? null
-                  : {
-                      questionId: mock.nextQuestionId,
-                      url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
-                      kind: "new",
-                      dueMs: null,
-                    },
-            });
-            return;
-          }
-          mock.catalogUpdatedAtMs = Date.now();
-          mock.catalogQuestionCount = call.body.questionIds.length;
-          mock.catalogGeneration += 1;
-          respondJSON(200, {
-            site: expectedSite,
-            questionCount: call.body.questionIds.length,
-            updatedAtMs: mock.catalogUpdatedAtMs,
-            generation: mock.catalogGeneration,
-            question:
-              mock.nextQuestionId === null
-                ? null
-                : {
-                    questionId: mock.nextQuestionId,
-                    url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
-                    kind: "new",
-                    dueMs: null,
-                  },
-          });
-          return;
-        }
-        if (call.method === "POST" && pathname === "/v11/attempts") {
-          const operationId = call.body?.operationId;
-          const questionId = call.body?.questionId;
-          const answerResult = call.body?.answerResult;
-          if (
-            !/^[0-9a-f]{32}$/.test(operationId ?? "") ||
-            !/^\d+$/.test(questionId ?? "") ||
-            call.body?.site !== expectedSite ||
-            (answerResult !== "correct" && answerResult !== "incorrect") ||
-            Object.keys(call.body ?? {}).sort().join(",") !==
-              "answerResult,operationId,questionId,site"
-          ) {
-            respondJSON(400, { error: "invalid_request" });
-            return;
-          }
-          let item = processed.get(operationId);
-          if (
-            item !== undefined &&
-            (item.answerResult !== answerResult || item.questionId !== questionId)
-          ) {
-            respondJSON(409, { error: "operation_conflict" });
-            return;
-          }
-          if (item === undefined) {
-            mock.attemptCount += 1;
-            mock.todayAttemptCount += 1;
-            if (answerResult === "correct") {
-              mock.todayCorrectAttemptCount += 1;
-            }
-            if (!attemptedQuestionIds.has(questionId)) {
-              attemptedQuestionIds.add(questionId);
-              mock.attemptedQuestionCount += 1;
-              mock.todayAttemptedQuestionCount += 1;
-              mock.todayNewQuestionCount += 1;
-            }
-            const nextAttemptStabilityDaysDelta =
-              mock.nextAttemptStabilityDaysDelta;
-            mock.nextAttemptStabilityDaysDelta = 0;
-            const previousStabilityDays = mock.stabilityDays;
-            mock.stabilityDays += nextAttemptStabilityDaysDelta;
-            mock.todayStabilityDaysDelta += nextAttemptStabilityDaysDelta;
-            if (mock.nextAttemptDueCardsRemaining !== null) {
-              mock.dueCardsRemaining = mock.nextAttemptDueCardsRemaining;
-              mock.dueCardsCompleted = mock.dueCardsRemaining === 0;
-              mock.nextAttemptDueCardsRemaining = null;
-            }
-            item = {
-              questionId,
-              answerResult,
-              attemptedAtMs: Date.now(),
-              previousCardStabilityDays:
-                nextAttemptStabilityDaysDelta === -1
-                  ? 35
-                  : nextAttemptStabilityDaysDelta === 1
-                    ? 29
-                    : 10,
-              resultingCardStabilityDays:
-                nextAttemptStabilityDaysDelta === -1
-                  ? 5
-                  : nextAttemptStabilityDaysDelta === 1
-                    ? 31
-                    : 11,
-              previousStabilityDays,
-              resultingStabilityDays: mock.stabilityDays,
-              celebration: mock.nextCelebration ?? undefined,
-            };
-            if (item.celebration?.dailyKpiCompleted === true) {
-              mock.dueCardsCompleted = true;
-              mock.dueCardsRemaining = 0;
-              mock.todayNewQuestionCount = Math.max(
-                newQuestionGoal,
-                mock.todayNewQuestionCount
-              );
-            }
-            mock.nextCelebration = null;
-            processed.set(operationId, item);
-          }
-          if (mock.commitThenFailNextAttempt) {
-            mock.commitThenFailNextAttempt = false;
-            failRequest();
-            return;
-          }
-          respondJSON(200, {
-            attempt: {
-              questionId: item.questionId,
-              answerResult: item.answerResult,
-              attemptedAtMs: item.attemptedAtMs,
-              previousCardStabilityDays: item.previousCardStabilityDays,
-              resultingCardStabilityDays: item.resultingCardStabilityDays,
-              previousStabilityDays: item.previousStabilityDays,
-              resultingStabilityDays: item.resultingStabilityDays,
-            },
-            learningMetrics: learningMetrics(),
-            nextQuestion:
-              mock.nextQuestionId === null
-                ? null
-                : {
-                    questionId: mock.nextQuestionId,
-                    url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
-                    kind: "new",
-                    dueMs: null,
-                  },
-            ...(item.celebration === undefined
-              ? {}
-              : { celebration: item.celebration }),
-          });
-          return;
-        }
-        respondJSON(404, { error: "not_found" });
-      };
-
-      const isHeldSpeechRequest =
-        isSpeechRequest &&
-        mock.speechRequestCount === mock.holdSpeechRequestNumber;
-      if (mock.holdNextRequest || isHeldSpeechRequest) {
-        mock.holdNextRequest = false;
-        releaseHeldRequest = () => {
-          if (aborted) {
-            return;
-          }
-          mock.releaseHeldRequest = null;
-          mock.releaseHeldSpeechRequest = null;
-          window.setTimeout(executeRequest, 0);
-        };
-        mock.releaseHeldRequest = releaseHeldRequest;
-        if (isHeldSpeechRequest) {
-          mock.releaseHeldSpeechRequest = releaseHeldRequest;
-        }
-      } else {
-        window.setTimeout(executeRequest, 0);
+        respondJSON(200, {
+          attempt: {
+            questionId: item.questionId,
+            answerResult: item.answerResult,
+            attemptedAtMs: item.attemptedAtMs,
+            previousCardStabilityDays: item.previousCardStabilityDays,
+            resultingCardStabilityDays: item.resultingCardStabilityDays,
+            previousStabilityDays: item.previousStabilityDays,
+            resultingStabilityDays: item.resultingStabilityDays,
+          },
+          learningMetrics: learningMetrics(),
+          nextQuestion:
+            mock.nextQuestionId === null
+              ? null
+              : {
+                  questionId: mock.nextQuestionId,
+                  url: `https://${expectedSite}/questions/${mock.nextQuestionId}`,
+                  kind: "new",
+                  dueMs: null,
+                },
+          ...(item.celebration === undefined ? {} : { celebration: item.celebration }),
+        });
+        return;
       }
-      request.abort = () => {
+      respondJSON(404, { error: "not_found" });
+    };
+
+    const isHeldSpeechRequest =
+      isSpeechRequest && mock.speechRequestCount === mock.holdSpeechRequestNumber;
+    if (mock.holdNextRequest || isHeldSpeechRequest) {
+      mock.holdNextRequest = false;
+      releaseHeldRequest = () => {
         if (aborted) {
           return;
         }
-        aborted = true;
-        mock.abortedRequestCount += 1;
-        if (mock.releaseHeldRequest === releaseHeldRequest) {
-          mock.releaseHeldRequest = null;
-        }
-        if (mock.releaseHeldSpeechRequest === releaseHeldRequest) {
-          mock.releaseHeldSpeechRequest = null;
-        }
-        details.onabort(new Error("mock request aborted"));
+        mock.releaseHeldRequest = null;
+        mock.releaseHeldSpeechRequest = null;
+        window.setTimeout(executeRequest, 0);
       };
-      return request;
+      mock.releaseHeldRequest = releaseHeldRequest;
+      if (isHeldSpeechRequest) {
+        mock.releaseHeldSpeechRequest = releaseHeldRequest;
+      }
+    } else {
+      window.setTimeout(executeRequest, 0);
+    }
+    request.abort = () => {
+      if (aborted) {
+        return;
+      }
+      aborted = true;
+      mock.abortedRequestCount += 1;
+      if (mock.releaseHeldRequest === releaseHeldRequest) {
+        mock.releaseHeldRequest = null;
+      }
+      if (mock.releaseHeldSpeechRequest === releaseHeldRequest) {
+        mock.releaseHeldSpeechRequest = null;
+      }
+      details.onabort(new Error("mock request aborted"));
     };
-  window.__getGMValue = (key) =>
-    values.has(key) ? structuredClone(values.get(key)) : null;
+    return request;
+  };
+  window.__getGMValue = (key) => (values.has(key) ? structuredClone(values.get(key)) : null);
 }
 
 function createSyncMockConfiguration({

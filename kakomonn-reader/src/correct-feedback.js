@@ -71,7 +71,7 @@ export const CORRECT_FEEDBACK_VARIANTS = Object.freeze([
 ]);
 
 const CORRECT_FEEDBACK_VARIANT_BY_ID = new Map(
-  CORRECT_FEEDBACK_VARIANTS.map((variant) => [variant.id, variant])
+  CORRECT_FEEDBACK_VARIANTS.map((variant) => [variant.id, variant]),
 );
 
 export const CORRECT_FEEDBACK_CSS = `
@@ -326,8 +326,7 @@ export const CORRECT_FEEDBACK_CSS = `
 const correctFeedbackKpiResolvers = new Map();
 
 export function calculateKpiQuestionsRemaining(metrics) {
-  const remaining =
-    metrics.dueCardsRemaining + metrics.newQuestionsRemaining;
+  const remaining = metrics.dueCardsRemaining + metrics.newQuestionsRemaining;
   if (!Number.isSafeInteger(remaining) || remaining < 0) {
     throw new TypeError("KPI questions remaining is invalid.");
   }
@@ -336,9 +335,7 @@ export function calculateKpiQuestionsRemaining(metrics) {
 
 export function waitForCorrectFeedbackKpi(questionId, pendingAttempt) {
   if (!/^\d+$/.test(questionId ?? "")) {
-    return Promise.reject(
-      new TypeError("Correct feedback question ID is invalid.")
-    );
+    return Promise.reject(new TypeError("Correct feedback question ID is invalid."));
   }
   if (
     pendingAttempt?.phase === "recorded" &&
@@ -355,11 +352,7 @@ export function waitForCorrectFeedbackKpi(questionId, pendingAttempt) {
 }
 
 export function resolveCorrectFeedbackKpi(questionId, remaining) {
-  if (
-    !/^\d+$/.test(questionId ?? "") ||
-    !Number.isSafeInteger(remaining) ||
-    remaining < 0
-  ) {
+  if (!/^\d+$/.test(questionId ?? "") || !Number.isSafeInteger(remaining) || remaining < 0) {
     throw new TypeError("Correct feedback KPI result is invalid.");
   }
   const resolvers = correctFeedbackKpiResolvers.get(questionId);
@@ -375,11 +368,7 @@ export function resolveCorrectFeedbackKpi(questionId, remaining) {
 }
 
 export function randomIntegerBelow(limit, cryptoSource = globalThis.crypto) {
-  if (
-    !Number.isSafeInteger(limit) ||
-    limit <= 0 ||
-    limit > UINT16_RANGE
-  ) {
+  if (!Number.isSafeInteger(limit) || limit <= 0 || limit > UINT16_RANGE) {
     throw new RangeError("limit must be between 1 and 65536.");
   }
   if (typeof cryptoSource?.getRandomValues !== "function") {
@@ -395,10 +384,7 @@ export function randomIntegerBelow(limit, cryptoSource = globalThis.crypto) {
 }
 
 export function chooseCorrectFeedbackVariant(cryptoSource = globalThis.crypto) {
-  const bucket = randomIntegerBelow(
-    CORRECT_FEEDBACK_RANDOM_BUCKETS,
-    cryptoSource
-  );
+  const bucket = randomIntegerBelow(CORRECT_FEEDBACK_RANDOM_BUCKETS, cryptoSource);
   if (bucket === 0) {
     return CORRECT_FEEDBACK_VARIANT_BY_ID.get("ssr");
   }

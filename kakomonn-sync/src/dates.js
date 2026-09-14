@@ -10,9 +10,7 @@ export function getTokyoDate(date = new Date()) {
     day: "2-digit",
   }).formatToParts(date);
   const values = Object.fromEntries(
-    parts
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, part.value])
+    parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]),
   );
   return `${values.year}-${values.month}-${values.day}`;
 }
@@ -30,19 +28,13 @@ export function recentTokyoDates(today, days) {
   if (ordinal === null || !Number.isSafeInteger(days) || days < 1 || days > 31) {
     throw new TypeError("invalid history range");
   }
-  return Array.from({ length: days }, (_, index) =>
-    isoDateFromOrdinal(ordinal - days + 1 + index)
-  );
+  return Array.from({ length: days }, (_, index) => isoDateFromOrdinal(ordinal - days + 1 + index));
 }
 
 export function tokyoDateRangeMs(firstDate, lastDate = firstDate) {
   const firstOrdinal = dateOrdinal(firstDate);
   const lastOrdinal = dateOrdinal(lastDate);
-  if (
-    firstOrdinal === null ||
-    lastOrdinal === null ||
-    lastOrdinal < firstOrdinal
-  ) {
+  if (firstOrdinal === null || lastOrdinal === null || lastOrdinal < firstOrdinal) {
     throw new TypeError("invalid Tokyo date range");
   }
   return {

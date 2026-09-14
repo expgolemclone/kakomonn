@@ -14,7 +14,7 @@ export function installNavigationController(app) {
     )?.value;
     return isQuestionId(randomQuestionId) ? randomQuestionId : null;
   }
-  
+
   function canSkipCurrentQuestion() {
     const unansweredQuestionReady =
       app.frameDocument?.body !== undefined &&
@@ -33,29 +33,24 @@ export function installNavigationController(app) {
       !app.syncSettings.open
     );
   }
-  
+
   function getCurrentAnswerResult() {
     return app.answerResultFromDocument(app.frameDocument);
   }
-  
-  function synchronizeAnswerPresentation(
-    sourceDocument = app.frameDocument
-  ) {
-    if (
-      sourceDocument?.documentElement === undefined ||
-      app.frameDocument !== sourceDocument
-    ) {
+
+  function synchronizeAnswerPresentation(sourceDocument = app.frameDocument) {
+    if (sourceDocument?.documentElement === undefined || app.frameDocument !== sourceDocument) {
       return;
     }
-  
+
     if (app.answerResultFromDocument(sourceDocument) === "unknown") {
       sourceDocument.documentElement.dataset.kakomonnReaderPhase = "question";
       return;
     }
-  
+
     delete sourceDocument.documentElement.dataset.kakomonnReaderPhase;
   }
-  
+
   function createOperationId() {
     if (typeof globalThis.crypto?.getRandomValues !== "function") {
       throw new Error("secure random values are unavailable");
@@ -63,7 +58,7 @@ export function installNavigationController(app) {
     const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
     return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
   }
-  
+
   const READER_HISTORY_OWNER = "kakomonn-reader";
   const READER_HISTORY_VERSION = 1;
   const READER_HISTORY_SESSION_KEY = "kakomonn-reader.history.v1";
@@ -74,7 +69,7 @@ export function installNavigationController(app) {
   let preparedDestinationOperationId = null;
   let incorrectAdvanceRequested = false;
   let noNextQuestionOperationId = null;
-  
+
   function isReaderHistoryState(value) {
     return (
       value !== null &&
@@ -84,15 +79,13 @@ export function installNavigationController(app) {
       /^[0-9a-f]{32}$/.test(value.sessionId) &&
       Number.isSafeInteger(value.index) &&
       value.index > 0 &&
-      ["current", "future-question", "future-celebration"].includes(
-        value.entryType
-      ) &&
+      ["current", "future-question", "future-celebration"].includes(value.entryType) &&
       (value.entryType === "current"
         ? value.operationId === null
         : /^[0-9a-f]{32}$/.test(value.operationId))
     );
   }
-  
+
   function isReaderHistorySession(value) {
     return (
       value !== null &&
@@ -104,25 +97,20 @@ export function installNavigationController(app) {
       ["active", "celebration", "exiting", "returning"].includes(value.mode)
     );
   }
-  
+
   function saveReaderHistorySession() {
-    sessionStorage.setItem(
-      READER_HISTORY_SESSION_KEY,
-      JSON.stringify(readerHistorySession)
-    );
+    sessionStorage.setItem(READER_HISTORY_SESSION_KEY, JSON.stringify(readerHistorySession));
   }
-  
+
   function loadReaderHistorySession() {
     try {
-      const value = JSON.parse(
-        sessionStorage.getItem(READER_HISTORY_SESSION_KEY) ?? "null"
-      );
+      const value = JSON.parse(sessionStorage.getItem(READER_HISTORY_SESSION_KEY) ?? "null");
       return isReaderHistorySession(value) ? value : null;
     } catch {
       return null;
     }
   }
-  
+
   function readerHistoryState(index, entryType, operationId = null) {
     return {
       owner: READER_HISTORY_OWNER,
@@ -133,7 +121,7 @@ export function installNavigationController(app) {
       operationId,
     };
   }
-  
+
   function ensureCurrentReaderHistory() {
     const storedSession = loadReaderHistorySession();
     const state = history.state;
@@ -145,7 +133,7 @@ export function installNavigationController(app) {
       readerHistorySession = storedSession;
       return state;
     }
-  
+
     readerHistorySession = {
       version: READER_HISTORY_VERSION,
       sessionId: createOperationId(),
@@ -157,7 +145,7 @@ export function installNavigationController(app) {
     saveReaderHistorySession();
     return currentState;
   }
-  
+
   function synchronizeCurrentHistoryURL() {
     const state = ensureCurrentReaderHistory();
     if (
@@ -180,20 +168,14 @@ export function installNavigationController(app) {
     }
     const index =
       activatingFutureHistoryState?.index ??
-      (state.entryType === "current"
-        ? state.index
-        : readerHistorySession.currentIndex);
-    history.replaceState(
-      readerHistoryState(index, "current"),
-      "",
-      app.currentFrameURL
-    );
+      (state.entryType === "current" ? state.index : readerHistorySession.currentIndex);
+    history.replaceState(readerHistoryState(index, "current"), "", app.currentFrameURL);
     readerHistorySession.currentIndex = index;
     readerHistorySession.mode = "active";
     saveReaderHistorySession();
     return true;
   }
-  
+
   function resolveHistoryPreparation(state) {
     if (
       historyPreparation === null ||
@@ -210,7 +192,7 @@ export function installNavigationController(app) {
     preparation.resolve(true);
     return true;
   }
-  
+
   function prepareFutureHistoryEntry(entryType, operation) {
     if (preparedDestinationOperationId === operation.operationId) {
       return Promise.resolve(true);
@@ -218,30 +200,29 @@ export function installNavigationController(app) {
     if (historyPreparation !== null) {
       return historyPreparation.promise;
     }
-  
+
     const currentState = ensureCurrentReaderHistory();
     if (currentState.entryType !== "current") {
       return Promise.resolve(false);
     }
     const futureIndex = readerHistorySession.currentIndex + 1;
-    const futureURL =
-      entryType === "future-question" ? operation.nextURL : app.currentFrameURL;
+    const futureURL = entryType === "future-question" ? operation.nextURL : app.currentFrameURL;
     try {
       history.pushState(
         readerHistoryState(futureIndex, entryType, operation.operationId),
         "",
-        futureURL
+        futureURL,
       );
     } catch (error) {
       app.showReaderError(
         "history-prepare",
         "Browser forwardを準備できません",
         "Readerのhistoryへ次の遷移先を保存できませんでした.",
-        error
+        error,
       );
       return Promise.resolve(false);
     }
-  
+
     let resolvePreparation;
     const promise = new Promise((resolve) => {
       resolvePreparation = resolve;
@@ -255,7 +236,7 @@ export function installNavigationController(app) {
         "history-prepare",
         "Browser forwardを準備できません",
         "ページを再読み込みしてから同期を再試行してください.",
-        { code: "history_prepare_timeout" }
+        { code: "history_prepare_timeout" },
       );
       resolvePreparation(false);
     }, READER_HISTORY_TIMEOUT_MS);
@@ -268,7 +249,7 @@ export function installNavigationController(app) {
       return prepared;
     });
   }
-  
+
   function navigateToScheduledQuestion(nextURL) {
     if (!app.isScheduledQuestionURL(nextURL)) {
       app.navigationInProgress = false;
@@ -276,7 +257,7 @@ export function installNavigationController(app) {
       app.showReaderError(
         "next-question-url",
         "次の問題を開けません",
-        "同期APIから受け取った次の問題URLが不正です. 再同期してください."
+        "同期APIから受け取った次の問題URLが不正です. 再同期してください.",
       );
       app.updateSyncDependentControls();
       return false;
@@ -296,13 +277,13 @@ export function installNavigationController(app) {
         "next-question-navigation",
         "次の問題へ移動できません",
         "ページを再読み込みしてから再試行してください.",
-        error
+        error,
       );
       app.updateSyncDependentControls();
       return false;
     }
   }
-  
+
   async function completePendingAttemptNavigation() {
     if (
       app.pendingAttempt === null ||
@@ -336,7 +317,7 @@ export function installNavigationController(app) {
         "pending-navigation",
         "次の問題への遷移を完了できません",
         "解答記録は保持されています. ページを再読み込みしてください.",
-        error
+        error,
       );
       return false;
     } finally {
@@ -344,7 +325,7 @@ export function installNavigationController(app) {
       app.updateSyncDependentControls();
     }
   }
-  
+
   async function resumePendingLearningFlow() {
     await completePendingAttemptNavigation();
     if (
@@ -360,7 +341,7 @@ export function installNavigationController(app) {
     await maybePreparePendingDestination();
     recordCurrentAnswerIfAvailable();
   }
-  
+
   function congratulationsURL(celebration) {
     const url = new URL(app.CONGRATULATIONS_URL);
     url.searchParams.set("site", celebration.site);
@@ -368,7 +349,7 @@ export function installNavigationController(app) {
     url.searchParams.set("dailyKpiCompleted", "true");
     return url.href;
   }
-  
+
   async function transitionToPendingCelebration(historyIndex, failureDetail) {
     const celebration = app.pendingCelebration;
     const operation = app.pendingAttempt;
@@ -399,17 +380,12 @@ export function installNavigationController(app) {
       saveReaderHistorySession();
       app.navigationInProgress = false;
       clearIncorrectAdvanceRequest();
-      app.showReaderError(
-        "celebration-navigation",
-        "祝福pageを開けません",
-        failureDetail,
-        error
-      );
+      app.showReaderError("celebration-navigation", "祝福pageを開けません", failureDetail, error);
       app.updateSyncDependentControls();
       return false;
     }
   }
-  
+
   async function activateFutureCelebration(state) {
     if (
       app.pendingAttempt === null ||
@@ -423,17 +399,17 @@ export function installNavigationController(app) {
         "celebration-history",
         "祝福pageを開けません",
         "Browser historyと保存済みの達成情報が一致しません.",
-        { code: "history_state_mismatch" }
+        { code: "history_state_mismatch" },
       );
       history.back();
       return false;
     }
     return transitionToPendingCelebration(
       state.index,
-      "達成情報は保持されています. Browser forwardを再試行してください."
+      "達成情報は保持されています. Browser forwardを再試行してください.",
     );
   }
-  
+
   async function activateFutureQuestion(state) {
     if (
       app.pendingAttempt === null ||
@@ -448,7 +424,7 @@ export function installNavigationController(app) {
         "question-history",
         "次の問題を開けません",
         "Browser historyと保存済みの次問情報が一致しません.",
-        { code: "history_state_mismatch" }
+        { code: "history_state_mismatch" },
       );
       history.back();
       return false;
@@ -456,7 +432,7 @@ export function installNavigationController(app) {
     activatingFutureHistoryState = state;
     return navigateToScheduledQuestion(app.pendingAttempt.nextURL);
   }
-  
+
   function handleReaderPopState(event) {
     const state = event.state;
     if (resolveHistoryPreparation(state)) {
@@ -501,7 +477,7 @@ export function installNavigationController(app) {
     readerHistorySession.mode = "active";
     saveReaderHistorySession();
   }
-  
+
   function handleReaderPageShow() {
     const state = history.state;
     if (
@@ -514,18 +490,18 @@ export function installNavigationController(app) {
       history.forward();
     }
   }
-  
+
   function handleReaderPageHide() {
     if (readerHistorySession?.mode === "exiting") {
       readerHistorySession.mode = "returning";
       saveReaderHistorySession();
     }
   }
-  
+
   function clearIncorrectAdvanceRequest() {
     incorrectAdvanceRequested = false;
   }
-  
+
   function activateRequestedIncorrectDestination() {
     if (
       !incorrectAdvanceRequested ||
@@ -546,7 +522,7 @@ export function installNavigationController(app) {
         const currentState = ensureCurrentReaderHistory();
         void transitionToPendingCelebration(
           currentState.index,
-          "達成情報は保持されています. ページを再読み込みしてください."
+          "達成情報は保持されています. ページを再読み込みしてください.",
         );
         return true;
       }
@@ -564,19 +540,19 @@ export function installNavigationController(app) {
     history.forward();
     return true;
   }
-  
+
   function requestIncorrectAnswerAdvance() {
     if (getCurrentAnswerResult() !== "incorrect") {
       return false;
     }
-  
+
     incorrectAdvanceRequested = true;
     if (!activateRequestedIncorrectDestination()) {
       void maybePreparePendingDestination();
     }
     return true;
   }
-  
+
   async function preparePendingFutureEntry(entryType, operation) {
     const prepared = await prepareFutureHistoryEntry(entryType, operation);
     if (!prepared) {
@@ -586,7 +562,7 @@ export function installNavigationController(app) {
     activateRequestedIncorrectDestination();
     return true;
   }
-  
+
   async function maybePreparePendingDestination() {
     if (
       !app.syncReady ||
@@ -603,7 +579,7 @@ export function installNavigationController(app) {
       const currentState = ensureCurrentReaderHistory();
       return transitionToPendingCelebration(
         currentState.index,
-        "達成情報は保持されています. ページを再読み込みしてください."
+        "達成情報は保持されています. ページを再読み込みしてください.",
       );
     }
     if (
@@ -613,10 +589,7 @@ export function installNavigationController(app) {
       return false;
     }
     if (app.isIPhoneSafari && app.pendingAttempt.answerResult === "incorrect") {
-      if (
-        app.pendingCelebration !== null ||
-        app.pendingAttempt.nextURL !== null
-      ) {
+      if (app.pendingCelebration !== null || app.pendingAttempt.nextURL !== null) {
         return activateRequestedIncorrectDestination();
       }
       clearIncorrectAdvanceRequest();
@@ -626,7 +599,7 @@ export function installNavigationController(app) {
           "next-question-empty",
           "出題できる問題はありません",
           "時間を置いてから次の学習sessionを開始してください.",
-          { code: "next_question_empty" }
+          { code: "next_question_empty" },
         );
       }
       return false;
@@ -639,21 +612,15 @@ export function installNavigationController(app) {
         const currentState = ensureCurrentReaderHistory();
         return transitionToPendingCelebration(
           currentState.index,
-          "達成情報は保持されています. ページを再読み込みしてください."
+          "達成情報は保持されています. ページを再読み込みしてください.",
         );
       }
       return preparePendingFutureEntry("future-celebration", app.pendingAttempt);
     }
-    if (
-      app.pendingAttempt.answerResult === "correct" &&
-      app.pendingAttempt.nextURL !== null
-    ) {
+    if (app.pendingAttempt.answerResult === "correct" && app.pendingAttempt.nextURL !== null) {
       return navigateToScheduledQuestion(app.pendingAttempt.nextURL);
     }
-    if (
-      app.pendingAttempt.copy.state === "not-required" &&
-      app.pendingAttempt.nextURL !== null
-    ) {
+    if (app.pendingAttempt.copy.state === "not-required" && app.pendingAttempt.nextURL !== null) {
       return navigateToScheduledQuestion(app.pendingAttempt.nextURL);
     }
     if (app.pendingAttempt.nextURL !== null) {
@@ -666,16 +633,16 @@ export function installNavigationController(app) {
         "next-question-empty",
         "出題できる問題はありません",
         "時間を置いてから次の学習sessionを開始してください.",
-        { code: "next_question_empty" }
+        { code: "next_question_empty" },
       );
     }
     return false;
   }
-  
+
   async function createPendingAttempt(
     answerResult,
     copyRequired,
-    operationId = createOperationId()
+    operationId = createOperationId(),
   ) {
     const questionId = currentQuestionId();
     if (questionId === null) {
@@ -697,7 +664,7 @@ export function installNavigationController(app) {
     app.pendingAttempt = operation;
     return operation;
   }
-  
+
   async function submitPendingAttempt() {
     if (app.pendingAttempt === null || app.syncPromise !== null) {
       return false;
@@ -714,12 +681,12 @@ export function installNavigationController(app) {
       void app.refreshQuestionCatalog(app.syncToken);
       return false;
     }
-  
+
     app.nextQuestionOperationInProgress = true;
     const operation = app.pendingAttempt;
     app.syncInProgress = true;
     app.updateSyncDependentControls();
-  
+
     app.syncPromise = (async () => {
       let failedError = null;
       try {
@@ -733,7 +700,7 @@ export function installNavigationController(app) {
         if (result.celebration !== undefined) {
           await app.savePendingCelebration(result.celebration);
         }
-  
+
         const nextQuestion = result.nextQuestion;
         const kpiQuestionsRemaining =
           operation.answerResult === "correct"
@@ -743,7 +710,7 @@ export function installNavigationController(app) {
         await app.markPendingAttemptRecorded(
           operation,
           nextQuestion?.url ?? null,
-          kpiQuestionsRemaining
+          kpiQuestionsRemaining,
         );
         return true;
       } catch (error) {
@@ -765,7 +732,7 @@ export function installNavigationController(app) {
             "解答記録を同期できません",
             `${app.syncErrorMessage(failedError)}. 解答記録は保持されています. 再試行してください.`,
             failedError,
-            { label: "同期を再試行", run: submitPendingAttempt }
+            { label: "同期を再試行", run: submitPendingAttempt },
           );
         }
         void maybePreparePendingDestination();
@@ -773,14 +740,14 @@ export function installNavigationController(app) {
     })();
     return app.syncPromise;
   }
-  
+
   async function recordCurrentAnswer(answerResult, copyRequired = true) {
     const questionId = currentQuestionId();
     if (questionId === null) {
       app.showReaderError(
         "question-id",
         "解答記録を準備できません",
-        "現在の問題IDを取得できませんでした. ページを再読み込みしてください."
+        "現在の問題IDを取得できませんでした. ページを再読み込みしてください.",
       );
       app.updateSyncDependentControls();
       return false;
@@ -789,8 +756,7 @@ export function installNavigationController(app) {
     app.updateSyncDependentControls();
     try {
       const operationId =
-        copyRequired &&
-        app.answerCopyOperation?.questionId === questionId
+        copyRequired && app.answerCopyOperation?.questionId === questionId
           ? app.answerCopyOperation.operationId
           : createOperationId();
       await createPendingAttempt(answerResult, copyRequired, operationId);
@@ -803,7 +769,7 @@ export function installNavigationController(app) {
         "attempt-storage",
         "解答記録を準備できません",
         "Userscript storageへ未送信の解答を保存できませんでした.",
-        error
+        error,
       );
       app.updateSyncDependentControls();
       return false;
@@ -814,7 +780,7 @@ export function installNavigationController(app) {
     }
     return submitPendingAttempt();
   }
-  
+
   function recordCurrentAnswerIfAvailable() {
     if (
       !app.syncReady ||
@@ -834,7 +800,7 @@ export function installNavigationController(app) {
     void recordCurrentAnswer(answerResult);
     return true;
   }
-  
+
   async function recordCurrentQuestionAndAdvance(answerResult) {
     const recorded = await recordCurrentAnswer(answerResult, false);
     if (!recorded || app.pendingAttempt?.phase !== "recorded") {
@@ -845,12 +811,9 @@ export function installNavigationController(app) {
     }
     return maybePreparePendingDestination();
   }
-  
+
   async function handleSkipQuestion() {
-    if (
-      app.navigationInProgress ||
-      app.nextQuestionOperationInProgress
-    ) {
+    if (app.navigationInProgress || app.nextQuestionOperationInProgress) {
       return false;
     }
     if (app.syncInProgress) {
@@ -887,7 +850,7 @@ export function installNavigationController(app) {
     }
     return recordCurrentQuestionAndAdvance("incorrect");
   }
-  
+
   function readPendingCurrentPage() {
     if (
       !app.speechEnabled ||
@@ -899,11 +862,11 @@ export function installNavigationController(app) {
     ) {
       return;
     }
-  
+
     app.currentPageReadPending = false;
     app.readCurrentPage();
   }
-  
+
   function startSpeechForCurrentPage() {
     if (
       app.speechEnabled ||
@@ -917,7 +880,7 @@ export function installNavigationController(app) {
     ) {
       return false;
     }
-  
+
     app.speechInitializationInProgress = true;
     app.speechInitializationPromise = new Promise((resolve) => {
       app.speechInitializationResolve = resolve;
@@ -942,11 +905,11 @@ export function installNavigationController(app) {
           app.speechEnabled = false;
           app.finishSpeechInitialization();
         }
-      }
+      },
     );
     return true;
   }
-  
+
   function processCurrentPageSpeech() {
     if (
       !app.currentPageReadPending ||
@@ -957,21 +920,18 @@ export function installNavigationController(app) {
     ) {
       return;
     }
-  
-    if (
-      getCurrentAnswerResult() === "unknown" &&
-      app.extractQuestionText() === ""
-    ) {
+
+    if (getCurrentAnswerResult() === "unknown" && app.extractQuestionText() === "") {
       return;
     }
-  
+
     if (!app.speechSupported) {
       app.currentPageReadPending = false;
       app.showReaderError(
         "speech-runtime",
         "読み上げを利用できません",
         "このbrowserでは音声再生APIを利用できません.",
-        { code: "speech_unsupported" }
+        { code: "speech_unsupported" },
       );
       return;
     }
@@ -984,7 +944,7 @@ export function installNavigationController(app) {
     }
     startSpeechForCurrentPage();
   }
-  
+
   function activateSpeechFromGesture() {
     // 自動再生が拒否された場合は,ユーザー操作内で同じ読み上げ経路を再試行します.
     if (!app.speechEnabled && app.currentPageReadPending) {
@@ -1002,12 +962,48 @@ export function installNavigationController(app) {
     READER_HISTORY_VERSION: { enumerable: false, get: () => READER_HISTORY_VERSION },
     READER_HISTORY_SESSION_KEY: { enumerable: false, get: () => READER_HISTORY_SESSION_KEY },
     READER_HISTORY_TIMEOUT_MS: { enumerable: false, get: () => READER_HISTORY_TIMEOUT_MS },
-    readerHistorySession: { enumerable: false, get: () => readerHistorySession, set: (value) => { readerHistorySession = value; } },
-    historyPreparation: { enumerable: false, get: () => historyPreparation, set: (value) => { historyPreparation = value; } },
-    activatingFutureHistoryState: { enumerable: false, get: () => activatingFutureHistoryState, set: (value) => { activatingFutureHistoryState = value; } },
-    preparedDestinationOperationId: { enumerable: false, get: () => preparedDestinationOperationId, set: (value) => { preparedDestinationOperationId = value; } },
-    incorrectAdvanceRequested: { enumerable: false, get: () => incorrectAdvanceRequested, set: (value) => { incorrectAdvanceRequested = value; } },
-    noNextQuestionOperationId: { enumerable: false, get: () => noNextQuestionOperationId, set: (value) => { noNextQuestionOperationId = value; } },
+    readerHistorySession: {
+      enumerable: false,
+      get: () => readerHistorySession,
+      set: (value) => {
+        readerHistorySession = value;
+      },
+    },
+    historyPreparation: {
+      enumerable: false,
+      get: () => historyPreparation,
+      set: (value) => {
+        historyPreparation = value;
+      },
+    },
+    activatingFutureHistoryState: {
+      enumerable: false,
+      get: () => activatingFutureHistoryState,
+      set: (value) => {
+        activatingFutureHistoryState = value;
+      },
+    },
+    preparedDestinationOperationId: {
+      enumerable: false,
+      get: () => preparedDestinationOperationId,
+      set: (value) => {
+        preparedDestinationOperationId = value;
+      },
+    },
+    incorrectAdvanceRequested: {
+      enumerable: false,
+      get: () => incorrectAdvanceRequested,
+      set: (value) => {
+        incorrectAdvanceRequested = value;
+      },
+    },
+    noNextQuestionOperationId: {
+      enumerable: false,
+      get: () => noNextQuestionOperationId,
+      set: (value) => {
+        noNextQuestionOperationId = value;
+      },
+    },
     isReaderHistoryState: { enumerable: false, get: () => isReaderHistoryState },
     isReaderHistorySession: { enumerable: false, get: () => isReaderHistorySession },
     saveReaderHistorySession: { enumerable: false, get: () => saveReaderHistorySession },
@@ -1018,25 +1014,43 @@ export function installNavigationController(app) {
     resolveHistoryPreparation: { enumerable: false, get: () => resolveHistoryPreparation },
     prepareFutureHistoryEntry: { enumerable: false, get: () => prepareFutureHistoryEntry },
     navigateToScheduledQuestion: { enumerable: false, get: () => navigateToScheduledQuestion },
-    completePendingAttemptNavigation: { enumerable: false, get: () => completePendingAttemptNavigation },
+    completePendingAttemptNavigation: {
+      enumerable: false,
+      get: () => completePendingAttemptNavigation,
+    },
     resumePendingLearningFlow: { enumerable: false, get: () => resumePendingLearningFlow },
     congratulationsURL: { enumerable: false, get: () => congratulationsURL },
-    transitionToPendingCelebration: { enumerable: false, get: () => transitionToPendingCelebration },
+    transitionToPendingCelebration: {
+      enumerable: false,
+      get: () => transitionToPendingCelebration,
+    },
     activateFutureCelebration: { enumerable: false, get: () => activateFutureCelebration },
     activateFutureQuestion: { enumerable: false, get: () => activateFutureQuestion },
     handleReaderPopState: { enumerable: false, get: () => handleReaderPopState },
     handleReaderPageShow: { enumerable: false, get: () => handleReaderPageShow },
     handleReaderPageHide: { enumerable: false, get: () => handleReaderPageHide },
     clearIncorrectAdvanceRequest: { enumerable: false, get: () => clearIncorrectAdvanceRequest },
-    activateRequestedIncorrectDestination: { enumerable: false, get: () => activateRequestedIncorrectDestination },
+    activateRequestedIncorrectDestination: {
+      enumerable: false,
+      get: () => activateRequestedIncorrectDestination,
+    },
     requestIncorrectAnswerAdvance: { enumerable: false, get: () => requestIncorrectAnswerAdvance },
     preparePendingFutureEntry: { enumerable: false, get: () => preparePendingFutureEntry },
-    maybePreparePendingDestination: { enumerable: false, get: () => maybePreparePendingDestination },
+    maybePreparePendingDestination: {
+      enumerable: false,
+      get: () => maybePreparePendingDestination,
+    },
     createPendingAttempt: { enumerable: false, get: () => createPendingAttempt },
     submitPendingAttempt: { enumerable: false, get: () => submitPendingAttempt },
     recordCurrentAnswer: { enumerable: false, get: () => recordCurrentAnswer },
-    recordCurrentAnswerIfAvailable: { enumerable: false, get: () => recordCurrentAnswerIfAvailable },
-    recordCurrentQuestionAndAdvance: { enumerable: false, get: () => recordCurrentQuestionAndAdvance },
+    recordCurrentAnswerIfAvailable: {
+      enumerable: false,
+      get: () => recordCurrentAnswerIfAvailable,
+    },
+    recordCurrentQuestionAndAdvance: {
+      enumerable: false,
+      get: () => recordCurrentQuestionAndAdvance,
+    },
     handleSkipQuestion: { enumerable: false, get: () => handleSkipQuestion },
     readPendingCurrentPage: { enumerable: false, get: () => readPendingCurrentPage },
     startSpeechForCurrentPage: { enumerable: false, get: () => startSpeechForCurrentPage },

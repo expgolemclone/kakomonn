@@ -73,17 +73,11 @@ async function verifyShell(browser, origin, experience, selectedIndex) {
       waitUntil: "domcontentloaded",
     });
     assert.equal(response?.headers()["cache-control"], "no-cache");
-    assert.match(
-      response?.headers()["content-security-policy"] ?? "",
-      /frame-ancestors 'self'/,
-    );
+    assert.match(response?.headers()["content-security-policy"] ?? "", /frame-ancestors 'self'/);
     await page.waitForSelector('html[data-state="ready"]');
     const selectedId = await page.locator("#celebration-frame").getAttribute("data-experience-id");
     assert.equal(selectedId, experience.id);
-    const frameURL = new URL(
-      await page.locator("#celebration-frame").getAttribute("src"),
-      origin,
-    );
+    const frameURL = new URL(await page.locator("#celebration-frame").getAttribute("src"), origin);
     assert.equal(frameURL.search, "");
     assert.equal(await page.locator("#celebration-frame").isVisible(), true);
     assert.equal(await page.locator("#loading").isVisible(), false);
@@ -136,9 +130,7 @@ async function verifyFrameVisibleBeforeReady(browser, origin) {
   });
   try {
     await page.goto(`${origin}/?${search}`, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(
-      () => document.querySelector("#celebration-frame")?.src !== "",
-    );
+    await page.waitForFunction(() => document.querySelector("#celebration-frame")?.src !== "");
     assert.equal(await page.locator("#celebration-frame").isVisible(), true);
     assert.equal(await page.locator("#loading").isVisible(), true);
     assert.equal(await page.locator("html").getAttribute("data-state"), "loading");
@@ -190,9 +182,7 @@ async function verifyLocalCachePolicy(origin) {
 
   const builtAssets = await readdir(resolve(projectRoot, "dist", "assets"));
   assert.notEqual(builtAssets.length, 0);
-  const immutableResponse = await fetch(
-    `${origin}/assets/${builtAssets.sort()[0]}`,
-  );
+  const immutableResponse = await fetch(`${origin}/assets/${builtAssets.sort()[0]}`);
   assert.equal(immutableResponse.status, 200);
   assert.equal(
     immutableResponse.headers.get("cache-control"),
@@ -201,10 +191,7 @@ async function verifyLocalCachePolicy(origin) {
 
   const vendorResponse = await fetch(`${origin}/vendor/gsap/3.12.5/gsap.min.js`);
   assert.equal(vendorResponse.status, 200);
-  assert.equal(
-    vendorResponse.headers.get("cache-control"),
-    "public, max-age=31536000, immutable",
-  );
+  assert.equal(vendorResponse.headers.get("cache-control"), "public, max-age=31536000, immutable");
 }
 
 async function verifyReadyBeforeImages(browser, origin) {
@@ -226,10 +213,9 @@ async function verifyReadyBeforeImages(browser, origin) {
     });
   });
   try {
-    await page.goto(
-      `${origin}/experiences/formwork-meridian/?${search}`,
-      { waitUntil: "domcontentloaded" },
-    );
+    await page.goto(`${origin}/experiences/formwork-meridian/?${search}`, {
+      waitUntil: "domcontentloaded",
+    });
     await page.waitForFunction(() => window.__celebrationReady === true);
     assert.equal(await page.evaluate(() => document.readyState), "interactive");
   } finally {

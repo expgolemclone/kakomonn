@@ -12,9 +12,7 @@ const SHA = "a".repeat(40);
 const OTHER_SHA = "b".repeat(40);
 const REPOSITORY = "expgolemclone/kakomonn";
 const REPOSITORY_URL = `https://github.com/${REPOSITORY}`;
-const packageJson = JSON.parse(
-  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
-);
+const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 function valueAt(values, index) {
   return values[Math.min(index, values.length - 1)];
@@ -40,12 +38,7 @@ function createFakeRunner({
     if (command === "jj" && args[0] === "diff") {
       return dirtySummary;
     }
-    if (
-      command === "jj" &&
-      args[0] === "git" &&
-      args[1] === "remote" &&
-      args[2] === "list"
-    ) {
+    if (command === "jj" && args[0] === "git" && args[1] === "remote" && args[2] === "list") {
       return remoteList;
     }
     if (command === "jj" && args[0] === "log") {
@@ -100,11 +93,7 @@ function releaseOptions(fake, overrides = {}) {
 
 test("reads exactly one semantic userscript version", () => {
   assert.equal(readUserscriptVersion("// @version 1.2.3\n"), "1.2.3");
-  for (const source of [
-    "",
-    "// @version next\n",
-    "// @version 1.0.0\n// @version 1.0.1\n",
-  ]) {
+  for (const source of ["", "// @version next\n", "// @version 1.0.0\n// @version 1.0.1\n"]) {
     assert.throws(() => readUserscriptVersion(source));
   }
 });
@@ -179,10 +168,7 @@ test("publishes the synchronized main only after the complete test suite", async
 
   assert.equal(result.commitSha, SHA);
   assert.equal(result.tagName, "kakomonn-reader-v1.0.0");
-  assert.equal(
-    findCall(fake.calls, "gh", "repo", "view").args[2],
-    `${REPOSITORY_URL}.git`,
-  );
+  assert.equal(findCall(fake.calls, "gh", "repo", "view").args[2], `${REPOSITORY_URL}.git`);
 
   assert.equal(findCall(fake.calls, "gh", "workflow"), undefined);
   assert.equal(findCall(fake.calls, "gh", "run"), undefined);
@@ -207,15 +193,10 @@ test("publishes the synchronized main only after the complete test suite", async
   const npmCalls = fake.calls
     .filter((call) => call.command === "npm")
     .map((call) => call.args.join(" "));
-  assert.deepEqual(npmCalls, [
-    "ci",
-    "test",
-    "run build:kakomonn-reader",
-  ]);
+  assert.deepEqual(npmCalls, ["ci", "test", "run build:kakomonn-reader"]);
   assert.equal(
-    fake.calls.findIndex(
-      (call) => call.command === "npm" && call.args[0] === "test",
-    ) < fake.calls.indexOf(releaseCall),
+    fake.calls.findIndex((call) => call.command === "npm" && call.args[0] === "test") <
+      fake.calls.indexOf(releaseCall),
     true,
   );
 });
@@ -223,30 +204,24 @@ test("publishes the synchronized main only after the complete test suite", async
 test("rejects working copy content that differs from main", async () => {
   const fake = createFakeRunner({ dirtySummary: "M package.json" });
 
-  await assert.rejects(
-    runRelease(releaseOptions(fake)),
-    /working copy content differs from main/,
+  await assert.rejects(runRelease(releaseOptions(fake)), /working copy content differs from main/);
+  assert.equal(
+    fake.calls.some((call) => call.command === "npm"),
+    false,
   );
-  assert.equal(fake.calls.some((call) => call.command === "npm"), false);
 });
 
 test("rejects local main that differs from origin", async () => {
   const fake = createFakeRunner({ originShas: [OTHER_SHA] });
 
-  await assert.rejects(
-    runRelease(releaseOptions(fake)),
-    /does not match main@origin/,
-  );
+  await assert.rejects(runRelease(releaseOptions(fake)), /does not match main@origin/);
   assert.equal(findCall(fake.calls, "gh", "release", "create"), undefined);
 });
 
 test("rejects a repository without exactly one origin", async () => {
   const fake = createFakeRunner({ remoteList: "upstream https://example.com/repo" });
 
-  await assert.rejects(
-    runRelease(releaseOptions(fake)),
-    /Exactly one origin remote is required/,
-  );
+  await assert.rejects(runRelease(releaseOptions(fake)), /Exactly one origin remote is required/);
   assert.equal(findCall(fake.calls, "gh", "release", "create"), undefined);
 });
 
@@ -274,20 +249,14 @@ test("does not publish when main moves during local validation", async () => {
     githubShas: [SHA, OTHER_SHA],
   });
 
-  await assert.rejects(
-    runRelease(releaseOptions(fake)),
-    /main changed during release validation/,
-  );
+  await assert.rejects(runRelease(releaseOptions(fake)), /main changed during release validation/);
   assert.equal(findCall(fake.calls, "gh", "release", "create"), undefined);
 });
 
 test("does not retry or overwrite an existing release", async () => {
   const fake = createFakeRunner({ failReleaseCreate: true });
 
-  await assert.rejects(
-    runRelease(releaseOptions(fake)),
-    /release already exists/,
-  );
+  await assert.rejects(runRelease(releaseOptions(fake)), /release already exists/);
   const releaseCalls = fake.calls.filter(
     (call) => call.command === "gh" && call.args[0] === "release",
   );

@@ -1,11 +1,16 @@
 /* CHROMA — raymarched liquid-chrome metaballs (raw WebGL) + motion */
 (() => {
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const canvas = document.getElementById('chrome');
-  const gl = canvas.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'high-performance' });
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const canvas = document.getElementById("chrome");
+  const gl = canvas.getContext("webgl", {
+    antialias: false,
+    alpha: false,
+    powerPreference: "high-performance",
+  });
 
-  if (!gl) { canvas.classList.add('fallback'); }
-  else {
+  if (!gl) {
+    canvas.classList.add("fallback");
+  } else {
     const vert = `attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}`;
     const frag = `
       precision highp float;
@@ -61,45 +66,87 @@
         col+=(fract(sin(dot(gl_FragCoord.xy,vec2(12.9,78.2)))*43758.5)-0.5)*0.02;
         gl_FragColor=vec4(col,1.0);
       }`;
-    const sh=(ty,src)=>{const s=gl.createShader(ty);gl.shaderSource(s,src);gl.compileShader(s);return s;};
-    const prog=gl.createProgram();
-    gl.attachShader(prog,sh(gl.VERTEX_SHADER,vert));
-    gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,frag));
+    const sh = (ty, src) => {
+      const s = gl.createShader(ty);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      return s;
+    };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, vert));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, frag));
     gl.linkProgram(prog);
-    if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){canvas.classList.add('fallback');}
-    else{
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      canvas.classList.add("fallback");
+    } else {
       gl.useProgram(prog);
-      const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
-      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
-      const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
-      const uT=gl.getUniformLocation(prog,'u_time'),uR=gl.getUniformLocation(prog,'u_res'),uM=gl.getUniformLocation(prog,'u_mouse');
-      const m={x:.5,y:.5,tx:.5,ty:.5};
-      if(!reduce)addEventListener('pointermove',e=>{m.tx=e.clientX/innerWidth;m.ty=1-e.clientY/innerHeight;},{passive:true});
-      const dpr=Math.min(devicePixelRatio||1,1.4);
-      function resize(){const w=(canvas.clientWidth*dpr)|0,h=(canvas.clientHeight*dpr)|0;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}}
-      const start=performance.now();
-      function frame(now){resize();
-        m.x+=(m.tx-m.x)*0.05;m.y+=(m.ty-m.y)*0.05;
-        gl.uniform1f(uT,reduce?6.0:(now-start)/1000);
-        gl.uniform2f(uR,canvas.width,canvas.height);
-        gl.uniform2f(uM,m.x,m.y);
-        gl.drawArrays(gl.TRIANGLES,0,3);
-        if(!reduce)requestAnimationFrame(frame);
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const loc = gl.getAttribLocation(prog, "p");
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      const uT = gl.getUniformLocation(prog, "u_time"),
+        uR = gl.getUniformLocation(prog, "u_res"),
+        uM = gl.getUniformLocation(prog, "u_mouse");
+      const m = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5 };
+      if (!reduce)
+        addEventListener(
+          "pointermove",
+          (e) => {
+            m.tx = e.clientX / innerWidth;
+            m.ty = 1 - e.clientY / innerHeight;
+          },
+          { passive: true },
+        );
+      const dpr = Math.min(devicePixelRatio || 1, 1.4);
+      function resize() {
+        const w = (canvas.clientWidth * dpr) | 0,
+          h = (canvas.clientHeight * dpr) | 0;
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+          gl.viewport(0, 0, w, h);
+        }
       }
-      addEventListener('resize',resize);resize();requestAnimationFrame(frame);
+      const start = performance.now();
+      function frame(now) {
+        resize();
+        m.x += (m.tx - m.x) * 0.05;
+        m.y += (m.ty - m.y) * 0.05;
+        gl.uniform1f(uT, reduce ? 6.0 : (now - start) / 1000);
+        gl.uniform2f(uR, canvas.width, canvas.height);
+        gl.uniform2f(uM, m.x, m.y);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        if (!reduce) requestAnimationFrame(frame);
+      }
+      addEventListener("resize", resize);
+      resize();
+      requestAnimationFrame(frame);
     }
   }
 
   /* motion layer */
-  const hero=document.querySelector('.hero');
-  requestAnimationFrame(()=>requestAnimationFrame(()=>hero.classList.add('loaded')));
-  setTimeout(()=>hero.classList.add('loaded'),400);
-  const revealAll=()=>document.querySelectorAll('.reveal').forEach(e=>e.classList.add('is-in'));
-  window.addEventListener('load',()=>{
-    if(!window.gsap){revealAll();return;}
+  const hero = document.querySelector(".hero");
+  requestAnimationFrame(() => requestAnimationFrame(() => hero.classList.add("loaded")));
+  setTimeout(() => hero.classList.add("loaded"), 400);
+  const revealAll = () =>
+    document.querySelectorAll(".reveal").forEach((e) => e.classList.add("is-in"));
+  window.addEventListener("load", () => {
+    if (!window.gsap) {
+      revealAll();
+      return;
+    }
     gsap.registerPlugin(ScrollTrigger);
-    gsap.utils.toArray('.reveal:not(.hero .reveal)').forEach(el=>
-      ScrollTrigger.create({trigger:el,start:'top 88%',onEnter:()=>el.classList.add('is-in')}));
+    gsap.utils.toArray(".reveal:not(.hero .reveal)").forEach((el) =>
+      ScrollTrigger.create({
+        trigger: el,
+        start: "top 88%",
+        onEnter: () => el.classList.add("is-in"),
+      }),
+    );
   });
-  setTimeout(()=>{if(!window.gsap)revealAll();},2500);
+  setTimeout(() => {
+    if (!window.gsap) revealAll();
+  }, 2500);
 })();

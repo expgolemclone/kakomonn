@@ -19,7 +19,5 @@ export async function handleDailyDetails(url, env) {
   if (!isSite(site) || dateOrdinal(date) === null) {
     return errorResponse("invalid_request", 400);
   }
-  return jsonResponse(
-    await getLearningStateStub(env).getDailyDetails(site, date)
-  );
+  return jsonResponse(await getLearningStateStub(env).getDailyDetails(site, date));
 }

@@ -9,13 +9,7 @@ const { kakomonnFreeEnvironment } = kakomonnConfig;
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(projectRoot, "..");
-const wranglerPath = resolve(
-  repositoryRoot,
-  "node_modules",
-  "wrangler",
-  "bin",
-  "wrangler.js",
-);
+const wranglerPath = resolve(repositoryRoot, "node_modules", "wrangler", "bin", "wrangler.js");
 
 async function getAvailablePort() {
   const probe = createServer();

@@ -11,9 +11,7 @@ async function installReaderInChildFrames(target, script) {
       const runReader = () => {
         if (
           document.readyState === "loading" ||
-          !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(
-            location.hostname,
-          )
+          !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.kakomonn\.com$/.test(location.hostname)
         ) {
           return;
         }
@@ -55,9 +53,7 @@ async function dispatchNextQuestionSwipe(frame) {
     };
     const startTouch = touch(startX);
     const endTouch = touch(endX);
-    target.dispatchEvent(
-      createEvent("touchstart", [startTouch], [startTouch]),
-    );
+    target.dispatchEvent(createEvent("touchstart", [startTouch], [startTouch]));
     const endEvent = createEvent("touchend", [], [endTouch]);
     const dispatchResult = target.dispatchEvent(endEvent);
     return {

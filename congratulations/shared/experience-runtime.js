@@ -18,10 +18,7 @@ export function announceCelebration(siteId) {
 
   const celebration = parseCelebration(celebrationSearch());
   const announce = () => {
-    window.parent.postMessage(
-      { type: READY_MESSAGE, siteId, celebration },
-      window.location.origin,
-    );
+    window.parent.postMessage({ type: READY_MESSAGE, siteId, celebration }, window.location.origin);
   };
 
   if (document.readyState === "loading") {

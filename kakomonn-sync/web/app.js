@@ -32,36 +32,87 @@ const byId = (id) => {
 };
 
 const el = {
-  authPanel: byId("auth-panel"), authTitle: byId("auth-title"), authDescription: byId("auth-description"), authActions: byId("auth-actions"), authMessage: byId("auth-message"), authRetry: byId("auth-retry"),
-  dashboard: byId("dashboard"), siteEmpty: byId("site-empty"), loadError: byId("load-error"), errorMessage: byId("error-message"), retryButton: byId("retry-button"),
-  siteSelect: byId("site-select"), refreshButton: byId("refresh-button"), dailyKpiCompletedElement: byId("daily-kpi-completed"), dueCardsRemainingElement: byId("due-cards-remaining"), newQuestionsRemainingElement: byId("new-questions-remaining"), todayStabilityDaysDeltaElement: byId("today-stability-days-delta"), stabilityDaysElement: byId("stability-days"), attemptedQuestionCountElement: byId("attempted-question-count"), todayAttemptedQuestionCountElement: byId("today-attempted-question-count"), todayCorrectRatePercentElement: byId("today-correct-rate-percent"), todayCorrectRatePercentUnit: byId("today-correct-rate-percent-unit"), stabilityChartAxis: byId("stability-chart-axis"), historyScroll: byId("history-scroll"), stabilityChart: byId("stability-chart"), historyEmpty: byId("history-empty"), dashboardStatus: byId("dashboard-status"),
-  dailyDetails: byId("daily-details"), dailyDetailsDate: byId("daily-details-date"), dailyDetailsInstruction: byId("daily-details-instruction"), dailyDetailsStatus: byId("daily-details-status"), dailyDetailsTables: byId("daily-details-tables"), stabilityHistoryTable: byId("stability-history-table"), attemptsTable: byId("attempts-table"),
+  authPanel: byId("auth-panel"),
+  authTitle: byId("auth-title"),
+  authDescription: byId("auth-description"),
+  authActions: byId("auth-actions"),
+  authMessage: byId("auth-message"),
+  authRetry: byId("auth-retry"),
+  dashboard: byId("dashboard"),
+  siteEmpty: byId("site-empty"),
+  loadError: byId("load-error"),
+  errorMessage: byId("error-message"),
+  retryButton: byId("retry-button"),
+  siteSelect: byId("site-select"),
+  refreshButton: byId("refresh-button"),
+  dailyKpiCompletedElement: byId("daily-kpi-completed"),
+  dueCardsRemainingElement: byId("due-cards-remaining"),
+  newQuestionsRemainingElement: byId("new-questions-remaining"),
+  todayStabilityDaysDeltaElement: byId("today-stability-days-delta"),
+  stabilityDaysElement: byId("stability-days"),
+  attemptedQuestionCountElement: byId("attempted-question-count"),
+  todayAttemptedQuestionCountElement: byId("today-attempted-question-count"),
+  todayCorrectRatePercentElement: byId("today-correct-rate-percent"),
+  todayCorrectRatePercentUnit: byId("today-correct-rate-percent-unit"),
+  stabilityChartAxis: byId("stability-chart-axis"),
+  historyScroll: byId("history-scroll"),
+  stabilityChart: byId("stability-chart"),
+  historyEmpty: byId("history-empty"),
+  dashboardStatus: byId("dashboard-status"),
+  dailyDetails: byId("daily-details"),
+  dailyDetailsDate: byId("daily-details-date"),
+  dailyDetailsInstruction: byId("daily-details-instruction"),
+  dailyDetailsStatus: byId("daily-details-status"),
+  dailyDetailsTables: byId("daily-details-tables"),
+  stabilityHistoryTable: byId("stability-history-table"),
+  attemptsTable: byId("attempts-table"),
 };
 
-const state = { site: "", sites: [], learning: null, history: null, selectedDate: "", dailyDetails: null };
+const state = {
+  site: "",
+  sites: [],
+  learning: null,
+  history: null,
+  selectedDate: "",
+  dailyDetails: null,
+};
 let loadGeneration = 0;
 let detailGeneration = 0;
 let bridgeRequestId = 0;
 let bridgeReadyPromise = null;
 
 class DashboardError extends Error {
-  constructor(code, status = 0) { super(code); this.code = code; this.status = status; }
+  constructor(code, status = 0) {
+    super(code);
+    this.code = code;
+    this.status = status;
+  }
 }
 
 function storageGet(key) {
-  try { return localStorage.getItem(key); } catch { throw new DashboardError("storage_unavailable"); }
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    throw new DashboardError("storage_unavailable");
+  }
 }
 function storageSet(key, value) {
-  try { localStorage.setItem(key, value); } catch { throw new DashboardError("storage_unavailable"); }
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    throw new DashboardError("storage_unavailable");
+  }
 }
 function storageRemove(key) {
-  try { localStorage.removeItem(key); } catch { throw new DashboardError("storage_unavailable"); }
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    throw new DashboardError("storage_unavailable");
+  }
 }
 
 function waitForDashboardBridge() {
-  const currentState = document.documentElement.getAttribute(
-    DASHBOARD_BRIDGE_STATE_ATTRIBUTE,
-  );
+  const currentState = document.documentElement.getAttribute(DASHBOARD_BRIDGE_STATE_ATTRIBUTE);
   if (currentState === "ready") return Promise.resolve();
   if (currentState === "error") {
     return Promise.reject(new DashboardError("reader_unavailable"));
@@ -70,9 +121,7 @@ function waitForDashboardBridge() {
   bridgeReadyPromise = new Promise((resolve, reject) => {
     let timer = null;
     const observer = new MutationObserver(() => {
-      const bridgeState = document.documentElement.getAttribute(
-        DASHBOARD_BRIDGE_STATE_ATTRIBUTE,
-      );
+      const bridgeState = document.documentElement.getAttribute(DASHBOARD_BRIDGE_STATE_ATTRIBUTE);
       if (bridgeState !== "ready" && bridgeState !== "error") return;
       observer.disconnect();
       if (timer !== null) clearTimeout(timer);
@@ -100,10 +149,7 @@ async function requestJSON(request) {
     let timer = null;
     const cleanup = () => {
       if (timer !== null) clearTimeout(timer);
-      document.removeEventListener(
-        DASHBOARD_BRIDGE_RESPONSE_EVENT,
-        handleResponse,
-      );
+      document.removeEventListener(DASHBOARD_BRIDGE_RESPONSE_EVENT, handleResponse);
     };
     const handleResponse = (event) => {
       let response;
@@ -126,10 +172,7 @@ async function requestJSON(request) {
       cleanup();
       reject(new DashboardError("timeout"));
     }, DASHBOARD_BRIDGE_TIMEOUT_MS);
-    document.addEventListener(
-      DASHBOARD_BRIDGE_RESPONSE_EVENT,
-      handleResponse,
-    );
+    document.addEventListener(DASHBOARD_BRIDGE_RESPONSE_EVENT, handleResponse);
     document.dispatchEvent(
       new CustomEvent(DASHBOARD_BRIDGE_REQUEST_EVENT, {
         detail: JSON.stringify({ id, ...request }),
@@ -138,8 +181,12 @@ async function requestJSON(request) {
   });
 }
 
-function formatted(value) { return value.toLocaleString("ja-JP"); }
-function signed(value) { return `${value >= 0 ? "+" : ""}${formatted(value)}`; }
+function formatted(value) {
+  return value.toLocaleString("ja-JP");
+}
+function signed(value) {
+  return `${value >= 0 ? "+" : ""}${formatted(value)}`;
+}
 function svgNode(name, attrs = {}, text = "") {
   const node = document.createElementNS(SVG_NS, name);
   for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
@@ -175,15 +222,26 @@ function renderAxis(axis, top, bottom) {
     const value = axis.minimum + axis.step * index;
     const yy = chartY(axis, value, top, bottom);
     el.stabilityChartAxis.append(
-      svgNode("line", { x1: 52, y1: yy, x2: 62, y2: yy, class: value === 0 ? "zero-line" : "grid-line" }),
-      svgNode("text", { x: 48, y: yy + 4, class: "axis-label delta-axis-label", "text-anchor": "end" }, signed(value))
+      svgNode("line", {
+        x1: 52,
+        y1: yy,
+        x2: 62,
+        y2: yy,
+        class: value === 0 ? "zero-line" : "grid-line",
+      }),
+      svgNode(
+        "text",
+        { x: 48, y: yy + 4, class: "axis-label delta-axis-label", "text-anchor": "end" },
+        signed(value),
+      ),
     );
   }
 }
 
 function correctRateY(value) {
-  return CORRECT_RATE_CHART_BOTTOM -
-    (value / 100) * (CORRECT_RATE_CHART_BOTTOM - CORRECT_RATE_CHART_TOP);
+  return (
+    CORRECT_RATE_CHART_BOTTOM - (value / 100) * (CORRECT_RATE_CHART_BOTTOM - CORRECT_RATE_CHART_TOP)
+  );
 }
 
 function renderCorrectRateAxis() {
@@ -191,7 +249,11 @@ function renderCorrectRateAxis() {
     const yy = correctRateY(value);
     el.stabilityChartAxis.append(
       svgNode("line", { x1: 52, y1: yy, x2: 62, y2: yy, class: "correct-rate-grid-line" }),
-      svgNode("text", { x: 48, y: yy + 4, class: "axis-label correct-rate-axis-label", "text-anchor": "end" }, `${value}%`)
+      svgNode(
+        "text",
+        { x: 48, y: yy + 4, class: "axis-label correct-rate-axis-label", "text-anchor": "end" },
+        `${value}%`,
+      ),
     );
   }
 }
@@ -201,49 +263,76 @@ function renderGrid(axis, right, top, bottom) {
   for (let index = 0; index <= divisions; index += 1) {
     const value = axis.minimum + axis.step * index;
     const yy = chartY(axis, value, top, bottom);
-    el.stabilityChart.append(svgNode("line", { x1: 0, y1: yy, x2: right, y2: yy, class: value === 0 ? "zero-line" : "grid-line" }));
+    el.stabilityChart.append(
+      svgNode("line", {
+        x1: 0,
+        y1: yy,
+        x2: right,
+        y2: yy,
+        class: value === 0 ? "zero-line" : "grid-line",
+      }),
+    );
   }
 }
 
 function renderCorrectRateGrid(right) {
   for (const value of [0, 25, 50, 75, 100]) {
     el.stabilityChart.append(
-      svgNode("line", { x1: 0, y1: correctRateY(value), x2: right, y2: correctRateY(value), class: "correct-rate-grid-line" })
+      svgNode("line", {
+        x1: 0,
+        y1: correctRateY(value),
+        x2: right,
+        y2: correctRateY(value),
+        class: "correct-rate-grid-line",
+      }),
     );
   }
 }
 
 function correctRateLinePath(days, left, bandWidth) {
   let segmentOpen = false;
-  return days.map((day, index) => {
-    if (day.dailyCorrectRatePercent === null) {
-      segmentOpen = false;
-      return "";
-    }
-    const xx = left + bandWidth * (index + 0.5);
-    const command = segmentOpen ? "L" : "M";
-    segmentOpen = true;
-    return `${command}${xx} ${correctRateY(day.dailyCorrectRatePercent)}`;
-  }).filter(Boolean).join(" ");
+  return days
+    .map((day, index) => {
+      if (day.dailyCorrectRatePercent === null) {
+        segmentOpen = false;
+        return "";
+      }
+      const xx = left + bandWidth * (index + 0.5);
+      const command = segmentOpen ? "L" : "M";
+      segmentOpen = true;
+      return `${command}${xx} ${correctRateY(day.dailyCorrectRatePercent)}`;
+    })
+    .filter(Boolean)
+    .join(" ");
 }
 
 function renderChart(days) {
   el.stabilityChart.replaceChildren();
   const values = days.map((day) => day.stabilityDaysDelta).filter((value) => value !== null);
   const axis = signedAxis(values);
-  const left = 0, right = CHART_DAY_WIDTH * days.length;
+  const left = 0,
+    right = CHART_DAY_WIDTH * days.length;
   const chartWidth = right + CHART_RIGHT_PADDING;
   const bandWidth = CHART_DAY_WIDTH;
   const zeroY = chartY(axis, 0, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
   el.stabilityChart.setAttribute("viewBox", `0 0 ${chartWidth} ${CHART_HEIGHT}`);
   el.stabilityChart.style.width = `${chartWidth}px`;
   el.stabilityChart.append(
-    svgNode("title", { id: "history-chart-title" }, `stabilityDaysDeltaとdailyCorrectRatePercentの${DASHBOARD_HISTORY_DAYS}日推移`),
+    svgNode(
+      "title",
+      { id: "history-chart-title" },
+      `stabilityDaysDeltaとdailyCorrectRatePercentの${DASHBOARD_HISTORY_DAYS}日推移`,
+    ),
     svgNode(
       "desc",
       { id: "history-chart-description" },
-      days.map((day) => `${day.date}, stabilityDaysDelta ${day.stabilityDaysDelta === null ? "記録なし" : `${signed(day.stabilityDaysDelta)}日`}, dailyCorrectRatePercent ${day.dailyCorrectRatePercent === null ? "記録なし" : `${formatted(day.dailyCorrectRatePercent)}%`}`).join(". ")
-    )
+      days
+        .map(
+          (day) =>
+            `${day.date}, stabilityDaysDelta ${day.stabilityDaysDelta === null ? "記録なし" : `${signed(day.stabilityDaysDelta)}日`}, dailyCorrectRatePercent ${day.dailyCorrectRatePercent === null ? "記録なし" : `${formatted(day.dailyCorrectRatePercent)}%`}`,
+        )
+        .join(". "),
+    ),
   );
   renderAxis(axis, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
   renderCorrectRateAxis();
@@ -251,9 +340,7 @@ function renderChart(days) {
   renderCorrectRateGrid(right);
   const correctRatePath = correctRateLinePath(days, left, bandWidth);
   if (correctRatePath !== "") {
-    el.stabilityChart.append(
-      svgNode("path", { d: correctRatePath, class: "correct-rate-line" })
-    );
+    el.stabilityChart.append(svgNode("path", { d: correctRatePath, class: "correct-rate-line" }));
   }
   const barWidth = Math.min(50, bandWidth * 0.56);
   days.forEach((day, index) => {
@@ -271,7 +358,15 @@ function renderChart(days) {
       "aria-label": `${day.date}, stabilityDaysDelta ${value === null ? "記録なし" : `${signed(value)}日`}, dailyCorrectRatePercent ${correctRate === null ? "記録なし" : `${formatted(correctRate)}%`}. 日別詳細を表示`,
       "data-chart-date": day.date,
     });
-    group.append(svgNode("rect", { x: left + bandWidth * index, y: STABILITY_CHART_TOP - 8, width: bandWidth, height: CHART_DATE_Y - STABILITY_CHART_TOP + 18, class: "chart-hit-area" }));
+    group.append(
+      svgNode("rect", {
+        x: left + bandWidth * index,
+        y: STABILITY_CHART_TOP - 8,
+        width: bandWidth,
+        height: CHART_DATE_Y - STABILITY_CHART_TOP + 18,
+        class: "chart-hit-area",
+      }),
+    );
     if (value !== null) {
       const valueY = chartY(axis, value, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
       let barY = Math.min(valueY, zeroY);
@@ -280,21 +375,65 @@ function renderChart(days) {
         barY = zeroY - 1;
         barHeight = 2;
       }
-      group.append(svgNode("rect", { x: xx - barWidth / 2, y: barY, width: barWidth, height: barHeight, rx: 5, class: `delta-bar ${value < 0 ? "negative" : value === 0 ? "zero" : "positive"}` }));
-      group.append(svgNode("text", { x: xx, y: value >= 0 ? Math.max(STABILITY_CHART_TOP + 12, barY - 8) : Math.min(STABILITY_CHART_BOTTOM + 16, barY + barHeight + 16), class: "delta-value-label", "text-anchor": "middle" }, signed(value)));
+      group.append(
+        svgNode("rect", {
+          x: xx - barWidth / 2,
+          y: barY,
+          width: barWidth,
+          height: barHeight,
+          rx: 5,
+          class: `delta-bar ${value < 0 ? "negative" : value === 0 ? "zero" : "positive"}`,
+        }),
+      );
+      group.append(
+        svgNode(
+          "text",
+          {
+            x: xx,
+            y:
+              value >= 0
+                ? Math.max(STABILITY_CHART_TOP + 12, barY - 8)
+                : Math.min(STABILITY_CHART_BOTTOM + 16, barY + barHeight + 16),
+            class: "delta-value-label",
+            "text-anchor": "middle",
+          },
+          signed(value),
+        ),
+      );
     }
     if (correctRate === null) {
-      group.append(svgNode("text", { x: xx, y: (CORRECT_RATE_CHART_TOP + CORRECT_RATE_CHART_BOTTOM) / 2 + 4, class: "correct-rate-value-label missing", "text-anchor": "middle" }, "--"));
+      group.append(
+        svgNode(
+          "text",
+          {
+            x: xx,
+            y: (CORRECT_RATE_CHART_TOP + CORRECT_RATE_CHART_BOTTOM) / 2 + 4,
+            class: "correct-rate-value-label missing",
+            "text-anchor": "middle",
+          },
+          "--",
+        ),
+      );
     } else {
       const pointY = correctRateY(correctRate);
       const labelY = correctRate >= 90 ? pointY + 18 : pointY - 10;
       group.append(
         svgNode("circle", { cx: xx, cy: pointY, r: 5, class: "correct-rate-point" }),
-        svgNode("text", { x: xx, y: labelY, class: "correct-rate-value-label", "text-anchor": "middle" }, `${formatted(correctRate)}%`)
+        svgNode(
+          "text",
+          { x: xx, y: labelY, class: "correct-rate-value-label", "text-anchor": "middle" },
+          `${formatted(correctRate)}%`,
+        ),
       );
     }
     const [, month, date] = day.date.split("-");
-    group.append(svgNode("text", { x: xx, y: CHART_DATE_Y, class: "date-label", "text-anchor": "middle" }, `${Number(month)}/${Number(date)}`));
+    group.append(
+      svgNode(
+        "text",
+        { x: xx, y: CHART_DATE_Y, class: "date-label", "text-anchor": "middle" },
+        `${Number(month)}/${Number(date)}`,
+      ),
+    );
     el.stabilityChart.append(group);
   });
   el.historyEmpty.hidden = values.some((value) => value !== 0);
@@ -370,14 +509,21 @@ function renderDailyDetailsLoading(date) {
 function renderDailyDetailsResult(details) {
   el.dailyDetails.removeAttribute("aria-busy");
   el.dailyDetailsStatus.textContent = `${details.tables.stability_history.length + details.tables.attempts.length} rows`;
-  renderRawTable(el.stabilityHistoryTable, RAW_TABLE_COLUMNS.stability_history, details.tables.stability_history);
+  renderRawTable(
+    el.stabilityHistoryTable,
+    RAW_TABLE_COLUMNS.stability_history,
+    details.tables.stability_history,
+  );
   renderRawTable(el.attemptsTable, RAW_TABLE_COLUMNS.attempts, details.tables.attempts);
   el.dailyDetailsTables.hidden = false;
 }
 
 function renderDailyDetailsError(error) {
   const messages = {
-    unauthorized: "同期tokenを確認してください.", timeout: "日別詳細の読み込みがタイムアウトしました.", network_error: "日別詳細を読み込めませんでした.", invalid_response: "日別詳細のAPI応答が不正です.",
+    unauthorized: "同期tokenを確認してください.",
+    timeout: "日別詳細の読み込みがタイムアウトしました.",
+    network_error: "日別詳細を読み込めませんでした.",
+    invalid_response: "日別詳細のAPI応答が不正です.",
   };
   el.dailyDetails.removeAttribute("aria-busy");
   el.dailyDetailsStatus.textContent = messages[error?.code] ?? "日別詳細を読み込めませんでした.";
@@ -397,7 +543,8 @@ async function loadDailyDetails(date, { focusChart = false } = {}) {
     details = await requestJSON({ date, operation: "daily-details", site });
     if (!validDailyDetails(details, site, date)) throw new DashboardError("invalid_response");
   } catch (error) {
-    if (generation !== detailGeneration || site !== state.site || date !== state.selectedDate) return false;
+    if (generation !== detailGeneration || site !== state.site || date !== state.selectedDate)
+      return false;
     if (error?.code === "token_missing" || error?.code === "unauthorized") {
       showReaderSetup(error);
       return false;
@@ -405,7 +552,8 @@ async function loadDailyDetails(date, { focusChart = false } = {}) {
     renderDailyDetailsError(error);
     return false;
   }
-  if (generation !== detailGeneration || site !== state.site || date !== state.selectedDate) return false;
+  if (generation !== detailGeneration || site !== state.site || date !== state.selectedDate)
+    return false;
   state.dailyDetails = details;
   renderDailyDetailsResult(details);
   return true;
@@ -421,10 +569,11 @@ function renderDashboard() {
   el.todayStabilityDaysDeltaElement.textContent = signed(metrics.todayStabilityDaysDelta);
   el.stabilityDaysElement.textContent = formatted(metrics.stabilityDays);
   el.attemptedQuestionCountElement.textContent = formatted(metrics.attemptedQuestionCount);
-  el.todayAttemptedQuestionCountElement.textContent = formatted(metrics.todayAttemptedQuestionCount);
-  el.todayCorrectRatePercentElement.textContent = metrics.todayCorrectRatePercent === null
-    ? "--"
-    : formatted(metrics.todayCorrectRatePercent);
+  el.todayAttemptedQuestionCountElement.textContent = formatted(
+    metrics.todayAttemptedQuestionCount,
+  );
+  el.todayCorrectRatePercentElement.textContent =
+    metrics.todayCorrectRatePercent === null ? "--" : formatted(metrics.todayCorrectRatePercent);
   el.todayCorrectRatePercentUnit.hidden = metrics.todayCorrectRatePercent === null;
   renderChart(state.history.days);
   el.dashboard.hidden = false;
@@ -437,7 +586,15 @@ function renderDashboard() {
 
 function showError(error) {
   const messages = {
-    reader_unavailable: "対応する過去問readerを利用できません. Tampermonkeyで最新のreaderを有効にしてください.", reader_ready_timeout: "過去問readerを確認できませんでした. Tampermonkeyで最新のreaderを有効にして再読み込みしてください.", timeout: "読み込みがタイムアウトしました.", network_error: "networkへ接続できません.", storage_unavailable: "browser storageを利用できません.", invalid_response: "API応答が不正です.", server_misconfigured: "同期APIが設定されていません.",
+    reader_unavailable:
+      "対応する過去問readerを利用できません. Tampermonkeyで最新のreaderを有効にしてください.",
+    reader_ready_timeout:
+      "過去問readerを確認できませんでした. Tampermonkeyで最新のreaderを有効にして再読み込みしてください.",
+    timeout: "読み込みがタイムアウトしました.",
+    network_error: "networkへ接続できません.",
+    storage_unavailable: "browser storageを利用できません.",
+    invalid_response: "API応答が不正です.",
+    server_misconfigured: "同期APIが設定されていません.",
   };
   el.errorMessage.textContent = messages[error?.code] ?? "学習記録を読み込めませんでした.";
   el.loadError.hidden = false;
@@ -452,9 +609,10 @@ function showReaderSetup(error) {
   el.authTitle.textContent = "Readerの同期設定が必要です";
   el.authDescription.textContent =
     "同じbrowser profileの問題画面で同期tokenを設定してから, このdashboardを再読み込みしてください.";
-  el.authMessage.textContent = error?.code === "unauthorized"
-    ? "保存済みの同期tokenが認証されませんでした."
-    : "同期tokenがまだ保存されていません.";
+  el.authMessage.textContent =
+    error?.code === "unauthorized"
+      ? "保存済みの同期tokenが認証されませんでした."
+      : "同期tokenがまだ保存されていません.";
   el.authActions.hidden = false;
   el.authPanel.hidden = false;
   el.dashboard.hidden = true;
@@ -469,9 +627,15 @@ async function fetchDashboardData(site) {
 }
 
 function applySiteData(data) {
-  state.sites = data.sites; state.site = data.selectedSite ?? "";
-  state.learning = data.state; state.history = data.history;
-  if (state.selectedDate !== "" && !data.history.days.some((day) => day.date === state.selectedDate)) resetDailyDetails();
+  state.sites = data.sites;
+  state.site = data.selectedSite ?? "";
+  state.learning = data.state;
+  state.history = data.history;
+  if (
+    state.selectedDate !== "" &&
+    !data.history.days.some((day) => day.date === state.selectedDate)
+  )
+    resetDailyDetails();
   renderDashboard();
 }
 
@@ -485,15 +649,21 @@ async function loadSelectedSite() {
     if (generation !== loadGeneration || site !== state.site) return false;
     throw error;
   }
-  if (generation !== loadGeneration || site !== state.site || data.selectedSite !== site) return false;
+  if (generation !== loadGeneration || site !== state.site || data.selectedSite !== site)
+    return false;
   applySiteData(data);
   return true;
 }
 
 function renderSiteOptions() {
-  el.siteSelect.replaceChildren(...state.sites.map((site) => {
-    const option = document.createElement("option"); option.value = site; option.textContent = site; return option;
-  }));
+  el.siteSelect.replaceChildren(
+    ...state.sites.map((site) => {
+      const option = document.createElement("option");
+      option.value = site;
+      option.textContent = site;
+      return option;
+    }),
+  );
   el.siteSelect.value = state.site;
 }
 
@@ -509,12 +679,19 @@ async function connect() {
   }
   if (generation !== loadGeneration) return false;
   const site = data.selectedSite ?? "";
-  if (site === "") storageRemove(SITE_KEY); else storageSet(SITE_KEY, site);
-  state.sites = data.sites; state.site = site;
-  state.learning = null; state.history = null;
+  if (site === "") storageRemove(SITE_KEY);
+  else storageSet(SITE_KEY, site);
+  state.sites = data.sites;
+  state.site = site;
+  state.learning = null;
+  state.history = null;
   resetDailyDetails();
   if (data.sites.length === 0) {
-    el.authPanel.hidden = true; el.dashboard.hidden = true; el.loadError.hidden = true; el.siteEmpty.hidden = false; return true;
+    el.authPanel.hidden = true;
+    el.dashboard.hidden = true;
+    el.loadError.hidden = true;
+    el.siteEmpty.hidden = false;
+    return true;
   }
   renderSiteOptions();
   applySiteData(data);
@@ -523,17 +700,32 @@ async function connect() {
 
 el.siteSelect.addEventListener("change", async () => {
   if (!state.sites.includes(el.siteSelect.value)) return;
-  resetDailyDetails(); state.site = el.siteSelect.value; storageSet(SITE_KEY, state.site);
-  try { await loadSelectedSite(); } catch (error) { if (error?.code === "token_missing" || error?.code === "unauthorized") showReaderSetup(error); else showError(error); }
+  resetDailyDetails();
+  state.site = el.siteSelect.value;
+  storageSet(SITE_KEY, state.site);
+  try {
+    await loadSelectedSite();
+  } catch (error) {
+    if (error?.code === "token_missing" || error?.code === "unauthorized") showReaderSetup(error);
+    else showError(error);
+  }
 });
 el.refreshButton.addEventListener("click", async () => {
   const selectedDate = state.selectedDate;
   try {
-    if (await loadSelectedSite() && selectedDate !== "" && state.selectedDate === selectedDate) await loadDailyDetails(selectedDate);
-  } catch (error) { if (error?.code === "token_missing" || error?.code === "unauthorized") showReaderSetup(error); else showError(error); }
+    if ((await loadSelectedSite()) && selectedDate !== "" && state.selectedDate === selectedDate)
+      await loadDailyDetails(selectedDate);
+  } catch (error) {
+    if (error?.code === "token_missing" || error?.code === "unauthorized") showReaderSetup(error);
+    else showError(error);
+  }
 });
-el.retryButton.addEventListener("click", () => { void initializeDashboard(); });
-el.authRetry.addEventListener("click", () => { void initializeDashboard(); });
+el.retryButton.addEventListener("click", () => {
+  void initializeDashboard();
+});
+el.authRetry.addEventListener("click", () => {
+  void initializeDashboard();
+});
 el.stabilityChart.addEventListener("click", (event) => {
   const target = event.target.closest?.("[data-chart-date]");
   if (target) void loadDailyDetails(target.getAttribute("data-chart-date"), { focusChart: true });
@@ -549,8 +741,7 @@ async function initializeDashboard() {
   try {
     storageRemove(LEGACY_TOKEN_KEY);
     el.authTitle.textContent = "Readerと接続しています";
-    el.authDescription.textContent =
-      "同じbrowser profileの過去問readerから学習記録を読み込みます.";
+    el.authDescription.textContent = "同じbrowser profileの過去問readerから学習記録を読み込みます.";
     el.authMessage.textContent = "接続を確認中です.";
     el.authActions.hidden = true;
     el.authPanel.hidden = false;

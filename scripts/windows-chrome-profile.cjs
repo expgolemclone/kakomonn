@@ -1,17 +1,14 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 
-const CHROME_AUTOPLAY_ARGUMENT =
-  "--autoplay-policy=no-user-gesture-required";
+const CHROME_AUTOPLAY_ARGUMENT = "--autoplay-policy=no-user-gesture-required";
 const CHROME_REMOTE_DEBUGGING_ARGUMENT = "--remote-debugging-port=0";
 
 function isSameOrDescendantPath(parentPath, candidatePath, pathApi = path) {
   const relative = pathApi.relative(parentPath, candidatePath);
   return (
     relative === "" ||
-    (!relative.startsWith(`..${pathApi.sep}`) &&
-      relative !== ".." &&
-      !pathApi.isAbsolute(relative))
+    (!relative.startsWith(`..${pathApi.sep}`) && relative !== ".." && !pathApi.isAbsolute(relative))
   );
 }
 
@@ -20,13 +17,7 @@ function windowsPowerShellExecutable(environment = process.env) {
   if (!systemRoot) {
     throw new Error("SystemRoot is not set");
   }
-  return path.win32.join(
-    systemRoot,
-    "System32",
-    "WindowsPowerShell",
-    "v1.0",
-    "powershell.exe",
-  );
+  return path.win32.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
 }
 
 function subprocessEnvironment(environment = process.env) {
@@ -146,21 +137,11 @@ exit 1
 function runPowerShell(
   source,
   arguments_,
-  {
-    spawnSyncImpl = spawnSync,
-    systemEnvironment = process.env,
-  } = {},
+  { spawnSyncImpl = spawnSync, systemEnvironment = process.env } = {},
 ) {
   const result = spawnSyncImpl(
     windowsPowerShellExecutable(systemEnvironment),
-    [
-      "-NoLogo",
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      `& {${source}\n}`,
-      ...arguments_,
-    ],
+    ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", `& {${source}\n}`, ...arguments_],
     {
       encoding: "utf8",
       env: subprocessEnvironment(systemEnvironment),
@@ -180,10 +161,7 @@ function runPowerShell(
 
 function inspectDedicatedChrome(
   userDataDir,
-  {
-    spawnSyncImpl = spawnSync,
-    systemEnvironment = process.env,
-  } = {},
+  { spawnSyncImpl = spawnSync, systemEnvironment = process.env } = {},
 ) {
   const output = runPowerShell(
     inspectDedicatedChromePowerShell,
@@ -226,16 +204,12 @@ function inspectDedicatedChrome(
 
 function stopDedicatedChrome(
   userDataDir,
-  {
-    spawnSyncImpl = spawnSync,
-    systemEnvironment = process.env,
-  } = {},
+  { spawnSyncImpl = spawnSync, systemEnvironment = process.env } = {},
 ) {
-  runPowerShell(
-    stopDedicatedChromePowerShell,
-    ["-UserDataDir", userDataDir],
-    { spawnSyncImpl, systemEnvironment },
-  );
+  runPowerShell(stopDedicatedChromePowerShell, ["-UserDataDir", userDataDir], {
+    spawnSyncImpl,
+    systemEnvironment,
+  });
 }
 
 module.exports = {

@@ -1,8 +1,4 @@
-import {
-  env,
-  runInDurableObject as runInRawDurableObject,
-  SELF,
-} from "cloudflare:test";
+import { env, runInDurableObject as runInRawDurableObject, SELF } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ratingForResult } from "../src/fsrs.js";
 import { getTokyoDate } from "../src/dates.js";
@@ -133,7 +129,7 @@ async function seedReviewCard(
   stability,
   dueMs = NOW - 1000,
   lastReviewMs = NOW - 30 * DAY_MS,
-  site = SITE
+  site = SITE,
 ) {
   const lastAttemptDate = getTokyoDate(new Date(lastReviewMs));
   await runInRawDurableObject(stub(), (_instance, state) => {
@@ -158,13 +154,13 @@ async function seedReviewCard(
       dueMs,
       stability,
       lastReviewMs,
-      lastAttemptDate
+      lastAttemptDate,
     );
     state.storage.sql.exec(
       `UPDATE questions SET attempted = 1
        WHERE site = ? AND question_id = ?`,
       site,
-      questionId
+      questionId,
     );
     state.storage.sql.exec(
       `UPDATE learning_metrics
@@ -198,16 +194,12 @@ async function seedReviewCard(
       site,
       TODAY_START_MS,
       TODAY_END_MS,
-      site
+      site,
     );
   });
 }
 
-async function seedTodayNewQuestionCount(
-  count,
-  date = "2026-08-10",
-  site = SITE
-) {
+async function seedTodayNewQuestionCount(count, date = "2026-08-10", site = SITE) {
   await runInRawDurableObject(stub(), (_instance, state) => {
     state.storage.sql.exec(
       `UPDATE learning_metrics
@@ -227,7 +219,7 @@ async function seedTodayNewQuestionCount(
       date,
       count,
       count,
-      site
+      site,
     );
   });
 }
@@ -283,18 +275,16 @@ describe("LearningState schema", () => {
   it("reconciles indexes for the current schema version", async () => {
     await runInRawDurableObject(stub(), (_instance, state) => {
       initializeLearningSchema(state.storage, NOW);
+      state.storage.sql.exec("CREATE INDEX IF NOT EXISTS attempts_by_site ON attempts (site)");
       state.storage.sql.exec(
-        "CREATE INDEX IF NOT EXISTS attempts_by_site ON attempts (site)"
-      );
-      state.storage.sql.exec(
-        "CREATE INDEX IF NOT EXISTS custom_redundant_cards_index ON cards (site)"
+        "CREATE INDEX IF NOT EXISTS custom_redundant_cards_index ON cards (site)",
       );
       initializeLearningSchema(state.storage, NOW);
       const indexes = state.storage.sql
         .exec(
           `SELECT name FROM sqlite_master
            WHERE type = 'index' AND name NOT LIKE 'sqlite_%'
-           ORDER BY name`
+           ORDER BY name`,
         )
         .toArray()
         .map((row) => row.name);
@@ -313,7 +303,7 @@ describe("LearningState schema", () => {
         .exec(
           `SELECT site, question_id, due_ms, stability FROM cards
            WHERE site = ? AND question_id = '2'`,
-          SITE
+          SITE,
         )
         .toArray()[0];
       state.storage.sql.exec(`
@@ -324,26 +314,26 @@ describe("LearningState schema", () => {
 
       initializeLearningSchema(state.storage, NOW);
 
-      expect(
-        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 11 });
+      expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
+        version: 11,
+      });
       expect(
         state.storage.sql
           .exec(
             `SELECT site, question_id, due_ms, stability FROM cards
              WHERE site = ? AND question_id = '2'`,
-            SITE
+            SITE,
           )
-          .toArray()[0]
+          .toArray()[0],
       ).toEqual(cardBefore);
       expect(
         state.storage.sql
           .exec(
             `SELECT name FROM sqlite_master
              WHERE type = 'index' AND name LIKE 'cards_by_site_due%'
-             ORDER BY name`
+             ORDER BY name`,
           )
-          .toArray()
+          .toArray(),
       ).toEqual([{ name: "cards_by_site_due_number" }]);
 
       const duePlan = state.storage.sql
@@ -357,7 +347,7 @@ describe("LearningState schema", () => {
            ORDER BY c.due_ms, CAST(c.question_id AS INTEGER), c.question_id
            LIMIT 1`,
           SITE,
-          NOW
+          NOW,
         )
         .toArray()
         .map((row) => row.detail)
@@ -377,7 +367,7 @@ describe("LearningState schema", () => {
          ) VALUES (?, '2', ?, 3.5, 5, 1, 0, 1, 0, 2, ?)`,
         SITE,
         NOW + DAY_MS,
-        NOW
+        NOW,
       );
       state.storage.sql.exec(
         `INSERT INTO attempts (
@@ -386,47 +376,42 @@ describe("LearningState schema", () => {
          ) VALUES (?, ?, '2', ?, 'correct', 0, 3.5)`,
         SITE,
         operationId(999),
-        NOW
+        NOW,
       );
       state.storage.sql.exec(
         `UPDATE stability_history SET closing_stability_days = 3
          WHERE site = ? AND date = '2026-08-10'`,
-        SITE
+        SITE,
       );
-      state.storage.sql.exec(
-        "UPDATE schema_metadata SET version = 8 WHERE singleton = 1"
-      );
+      state.storage.sql.exec("UPDATE schema_metadata SET version = 8 WHERE singleton = 1");
 
       initializeLearningSchema(state.storage, NOW);
 
-      expect(
-        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 11 });
+      expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
+        version: 11,
+      });
       expect(
         state.storage.sql
           .exec(
             `SELECT last_attempt_date FROM cards
              WHERE site = ? AND question_id = '2'`,
-            SITE
+            SITE,
           )
-          .toArray()[0]
+          .toArray()[0],
       ).toEqual({ last_attempt_date: "2026-08-10" });
       expect(
         state.storage.sql
           .exec(
             `SELECT question_number, attempted FROM questions
              WHERE site = ? AND question_id = '2'`,
-            SITE
+            SITE,
           )
-          .toArray()[0]
+          .toArray()[0],
       ).toEqual({ question_number: 2, attempted: 1 });
       expect(
         state.storage.sql
-          .exec(
-            `SELECT question_ids_json FROM catalog_metadata WHERE site = ?`,
-            SITE
-          )
-          .toArray()[0]
+          .exec(`SELECT question_ids_json FROM catalog_metadata WHERE site = ?`, SITE)
+          .toArray()[0],
       ).toEqual({ question_ids_json: '["1","2","3","4"]' });
       expect(
         state.storage.sql
@@ -435,9 +420,9 @@ describe("LearningState schema", () => {
                     attempt_count, correct_attempt_count
              FROM stability_history
              WHERE site = ? AND date = '2026-08-10'`,
-            SITE
+            SITE,
           )
-          .toArray()[0]
+          .toArray()[0],
       ).toEqual({
         attempted_question_count: 1,
         new_question_count: 1,
@@ -451,7 +436,7 @@ describe("LearningState schema", () => {
            SELECT question_id FROM questions
            WHERE site = ? AND attempted = 0
            ORDER BY question_number, question_id LIMIT 1`,
-          SITE
+          SITE,
         )
         .toArray()
         .map((row) => row.detail)
@@ -465,7 +450,7 @@ describe("LearningState schema", () => {
            ORDER BY attempted_at_ms, operation_id`,
           SITE,
           TODAY_START_MS,
-          TODAY_END_MS
+          TODAY_END_MS,
         )
         .toArray()
         .map((row) => row.detail)
@@ -509,20 +494,22 @@ describe("LearningState schema", () => {
         UPDATE schema_metadata SET version = 5 WHERE singleton = 1;
       `);
       initializeLearningSchema(state.storage, NOW);
-      expect(
-        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 11 });
+      expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
+        version: 11,
+      });
       expect(
         state.storage.sql
           .exec(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('site_settings', 'daily_stability_days_delta_achievements')"
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('site_settings', 'daily_stability_days_delta_achievements')",
           )
-          .toArray()
+          .toArray(),
       ).toEqual([]);
       expect(
         state.storage.sql
-            .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daily_kpi_achievements'")
-          .toArray()
+          .exec(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daily_kpi_achievements'",
+          )
+          .toArray(),
       ).toEqual([{ name: "daily_kpi_achievements" }]);
       const indexes = state.storage.sql
         .exec(
@@ -534,7 +521,7 @@ describe("LearningState schema", () => {
           "attempts_by_site_attempted_at_operation",
           "cards_by_site_due_number",
           "cards_by_site_stability",
-          "questions_by_site_attempted_number"
+          "questions_by_site_attempted_number",
         )
         .toArray()
         .map((row) => row.name);
@@ -568,9 +555,9 @@ describe("LearningState schema", () => {
 
       initializeLearningSchema(state.storage, NOW);
 
-      expect(
-        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 11 });
+      expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
+        version: 11,
+      });
       expect(
         state.storage.sql
           .exec(
@@ -578,9 +565,9 @@ describe("LearningState schema", () => {
                     today_attempt_count, today_correct_attempt_count,
                     today_new_question_count
              FROM learning_metrics WHERE site = ?`,
-            SITE
+            SITE,
           )
-          .toArray()[0]
+          .toArray()[0],
       ).toEqual({
         daily_metrics_date: "2026-08-10",
         today_attempted_question_count: 0,
@@ -632,20 +619,13 @@ describe("LearningState schema", () => {
           updated_at_ms INTEGER NOT NULL, generation INTEGER NOT NULL
         ) WITHOUT ROWID;
       `);
-      state.storage.sql.exec(
-        "INSERT INTO questions (site, question_id) VALUES (?, '1')",
-        SITE
-      );
-      state.storage.sql.exec(
-        "INSERT INTO catalog_metadata VALUES (?, 1, ?, 1)",
-        SITE,
-        NOW
-      );
+      state.storage.sql.exec("INSERT INTO questions (site, question_id) VALUES (?, '1')", SITE);
+      state.storage.sql.exec("INSERT INTO catalog_metadata VALUES (?, 1, ?, 1)", SITE, NOW);
       state.storage.sql.exec(
         "INSERT INTO cards VALUES (?, '1', ?, 12.9, 5, 30, 0, 5, 0, 2, ?)",
         SITE,
         NOW,
-        NOW
+        NOW,
       );
       state.storage.sql.exec(
         `INSERT INTO attempts VALUES (
@@ -653,30 +633,18 @@ describe("LearningState schema", () => {
          )`,
         SITE,
         operationId(900),
-        NOW
+        NOW,
       );
-      state.storage.sql.exec(
-        "INSERT INTO mastery_history VALUES (?, '2026-08-09', 4)",
-        SITE
-      );
-      state.storage.sql.exec(
-        "INSERT INTO learning_metadata VALUES (?, 50)",
-        SITE
-      );
+      state.storage.sql.exec("INSERT INTO mastery_history VALUES (?, '2026-08-09', 4)", SITE);
+      state.storage.sql.exec("INSERT INTO learning_metadata VALUES (?, 50)", SITE);
 
       initializeLearningSchema(state.storage, NOW);
 
-      expect(
-        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 11 });
-      expect(
-        state.storage.sql
-          .exec("SELECT * FROM daily_kpi_achievements")
-          .toArray()
-      ).toEqual([]);
-      expect(
-        state.storage.sql.exec("SELECT * FROM stability_history").toArray()[0]
-      ).toEqual({
+      expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
+        version: 11,
+      });
+      expect(state.storage.sql.exec("SELECT * FROM daily_kpi_achievements").toArray()).toEqual([]);
+      expect(state.storage.sql.exec("SELECT * FROM stability_history").toArray()[0]).toEqual({
         site: SITE,
         date: "2026-08-10",
         opening_stability_days: 12,
@@ -686,9 +654,7 @@ describe("LearningState schema", () => {
         correct_attempt_count: 1,
         new_question_count: 1,
       });
-      expect(
-        state.storage.sql.exec("SELECT * FROM learning_metrics").toArray()[0]
-      ).toEqual({
+      expect(state.storage.sql.exec("SELECT * FROM learning_metrics").toArray()[0]).toEqual({
         site: SITE,
         stability_days: 12.9,
         attempted_question_count: 1,
@@ -698,9 +664,7 @@ describe("LearningState schema", () => {
         today_correct_attempt_count: 1,
         today_new_question_count: 1,
       });
-      expect(
-        state.storage.sql.exec("SELECT * FROM attempts").toArray()[0]
-      ).toEqual({
+      expect(state.storage.sql.exec("SELECT * FROM attempts").toArray()[0]).toEqual({
         site: SITE,
         operation_id: operationId(900),
         question_id: "1",
@@ -712,9 +676,9 @@ describe("LearningState schema", () => {
       expect(
         state.storage.sql
           .exec(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('mastery_history', 'learning_metadata')"
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('mastery_history', 'learning_metadata')",
           )
-          .toArray()
+          .toArray(),
       ).toEqual([]);
     });
   });
@@ -765,49 +729,30 @@ describe("LearningState schema", () => {
 
         INSERT INTO schema_metadata (singleton, version) VALUES (1, 2);
       `);
-      state.storage.sql.exec(
-        "INSERT INTO questions (site, question_id) VALUES (?, '1')",
-        SITE
-      );
-      state.storage.sql.exec(
-        "INSERT INTO catalog_metadata VALUES (?, 1, ?, 1)",
-        SITE,
-        NOW
-      );
+      state.storage.sql.exec("INSERT INTO questions (site, question_id) VALUES (?, '1')", SITE);
+      state.storage.sql.exec("INSERT INTO catalog_metadata VALUES (?, 1, ?, 1)", SITE, NOW);
       state.storage.sql.exec(
         `INSERT INTO attempts VALUES (?, ?, '1', ?, 'incorrect', 10, 2.5)`,
         SITE,
         operationId(901),
-        NOW
+        NOW,
       );
       state.storage.sql.exec(
         "INSERT INTO cards VALUES (?, '1', ?, 2.5, 5, 1, 0, 1, 1, 2, ?)",
         SITE,
         NOW,
-        NOW
+        NOW,
       );
-      state.storage.sql.exec(
-        "INSERT INTO stability_history VALUES (?, '2026-08-10', 0, 2)",
-        SITE
-      );
-      state.storage.sql.exec(
-        "INSERT INTO site_settings VALUES (?, 45)",
-        SITE
-      );
+      state.storage.sql.exec("INSERT INTO stability_history VALUES (?, '2026-08-10', 0, 2)", SITE);
+      state.storage.sql.exec("INSERT INTO site_settings VALUES (?, 45)", SITE);
 
       initializeLearningSchema(state.storage, NOW);
 
-      expect(
-        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 11 });
-      expect(
-        state.storage.sql
-          .exec("SELECT * FROM daily_kpi_achievements")
-          .toArray()
-      ).toEqual([]);
-      expect(
-        state.storage.sql.exec("SELECT * FROM attempts").toArray()[0]
-      ).toEqual({
+      expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
+        version: 11,
+      });
+      expect(state.storage.sql.exec("SELECT * FROM daily_kpi_achievements").toArray()).toEqual([]);
+      expect(state.storage.sql.exec("SELECT * FROM attempts").toArray()[0]).toEqual({
         site: SITE,
         operation_id: operationId(901),
         question_id: "1",
@@ -819,11 +764,9 @@ describe("LearningState schema", () => {
       expect(
         state.storage.sql
           .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'site_settings'")
-          .toArray()
+          .toArray(),
       ).toEqual([]);
-      expect(
-        state.storage.sql.exec("SELECT * FROM learning_metrics").toArray()[0]
-      ).toEqual({
+      expect(state.storage.sql.exec("SELECT * FROM learning_metrics").toArray()[0]).toEqual({
         site: SITE,
         stability_days: 2.5,
         attempted_question_count: 1,
@@ -833,9 +776,7 @@ describe("LearningState schema", () => {
         today_correct_attempt_count: 0,
         today_new_question_count: 1,
       });
-      expect(
-        state.storage.sql.exec("SELECT * FROM stability_history").toArray()[0]
-      ).toEqual({
+      expect(state.storage.sql.exec("SELECT * FROM stability_history").toArray()[0]).toEqual({
         site: SITE,
         date: "2026-08-10",
         opening_stability_days: 0,
@@ -847,10 +788,8 @@ describe("LearningState schema", () => {
       });
       expect(
         state.storage.sql
-          .exec(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%_v2'"
-          )
-          .toArray()
+          .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%_v2'")
+          .toArray(),
       ).toEqual([]);
     });
   });
@@ -876,31 +815,29 @@ describe("LearningState schema", () => {
         "INSERT INTO cards VALUES (?, '1', ?, 1.9, 5, 1, 0, 1, 0, 2, ?)",
         SITE,
         NOW,
-        NOW
+        NOW,
       );
       state.storage.sql.exec(
         "INSERT INTO cards VALUES (?, '2', ?, 2.8, 5, 1, 0, 1, 0, 2, ?)",
         SITE,
         NOW,
-        NOW
+        NOW,
       );
       state.storage.sql.exec("DROP TABLE learning_metrics");
-      state.storage.sql.exec(
-        "UPDATE schema_metadata SET version = 4 WHERE singleton = 1"
-      );
+      state.storage.sql.exec("UPDATE schema_metadata SET version = 4 WHERE singleton = 1");
 
       initializeLearningSchema(state.storage, NOW);
 
-      expect(
-        state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]
-      ).toEqual({ version: 11 });
+      expect(state.storage.sql.exec("SELECT version FROM schema_metadata").toArray()[0]).toEqual({
+        version: 11,
+      });
       const cursor = state.storage.sql.exec(
         `SELECT stability_days, attempted_question_count,
                 daily_metrics_date, today_attempted_question_count,
                 today_attempt_count, today_correct_attempt_count,
                 today_new_question_count
          FROM learning_metrics WHERE site = ?`,
-        SITE
+        SITE,
       );
       const metrics = cursor.toArray()[0];
       expect(metrics.stability_days).toBeCloseTo(4.7);
@@ -963,43 +900,37 @@ describe("learning metrics", () => {
       `);
     });
 
-    await expect(
-      stub().replaceCatalog(SITE, ["4", "2", "1", "3"], 1, NOW + 1000)
-    ).resolves.toEqual({
-      site: SITE,
-      questionCount: 4,
-      updatedAtMs: NOW + 1000,
-      generation: 1,
-      question: {
-        questionId: "1",
-        url: `https://${SITE}/questions/1`,
-        kind: "new",
-        dueMs: null,
+    await expect(stub().replaceCatalog(SITE, ["4", "2", "1", "3"], 1, NOW + 1000)).resolves.toEqual(
+      {
+        site: SITE,
+        questionCount: 4,
+        updatedAtMs: NOW + 1000,
+        generation: 1,
+        question: {
+          questionId: "1",
+          url: `https://${SITE}/questions/1`,
+          kind: "new",
+          dueMs: null,
+        },
       },
-    });
+    );
     await runInRawDurableObject(stub(), (_instance, state) => {
-      expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual(
-        []
-      );
+      expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual([]);
     });
 
     await expect(
-      stub().replaceCatalog(SITE, ["2", "3", "4", "5"], 1, NOW + 2000)
+      stub().replaceCatalog(SITE, ["2", "3", "4", "5"], 1, NOW + 2000),
     ).resolves.toMatchObject({ questionCount: 4, generation: 2 });
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(
-        state.storage.sql.exec("SELECT event FROM usage_audit ORDER BY event").toArray()
+        state.storage.sql.exec("SELECT event FROM usage_audit ORDER BY event").toArray(),
       ).toEqual([{ event: "delete:1" }, { event: "insert:5" }]);
     });
   });
 
   it("replaces the maximum catalog size with bulk SQL", async () => {
-    const firstCatalog = Array.from({ length: 10_000 }, (_, index) =>
-      String(index + 1)
-    );
-    await expect(
-      stub().replaceCatalog(SITE, firstCatalog, 1, NOW + 1000)
-    ).resolves.toEqual({
+    const firstCatalog = Array.from({ length: 10_000 }, (_, index) => String(index + 1));
+    await expect(stub().replaceCatalog(SITE, firstCatalog, 1, NOW + 1000)).resolves.toEqual({
       site: SITE,
       questionCount: 10_000,
       updatedAtMs: NOW + 1000,
@@ -1026,7 +957,7 @@ describe("learning metrics", () => {
       `);
     });
     await expect(
-      stub().replaceCatalog(SITE, [...firstCatalog].reverse(), 2, NOW + 1500)
+      stub().replaceCatalog(SITE, [...firstCatalog].reverse(), 2, NOW + 1500),
     ).resolves.toEqual({
       site: SITE,
       questionCount: 10_000,
@@ -1040,9 +971,7 @@ describe("learning metrics", () => {
       },
     });
     await runInRawDurableObject(stub(), (_instance, state) => {
-      expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual(
-        []
-      );
+      expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual([]);
       state.storage.sql.exec(`
         DROP TRIGGER audit_questions_insert;
         DROP TRIGGER audit_questions_delete;
@@ -1050,12 +979,8 @@ describe("learning metrics", () => {
       `);
     });
 
-    const secondCatalog = Array.from({ length: 10_000 }, (_, index) =>
-      String(index + 5001)
-    );
-    await expect(
-      stub().replaceCatalog(SITE, secondCatalog, 2, NOW + 2000)
-    ).resolves.toEqual({
+    const secondCatalog = Array.from({ length: 10_000 }, (_, index) => String(index + 5001));
+    await expect(stub().replaceCatalog(SITE, secondCatalog, 2, NOW + 2000)).resolves.toEqual({
       site: SITE,
       questionCount: 10_000,
       updatedAtMs: NOW + 2000,
@@ -1077,9 +1002,9 @@ describe("learning metrics", () => {
                            THEN 1 ELSE 0 END
                     ) AS expected_question_count
              FROM questions WHERE site = ?`,
-            SITE
+            SITE,
           )
-          .toArray()[0]
+          .toArray()[0],
       ).toEqual({
         question_count: 10_000,
         expected_question_count: 10_000,
@@ -1095,13 +1020,7 @@ describe("learning metrics", () => {
   });
 
   it("returns the v11 attempt contract for correct and incorrect answers", async () => {
-    const correct = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(1),
-      "correct",
-      NOW
-    );
+    const correct = await stub().recordAttempt(SITE, "1", operationId(1), "correct", NOW);
     expect(correct.attempt).toMatchObject({
       questionId: "1",
       answerResult: "correct",
@@ -1123,11 +1042,7 @@ describe("learning metrics", () => {
     expect(correct.learningMetrics).toHaveProperty("todayStabilityDaysDelta");
     await runInRawDurableObject(stub(), (_instance, state) => {
       const card = state.storage.sql
-        .exec(
-          "SELECT due_ms, stability FROM cards WHERE site = ? AND question_id = ?",
-          SITE,
-          "1"
-        )
+        .exec("SELECT due_ms, stability FROM cards WHERE site = ? AND question_id = ?", SITE, "1")
         .toArray()[0];
       expect(card.due_ms).toBeGreaterThan(NOW);
       expect(card.stability).toBe(correct.attempt.resultingCardStabilityDays);
@@ -1139,13 +1054,13 @@ describe("learning metrics", () => {
       "2",
       operationId(2),
       "incorrect",
-      NOW + 1000
+      NOW + 1000,
     );
     expect(incorrect.attempt.answerResult).toBe("incorrect");
     expect(incorrect.attempt.previousCardStabilityDays).toBe(35);
     expect(incorrect.attempt.resultingCardStabilityDays).toBeLessThan(35);
     expect(incorrect.attempt.resultingStabilityDays).toBeLessThan(
-      incorrect.attempt.previousStabilityDays
+      incorrect.attempt.previousStabilityDays,
     );
     expect(incorrect.learningMetrics.todayCorrectRatePercent).toBe(50);
   });
@@ -1159,7 +1074,7 @@ describe("attempt idempotency and attempted question totals", () => {
         `UPDATE stability_history
          SET opening_stability_days = 35, closing_stability_days = 35
          WHERE site = ? AND date = '2026-08-10'`,
-        SITE
+        SITE,
       );
     });
     await stub().recordAttempt(SITE, "1", operationId(39), "correct", NOW);
@@ -1182,7 +1097,7 @@ describe("attempt idempotency and attempted question totals", () => {
       "1",
       operationId(40),
       "incorrect",
-      NOW + 1000
+      NOW + 1000,
     );
     expect(repeated.learningMetrics).toMatchObject({
       stabilityDays: 35,
@@ -1192,12 +1107,10 @@ describe("attempt idempotency and attempted question totals", () => {
       todayCorrectRatePercent: 50,
     });
     await runInRawDurableObject(stub(), (_instance, state) => {
-      expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual(
-        [
-          { event: "learning_metrics" },
-          { event: "stability_history" },
-        ]
-      );
+      expect(state.storage.sql.exec("SELECT * FROM usage_audit").toArray()).toEqual([
+        { event: "learning_metrics" },
+        { event: "stability_history" },
+      ]);
     });
   });
 
@@ -1209,21 +1122,15 @@ describe("attempt idempotency and attempted question totals", () => {
           `UPDATE stability_history
            SET opening_stability_days = 35, closing_stability_days = 35
            WHERE site = ? AND date = '2026-08-10'`,
-          SITE
+          SITE,
         );
         return state.storage.sql
           .exec("SELECT * FROM cards WHERE site = ? AND question_id = '1'", SITE)
           .toArray()[0];
-      })
+      }),
     );
 
-    const correct = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(40),
-      "correct",
-      NOW
-    );
+    const correct = await stub().recordAttempt(SITE, "1", operationId(40), "correct", NOW);
     expect(correct.attempt).toMatchObject({
       previousCardStabilityDays: 35,
       resultingCardStabilityDays: 35,
@@ -1243,7 +1150,7 @@ describe("attempt idempotency and attempted question totals", () => {
       "1",
       operationId(41),
       "incorrect",
-      NOW + 1000
+      NOW + 1000,
     );
     expect(incorrect.attempt).toMatchObject({
       previousCardStabilityDays: 35,
@@ -1263,7 +1170,7 @@ describe("attempt idempotency and attempted question totals", () => {
       expect(
         state.storage.sql
           .exec("SELECT * FROM cards WHERE site = ? AND question_id = '1'", SITE)
-          .toArray()[0]
+          .toArray()[0],
       ).toEqual({ ...before, last_attempt_date: "2026-08-10" });
       expect(
         state.storage.sql
@@ -1272,9 +1179,9 @@ describe("attempt idempotency and attempted question totals", () => {
                     resulting_card_stability_days
              FROM attempts WHERE site = ? AND question_id = '1'
              ORDER BY attempted_at_ms`,
-            SITE
+            SITE,
           )
-          .toArray()
+          .toArray(),
       ).toEqual([
         {
           answer_result: "correct",
@@ -1292,34 +1199,16 @@ describe("attempt idempotency and attempted question totals", () => {
 
   it("applies a review exactly when its due time arrives", async () => {
     await seedReviewCard("1", 35, NOW, NOW - 30 * DAY_MS);
-    const result = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(42),
-      "correct",
-      NOW
-    );
+    const result = await stub().recordAttempt(SITE, "1", operationId(42), "correct", NOW);
     expect(result.attempt.resultingCardStabilityDays).toBeGreaterThan(35);
     expect(result.attempt.resultingStabilityDays).toBeGreaterThan(
-      result.attempt.previousStabilityDays
+      result.attempt.previousStabilityDays,
     );
   });
 
   it("does not apply the same operation twice", async () => {
-    const first = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(3),
-      "correct",
-      NOW
-    );
-    const retry = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(3),
-      "correct",
-      NOW + 60_000
-    );
+    const first = await stub().recordAttempt(SITE, "1", operationId(3), "correct", NOW);
+    const retry = await stub().recordAttempt(SITE, "1", operationId(3), "correct", NOW + 60_000);
     expect(retry.attempt).toMatchObject({
       questionId: first.attempt.questionId,
       answerResult: first.attempt.answerResult,
@@ -1327,21 +1216,16 @@ describe("attempt idempotency and attempted question totals", () => {
       previousCardStabilityDays: first.attempt.previousCardStabilityDays,
       resultingCardStabilityDays: first.attempt.resultingCardStabilityDays,
     });
-    expect(retry.attempt.previousStabilityDays).toBe(
-      first.attempt.resultingStabilityDays
-    );
-    expect(retry.attempt.resultingStabilityDays).toBe(
-      first.attempt.resultingStabilityDays
-    );
+    expect(retry.attempt.previousStabilityDays).toBe(first.attempt.resultingStabilityDays);
+    expect(retry.attempt.resultingStabilityDays).toBe(first.attempt.resultingStabilityDays);
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(
         state.storage.sql
           .exec("SELECT reps FROM cards WHERE site = ? AND question_id = '1'", SITE)
-          .toArray()[0].reps
+          .toArray()[0].reps,
       ).toBe(1);
       expect(
-        state.storage.sql.exec("SELECT COUNT(*) AS count FROM attempts").toArray()[0]
-          .count
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM attempts").toArray()[0].count,
       ).toBe(1);
     });
   });
@@ -1349,27 +1233,9 @@ describe("attempt idempotency and attempted question totals", () => {
   it("returns current totals when an older operation is retried", async () => {
     await seedReviewCard("1", 10);
     await seedReviewCard("2", 20);
-    const first = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(4),
-      "correct",
-      NOW
-    );
-    const second = await stub().recordAttempt(
-      SITE,
-      "2",
-      operationId(5),
-      "correct",
-      NOW + 1000
-    );
-    const retry = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(4),
-      "correct",
-      NOW + 2000
-    );
+    const first = await stub().recordAttempt(SITE, "1", operationId(4), "correct", NOW);
+    const second = await stub().recordAttempt(SITE, "2", operationId(5), "correct", NOW + 1000);
+    const retry = await stub().recordAttempt(SITE, "1", operationId(4), "correct", NOW + 2000);
     expect(retry.attempt).toMatchObject({
       questionId: first.attempt.questionId,
       answerResult: first.attempt.answerResult,
@@ -1377,12 +1243,8 @@ describe("attempt idempotency and attempted question totals", () => {
       previousCardStabilityDays: first.attempt.previousCardStabilityDays,
       resultingCardStabilityDays: first.attempt.resultingCardStabilityDays,
     });
-    expect(retry.attempt.previousStabilityDays).toBe(
-      second.learningMetrics.stabilityDays
-    );
-    expect(retry.attempt.resultingStabilityDays).toBe(
-      second.learningMetrics.stabilityDays
-    );
+    expect(retry.attempt.previousStabilityDays).toBe(second.learningMetrics.stabilityDays);
+    expect(retry.attempt.resultingStabilityDays).toBe(second.learningMetrics.stabilityDays);
     expect(retry.learningMetrics).toEqual(second.learningMetrics);
   });
 
@@ -1399,13 +1261,7 @@ describe("attempt idempotency and attempted question totals", () => {
       },
     });
     await stub().recordAttempt(SITE, "1", operationId(7), "correct", afterMidnight);
-    await stub().recordAttempt(
-      SITE,
-      "2",
-      operationId(8),
-      "incorrect",
-      afterMidnight + 1
-    );
+    await stub().recordAttempt(SITE, "2", operationId(8), "incorrect", afterMidnight + 1);
 
     await expect(stub().getState(SITE, afterMidnight + 1)).resolves.toMatchObject({
       today: "2026-08-11",
@@ -1435,13 +1291,7 @@ describe("attempt idempotency and attempted question totals", () => {
     await seedReviewCard("1", 35, NOW + DAY_MS, NOW - DAY_MS);
     await stub().recordAttempt(SITE, "1", operationId(43), "correct", NOW);
     await stub().recordAttempt(SITE, "1", operationId(44), "incorrect", NOW + 1);
-    const third = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(45),
-      "correct",
-      NOW + 2
-    );
+    const third = await stub().recordAttempt(SITE, "1", operationId(45), "correct", NOW + 2);
 
     expect(third.learningMetrics).toMatchObject({
       todayAttemptedQuestionCount: 1,
@@ -1472,19 +1322,13 @@ describe("attempt idempotency and attempted question totals", () => {
           .exec(
             `SELECT question_number, attempted FROM questions
              WHERE site = ? AND question_id = '1'`,
-            SITE
+            SITE,
           )
-          .toArray()[0]
+          .toArray()[0],
       ).toEqual({ question_number: 1, attempted: 1 });
     });
 
-    const repeated = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(47),
-      "correct",
-      NOW + 3
-    );
+    const repeated = await stub().recordAttempt(SITE, "1", operationId(47), "correct", NOW + 3);
     expect(repeated.learningMetrics.attemptedQuestionCount).toBe(1);
   });
 
@@ -1499,11 +1343,11 @@ describe("attempt idempotency and attempted question totals", () => {
 
   it("rejects operationId reuse with a different payload", async () => {
     await stub().recordAttempt(SITE, "1", operationId(9), "correct", NOW);
+    await expect(stub().recordAttempt(SITE, "2", operationId(9), "correct", NOW)).resolves.toEqual({
+      error: "operation_conflict",
+    });
     await expect(
-      stub().recordAttempt(SITE, "2", operationId(9), "correct", NOW)
-    ).resolves.toEqual({ error: "operation_conflict" });
-    await expect(
-      stub().recordAttempt(SITE, "1", operationId(9), "incorrect", NOW)
+      stub().recordAttempt(SITE, "1", operationId(9), "incorrect", NOW),
     ).resolves.toEqual({ error: "operation_conflict" });
   });
 });
@@ -1521,13 +1365,7 @@ describe("daily KPI celebrations", () => {
       },
     });
 
-    const result = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(28),
-      "incorrect",
-      NOW
-    );
+    const result = await stub().recordAttempt(SITE, "1", operationId(28), "incorrect", NOW);
 
     expect(result.learningMetrics).toMatchObject({
       dailyKpiCompleted: true,
@@ -1543,13 +1381,7 @@ describe("daily KPI celebrations", () => {
       dailyKpiCompleted: true,
     });
 
-    const repeated = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(27),
-      "correct",
-      NOW + 1
-    );
+    const repeated = await stub().recordAttempt(SITE, "1", operationId(27), "correct", NOW + 1);
     expect(repeated.learningMetrics.todayNewQuestionCount).toBe(50);
     expect(repeated).not.toHaveProperty("celebration");
   });
@@ -1563,7 +1395,7 @@ describe("daily KPI celebrations", () => {
       "1",
       operationId(26),
       "correct",
-      NOW
+      NOW,
     );
 
     expect(otherResult.learningMetrics.dailyKpiCompleted).toBe(true);
@@ -1579,13 +1411,7 @@ describe("daily KPI celebrations", () => {
   it("does not celebrate when the daily KPI was already complete", async () => {
     await seedTodayNewQuestionCount(50);
 
-    const result = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(25),
-      "correct",
-      NOW
-    );
+    const result = await stub().recordAttempt(SITE, "1", operationId(25), "correct", NOW);
 
     expect(result.learningMetrics).toMatchObject({
       dailyKpiCompleted: true,
@@ -1607,13 +1433,7 @@ describe("daily KPI celebrations", () => {
       },
     });
 
-    const earlyAttempt = await stub().recordAttempt(
-      SITE,
-      "2",
-      operationId(35),
-      "correct",
-      NOW
-    );
+    const earlyAttempt = await stub().recordAttempt(SITE, "2", operationId(35), "correct", NOW);
     expect(earlyAttempt.learningMetrics).toMatchObject({
       dueCardsCompleted: false,
       dueCardsRemaining: 1,
@@ -1639,25 +1459,13 @@ describe("daily KPI celebrations", () => {
     await seedTodayNewQuestionCount(50);
     await seedReviewCard("1", 30);
     await seedReviewCard("2", 30);
-    const partial = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(29),
-      "correct",
-      NOW
-    );
+    const partial = await stub().recordAttempt(SITE, "1", operationId(29), "correct", NOW);
     expect(partial.learningMetrics.dueCardsCompleted).toBe(false);
     expect(partial.learningMetrics.dueCardsRemaining).toBe(1);
     expect(partial.learningMetrics.dailyKpiCompleted).toBe(false);
     expect(partial).not.toHaveProperty("celebration");
 
-    const first = await stub().recordAttempt(
-      SITE,
-      "2",
-      operationId(30),
-      "correct",
-      NOW
-    );
+    const first = await stub().recordAttempt(SITE, "2", operationId(30), "correct", NOW);
     expect(first.learningMetrics.dueCardsCompleted).toBe(true);
     expect(first.learningMetrics.dueCardsRemaining).toBe(0);
     expect(first.learningMetrics.dailyKpiCompleted).toBe(true);
@@ -1667,20 +1475,10 @@ describe("daily KPI celebrations", () => {
       dailyKpiCompleted: true,
     });
 
-    const retry = await stub().recordAttempt(
-      SITE,
-      "2",
-      operationId(30),
-      "correct",
-      NOW + 1000
-    );
+    const retry = await stub().recordAttempt(SITE, "2", operationId(30), "correct", NOW + 1000);
     expect(retry.celebration).toEqual(first.celebration);
     await runInRawDurableObject(stub(), (_instance, state) => {
-      expect(
-        state.storage.sql
-          .exec("SELECT * FROM daily_kpi_achievements")
-          .toArray()
-      ).toEqual([
+      expect(state.storage.sql.exec("SELECT * FROM daily_kpi_achievements").toArray()).toEqual([
         {
           site: SITE,
           date: "2026-08-10",
@@ -1694,13 +1492,7 @@ describe("daily KPI celebrations", () => {
   it("does not celebrate a second completion on the same site and Tokyo date", async () => {
     await seedTodayNewQuestionCount(50);
     await seedReviewCard("1", 30);
-    const first = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(31),
-      "correct",
-      NOW
-    );
+    const first = await stub().recordAttempt(SITE, "1", operationId(31), "correct", NOW);
     expect(first).toHaveProperty("celebration");
 
     await seedReviewCard("2", 30, NOW + 500);
@@ -1712,13 +1504,7 @@ describe("daily KPI celebrations", () => {
       },
     });
 
-    const repeated = await stub().recordAttempt(
-      SITE,
-      "2",
-      operationId(32),
-      "correct",
-      NOW + 1000
-    );
+    const repeated = await stub().recordAttempt(SITE, "2", operationId(32), "correct", NOW + 1000);
     expect(repeated.learningMetrics.dailyKpiCompleted).toBe(true);
     expect(repeated.learningMetrics.dueCardsCompleted).toBe(true);
     expect(repeated).not.toHaveProperty("celebration");
@@ -1727,22 +1513,10 @@ describe("daily KPI celebrations", () => {
   it("allows another celebration on the next Tokyo date", async () => {
     await seedTodayNewQuestionCount(50);
     await seedReviewCard("1", 30);
-    const first = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(33),
-      "correct",
-      NOW
-    );
+    const first = await stub().recordAttempt(SITE, "1", operationId(33), "correct", NOW);
     await seedReviewCard("2", 30, NOW + DAY_MS);
     await seedTodayNewQuestionCount(50, "2026-08-11");
-    const nextDay = await stub().recordAttempt(
-      SITE,
-      "2",
-      operationId(34),
-      "correct",
-      NOW + DAY_MS
-    );
+    const nextDay = await stub().recordAttempt(SITE, "2", operationId(34), "correct", NOW + DAY_MS);
 
     expect(first.celebration.date).toBe("2026-08-10");
     expect(nextDay.celebration).toMatchObject({
@@ -1758,9 +1532,8 @@ describe("daily KPI celebrations", () => {
 
     await runInRawDurableObject(stub(), (_instance, state) => {
       expect(
-        state.storage.sql
-          .exec("SELECT COUNT(*) AS count FROM daily_kpi_achievements")
-          .toArray()[0].count
+        state.storage.sql.exec("SELECT COUNT(*) AS count FROM daily_kpi_achievements").toArray()[0]
+          .count,
       ).toBe(0);
     });
   });
@@ -1768,40 +1541,22 @@ describe("daily KPI celebrations", () => {
 
 describe("stability history", () => {
   it("uses opening and closing totals for the daily delta", async () => {
-    const first = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(10),
-      "correct",
-      NOW
-    );
-    const second = await stub().recordAttempt(
-      SITE,
-      "2",
-      operationId(11),
-      "correct",
-      NOW + 1000
-    );
+    const first = await stub().recordAttempt(SITE, "1", operationId(10), "correct", NOW);
+    const second = await stub().recordAttempt(SITE, "2", operationId(11), "correct", NOW + 1000);
     const state = await stub().getState(SITE, NOW + 1000);
-    expect(state.learningMetrics.stabilityDays).toBe(
-      second.learningMetrics.stabilityDays
-    );
+    expect(state.learningMetrics.stabilityDays).toBe(second.learningMetrics.stabilityDays);
     expect(state.learningMetrics.todayStabilityDaysDelta).toBe(
-      second.learningMetrics.stabilityDays
+      second.learningMetrics.stabilityDays,
     );
     expect(state.learningMetrics.stabilityDays).toBeGreaterThanOrEqual(
-      first.learningMetrics.stabilityDays
+      first.learningMetrics.stabilityDays,
     );
   });
 
   it("returns null before tracking starts and carries known totals forward", async () => {
     const initial = await stub().getHistory(SITE, 7, NOW);
-    expect(
-      initial.days.slice(0, 6).every((day) => day.closingStabilityDays === null)
-    ).toBe(true);
-    expect(
-      initial.days.slice(0, 6).every((day) => day.stabilityDaysDelta === null)
-    ).toBe(true);
+    expect(initial.days.slice(0, 6).every((day) => day.closingStabilityDays === null)).toBe(true);
+    expect(initial.days.slice(0, 6).every((day) => day.stabilityDaysDelta === null)).toBe(true);
     expect(initial.days.at(-1).closingStabilityDays).toBe(0);
     expect(initial.days.at(-1).stabilityDaysDelta).toBe(0);
 
@@ -1809,12 +1564,8 @@ describe("stability history", () => {
     const afterGap = await stub().getHistory(SITE, 3, NOW + 2 * DAY_MS);
     expect(afterGap.days[0].closingStabilityDays).not.toBeNull();
     expect(afterGap.days[0].stabilityDaysDelta).toBeGreaterThan(0);
-    expect(afterGap.days[1].closingStabilityDays).toBe(
-      afterGap.days[0].closingStabilityDays
-    );
-    expect(afterGap.days[2].closingStabilityDays).toBe(
-      afterGap.days[0].closingStabilityDays
-    );
+    expect(afterGap.days[1].closingStabilityDays).toBe(afterGap.days[0].closingStabilityDays);
+    expect(afterGap.days[2].closingStabilityDays).toBe(afterGap.days[0].closingStabilityDays);
     expect(afterGap.days[1].stabilityDaysDelta).toBe(0);
     expect(afterGap.days[2].stabilityDaysDelta).toBe(0);
   });
@@ -1822,23 +1573,15 @@ describe("stability history", () => {
   it("starts a new opening total at the Tokyo date boundary", async () => {
     await seedReviewCard("1", 35, NOW - 1000, NOW);
     const nextDay = NOW + DAY_MS;
-    const before = (await stub().getState(SITE, nextDay)).learningMetrics
-      .stabilityDays;
-    await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(13),
-      "incorrect",
-      nextDay
-    );
+    const before = (await stub().getState(SITE, nextDay)).learningMetrics.stabilityDays;
+    await stub().recordAttempt(SITE, "1", operationId(13), "incorrect", nextDay);
     const after = await stub().getState(SITE, nextDay);
     expect(after.learningMetrics.todayStabilityDaysDelta).toBe(
-      after.learningMetrics.stabilityDays - before
+      after.learningMetrics.stabilityDays - before,
     );
-    expect(
-      (await stub().getHistory(SITE, 2, nextDay)).days.at(-1)
-        .stabilityDaysDelta
-    ).toBeLessThan(0);
+    expect((await stub().getHistory(SITE, 2, nextDay)).days.at(-1).stabilityDaysDelta).toBeLessThan(
+      0,
+    );
   });
 
   it("serves daily attempt metrics from aggregates instead of raw attempts", async () => {
@@ -1862,20 +1605,8 @@ describe("stability history", () => {
 
 describe("daily raw details", () => {
   it("returns raw table rows for one Tokyo date in stable order", async () => {
-    const later = await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(16),
-      "correct",
-      NOW + 2000
-    );
-    const earlier = await stub().recordAttempt(
-      SITE,
-      "2",
-      operationId(17),
-      "incorrect",
-      NOW + 1000
-    );
+    const later = await stub().recordAttempt(SITE, "1", operationId(16), "correct", NOW + 2000);
+    const earlier = await stub().recordAttempt(SITE, "2", operationId(17), "incorrect", NOW + 1000);
 
     await expect(stub().getDailyDetails(SITE, "2026-08-10")).resolves.toEqual({
       site: SITE,
@@ -1930,30 +1661,18 @@ describe("daily raw details", () => {
   it("uses Tokyo midnight when selecting attempts", async () => {
     const beforeMidnight = Date.parse("2026-08-10T14:59:59.999Z");
     const afterMidnight = Date.parse("2026-08-10T15:00:00.000Z");
-    await stub().recordAttempt(
-      SITE,
-      "1",
-      operationId(18),
-      "correct",
-      beforeMidnight
-    );
-    await stub().recordAttempt(
-      SITE,
-      "2",
-      operationId(19),
-      "correct",
-      afterMidnight
-    );
+    await stub().recordAttempt(SITE, "1", operationId(18), "correct", beforeMidnight);
+    await stub().recordAttempt(SITE, "2", operationId(19), "correct", afterMidnight);
 
     expect(
       (await stub().getDailyDetails(SITE, "2026-08-10")).tables.attempts.map(
-        (row) => row.operation_id
-      )
+        (row) => row.operation_id,
+      ),
     ).toEqual([operationId(18)]);
     expect(
       (await stub().getDailyDetails(SITE, "2026-08-11")).tables.attempts.map(
-        (row) => row.operation_id
-      )
+        (row) => row.operation_id,
+      ),
     ).toEqual([operationId(19)]);
   });
 });
@@ -1961,10 +1680,9 @@ describe("daily raw details", () => {
 describe("v11 HTTP contract", () => {
   it("does not expose older API versions", async () => {
     for (const version of ["v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"]) {
-      const response = await SELF.fetch(
-        `https://example.test/${version}/state?site=${SITE}`,
-        { headers: AUTHORIZATION }
-      );
+      const response = await SELF.fetch(`https://example.test/${version}/state?site=${SITE}`, {
+        headers: AUTHORIZATION,
+      });
       expect(response.status).toBe(404);
     }
   });
@@ -1994,12 +1712,7 @@ describe("v11 HTTP contract", () => {
     });
     expect(state.status).toBe(200);
     const stateBody = await state.json();
-    expect(Object.keys(stateBody).sort()).toEqual([
-      "catalog",
-      "learningMetrics",
-      "site",
-      "today",
-    ]);
+    expect(Object.keys(stateBody).sort()).toEqual(["catalog", "learningMetrics", "site", "today"]);
     expect(stateBody).toMatchObject({
       site: SITE,
       learningMetrics: {
@@ -2019,10 +1732,9 @@ describe("v11 HTTP contract", () => {
     });
     expect(stateBody.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
-    const history = await SELF.fetch(
-      `https://example.test/v11/history?site=${SITE}&days=7`,
-      { headers: AUTHORIZATION }
-    );
+    const history = await SELF.fetch(`https://example.test/v11/history?site=${SITE}&days=7`, {
+      headers: AUTHORIZATION,
+    });
     expect(history.status).toBe(200);
     const historyBody = await history.json();
     expect(historyBody.days).toHaveLength(7);
@@ -2037,7 +1749,7 @@ describe("v11 HTTP contract", () => {
 
     const details = await SELF.fetch(
       `https://example.test/v11/daily-details?site=${SITE}&date=2026-08-10`,
-      { headers: AUTHORIZATION }
+      { headers: AUTHORIZATION },
     );
     expect(details.status).toBe(200);
     await expect(details.json()).resolves.toMatchObject({
@@ -2049,10 +1761,9 @@ describe("v11 HTTP contract", () => {
   });
 
   it("returns all dashboard reads through one endpoint", async () => {
-    const response = await SELF.fetch(
-      `https://example.test/v11/dashboard?site=${SITE}`,
-      { headers: AUTHORIZATION }
-    );
+    const response = await SELF.fetch(`https://example.test/v11/dashboard?site=${SITE}`, {
+      headers: AUTHORIZATION,
+    });
     expect(response.status).toBe(200);
     const dashboardBody = await response.json();
     expect(dashboardBody).toMatchObject({
@@ -2063,20 +1774,18 @@ describe("v11 HTTP contract", () => {
     });
     expect(dashboardBody.history.days).toHaveLength(31);
 
-    const selectedDefault = await SELF.fetch(
-      "https://example.test/v11/dashboard",
-      { headers: AUTHORIZATION }
-    );
+    const selectedDefault = await SELF.fetch("https://example.test/v11/dashboard", {
+      headers: AUTHORIZATION,
+    });
     await expect(selectedDefault.json()).resolves.toMatchObject({
       sites: [SITE],
       selectedSite: SITE,
     });
 
     for (const search of ["site=invalid.example", `site=${SITE}&site=${SITE}`, "extra=true"]) {
-      const invalid = await SELF.fetch(
-        `https://example.test/v11/dashboard?${search}`,
-        { headers: AUTHORIZATION }
-      );
+      const invalid = await SELF.fetch(`https://example.test/v11/dashboard?${search}`, {
+        headers: AUTHORIZATION,
+      });
       expect(invalid.status).toBe(400);
     }
 
@@ -2102,10 +1811,9 @@ describe("v11 HTTP contract", () => {
       `site=invalid.example&date=2026-08-10`,
       `site=${SITE}&date=2026-08-10&extra=true`,
     ]) {
-      const response = await SELF.fetch(
-        `https://example.test/v11/daily-details?${search}`,
-        { headers: AUTHORIZATION }
-      );
+      const response = await SELF.fetch(`https://example.test/v11/daily-details?${search}`, {
+        headers: AUTHORIZATION,
+      });
       expect(response.status).toBe(400);
     }
   });
@@ -2286,11 +1994,7 @@ describe("v11 HTTP contract", () => {
     });
     expect(response.status).toBe(200);
     const result = await response.json();
-    expect(Object.keys(result.celebration).sort()).toEqual([
-      "dailyKpiCompleted",
-      "date",
-      "site",
-    ]);
+    expect(Object.keys(result.celebration).sort()).toEqual(["dailyKpiCompleted", "date", "site"]);
     expect(result.celebration).toEqual({
       site: SITE,
       date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
@@ -2313,10 +2017,9 @@ describe("v11 HTTP contract", () => {
       state.storage.sql.exec("DELETE FROM questions WHERE site = ?", SITE);
       state.storage.sql.exec("DELETE FROM catalog_metadata WHERE site = ?", SITE);
     });
-    const response = await SELF.fetch(
-      `https://example.test/v11/next?site=${SITE}`,
-      { headers: AUTHORIZATION }
-    );
+    const response = await SELF.fetch(`https://example.test/v11/next?site=${SITE}`, {
+      headers: AUTHORIZATION,
+    });
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({ error: "catalog_missing" });
   });

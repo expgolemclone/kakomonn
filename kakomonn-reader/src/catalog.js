@@ -1,11 +1,6 @@
 import { canonicalQuestionIds } from "../../contracts/kakomonn.mjs";
 
-export function createCatalogLoader({
-  fetchConcurrency,
-  siteId,
-  SyncRequestError,
-  timeoutMs,
-}) {
+export function createCatalogLoader({ fetchConcurrency, siteId, SyncRequestError, timeoutMs }) {
   async function fetchCatalogDocument(url, signal) {
     let response;
     let text;
@@ -34,11 +29,11 @@ export function createCatalogLoader({
     }
     return documentNode;
   }
-  
+
   function createCatalogDocumentLoader(signal) {
     let activeCount = 0;
     const queue = [];
-  
+
     const startNext = () => {
       while (activeCount < fetchConcurrency && queue.length > 0) {
         const task = queue.shift();
@@ -55,14 +50,14 @@ export function createCatalogLoader({
           });
       }
     };
-  
+
     return (url) =>
       new Promise((resolve, reject) => {
         queue.push({ url, resolve, reject });
         startNext();
       });
   }
-  
+
   async function mapCatalogConcurrently(items, mapper) {
     const results = new Array(items.length);
     let nextIndex = 0;
@@ -77,7 +72,7 @@ export function createCatalogLoader({
     await Promise.all(workers);
     return results;
   }
-  
+
   function strictSameOriginURL(href, baseURL) {
     try {
       const url = new URL(href, baseURL);
@@ -86,7 +81,7 @@ export function createCatalogLoader({
       return null;
     }
   }
-  
+
   function collectQuestionIds(documentNode, pageURL) {
     const ids = new Set();
     for (const link of documentNode.querySelectorAll("a[href]")) {
@@ -101,14 +96,14 @@ export function createCatalogLoader({
     }
     return ids;
   }
-  
+
   function catalogPagePosition(documentNode) {
     const bodyText = documentNode.body?.textContent ?? "";
     const bodyMatch = bodyText.match(/全(\d+)ページ中(\d+)ページ目です[。.]/);
     const titleMatch = documentNode.title.match(/[（(](\d+)\/(\d+)[）)]/);
     let currentPage = null;
     let totalPages = null;
-  
+
     if (bodyMatch !== null) {
       totalPages = Number(bodyMatch[1]);
       currentPage = Number(bodyMatch[2]);
@@ -137,7 +132,7 @@ export function createCatalogLoader({
     }
     return { currentPage, totalPages };
   }
-  
+
   function collectCatalogListURLs(documentNode, pageURL, listURLs) {
     for (const link of documentNode.querySelectorAll("a[href]")) {
       const url = strictSameOriginURL(link.getAttribute("href"), pageURL);
@@ -148,7 +143,7 @@ export function createCatalogLoader({
       }
     }
   }
-  
+
   function findCatalogIndexURL(documentNode, pageURL) {
     for (const link of documentNode.querySelectorAll("a[href]")) {
       const url = strictSameOriginURL(link.getAttribute("href"), pageURL);
@@ -158,12 +153,12 @@ export function createCatalogLoader({
     }
     return null;
   }
-  
+
   async function loadCatalogListSnapshot(listURL, loadCatalogDocument) {
     const questionIds = new Set();
     let totalPages = null;
     let fullPageSize = null;
-  
+
     const loadPage = async (page) => {
       const pageURL = new URL(listURL);
       pageURL.searchParams.set("page", String(page));
@@ -173,7 +168,7 @@ export function createCatalogLoader({
         pageDocument: await loadCatalogDocument(pageURL.href),
       };
     };
-  
+
     const consumePage = ({ page, pageURL, pageDocument }) => {
       const position = catalogPagePosition(pageDocument);
       if (position.currentPage !== page) {
@@ -184,7 +179,7 @@ export function createCatalogLoader({
       } else if (position.totalPages !== totalPages) {
         throw new SyncRequestError("catalog_error");
       }
-  
+
       const pageIds = collectQuestionIds(pageDocument, pageURL);
       if (pageIds.size === 0) {
         throw new SyncRequestError("catalog_error");
@@ -203,17 +198,10 @@ export function createCatalogLoader({
         questionIds.add(id);
       }
     };
-  
+
     consumePage(await loadPage(1));
-    for (
-      let firstPage = 2;
-      firstPage <= totalPages;
-      firstPage += fetchConcurrency
-    ) {
-      const lastPage = Math.min(
-        totalPages,
-        firstPage + fetchConcurrency - 1
-      );
+    for (let firstPage = 2; firstPage <= totalPages; firstPage += fetchConcurrency) {
+      const lastPage = Math.min(totalPages, firstPage + fetchConcurrency - 1);
       const pages = [];
       for (let page = firstPage; page <= lastPage; page += 1) {
         pages.push(page);
@@ -223,13 +211,13 @@ export function createCatalogLoader({
         consumePage(pageResult);
       }
     }
-  
+
     return {
       totalPages,
       questionIds: canonicalQuestionIds([...questionIds]),
     };
   }
-  
+
   async function loadCatalogLists(loadCatalogDocument) {
     const createURL = `https://${siteId}/createques`;
     const createDocument = await loadCatalogDocument(createURL);
@@ -237,7 +225,7 @@ export function createCatalogLoader({
     if (catalogIndexURL === null) {
       throw new SyncRequestError("catalog_error");
     }
-  
+
     const listURLs = new Map();
     collectCatalogListURLs(createDocument, createURL, listURLs);
     const catalogIndexDocument = await loadCatalogDocument(catalogIndexURL);
@@ -245,34 +233,26 @@ export function createCatalogLoader({
     if (listURLs.size === 0) {
       throw new SyncRequestError("catalog_error");
     }
-  
-    return [...listURLs.entries()].sort(([left], [right]) =>
-      left.localeCompare(right)
-    );
+
+    return [...listURLs.entries()].sort(([left], [right]) => left.localeCompare(right));
   }
-  
+
   async function loadQuestionCatalogSnapshot(loadCatalogDocument) {
     const sortedLists = await loadCatalogLists(loadCatalogDocument);
-    const snapshots = await mapCatalogConcurrently(
-      sortedLists,
-      async ([listPath, listURL]) => [
-        listPath,
-        await loadCatalogListSnapshot(listURL, loadCatalogDocument),
-      ]
-    );
+    const snapshots = await mapCatalogConcurrently(sortedLists, async ([listPath, listURL]) => [
+      listPath,
+      await loadCatalogListSnapshot(listURL, loadCatalogDocument),
+    ]);
     return new Map(snapshots);
   }
-  
+
   async function loadCompleteQuestionCatalog() {
     const controller = new AbortController();
-    const timeout = window.setTimeout(
-      () => controller.abort(),
-      timeoutMs
-    );
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
     const loadCatalogDocument = createCatalogDocumentLoader(controller.signal);
     try {
       const snapshot = await loadQuestionCatalogSnapshot(loadCatalogDocument);
-  
+
       const questionIds = new Set();
       for (const { questionIds: listQuestionIds } of snapshot.values()) {
         for (const id of listQuestionIds) {

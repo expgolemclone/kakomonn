@@ -1,8 +1,4 @@
-import {
-  OPERATION_ID_PATTERN,
-  isAnswerResult,
-  isQuestionId,
-} from "../contracts.js";
+import { OPERATION_ID_PATTERN, isAnswerResult, isQuestionId } from "../contracts.js";
 import { getLearningStateStub } from "../learning-store.js";
 import { isSite } from "../auth.js";
 import { errorResponse, jsonResponse } from "../http.js";
@@ -36,7 +32,7 @@ export async function handleAttempts(request, env) {
     body.site,
     body.questionId,
     body.operationId,
-    body.answerResult
+    body.answerResult,
   );
   if (result?.error === "operation_conflict") {
     return errorResponse("operation_conflict", 409);

@@ -5,16 +5,9 @@ import {
   dashboardBridgeRequestId,
   isDashboardBridgeRequest,
 } from "../../contracts/dashboard-bridge.mjs";
-import {
-  isDailyDetailsResponse,
-  isDashboardResponse,
-} from "../../contracts/kakomonn.mjs";
+import { isDailyDetailsResponse, isDashboardResponse } from "../../contracts/kakomonn.mjs";
 
-export function installDashboardBridge({
-  gm,
-  requestSyncResponse,
-  syncTokenKey,
-}) {
+export function installDashboardBridge({ gm, requestSyncResponse, syncTokenKey }) {
   function respond(response) {
     document.dispatchEvent(
       new CustomEvent(DASHBOARD_BRIDGE_RESPONSE_EVENT, {
@@ -79,8 +72,7 @@ export function installDashboardBridge({
           "GET",
           `/v11/daily-details?${parameters}`,
           token,
-          (value) =>
-            isDailyDetailsResponse(value, request.site, request.date),
+          (value) => isDailyDetailsResponse(value, request.site, request.date),
         );
       }
       respond({ data, id, ok: true });
@@ -96,8 +88,5 @@ export function installDashboardBridge({
   document.addEventListener(DASHBOARD_BRIDGE_REQUEST_EVENT, (event) => {
     void handleRequest(event);
   });
-  document.documentElement.setAttribute(
-    DASHBOARD_BRIDGE_STATE_ATTRIBUTE,
-    "ready",
-  );
+  document.documentElement.setAttribute(DASHBOARD_BRIDGE_STATE_ATTRIBUTE, "ready");
 }

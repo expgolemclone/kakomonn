@@ -16,10 +16,7 @@ function activePortPath(userDataDir) {
 
 function readDevToolsActivePort(
   userDataDir,
-  {
-    existsSync = fs.existsSync,
-    readFileSync = fs.readFileSync,
-  } = {},
+  { existsSync = fs.existsSync, readFileSync = fs.readFileSync } = {},
 ) {
   const filePath = activePortPath(userDataDir);
   if (!existsSync(filePath)) {
@@ -39,11 +36,7 @@ function readDevToolsActivePort(
 async function waitForDevToolsActivePort(
   userDataDir,
   browserProcess,
-  {
-    delayImpl = delay,
-    readPort = readDevToolsActivePort,
-    timeoutMs = DEVTOOLS_TIMEOUT_MS,
-  } = {},
+  { delayImpl = delay, readPort = readDevToolsActivePort, timeoutMs = DEVTOOLS_TIMEOUT_MS } = {},
 ) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
@@ -82,17 +75,11 @@ async function readJsonResponse(response, label) {
   }
 }
 
-async function createPageTarget(
-  port,
-  url = "about:blank",
-  {
-    fetchImpl = fetch,
-  } = {},
-) {
-  const response = await fetchImpl(
-    devToolsURL(port, `/json/new?${encodeURIComponent(url)}`),
-    { method: "PUT", signal: AbortSignal.timeout(DEVTOOLS_TIMEOUT_MS) },
-  );
+async function createPageTarget(port, url = "about:blank", { fetchImpl = fetch } = {}) {
+  const response = await fetchImpl(devToolsURL(port, `/json/new?${encodeURIComponent(url)}`), {
+    method: "PUT",
+    signal: AbortSignal.timeout(DEVTOOLS_TIMEOUT_MS),
+  });
   const target = await readJsonResponse(response, "Chrome page creation");
   if (
     target?.type !== "page" ||
@@ -104,13 +91,7 @@ async function createPageTarget(
   return target;
 }
 
-async function closePageTarget(
-  port,
-  targetId,
-  {
-    fetchImpl = fetch,
-  } = {},
-) {
+async function closePageTarget(port, targetId, { fetchImpl = fetch } = {}) {
   const response = await fetchImpl(
     devToolsURL(port, `/json/close/${encodeURIComponent(targetId)}`),
     { signal: AbortSignal.timeout(DEVTOOLS_TIMEOUT_MS) },
@@ -207,10 +188,7 @@ class DevToolsSession {
 
 async function connectDevToolsSession(
   webSocketDebuggerUrl,
-  {
-    timeoutMs = DEVTOOLS_TIMEOUT_MS,
-    WebSocketImpl = globalThis.WebSocket,
-  } = {},
+  { timeoutMs = DEVTOOLS_TIMEOUT_MS, WebSocketImpl = globalThis.WebSocket } = {},
 ) {
   if (typeof WebSocketImpl !== "function") {
     throw new Error("The Node.js WebSocket API is unavailable");
@@ -221,32 +199,36 @@ async function connectDevToolsSession(
       webSocket.close();
       reject(new Error("Chrome DevTools connection timed out"));
     }, timeoutMs);
-    webSocket.addEventListener("open", () => {
-      clearTimeout(timeout);
-      resolve();
-    }, { once: true });
-    webSocket.addEventListener("error", () => {
-      clearTimeout(timeout);
-      reject(new Error("Chrome DevTools connection failed"));
-    }, { once: true });
+    webSocket.addEventListener(
+      "open",
+      () => {
+        clearTimeout(timeout);
+        resolve();
+      },
+      { once: true },
+    );
+    webSocket.addEventListener(
+      "error",
+      () => {
+        clearTimeout(timeout);
+        reject(new Error("Chrome DevTools connection failed"));
+      },
+      { once: true },
+    );
   });
   return new DevToolsSession(webSocket, timeoutMs);
 }
 
 async function readPageState(session) {
   const evaluated = await session.command("Runtime.evaluate", {
-    expression:
-      "({ href: location.href, readyState: document.readyState })",
+    expression: "({ href: location.href, readyState: document.readyState })",
     returnByValue: true,
   });
   if (evaluated.exceptionDetails) {
     throw new Error("Chrome page state evaluation failed");
   }
   const state = evaluated.result?.value;
-  if (
-    typeof state?.href !== "string" ||
-    typeof state?.readyState !== "string"
-  ) {
+  if (typeof state?.href !== "string" || typeof state?.readyState !== "string") {
     throw new Error("Chrome page state evaluation returned invalid data");
   }
   return state;
@@ -255,10 +237,7 @@ async function readPageState(session) {
 async function navigateAndWait(
   session,
   url,
-  {
-    delayImpl = delay,
-    timeoutMs = DEVTOOLS_TIMEOUT_MS,
-  } = {},
+  { delayImpl = delay, timeoutMs = DEVTOOLS_TIMEOUT_MS } = {},
 ) {
   const previousURL = (await readPageState(session)).href;
   await navigate(session, url);
@@ -279,9 +258,7 @@ async function navigateAndWait(
     }
     await delayImpl(50);
   }
-  throw new Error(
-    `Chrome navigation did not become ready: ${lastError?.message ?? url}`,
-  );
+  throw new Error(`Chrome navigation did not become ready: ${lastError?.message ?? url}`);
 }
 
 async function navigate(session, url) {
@@ -342,7 +319,7 @@ async function prepareKakomonnPage(
     userscriptIdentity,
   },
 ) {
-  const target = suppliedTarget ?? await createTarget(port);
+  const target = suppliedTarget ?? (await createTarget(port));
   let session = null;
   let applicationTarget = null;
   try {
@@ -361,10 +338,7 @@ async function prepareKakomonnPage(
       throw new Error("Tampermonkey readiness evaluation failed");
     }
     const readiness = evaluated.result?.value;
-    if (
-      readiness?.error !== null ||
-      readiness?.scriptCount !== 1
-    ) {
+    if (readiness?.error !== null || readiness?.scriptCount !== 1) {
       throw new Error(
         `Tampermonkey transport is not ready: ${readiness?.error ?? "invalid readiness response"}`,
       );

@@ -6,9 +6,11 @@ const {
   calculateKpiQuestionsRemaining,
   chooseCorrectFeedbackVariant,
   randomIntegerBelow,
-} = await import(`data:text/javascript;base64,${Buffer.from(
-  await readFile(new URL("../src/correct-feedback.js", import.meta.url), "utf8"),
-).toString("base64")}`);
+} = await import(
+  `data:text/javascript;base64,${Buffer.from(
+    await readFile(new URL("../src/correct-feedback.js", import.meta.url), "utf8"),
+  ).toString("base64")}`
+);
 
 test("combines due and new question work into one KPI number", () => {
   assert.equal(
@@ -110,8 +112,5 @@ test("correct feedback random selection rejects modulo-biased values", () => {
 });
 
 test("correct feedback random selection has no insecure fallback", () => {
-  assert.throws(
-    () => randomIntegerBelow(1000, {}),
-    /Crypto random values are unavailable/,
-  );
+  assert.throws(() => randomIntegerBelow(1000, {}), /Crypto random values are unavailable/);
 });

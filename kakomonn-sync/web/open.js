@@ -12,7 +12,11 @@ import { scheduledQuestionId } from "../../contracts/kakomonn.mjs";
 
   function nextQuestionURL(content) {
     let url;
-    try { url = new URL(content); } catch { throw new Error("invalid_url"); }
+    try {
+      url = new URL(content);
+    } catch {
+      throw new Error("invalid_url");
+    }
     if (scheduledQuestionId(url.href, "chushoks.kakomonn.com") === null) {
       throw new Error("invalid_url");
     }
@@ -32,8 +36,7 @@ import { scheduledQuestionId } from "../../contracts/kakomonn.mjs";
     document.querySelector("#open-bridge").hidden = true;
     document.querySelector("#open-error-title").textContent = title;
     document.querySelector("#open-error-message").textContent = message;
-    document.querySelector("#open-error-detail").textContent =
-      `context=open-bridge | code=${code}`;
+    document.querySelector("#open-error-detail").textContent = `context=open-bridge | code=${code}`;
     document.querySelector("#open-error").showModal();
   }
 
@@ -49,16 +52,10 @@ import { scheduledQuestionId } from "../../contracts/kakomonn.mjs";
     const state = document.documentElement.getAttribute(READER_BRIDGE_STATE_ATTRIBUTE);
     if (state === "ready") {
       try {
-        const readerTarget = document.documentElement.getAttribute(
-          READER_BRIDGE_TARGET_ATTRIBUTE
-        );
+        const readerTarget = document.documentElement.getAttribute(READER_BRIDGE_TARGET_ATTRIBUTE);
         launch(nextQuestionURL(readerTarget));
       } catch {
-        showBridgeError(
-          "invalid_url",
-          "次の問題を開けません",
-          "接続先の設定が不正です."
-        );
+        showBridgeError("invalid_url", "次の問題を開けません", "接続先の設定が不正です.");
       }
       return true;
     }
@@ -66,7 +63,7 @@ import { scheduledQuestionId } from "../../contracts/kakomonn.mjs";
       showBridgeError(
         "reader_unavailable",
         "Readerを起動できません",
-        "Tampermonkeyと過去問readerが有効か確認して, ページを再読み込みしてください."
+        "Tampermonkeyと過去問readerが有効か確認して, ページを再読み込みしてください.",
       );
       return true;
     }
@@ -74,7 +71,7 @@ import { scheduledQuestionId } from "../../contracts/kakomonn.mjs";
       showBridgeError(
         "no_next_question",
         "今解く問題はありません",
-        "時間を置いてから, もう一度確認してください."
+        "時間を置いてから, もう一度確認してください.",
       );
       return true;
     }
@@ -82,7 +79,7 @@ import { scheduledQuestionId } from "../../contracts/kakomonn.mjs";
       showBridgeError(
         "sync_unauthorized",
         "同期tokenを確認してください",
-        "問題画面の同期設定でtokenを確認してから, ページを再読み込みしてください."
+        "問題画面の同期設定でtokenを確認してから, ページを再読み込みしてください.",
       );
       return true;
     }
@@ -99,7 +96,7 @@ import { scheduledQuestionId } from "../../contracts/kakomonn.mjs";
       showBridgeError(
         "reader_ready_timeout",
         "Readerを起動できません",
-        "Tampermonkeyと過去問readerが有効か確認して, ページを再読み込みしてください."
+        "Tampermonkeyと過去問readerが有効か確認して, ページを再読み込みしてください.",
       );
     }, READER_READY_TIMEOUT_MS);
     handleReaderState();

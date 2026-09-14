@@ -1,11 +1,5 @@
 export function createSyncRequest({ apiURL, gmXMLHttpRequest, SyncRequestError }) {
-  return async function requestSyncResponse(
-    method,
-    path,
-    token,
-    validator,
-    body = null,
-  ) {
+  return async function requestSyncResponse(method, path, token, validator, body = null) {
     const response = await gmXMLHttpRequest({
       method,
       url: `${apiURL}${path}`,
@@ -28,9 +22,7 @@ export function createSyncRequest({ apiURL, gmXMLHttpRequest, SyncRequestError }
       return responseBody;
     }
     throw new SyncRequestError(
-      typeof responseBody?.error === "string"
-        ? responseBody.error
-        : "request_failed",
+      typeof responseBody?.error === "string" ? responseBody.error : "request_failed",
       response.status,
       responseBody,
     );

@@ -16,10 +16,7 @@ const kakomonnConfiguration = readKakomonnConfiguration();
 const contracts = import("../../contracts/kakomonn.mjs");
 
 function syncToken() {
-  return requireKakomonnConfiguration(
-    kakomonnConfiguration,
-    "KAKOMONN_SYNC_TOKEN",
-  );
+  return requireKakomonnConfiguration(kakomonnConfiguration, "KAKOMONN_SYNC_TOKEN");
 }
 
 async function authorizedGet(path) {
@@ -43,12 +40,14 @@ function sha256(value) {
 
 async function repositoryAssets(directory = distDirectory) {
   const entries = await readdir(directory, { withFileTypes: true });
-  const nestedAssets = await Promise.all(entries.map(async (entry) => {
-    const absolutePath = resolve(directory, entry.name);
-    if (entry.isDirectory()) return repositoryAssets(absolutePath);
-    if (!entry.isFile() || assetControlFiles.has(entry.name)) return [];
-    return [relative(distDirectory, absolutePath).split(sep).join("/")];
-  }));
+  const nestedAssets = await Promise.all(
+    entries.map(async (entry) => {
+      const absolutePath = resolve(directory, entry.name);
+      if (entry.isDirectory()) return repositoryAssets(absolutePath);
+      if (!entry.isFile() || assetControlFiles.has(entry.name)) return [];
+      return [relative(distDirectory, absolutePath).split(sep).join("/")];
+    }),
+  );
   return nestedAssets.flat().sort();
 }
 
@@ -59,10 +58,7 @@ test("production assets match the repository", async (context) => {
 
   for (const assetName of assetNames) {
     await context.test(assetName, async () => {
-      const expected = canonicalAsset(
-        assetName,
-        await readFile(resolve(distDirectory, assetName))
-      );
+      const expected = canonicalAsset(assetName, await readFile(resolve(distDirectory, assetName)));
       const assetUrl = new URL(`/${assetName}`, productionOrigin);
       assetUrl.searchParams.set("deployment-test", String(Date.now()));
       const response = await fetch(assetUrl, {
@@ -74,14 +70,11 @@ test("production assets match the repository", async (context) => {
         ? "public, max-age=31536000, immutable"
         : "no-cache";
       assert.equal(response.headers.get("cache-control"), expectedCacheControl);
-      const actual = canonicalAsset(
-        assetName,
-        Buffer.from(await response.arrayBuffer())
-      );
+      const actual = canonicalAsset(assetName, Buffer.from(await response.arrayBuffer()));
       assert.equal(
         sha256(actual),
         sha256(expected),
-        `${assetUrl.pathname} does not match the repository`
+        `${assetUrl.pathname} does not match the repository`,
       );
 
       if (assetName.startsWith("assets/") && extname(assetName) === ".js") {
@@ -102,14 +95,8 @@ test("production /open serves the repository dashboard bridge", async () => {
     redirect: "manual",
   });
   assert.equal(response.status, 200);
-  const expected = canonicalAsset(
-    "open.html",
-    await readFile(resolve(distDirectory, "open.html")),
-  );
-  const actual = canonicalAsset(
-    "open.html",
-    Buffer.from(await response.arrayBuffer()),
-  );
+  const expected = canonicalAsset("open.html", await readFile(resolve(distDirectory, "open.html")));
+  const actual = canonicalAsset("open.html", Buffer.from(await response.arrayBuffer()));
   assert.equal(sha256(actual), sha256(expected));
 });
 
@@ -141,9 +128,7 @@ test("production serves only the authenticated v11 API backed by LearningState",
   }
 
   const site = sitesBody.sites[0];
-  const dashboardResponse = await authorizedGet(
-    `/v11/dashboard?${new URLSearchParams({ site })}`,
-  );
+  const dashboardResponse = await authorizedGet(`/v11/dashboard?${new URLSearchParams({ site })}`);
   assert.equal(dashboardResponse.status, 200);
   const dashboardBody = await dashboardResponse.json();
   assert.equal(isDashboardResponse(dashboardBody), true);
@@ -167,10 +152,7 @@ test("production serves only the authenticated v11 API backed by LearningState",
   );
   assert.equal(detailsResponse.status, 200);
   const detailsBody = await detailsResponse.json();
-  assert.equal(
-    isDailyDetailsResponse(detailsBody, site, historyBody.today),
-    true,
-  );
+  assert.equal(isDailyDetailsResponse(detailsBody, site, historyBody.today), true);
 });
 
 test("production issues Azure speech tokens with the configured key", async () => {

@@ -1,11 +1,8 @@
 import { hasExactKeys, isCalendarDate, isSite } from "./kakomonn.mjs";
 
-export const DASHBOARD_BRIDGE_STATE_ATTRIBUTE =
-  "data-kakomonn-dashboard-bridge-state";
-export const DASHBOARD_BRIDGE_REQUEST_EVENT =
-  "kakomonn-dashboard:request";
-export const DASHBOARD_BRIDGE_RESPONSE_EVENT =
-  "kakomonn-dashboard:response";
+export const DASHBOARD_BRIDGE_STATE_ATTRIBUTE = "data-kakomonn-dashboard-bridge-state";
+export const DASHBOARD_BRIDGE_REQUEST_EVENT = "kakomonn-dashboard:request";
+export const DASHBOARD_BRIDGE_RESPONSE_EVENT = "kakomonn-dashboard:response";
 export const DASHBOARD_BRIDGE_TIMEOUT_MS = 15_000;
 
 function isRequestId(value) {

@@ -1,7 +1,4 @@
-import {
-  isNextResponse,
-  isSite,
-} from "../../contracts/kakomonn.mjs";
+import { isNextResponse, isSite } from "../../contracts/kakomonn.mjs";
 import { createCatalogLoader } from "./catalog.js";
 import {
   answerResultFromDocument,
@@ -25,11 +22,7 @@ import {
   resolveCorrectFeedbackKpi,
   waitForCorrectFeedbackKpi as waitForCorrectFeedbackKpiResult,
 } from "./correct-feedback.js";
-import {
-  buildCopyMarkdown,
-  directChild,
-  isSelectedAnswerChoice,
-} from "./markdown.js";
+import { buildCopyMarkdown, directChild, isSelectedAnswerChoice } from "./markdown.js";
 import { installReaderStyles } from "./styles.js";
 import { createSyncRequest } from "./sync-request.js";
 import { installSyncController } from "./sync-controller.js";
@@ -44,26 +37,23 @@ import { installDashboardBridge } from "./dashboard-bridge.js";
 import { DASHBOARD_BRIDGE_STATE_ATTRIBUTE } from "../../contracts/dashboard-bridge.mjs";
 
 export async function startReader() {
-"use strict";
-  
-  const READER_FRAME_READY_MESSAGE_TYPE =
-    "kakomonn-reader:frame-ready";
+  "use strict";
+
+  const READER_FRAME_READY_MESSAGE_TYPE = "kakomonn-reader:frame-ready";
   if (window.top !== window.self) {
     window.parent.postMessage(
       {
         href: location.href,
         type: READER_FRAME_READY_MESSAGE_TYPE,
       },
-      location.origin
+      location.origin,
     );
     return;
   }
-  
+
   const BUILD_FINGERPRINT = "__KAKOMONN_READER_BUILD_FINGERPRINT__";
   const SCRIPT_HANDLER =
-    typeof GM_info === "object" &&
-    GM_info !== null &&
-    typeof GM_info.scriptHandler === "string"
+    typeof GM_info === "object" && GM_info !== null && typeof GM_info.scriptHandler === "string"
       ? GM_info.scriptHandler
       : "";
   const userAgent = navigator.userAgent;
@@ -78,8 +68,7 @@ export async function startReader() {
     /\bMobile\/\S+/.test(userAgent) &&
     /\bSafari\/\d+(?:\.\d+)+/.test(userAgent) &&
     !/(?:CriOS|FxiOS|EdgiOS|OPiOS)\//.test(userAgent);
-  const SYNC_API_URL =
-    "https://kakomonn-sync.kakomonn.workers.dev";
+  const SYNC_API_URL = "https://kakomonn-sync.kakomonn.workers.dev";
   const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
   const LAUNCH_HANDOFF_KEY = "kakomonn-reader.v11.launch-handoff";
   const LAUNCH_HANDOFF_MAX_AGE_MS = 60000;
@@ -89,20 +78,17 @@ export async function startReader() {
     location.pathname === "/open" &&
     location.search === "" &&
     location.hash === "";
-  const isDashboardBridge =
-    location.origin === SYNC_API_URL && location.pathname === "/";
+  const isDashboardBridge = location.origin === SYNC_API_URL && location.pathname === "/";
   const NEXT_QUESTION_SITE_ID = "chushoks.kakomonn.com";
-  const READER_BRIDGE_TARGET_ATTRIBUTE =
-    "data-kakomonn-reader-bridge-target";
+  const READER_BRIDGE_TARGET_ATTRIBUTE = "data-kakomonn-reader-bridge-target";
   const isNextQuestionLauncher =
     location.hostname === NEXT_QUESTION_SITE_ID &&
     location.pathname === "/createques" &&
     location.search === "" &&
     location.hash === "#kakomonn-next";
   let shouldLaunchNextQuestionAfterSync = isNextQuestionLauncher;
-  const CONGRATULATIONS_URL =
-    "https://kakomonn-congratulations.kakomonn.workers.dev/";
-  
+  const CONGRATULATIONS_URL = "https://kakomonn-congratulations.kakomonn.workers.dev/";
+
   class SyncRequestError extends Error {
     constructor(code, status = 0, responseBody = null) {
       super(code);
@@ -112,7 +98,7 @@ export async function startReader() {
       this.responseBody = responseBody;
     }
   }
-  
+
   function gmXMLHttpRequest(details) {
     const requestTimeoutMs = details.timeout ?? SYNC_TIMEOUT_MS;
     const requestDetails = { ...details };
@@ -135,8 +121,7 @@ export async function startReader() {
         return true;
       };
       const resolveOnce = (response) => settleOnce(() => resolve(response));
-      const rejectOnce = (code) =>
-        settleOnce(() => reject(new SyncRequestError(code)));
+      const rejectOnce = (code) => settleOnce(() => reject(new SyncRequestError(code)));
       rejectRequest = rejectOnce;
       requestTimeout = window.setTimeout(() => {
         if (!rejectOnce("request_timeout")) {
@@ -175,9 +160,8 @@ export async function startReader() {
     gmXMLHttpRequest,
     SyncRequestError,
   });
-  
-  const isReaderBridgeNextResponse = (value) =>
-    isNextResponse(value, NEXT_QUESTION_SITE_ID);
+
+  const isReaderBridgeNextResponse = (value) => isNextResponse(value, NEXT_QUESTION_SITE_ID);
   const hasDashboardBridgeRuntime =
     SCRIPT_HANDLER === "Tampermonkey" &&
     (isWindowsChrome || isIPhoneSafari) &&
@@ -187,10 +171,7 @@ export async function startReader() {
     typeof GM.xmlHttpRequest === "function";
   if (isDashboardBridge) {
     if (!hasDashboardBridgeRuntime) {
-      document.documentElement.setAttribute(
-        DASHBOARD_BRIDGE_STATE_ATTRIBUTE,
-        "error",
-      );
+      document.documentElement.setAttribute(DASHBOARD_BRIDGE_STATE_ATTRIBUTE, "error");
       return;
     }
     installDashboardBridge({
@@ -225,7 +206,7 @@ export async function startReader() {
         "GET",
         `/v11/next?${parameters}`,
         token,
-        isReaderBridgeNextResponse
+        isReaderBridgeNextResponse,
       );
       if (result.question === null) {
         document.documentElement.dataset.kakomonnReaderBridgeState = "empty";
@@ -236,10 +217,7 @@ export async function startReader() {
         questionURL: result.question.url,
         state: result.state,
       });
-      document.documentElement.setAttribute(
-        READER_BRIDGE_TARGET_ATTRIBUTE,
-        result.question.url
-      );
+      document.documentElement.setAttribute(READER_BRIDGE_TARGET_ATTRIBUTE, result.question.url);
       document.documentElement.dataset.kakomonnReaderBridgeState = "ready";
     } catch (error) {
       document.documentElement.dataset.kakomonnReaderBridgeState =
@@ -252,8 +230,7 @@ export async function startReader() {
     return;
   }
   const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE_ID}.v9.pending-attempt`;
-  const PENDING_CELEBRATION_KEY =
-    `kakomonn-reader.${SITE_ID}.v9.pending-celebration`;
+  const PENDING_CELEBRATION_KEY = `kakomonn-reader.${SITE_ID}.v9.pending-celebration`;
   const CATALOG_TIMEOUT_MS = 15000;
   const CATALOG_FETCH_CONCURRENCY = 4;
   const SPEECH_TIMEOUT_MS = 30000;
@@ -390,12 +367,10 @@ export async function startReader() {
   const QUESTION_SPEECH_RATE = 2.0;
   const ANSWER_RESULT_SPEECH_RATE = 1.7;
   const SPEECH_TOKEN_RENEWAL_SKEW_MS = 60000;
-  const AZURE_SPEECH_URL =
-    "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
+  const AZURE_SPEECH_URL = "https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1";
   const JAPANESE_SPEECH_LOCALE = "ja-JP";
   const JAPANESE_SPEECH_VOICE_NAME = "ja-JP-NanamiNeural";
-  const AZURE_SPEECH_OUTPUT_FORMAT =
-    "audio-24khz-48kbitrate-mono-mp3";
+  const AZURE_SPEECH_OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3";
   const FEEDBACK_AUDIO_DATA_URLS = Object.freeze({
     normal: "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_NORMAL__",
     rare: "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_RARE__",
@@ -405,11 +380,9 @@ export async function startReader() {
   });
   const SILENT_AUDIO_DATA_URL =
     "data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
-  const SPEECH_GESTURE_STATUS =
-    "画面をクリックまたはタップすると読み上げます";
-  
-  const speechAudio =
-    typeof window.Audio === "function" ? new window.Audio() : null;
+  const SPEECH_GESTURE_STATUS = "画面をクリックまたはタップすると読み上げます";
+
+  const speechAudio = typeof window.Audio === "function" ? new window.Audio() : null;
   const speechSupported =
     typeof speechAudio?.play === "function" &&
     typeof speechAudio?.pause === "function" &&
@@ -432,9 +405,7 @@ export async function startReader() {
   let frameDocument = null;
   let boundFrameDocument = null;
   let currentPageReadPending = false;
-  let currentFrameURL = shouldLaunchNextQuestionAfterSync
-    ? "about:blank"
-    : location.href;
+  let currentFrameURL = shouldLaunchNextQuestionAfterSync ? "about:blank" : location.href;
   let timeLimitPhase = null;
   let timeLimitDeadline = 0;
   let timeLimitTimeout = null;
@@ -462,8 +433,7 @@ export async function startReader() {
   let pendingCelebration = null;
   let answerCopyOperation = null;
   let automaticCopyPromise = null;
-  
-  
+
   const correctFeedbackDocuments = new WeakSet();
   let correctFeedbackPromise = null;
   let correctFeedbackRemovalTimer = null;
@@ -483,7 +453,10 @@ export async function startReader() {
 
   const app = {};
   Object.defineProperties(app, {
-    READER_FRAME_READY_MESSAGE_TYPE: { enumerable: false, get: () => READER_FRAME_READY_MESSAGE_TYPE },
+    READER_FRAME_READY_MESSAGE_TYPE: {
+      enumerable: false,
+      get: () => READER_FRAME_READY_MESSAGE_TYPE,
+    },
     BUILD_FINGERPRINT: { enumerable: false, get: () => BUILD_FINGERPRINT },
     SCRIPT_HANDLER: { enumerable: false, get: () => SCRIPT_HANDLER },
     isIPhoneSafari: { enumerable: false, get: () => isIPhoneSafari },
@@ -491,7 +464,13 @@ export async function startReader() {
     LAUNCH_HANDOFF_KEY: { enumerable: false, get: () => LAUNCH_HANDOFF_KEY },
     LAUNCH_HANDOFF_MAX_AGE_MS: { enumerable: false, get: () => LAUNCH_HANDOFF_MAX_AGE_MS },
     isNextQuestionLauncher: { enumerable: false, get: () => isNextQuestionLauncher },
-    shouldLaunchNextQuestionAfterSync: { enumerable: false, get: () => shouldLaunchNextQuestionAfterSync, set: (value) => { shouldLaunchNextQuestionAfterSync = value; } },
+    shouldLaunchNextQuestionAfterSync: {
+      enumerable: false,
+      get: () => shouldLaunchNextQuestionAfterSync,
+      set: (value) => {
+        shouldLaunchNextQuestionAfterSync = value;
+      },
+    },
     CONGRATULATIONS_URL: { enumerable: false, get: () => CONGRATULATIONS_URL },
     SyncRequestError: { enumerable: false, get: () => SyncRequestError },
     gmXMLHttpRequest: { enumerable: false, get: () => gmXMLHttpRequest },
@@ -500,7 +479,10 @@ export async function startReader() {
     PENDING_ATTEMPT_KEY: { enumerable: false, get: () => PENDING_ATTEMPT_KEY },
     PENDING_CELEBRATION_KEY: { enumerable: false, get: () => PENDING_CELEBRATION_KEY },
     SPEECH_TIMEOUT_MS: { enumerable: false, get: () => SPEECH_TIMEOUT_MS },
-    FRAME_PROBLEM_SCROLL_DELAYS_MS: { enumerable: false, get: () => FRAME_PROBLEM_SCROLL_DELAYS_MS },
+    FRAME_PROBLEM_SCROLL_DELAYS_MS: {
+      enumerable: false,
+      get: () => FRAME_PROBLEM_SCROLL_DELAYS_MS,
+    },
     SHORTCUT_SEQUENCE_TIMEOUT_MS: { enumerable: false, get: () => SHORTCUT_SEQUENCE_TIMEOUT_MS },
     TIME_LIMIT_MS: { enumerable: false, get: () => TIME_LIMIT_MS },
     FRAME_DARK_MODE_STYLE_ID: { enumerable: false, get: () => FRAME_DARK_MODE_STYLE_ID },
@@ -517,53 +499,323 @@ export async function startReader() {
     SPEECH_GESTURE_STATUS: { enumerable: false, get: () => SPEECH_GESTURE_STATUS },
     speechAudio: { enumerable: false, get: () => speechAudio },
     speechSupported: { enumerable: false, get: () => speechSupported },
-    speechEnabled: { enumerable: false, get: () => speechEnabled, set: (value) => { speechEnabled = value; } },
-    speechPaused: { enumerable: false, get: () => speechPaused, set: (value) => { speechPaused = value; } },
-    speechInitializationInProgress: { enumerable: false, get: () => speechInitializationInProgress, set: (value) => { speechInitializationInProgress = value; } },
-    speechInitializationPromise: { enumerable: false, get: () => speechInitializationPromise, set: (value) => { speechInitializationPromise = value; } },
-    speechInitializationResolve: { enumerable: false, get: () => speechInitializationResolve, set: (value) => { speechInitializationResolve = value; } },
-    speechRunId: { enumerable: false, get: () => speechRunId, set: (value) => { speechRunId = value; } },
+    speechEnabled: {
+      enumerable: false,
+      get: () => speechEnabled,
+      set: (value) => {
+        speechEnabled = value;
+      },
+    },
+    speechPaused: {
+      enumerable: false,
+      get: () => speechPaused,
+      set: (value) => {
+        speechPaused = value;
+      },
+    },
+    speechInitializationInProgress: {
+      enumerable: false,
+      get: () => speechInitializationInProgress,
+      set: (value) => {
+        speechInitializationInProgress = value;
+      },
+    },
+    speechInitializationPromise: {
+      enumerable: false,
+      get: () => speechInitializationPromise,
+      set: (value) => {
+        speechInitializationPromise = value;
+      },
+    },
+    speechInitializationResolve: {
+      enumerable: false,
+      get: () => speechInitializationResolve,
+      set: (value) => {
+        speechInitializationResolve = value;
+      },
+    },
+    speechRunId: {
+      enumerable: false,
+      get: () => speechRunId,
+      set: (value) => {
+        speechRunId = value;
+      },
+    },
     activeSpeechRequests: { enumerable: false, get: () => activeSpeechRequests },
-    speechChunkSession: { enumerable: false, get: () => speechChunkSession, set: (value) => { speechChunkSession = value; } },
-    activeSpeechAudioURL: { enumerable: false, get: () => activeSpeechAudioURL, set: (value) => { activeSpeechAudioURL = value; } },
-    activeSpeechPlaybackCancel: { enumerable: false, get: () => activeSpeechPlaybackCancel, set: (value) => { activeSpeechPlaybackCancel = value; } },
-    azureSpeechToken: { enumerable: false, get: () => azureSpeechToken, set: (value) => { azureSpeechToken = value; } },
-    azureSpeechTokenExpiresAt: { enumerable: false, get: () => azureSpeechTokenExpiresAt, set: (value) => { azureSpeechTokenExpiresAt = value; } },
-    azureSpeechTokenPromise: { enumerable: false, get: () => azureSpeechTokenPromise, set: (value) => { azureSpeechTokenPromise = value; } },
-    frameDocument: { enumerable: false, get: () => frameDocument, set: (value) => { frameDocument = value; } },
-    boundFrameDocument: { enumerable: false, get: () => boundFrameDocument, set: (value) => { boundFrameDocument = value; } },
-    currentPageReadPending: { enumerable: false, get: () => currentPageReadPending, set: (value) => { currentPageReadPending = value; } },
-    currentFrameURL: { enumerable: false, get: () => currentFrameURL, set: (value) => { currentFrameURL = value; } },
-    timeLimitPhase: { enumerable: false, get: () => timeLimitPhase, set: (value) => { timeLimitPhase = value; } },
-    timeLimitDeadline: { enumerable: false, get: () => timeLimitDeadline, set: (value) => { timeLimitDeadline = value; } },
-    timeLimitTimeout: { enumerable: false, get: () => timeLimitTimeout, set: (value) => { timeLimitTimeout = value; } },
-    timeLimitInterval: { enumerable: false, get: () => timeLimitInterval, set: (value) => { timeLimitInterval = value; } },
-    timeLimitSourceDocument: { enumerable: false, get: () => timeLimitSourceDocument, set: (value) => { timeLimitSourceDocument = value; } },
-    frameProblemScrollTimers: { enumerable: false, get: () => frameProblemScrollTimers, set: (value) => { frameProblemScrollTimers = value; } },
-    frameMutationObserver: { enumerable: false, get: () => frameMutationObserver, set: (value) => { frameMutationObserver = value; } },
-    frameControlObserver: { enumerable: false, get: () => frameControlObserver, set: (value) => { frameControlObserver = value; } },
-    observedAnswerResult: { enumerable: false, get: () => observedAnswerResult, set: (value) => { observedAnswerResult = value; } },
-    observedCommentary: { enumerable: false, get: () => observedCommentary, set: (value) => { observedCommentary = value; } },
-    awaitingAnswerResultSpeech: { enumerable: false, get: () => awaitingAnswerResultSpeech, set: (value) => { awaitingAnswerResultSpeech = value; } },
-    navigationInProgress: { enumerable: false, get: () => navigationInProgress, set: (value) => { navigationInProgress = value; } },
-    nextQuestionOperationInProgress: { enumerable: false, get: () => nextQuestionOperationInProgress, set: (value) => { nextQuestionOperationInProgress = value; } },
-    syncToken: { enumerable: false, get: () => syncToken, set: (value) => { syncToken = value; } },
-    syncReady: { enumerable: false, get: () => syncReady, set: (value) => { syncReady = value; } },
-    syncInProgress: { enumerable: false, get: () => syncInProgress, set: (value) => { syncInProgress = value; } },
-    syncPromise: { enumerable: false, get: () => syncPromise, set: (value) => { syncPromise = value; } },
-    catalogReady: { enumerable: false, get: () => catalogReady, set: (value) => { catalogReady = value; } },
-    catalogInProgress: { enumerable: false, get: () => catalogInProgress, set: (value) => { catalogInProgress = value; } },
-    catalogPromise: { enumerable: false, get: () => catalogPromise, set: (value) => { catalogPromise = value; } },
-    currentSyncState: { enumerable: false, get: () => currentSyncState, set: (value) => { currentSyncState = value; } },
-    launcherSyncState: { enumerable: false, get: () => launcherSyncState, set: (value) => { launcherSyncState = value; } },
-    pendingAttempt: { enumerable: false, get: () => pendingAttempt, set: (value) => { pendingAttempt = value; } },
-    pendingAttemptTransitionPromise: { enumerable: false, get: () => pendingAttemptTransitionPromise, set: (value) => { pendingAttemptTransitionPromise = value; } },
-    pendingCelebration: { enumerable: false, get: () => pendingCelebration, set: (value) => { pendingCelebration = value; } },
-    answerCopyOperation: { enumerable: false, get: () => answerCopyOperation, set: (value) => { answerCopyOperation = value; } },
-    automaticCopyPromise: { enumerable: false, get: () => automaticCopyPromise, set: (value) => { automaticCopyPromise = value; } },
+    speechChunkSession: {
+      enumerable: false,
+      get: () => speechChunkSession,
+      set: (value) => {
+        speechChunkSession = value;
+      },
+    },
+    activeSpeechAudioURL: {
+      enumerable: false,
+      get: () => activeSpeechAudioURL,
+      set: (value) => {
+        activeSpeechAudioURL = value;
+      },
+    },
+    activeSpeechPlaybackCancel: {
+      enumerable: false,
+      get: () => activeSpeechPlaybackCancel,
+      set: (value) => {
+        activeSpeechPlaybackCancel = value;
+      },
+    },
+    azureSpeechToken: {
+      enumerable: false,
+      get: () => azureSpeechToken,
+      set: (value) => {
+        azureSpeechToken = value;
+      },
+    },
+    azureSpeechTokenExpiresAt: {
+      enumerable: false,
+      get: () => azureSpeechTokenExpiresAt,
+      set: (value) => {
+        azureSpeechTokenExpiresAt = value;
+      },
+    },
+    azureSpeechTokenPromise: {
+      enumerable: false,
+      get: () => azureSpeechTokenPromise,
+      set: (value) => {
+        azureSpeechTokenPromise = value;
+      },
+    },
+    frameDocument: {
+      enumerable: false,
+      get: () => frameDocument,
+      set: (value) => {
+        frameDocument = value;
+      },
+    },
+    boundFrameDocument: {
+      enumerable: false,
+      get: () => boundFrameDocument,
+      set: (value) => {
+        boundFrameDocument = value;
+      },
+    },
+    currentPageReadPending: {
+      enumerable: false,
+      get: () => currentPageReadPending,
+      set: (value) => {
+        currentPageReadPending = value;
+      },
+    },
+    currentFrameURL: {
+      enumerable: false,
+      get: () => currentFrameURL,
+      set: (value) => {
+        currentFrameURL = value;
+      },
+    },
+    timeLimitPhase: {
+      enumerable: false,
+      get: () => timeLimitPhase,
+      set: (value) => {
+        timeLimitPhase = value;
+      },
+    },
+    timeLimitDeadline: {
+      enumerable: false,
+      get: () => timeLimitDeadline,
+      set: (value) => {
+        timeLimitDeadline = value;
+      },
+    },
+    timeLimitTimeout: {
+      enumerable: false,
+      get: () => timeLimitTimeout,
+      set: (value) => {
+        timeLimitTimeout = value;
+      },
+    },
+    timeLimitInterval: {
+      enumerable: false,
+      get: () => timeLimitInterval,
+      set: (value) => {
+        timeLimitInterval = value;
+      },
+    },
+    timeLimitSourceDocument: {
+      enumerable: false,
+      get: () => timeLimitSourceDocument,
+      set: (value) => {
+        timeLimitSourceDocument = value;
+      },
+    },
+    frameProblemScrollTimers: {
+      enumerable: false,
+      get: () => frameProblemScrollTimers,
+      set: (value) => {
+        frameProblemScrollTimers = value;
+      },
+    },
+    frameMutationObserver: {
+      enumerable: false,
+      get: () => frameMutationObserver,
+      set: (value) => {
+        frameMutationObserver = value;
+      },
+    },
+    frameControlObserver: {
+      enumerable: false,
+      get: () => frameControlObserver,
+      set: (value) => {
+        frameControlObserver = value;
+      },
+    },
+    observedAnswerResult: {
+      enumerable: false,
+      get: () => observedAnswerResult,
+      set: (value) => {
+        observedAnswerResult = value;
+      },
+    },
+    observedCommentary: {
+      enumerable: false,
+      get: () => observedCommentary,
+      set: (value) => {
+        observedCommentary = value;
+      },
+    },
+    awaitingAnswerResultSpeech: {
+      enumerable: false,
+      get: () => awaitingAnswerResultSpeech,
+      set: (value) => {
+        awaitingAnswerResultSpeech = value;
+      },
+    },
+    navigationInProgress: {
+      enumerable: false,
+      get: () => navigationInProgress,
+      set: (value) => {
+        navigationInProgress = value;
+      },
+    },
+    nextQuestionOperationInProgress: {
+      enumerable: false,
+      get: () => nextQuestionOperationInProgress,
+      set: (value) => {
+        nextQuestionOperationInProgress = value;
+      },
+    },
+    syncToken: {
+      enumerable: false,
+      get: () => syncToken,
+      set: (value) => {
+        syncToken = value;
+      },
+    },
+    syncReady: {
+      enumerable: false,
+      get: () => syncReady,
+      set: (value) => {
+        syncReady = value;
+      },
+    },
+    syncInProgress: {
+      enumerable: false,
+      get: () => syncInProgress,
+      set: (value) => {
+        syncInProgress = value;
+      },
+    },
+    syncPromise: {
+      enumerable: false,
+      get: () => syncPromise,
+      set: (value) => {
+        syncPromise = value;
+      },
+    },
+    catalogReady: {
+      enumerable: false,
+      get: () => catalogReady,
+      set: (value) => {
+        catalogReady = value;
+      },
+    },
+    catalogInProgress: {
+      enumerable: false,
+      get: () => catalogInProgress,
+      set: (value) => {
+        catalogInProgress = value;
+      },
+    },
+    catalogPromise: {
+      enumerable: false,
+      get: () => catalogPromise,
+      set: (value) => {
+        catalogPromise = value;
+      },
+    },
+    currentSyncState: {
+      enumerable: false,
+      get: () => currentSyncState,
+      set: (value) => {
+        currentSyncState = value;
+      },
+    },
+    launcherSyncState: {
+      enumerable: false,
+      get: () => launcherSyncState,
+      set: (value) => {
+        launcherSyncState = value;
+      },
+    },
+    pendingAttempt: {
+      enumerable: false,
+      get: () => pendingAttempt,
+      set: (value) => {
+        pendingAttempt = value;
+      },
+    },
+    pendingAttemptTransitionPromise: {
+      enumerable: false,
+      get: () => pendingAttemptTransitionPromise,
+      set: (value) => {
+        pendingAttemptTransitionPromise = value;
+      },
+    },
+    pendingCelebration: {
+      enumerable: false,
+      get: () => pendingCelebration,
+      set: (value) => {
+        pendingCelebration = value;
+      },
+    },
+    answerCopyOperation: {
+      enumerable: false,
+      get: () => answerCopyOperation,
+      set: (value) => {
+        answerCopyOperation = value;
+      },
+    },
+    automaticCopyPromise: {
+      enumerable: false,
+      get: () => automaticCopyPromise,
+      set: (value) => {
+        automaticCopyPromise = value;
+      },
+    },
     correctFeedbackDocuments: { enumerable: false, get: () => correctFeedbackDocuments },
-    correctFeedbackPromise: { enumerable: false, get: () => correctFeedbackPromise, set: (value) => { correctFeedbackPromise = value; } },
-    correctFeedbackRemovalTimer: { enumerable: false, get: () => correctFeedbackRemovalTimer, set: (value) => { correctFeedbackRemovalTimer = value; } },
+    correctFeedbackPromise: {
+      enumerable: false,
+      get: () => correctFeedbackPromise,
+      set: (value) => {
+        correctFeedbackPromise = value;
+      },
+    },
+    correctFeedbackRemovalTimer: {
+      enumerable: false,
+      get: () => correctFeedbackRemovalTimer,
+      set: (value) => {
+        correctFeedbackRemovalTimer = value;
+      },
+    },
     waitForCorrectFeedbackKpi: { enumerable: false, get: () => waitForCorrectFeedbackKpi },
     extractQuestionText: { enumerable: false, get: () => extractQuestionText },
     loadCompleteQuestionCatalog: { enumerable: false, get: () => loadCompleteQuestionCatalog },
@@ -576,9 +828,18 @@ export async function startReader() {
     splitText: { enumerable: false, get: () => splitText },
     CORRECT_CHIME_SAMPLE_RATE: { enumerable: false, get: () => CORRECT_CHIME_SAMPLE_RATE },
     CORRECT_FEEDBACK_CSS: { enumerable: false, get: () => CORRECT_FEEDBACK_CSS },
-    CORRECT_FEEDBACK_LEAVE_DURATION_MS: { enumerable: false, get: () => CORRECT_FEEDBACK_LEAVE_DURATION_MS },
-    CORRECT_FEEDBACK_MINIMUM_DURATION_MS: { enumerable: false, get: () => CORRECT_FEEDBACK_MINIMUM_DURATION_MS },
-    calculateKpiQuestionsRemaining: { enumerable: false, get: () => calculateKpiQuestionsRemaining },
+    CORRECT_FEEDBACK_LEAVE_DURATION_MS: {
+      enumerable: false,
+      get: () => CORRECT_FEEDBACK_LEAVE_DURATION_MS,
+    },
+    CORRECT_FEEDBACK_MINIMUM_DURATION_MS: {
+      enumerable: false,
+      get: () => CORRECT_FEEDBACK_MINIMUM_DURATION_MS,
+    },
+    calculateKpiQuestionsRemaining: {
+      enumerable: false,
+      get: () => calculateKpiQuestionsRemaining,
+    },
     chooseCorrectFeedbackVariant: { enumerable: false, get: () => chooseCorrectFeedbackVariant },
     renderCorrectFeedbackElement: { enumerable: false, get: () => renderCorrectFeedbackElement },
     resolveCorrectFeedbackKpi: { enumerable: false, get: () => resolveCorrectFeedbackKpi },

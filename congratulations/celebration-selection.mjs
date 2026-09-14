@@ -1,18 +1,11 @@
 const UINT32_RANGE = 0x1_0000_0000;
 
 function isSafeEntry(entry, id) {
-  return (
-    typeof entry === "string" &&
-    entry === `experiences/${id}/`
-  );
+  return typeof entry === "string" && entry === `experiences/${id}/`;
 }
 
 export function validateManifest(manifest) {
-  if (
-    manifest === null ||
-    typeof manifest !== "object" ||
-    !Array.isArray(manifest.experiences)
-  ) {
+  if (manifest === null || typeof manifest !== "object" || !Array.isArray(manifest.experiences)) {
     throw new TypeError("Celebration manifest is invalid.");
   }
   const ids = new Set();
@@ -39,9 +32,7 @@ export function validateManifest(manifest) {
 
 export function randomIndex(length, cryptoSource = globalThis.crypto) {
   if (!Number.isSafeInteger(length) || length <= 0 || length > UINT32_RANGE) {
-    throw new RangeError(
-      `length must be a positive integer no greater than ${UINT32_RANGE}.`,
-    );
+    throw new RangeError(`length must be a positive integer no greater than ${UINT32_RANGE}.`);
   }
   if (typeof cryptoSource?.getRandomValues !== "function") {
     throw new TypeError("Crypto random values are unavailable.");

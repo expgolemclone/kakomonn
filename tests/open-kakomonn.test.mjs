@@ -22,11 +22,8 @@ const {
   tampermonkeyReadyExpression,
   waitForDevToolsActivePort,
 } = chromeDevTools;
-const {
-  inspectDedicatedChrome,
-  inspectDedicatedChromePowerShell,
-  stopDedicatedChromePowerShell,
-} = windowsChromeProfile;
+const { inspectDedicatedChrome, inspectDedicatedChromePowerShell, stopDedicatedChromePowerShell } =
+  windowsChromeProfile;
 
 const SYSTEM_ENVIRONMENT = {
   LOCALAPPDATA: "C:\\Users\\tester\\AppData\\Local",
@@ -34,16 +31,13 @@ const SYSTEM_ENVIRONMENT = {
   KAKOMONN_SYNC_TOKEN: "process-token-must-not-be-forwarded",
   SystemRoot: "C:\\Windows",
 };
-const CHROME_PATH =
-  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-const PROFILE_PATH =
-  "C:\\Users\\tester\\AppData\\Local\\kakomonn-chrome-e2e";
+const CHROME_PATH = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+const PROFILE_PATH = "C:\\Users\\tester\\AppData\\Local\\kakomonn-chrome-e2e";
 const USERSCRIPT_IDENTITY = Object.freeze({
   name: "Reader fixture",
   namespace: "test.reader",
 });
-const TAMPERMONKEY_READY_EXPRESSION =
-  tampermonkeyReadyExpression(USERSCRIPT_IDENTITY);
+const TAMPERMONKEY_READY_EXPRESSION = tampermonkeyReadyExpression(USERSCRIPT_IDENTITY);
 const EMPTY_PROFILE_STATE = Object.freeze({
   autoplayAllowed: false,
   processCount: 0,
@@ -52,9 +46,7 @@ const EMPTY_PROFILE_STATE = Object.freeze({
 });
 
 test("runs browser and URL phases in separate sequential processes", () => {
-  const packageJSON = JSON.parse(
-    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
-  );
+  const packageJSON = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(
     packageJSON.scripts["open:kakomonn"],
     "npm run open:kakomonn:browser && npm run open:kakomonn:url",
@@ -163,10 +155,12 @@ test("starts only the browser when the dedicated profile is cold", async () => {
     stdio: "ignore",
   });
   assert.equal(unrefCallCount, 1);
-  assert.deepEqual(removals, [{
-    filePath: `${PROFILE_PATH}\\DevToolsActivePort`,
-    options: { force: true },
-  }]);
+  assert.deepEqual(removals, [
+    {
+      filePath: `${PROFILE_PATH}\\DevToolsActivePort`,
+      options: { force: true },
+    },
+  ]);
   assert.deepEqual(launch, {
     arguments: calls[0][1],
     browserStarted: true,
@@ -291,13 +285,7 @@ test("restarts an incompatible Chrome process without opening the application", 
       return 9444;
     },
   });
-  assert.deepEqual(operations, [
-    "inspect",
-    "stop",
-    "remove-port",
-    "spawn",
-    "wait-port",
-  ]);
+  assert.deepEqual(operations, ["inspect", "stop", "remove-port", "spawn", "wait-port"]);
 });
 
 test("does not launch when a required dedicated Chrome restart fails", async () => {
@@ -450,8 +438,7 @@ test("rejects missing and incorrectly typed Chrome paths", () => {
 });
 
 test("rejects the standard Chrome profile before inspecting processes", async () => {
-  const standardProfile =
-    "C:\\Users\\tester\\AppData\\Local\\Google\\Chrome\\User Data\\Default";
+  const standardProfile = "C:\\Users\\tester\\AppData\\Local\\Google\\Chrome\\User Data\\Default";
   let inspected = false;
   await assert.rejects(
     async () =>
@@ -518,9 +505,7 @@ test("inspects the exact Chrome profile through a sanitized PowerShell call", ()
     CHROME_REMOTE_DEBUGGING_ARGUMENT,
   ]);
   assert.equal(
-    Object.keys(calls[0].options.env).some((key) =>
-      key.startsWith("KAKOMONN_"),
-    ),
+    Object.keys(calls[0].options.env).some((key) => key.startsWith("KAKOMONN_")),
     false,
   );
 });
@@ -545,24 +530,29 @@ test("reads and validates the exact dedicated Chrome DevTools port", () => {
     /is not ready/,
   );
   assert.throws(
-    () => readDevToolsActivePort(PROFILE_PATH, {
-      existsSync: () => true,
-      readFileSync: () => "not-a-port\n",
-    }),
+    () =>
+      readDevToolsActivePort(PROFILE_PATH, {
+        existsSync: () => true,
+        readFileSync: () => "not-a-port\n",
+      }),
     /is invalid/,
   );
 });
 
 test("waits for the dedicated port after Chrome hands off successfully", async () => {
   let reads = 0;
-  const port = await waitForDevToolsActivePort(PROFILE_PATH, { exitCode: 0 }, {
-    delayImpl: async () => {},
-    readPort: () => {
-      reads += 1;
-      if (reads === 1) throw new Error("not ready yet");
-      return 49152;
+  const port = await waitForDevToolsActivePort(
+    PROFILE_PATH,
+    { exitCode: 0 },
+    {
+      delayImpl: async () => {},
+      readPort: () => {
+        reads += 1;
+        if (reads === 1) throw new Error("not ready yet");
+        return 49152;
+      },
     },
-  });
+  );
   assert.equal(port, 49152);
   assert.equal(reads, 2);
 });
@@ -577,12 +567,13 @@ test("a successful Chrome exit without a dedicated port still fails", async () =
 test("reads the launcher userscript identity from the canonical metadata", () => {
   assert.deepEqual(
     readUserscriptIdentity({
-      readFile: () => [
-        "// ==UserScript==",
-        "// @name         Reader fixture",
-        "// @namespace    test.reader",
-        "// ==/UserScript==",
-      ].join("\n"),
+      readFile: () =>
+        [
+          "// ==UserScript==",
+          "// @name         Reader fixture",
+          "// @namespace    test.reader",
+          "// ==/UserScript==",
+        ].join("\n"),
     }),
     USERSCRIPT_IDENTITY,
   );
@@ -661,14 +652,10 @@ test("prewarms Tampermonkey before creating the fixed application target", async
     userscriptIdentity: USERSCRIPT_IDENTITY,
   });
   assert.deepEqual(result, { port: 9222, targetId: "application-target" });
-  const navigations = operations.filter(
-    (operation) => operation?.method === "Page.navigate",
-  );
+  const navigations = operations.filter((operation) => operation?.method === "Page.navigate");
   assert.deepEqual(
     navigations.map((operation) => operation.params.url),
-    [
-      "chrome-extension://tampermonkey-beta/options.html#nav=settings",
-    ],
+    ["chrome-extension://tampermonkey-beta/options.html#nav=settings"],
   );
   const evaluationIndex = operations.findIndex(
     (operation) =>
@@ -741,8 +728,6 @@ test("closes the bootstrap target without opening the app when Tampermonkey is n
     }),
     /transport is not ready/,
   );
-  assert.deepEqual(navigations, [
-    "chrome-extension://tampermonkey-beta/options.html#nav=settings",
-  ]);
+  assert.deepEqual(navigations, ["chrome-extension://tampermonkey-beta/options.html#nav=settings"]);
   assert.deepEqual(closedTargets, [{ port: 9222, targetId: "failed-target" }]);
 });

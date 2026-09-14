@@ -15,11 +15,9 @@ function copyCelebrationAssets() {
   return {
     name: "copy-celebration-assets",
     closeBundle() {
-      cpSync(
-        resolve(projectRoot, "experiences"),
-        resolve(projectRoot, "dist", "experiences"),
-        { recursive: true },
-      );
+      cpSync(resolve(projectRoot, "experiences"), resolve(projectRoot, "dist", "experiences"), {
+        recursive: true,
+      });
     },
   };
 }

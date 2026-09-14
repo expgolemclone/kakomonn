@@ -10,22 +10,10 @@ test("the fixed URL serves the dashboard bridge to the configured userscript ori
   const openPage = await readFile(new URL("open.html", webDirectory), "utf8");
   const publicFiles = await readdir(publicDirectory);
 
-  assert.equal(
-    openPage.includes('name="kakomonn-next-question-url"'),
-    false,
-  );
-  assert.equal(
-    openScript.includes('"data-kakomonn-reader-bridge-state"'),
-    true,
-  );
-  assert.equal(
-    openScript.includes('"data-kakomonn-reader-bridge-target"'),
-    true,
-  );
-  assert.equal(
-    openScript.includes('scheduledQuestionId(url.href, "chushoks.kakomonn.com")'),
-    true,
-  );
+  assert.equal(openPage.includes('name="kakomonn-next-question-url"'), false);
+  assert.equal(openScript.includes('"data-kakomonn-reader-bridge-state"'), true);
+  assert.equal(openScript.includes('"data-kakomonn-reader-bridge-target"'), true);
+  assert.equal(openScript.includes('scheduledQuestionId(url.href, "chushoks.kakomonn.com")'), true);
   assert.equal(openScript.includes("/createques"), false);
   assert.equal(openScript.includes('state === "ready"'), true);
   assert.equal(openScript.includes('state === "error"'), true);

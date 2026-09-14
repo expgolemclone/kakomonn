@@ -497,5 +497,4 @@ export function installReaderStyles(correctFeedbackCSS) {
     }
   `;
   document.documentElement.appendChild(style);
-  
 }

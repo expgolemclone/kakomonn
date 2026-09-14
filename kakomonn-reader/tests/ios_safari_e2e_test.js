@@ -9,10 +9,7 @@ const {
   readKakomonnConfiguration,
 } = require("../../scripts/kakomonn-config.cjs");
 
-const {
-  createSyncMockConfiguration,
-  installSyncMockInWindow,
-} = require("./sync_mock");
+const { createSyncMockConfiguration, installSyncMockInWindow } = require("./sync_mock");
 const {
   assertMarkdownCopy,
   MARKDOWN_CHOICES,
@@ -33,31 +30,17 @@ const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
 const resultDirectory = path.join(projectRoot, "test-results", "ios-safari");
 const appiumLogPath = path.join(resultDirectory, "appium.log");
 const simulatorLogPath = path.join(resultDirectory, "simulator.log");
-const failureScreenshotPath = path.join(
-  resultDirectory,
-  "failure-screenshot.png",
-);
+const failureScreenshotPath = path.join(resultDirectory, "failure-screenshot.png");
 const failureSourcePath = path.join(resultDirectory, "failure-source.xml");
-const safariNativeSourcePath = path.join(
-  resultDirectory,
-  "safari-native-source.xml",
-);
-const failureDiagnosticsPath = path.join(
-  resultDirectory,
-  "failure-diagnostics.json",
-);
+const safariNativeSourcePath = path.join(resultDirectory, "safari-native-source.xml");
+const failureDiagnosticsPath = path.join(resultDirectory, "failure-diagnostics.json");
 const readerSourceURL = "kakomonn-reader.user.js";
-const nextQuestionOpenURL =
-  "https://kakomonn-sync.kakomonn.workers.dev/open";
-const nextQuestionLauncherURL =
-  "https://chushoks.kakomonn.com/createques#kakomonn-next";
+const nextQuestionOpenURL = "https://kakomonn-sync.kakomonn.workers.dev/open";
+const nextQuestionLauncherURL = "https://chushoks.kakomonn.com/createques#kakomonn-next";
 const kakomonnConfiguration = readKakomonnConfiguration();
-const expectedXcodeVersion =
-  kakomonnConfiguration.KAKOMONN_XCODE_VERSION ?? "26.6";
-const simulatorPlatformVersion =
-  kakomonnConfiguration.KAKOMONN_IOS_VERSION ?? "26.5";
-const simulatorDeviceName =
-  kakomonnConfiguration.KAKOMONN_IOS_DEVICE ?? "iPhone 17";
+const expectedXcodeVersion = kakomonnConfiguration.KAKOMONN_XCODE_VERSION ?? "26.6";
+const simulatorPlatformVersion = kakomonnConfiguration.KAKOMONN_IOS_VERSION ?? "26.5";
+const simulatorDeviceName = kakomonnConfiguration.KAKOMONN_IOS_DEVICE ?? "iPhone 17";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
 const testTimeout = 60_000;
 const webDriverElementKey = "element-6066-11e4-a52e-4f735466cecf";
@@ -69,32 +52,19 @@ class IOSWebElement {
   }
 
   async click() {
-    await this.driver.sessionRequest(
-      "POST",
-      `/element/${encodeURIComponent(this.id)}/click`,
-      {},
-    );
+    await this.driver.sessionRequest("POST", `/element/${encodeURIComponent(this.id)}/click`, {});
   }
 
   async getText() {
-    return this.driver.sessionRequest(
-      "GET",
-      `/element/${encodeURIComponent(this.id)}/text`,
-    );
+    return this.driver.sessionRequest("GET", `/element/${encodeURIComponent(this.id)}/text`);
   }
 
   async isDisplayed() {
-    return this.driver.sessionRequest(
-      "GET",
-      `/element/${encodeURIComponent(this.id)}/displayed`,
-    );
+    return this.driver.sessionRequest("GET", `/element/${encodeURIComponent(this.id)}/displayed`);
   }
 
   async isSelected() {
-    return this.driver.sessionRequest(
-      "GET",
-      `/element/${encodeURIComponent(this.id)}/selected`,
-    );
+    return this.driver.sessionRequest("GET", `/element/${encodeURIComponent(this.id)}/selected`);
   }
 
   async waitForDisplayed({ timeout = testTimeout } = {}) {
@@ -255,9 +225,7 @@ class IOSWebDriver {
       request.once("error", reject);
       request.setTimeout(timeout, () => {
         request.destroy(
-          new Error(
-            `WebDriver command timed out after ${timeout}ms for ${method} ${endpoint}`,
-          ),
+          new Error(`WebDriver command timed out after ${timeout}ms for ${method} ${endpoint}`),
         );
       });
       if (requestBody !== null) {
@@ -270,9 +238,7 @@ class IOSWebDriver {
     try {
       payload = JSON.parse(responseText);
     } catch {
-      throw new Error(
-        `WebDriver returned invalid JSON for ${method} ${endpoint}: ${responseText}`,
-      );
+      throw new Error(`WebDriver returned invalid JSON for ${method} ${endpoint}: ${responseText}`);
     }
     if (
       response.statusCode === undefined ||
@@ -284,9 +250,7 @@ class IOSWebDriver {
         payload.value?.message ??
         payload.value?.error ??
         `${response.statusCode ?? "unknown"} ${response.statusMessage ?? ""}`.trim();
-      const error = new Error(
-        `WebDriver command failed for ${method} ${endpoint}: ${message}`,
-      );
+      const error = new Error(`WebDriver command failed for ${method} ${endpoint}: ${message}`);
       if (typeof payload.value?.stacktrace === "string") {
         error.stack += `\n${payload.value.stacktrace}`;
       }
@@ -328,9 +292,7 @@ class IOSWebDriver {
   }
 
   async typeKeys(value) {
-    await this.executeScript("mobile: keys", [
-      { keys: Array.from(value) },
-    ]);
+    await this.executeScript("mobile: keys", [{ keys: Array.from(value) }]);
   }
 
   async switchToFrame(element) {
@@ -370,11 +332,7 @@ class IOSWebDriver {
 }
 
 function verifyHostEnvironment() {
-  assert.equal(
-    process.platform,
-    "darwin",
-    "The iOS Safari E2E requires macOS",
-  );
+  assert.equal(process.platform, "darwin", "The iOS Safari E2E requires macOS");
 
   const xcodeVersion = execFileSync("xcodebuild", ["-version"], {
     encoding: "utf8",
@@ -395,9 +353,7 @@ function verifyHostEnvironment() {
   const runtimeKey = `com.apple.CoreSimulator.SimRuntime.iOS-${simulatorPlatformVersion.replace(/\./g, "-")}`;
   const availableDevices = simulatorList.devices?.[runtimeKey] ?? [];
   assert.equal(
-    availableDevices.some(
-      (device) => device.name === simulatorDeviceName && device.isAvailable,
-    ),
+    availableDevices.some((device) => device.name === simulatorDeviceName && device.isAvailable),
     true,
     `${simulatorDeviceName} with iOS ${simulatorPlatformVersion} is required`,
   );
@@ -423,9 +379,7 @@ async function waitForAppium(port, appiumProcess) {
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     if (appiumProcess.exitCode !== null) {
-      throw new Error(
-        `Appium exited before becoming ready with code ${appiumProcess.exitCode}`,
-      );
+      throw new Error(`Appium exited before becoming ready with code ${appiumProcess.exitCode}`);
     }
     try {
       const response = await fetch(statusURL);
@@ -525,12 +479,7 @@ async function waitForElementPresent(driver, selector, timeout = testTimeout) {
   return driver.$(selector);
 }
 
-async function waitForElementText(
-  driver,
-  selector,
-  expectedText,
-  timeout = testTimeout,
-) {
+async function waitForElementText(driver, selector, expectedText, timeout = testTimeout) {
   await driver.waitUntil(
     async () => {
       try {
@@ -567,8 +516,7 @@ async function readNativeWebTapViewport(driver) {
     return {
       innerHeight: window.innerHeight,
       innerWidth: window.innerWidth,
-      isScrolledToTop:
-        document.documentElement.scrollTop === 0 && document.body.scrollTop === 0,
+      isScrolledToTop: document.documentElement.scrollTop === 0 && document.body.scrollTop === 0,
       visualViewportHeight: visualViewport?.height ?? window.innerHeight,
       visualViewportOffsetLeft: visualViewport?.offsetLeft ?? 0,
       visualViewportOffsetTop: visualViewport?.offsetTop ?? 0,
@@ -586,16 +534,11 @@ async function prepareSafariInitialPage(driver) {
   const closeSafariToolbarTip = async (nativeSource) => {
     const showsToolbarTip =
       nativeSource.includes('name="TipView"') &&
-      nativeSource.includes(
-        'name="View Bookmarks, Share Menu, and Open Tabs"',
-      );
+      nativeSource.includes('name="View Bookmarks, Share Menu, and Open Tabs"');
     if (!showsToolbarTip) {
       return;
     }
-    const closeButton = await driver.findElement(
-      "accessibility id",
-      "xmark.circle.fill",
-    );
+    const closeButton = await driver.findElement("accessibility id", "xmark.circle.fill");
     await closeButton.waitForDisplayed();
     await closeButton.click();
   };
@@ -608,9 +551,7 @@ async function prepareSafariInitialPage(driver) {
     const showsStartPageOnboarding = nativeSource.includes(
       'name="onboardingButton-CustomizeStartPage"',
     );
-    const showsLoadedPage = /name="TabDocument[^\"]*IsPageLoaded=true/.test(
-      nativeSource,
-    );
+    const showsLoadedPage = /name="TabDocument[^\"]*IsPageLoaded=true/.test(nativeSource);
 
     // Safari can retain an inactive StartPageCollectionView in the native
     // accessibility tree after the configured page has finished loading.
@@ -641,21 +582,14 @@ async function prepareSafariInitialPage(driver) {
     const loadedNativeSource = await driver.getPageSource();
     fs.writeFileSync(safariNativeSourcePath, loadedNativeSource, "utf8");
     assert.match(loadedNativeSource, /width="402" height="874"/);
-    assert.match(
-      loadedNativeSource,
-      /name="TabDocument[^"]*IsPageLoaded=true/,
-    );
+    assert.match(loadedNativeSource, /name="TabDocument[^"]*IsPageLoaded=true/);
     await closeSafariToolbarTip(loadedNativeSource);
   } finally {
     await driver.switchToContext(webContext);
   }
 }
 
-async function installReaderInCurrentDocument(
-  driver,
-  script,
-  syncOptions,
-) {
+async function installReaderInCurrentDocument(driver, script, syncOptions) {
   const documentURL = new URL(await driver.getUrl());
   await driver.execute(() => {
     localStorage.clear();
@@ -708,10 +642,7 @@ async function installReaderInCurrentDocument(
         }
 
         const frameURL = new URL(frameWindow.location.href);
-        if (
-          frameURL.href === "about:blank" ||
-          !frameURL.hostname.endsWith(".kakomonn.com")
-        ) {
+        if (frameURL.href === "about:blank" || !frameURL.hostname.endsWith(".kakomonn.com")) {
           return;
         }
 
@@ -750,8 +681,7 @@ async function installReaderInCurrentDocument(
         () =>
           document
             .querySelector("#kakomonn-reader-frame")
-            ?.contentDocument?.getElementById("kakomonn-reader-dark-mode") !==
-          null,
+            ?.contentDocument?.getElementById("kakomonn-reader-dark-mode") !== null,
       ),
     {
       interval: 100,
@@ -763,23 +693,16 @@ async function installReaderInCurrentDocument(
 }
 
 async function installReader(driver, script, syncOptions = {}) {
-  const documentURL = await installReaderInCurrentDocument(
-    driver,
-    script,
-    syncOptions,
-  );
+  const documentURL = await installReaderInCurrentDocument(driver, script, syncOptions);
   if (documentURL.href !== nextQuestionOpenURL) {
     return;
   }
 
-  await driver.waitUntil(
-    () => driver.getUrl().then((url) => url === nextQuestionURL),
-    {
-      interval: 100,
-      timeout: 30_000,
-      timeoutMsg: "The production /open bridge did not navigate",
-    },
-  );
+  await driver.waitUntil(() => driver.getUrl().then((url) => url === nextQuestionURL), {
+    interval: 100,
+    timeout: 30_000,
+    timeoutMsg: "The production /open bridge did not navigate",
+  });
   await installReaderInCurrentDocument(driver, script, syncOptions);
 }
 
@@ -820,24 +743,14 @@ async function submitAnswer(driver, answerText) {
   for (const choice of choiceElements) {
     choiceTexts.push(normalizeContent(await choice.getText()));
   }
-  const choiceIndex = choiceTexts.findIndex(
-    (choice) => choice === normalizeContent(answerText),
-  );
+  const choiceIndex = choiceTexts.findIndex((choice) => choice === normalizeContent(answerText));
   assert.notEqual(choiceIndex, -1, `Answer choice was not found: ${answerText}`);
 
-  const answerInputs = await driver.$$(
-    ".problem_detail ul.check input[name='intAnswerData']",
-  );
-  const answerLabels = await driver.$$(
-    ".problem_detail ul.check > li > label",
-  );
+  const answerInputs = await driver.$$(".problem_detail ul.check input[name='intAnswerData']");
+  const answerLabels = await driver.$$(".problem_detail ul.check > li > label");
   assert.equal(answerInputs.length, choiceTexts.length);
   assert.equal(answerLabels.length, choiceTexts.length);
-  await clickWebElementNatively(
-    driver,
-    ".problem_detail ul.check > li > label",
-    choiceIndex,
-  );
+  await clickWebElementNatively(driver, ".problem_detail ul.check > li > label", choiceIndex);
   await switchToReaderFrame(driver);
   const selectedAnswerInputs = await driver.$$(
     ".problem_detail ul.check input[name='intAnswerData']",
@@ -905,9 +818,7 @@ async function dispatchNextQuestionSwipe(driver) {
 
 async function readExplanationContents(driver) {
   await waitForElement(driver, "#js-answer-result-box.is-wrong", 30_000);
-  const explanationElements = await driver.$$(
-    "#js-commentary-wrap > .item > .text",
-  );
+  const explanationElements = await driver.$$("#js-commentary-wrap > .item > .text");
   assert.equal(explanationElements.length, 3);
   for (const explanation of explanationElements) {
     await explanation.waitForDisplayed({ timeout: 30_000 });
@@ -986,11 +897,7 @@ async function captureFailureArtifacts(driver, error) {
     const safariConsole = await driver.getLogs("safariConsole").catch(() => []);
     diagnostics.safariConsole = safariConsole;
   }
-  fs.writeFileSync(
-    failureDiagnosticsPath,
-    `${JSON.stringify(diagnostics, null, 2)}\n`,
-    "utf8",
-  );
+  fs.writeFileSync(failureDiagnosticsPath, `${JSON.stringify(diagnostics, null, 2)}\n`, "utf8");
   try {
     const simulatorLog = execFileSync(
       "xcrun",
@@ -1077,11 +984,16 @@ async function runTest() {
     await installReader(driver, script);
     await waitForElement(driver, "#kakomonn-reader-frame");
     await driver.waitUntil(
-      () => driver.execute(() => document.querySelector("#kakomonn-reader-error-dialog")?.open === true),
+      () =>
+        driver.execute(
+          () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+        ),
       { interval: 250, timeout: 30_000, timeoutMsg: "The speech error dialog did not open" },
     );
     assert.equal(
-      await driver.execute(() => document.querySelector("#kakomonn-reader-error-title")?.textContent),
+      await driver.execute(
+        () => document.querySelector("#kakomonn-reader-error-title")?.textContent,
+      ),
       "読み上げを利用できません",
     );
     await clickWebElementNatively(driver, "#kakomonn-reader-error-close");
@@ -1098,8 +1010,7 @@ async function runTest() {
           Math.abs(frameRect.right - shellRect.right) <= 1 &&
           Math.abs(frameRect.bottom - shellRect.bottom) <= 1 &&
           Math.abs(frameRect.left - shellRect.left) <= 1,
-        noHorizontalOverflow:
-          shell.scrollWidth <= shell.clientWidth,
+        noHorizontalOverflow: shell.scrollWidth <= shell.clientWidth,
         shellFillsViewport:
           Math.abs(shellRect.top) <= 1 &&
           Math.abs(shellRect.right - innerWidth) <= 1 &&
@@ -1129,58 +1040,36 @@ async function runTest() {
     assert.deepEqual(
       await driver.execute(() =>
         Array.from(
-          document.querySelectorAll(
-            ".p-post > .fixed_btn, .p-post > .fixed_btn_menu",
-          ),
+          document.querySelectorAll(".p-post > .fixed_btn, .p-post > .fixed_btn_menu"),
           (element) => getComputedStyle(element).display,
         ),
       ),
       ["none", "none"],
     );
-    const { choices, heading, questionImageURLs, questionText } =
-      await readQuestionContent(driver);
+    const { choices, heading, questionImageURLs, questionText } = await readQuestionContent(driver);
     assert.equal(heading, MARKDOWN_QUESTION_HEADING);
     assert.equal(questionText, MARKDOWN_QUESTION_TEXT);
     assert.deepEqual(choices, MARKDOWN_CHOICES);
     assert.deepEqual(questionImageURLs, MARKDOWN_QUESTION_IMAGE_URLS);
 
     await submitAnswer(driver, MARKDOWN_INCORRECT_ANSWER_TEXT);
-    const {
-      explanationContents,
-      explanationImageURLs,
-      explanationSegments,
-    } =
+    const { explanationContents, explanationImageURLs, explanationSegments } =
       await readExplanationContents(driver);
-    for (
-      let index = 0;
-      index < MARKDOWN_EXPLANATION_PREFIXES.length;
-      index += 1
-    ) {
+    for (let index = 0; index < MARKDOWN_EXPLANATION_PREFIXES.length; index += 1) {
       assert.equal(
-        explanationContents[index].startsWith(
-          MARKDOWN_EXPLANATION_PREFIXES[index],
-        ),
+        explanationContents[index].startsWith(MARKDOWN_EXPLANATION_PREFIXES[index]),
         true,
       );
     }
-    assert.deepEqual(
-      explanationImageURLs,
-      MARKDOWN_EXPLANATION_IMAGE_URLS,
-    );
+    assert.deepEqual(explanationImageURLs, MARKDOWN_EXPLANATION_IMAGE_URLS);
 
     await driver.switchToTopFrame();
-    await driver.waitUntil(
-      async () => (await driver.getClipboardText()) !== clipboardNonce,
-      {
-        interval: 250,
-        timeout: 30_000,
-        timeoutMsg: "The answer was not copied automatically",
-      },
-    );
-    const copiedMarkdown = (await driver.getClipboardText()).replace(
-      /\r\n/g,
-      "\n",
-    );
+    await driver.waitUntil(async () => (await driver.getClipboardText()) !== clipboardNonce, {
+      interval: 250,
+      timeout: 30_000,
+      timeoutMsg: "The answer was not copied automatically",
+    });
+    const copiedMarkdown = (await driver.getClipboardText()).replace(/\r\n/g, "\n");
     assert.notEqual(copiedMarkdown, clipboardNonce);
     assertMarkdownCopy({
       answerSummary: MARKDOWN_INCORRECT_ANSWER_SUMMARY,
@@ -1190,19 +1079,17 @@ async function runTest() {
       explanationSegments,
       questionText,
     });
-    assert.deepEqual(
-      await driver.execute(() => window.__syncMock.clipboardWrites),
-      [],
-    );
+    assert.deepEqual(await driver.execute(() => window.__syncMock.clipboardWrites), []);
 
     await driver.waitUntil(
-      () => driver.execute(
-        (previousLength) =>
-          window.__syncMock.attemptCount === 1 &&
-          history.length === previousLength &&
-          history.state?.entryType === "current",
-        historyLengthBefore,
-      ),
+      () =>
+        driver.execute(
+          (previousLength) =>
+            window.__syncMock.attemptCount === 1 &&
+            history.length === previousLength &&
+            history.state?.entryType === "current",
+          historyLengthBefore,
+        ),
       {
         interval: 250,
         timeout: 30_000,
@@ -1214,8 +1101,8 @@ async function runTest() {
       () =>
         driver.execute(
           (expectedURL) =>
-            document.querySelector("#kakomonn-reader-frame")?.contentWindow
-              .location.href === expectedURL,
+            document.querySelector("#kakomonn-reader-frame")?.contentWindow.location.href ===
+            expectedURL,
           nextQuestionURL,
         ),
       {
@@ -1229,9 +1116,7 @@ async function runTest() {
       await driver.execute(
         () =>
           window.__syncMock.calls.filter(
-            (call) =>
-              call.method === "POST" &&
-              new URL(call.url).pathname === "/v11/attempts",
+            (call) => call.method === "POST" && new URL(call.url).pathname === "/v11/attempts",
           ).length,
       ),
       1,
@@ -1250,17 +1135,11 @@ async function runTest() {
     await driver.navigateTo(nextQuestionOpenURL);
     await waitForElement(driver, "#open-bridge");
     await installReader(driver, script);
-    await driver.waitUntil(
-      () =>
-        driver
-          .getUrl()
-          .then((url) => url === nextQuestionURL),
-      {
-        interval: 250,
-        timeout: 30_000,
-        timeoutMsg: "The production /open bridge did not open the next question",
-      },
-    );
+    await driver.waitUntil(() => driver.getUrl().then((url) => url === nextQuestionURL), {
+      interval: 250,
+      timeout: 30_000,
+      timeoutMsg: "The production /open bridge did not open the next question",
+    });
 
     await driver.navigateTo(nextQuestionLauncherURL);
     await driver.calibrateNativeWebTap();
@@ -1270,17 +1149,11 @@ async function runTest() {
     });
     await installReader(driver, script, { configured: false });
     await waitForElement(driver, "#kakomonn-reader-sync-settings");
-    await waitForElement(
-      driver,
-      "#kakomonn-reader-sync-token",
-    );
+    await waitForElement(driver, "#kakomonn-reader-sync-token");
     // The dialog intentionally focuses the input. Restore the calibrated
     // viewport before validating a real tap on that input.
     await driver.waitUntil(
-      () =>
-        driver.execute(
-          () => document.activeElement?.id === "kakomonn-reader-sync-token",
-        ),
+      () => driver.execute(() => document.activeElement?.id === "kakomonn-reader-sync-token"),
       {
         interval: 100,
         timeout: 10_000,
@@ -1291,8 +1164,7 @@ async function runTest() {
     await driver.waitUntil(
       () =>
         readNativeWebTapViewport(driver).then(
-          (viewport) =>
-            JSON.stringify(viewport) === JSON.stringify(launcherViewport),
+          (viewport) => JSON.stringify(viewport) === JSON.stringify(launcherViewport),
         ),
       {
         interval: 250,
@@ -1301,64 +1173,35 @@ async function runTest() {
       },
     );
     const syncSettingsLayout = await driver.execute(() => {
-      const settings = document.querySelector(
-        "#kakomonn-reader-sync-settings",
-      );
-      const panel = document.querySelector(
-        "#kakomonn-reader-sync-settings-panel",
-      );
+      const settings = document.querySelector("#kakomonn-reader-sync-settings");
+      const panel = document.querySelector("#kakomonn-reader-sync-settings-panel");
       const input = document.querySelector("#kakomonn-reader-sync-token");
-      const save = document.querySelector(
-        "#kakomonn-reader-sync-settings-save",
-      );
+      const save = document.querySelector("#kakomonn-reader-sync-settings-save");
       const panelRect = panel.getBoundingClientRect();
       return {
         horizontalOverflow: settings.scrollWidth > settings.clientWidth,
         inputHeight: input.getBoundingClientRect().height,
-        panelInsideViewport:
-          panelRect.left >= 0 && panelRect.right <= innerWidth,
+        panelInsideViewport: panelRect.left >= 0 && panelRect.right <= innerWidth,
         saveHeight: save.getBoundingClientRect().height,
       };
     });
-    assert.equal(
-      syncSettingsLayout.horizontalOverflow,
-      false,
-      JSON.stringify(syncSettingsLayout),
-    );
-    assert.equal(
-      syncSettingsLayout.panelInsideViewport,
-      true,
-      JSON.stringify(syncSettingsLayout),
-    );
-    assert.equal(
-      syncSettingsLayout.inputHeight >= 44,
-      true,
-      JSON.stringify(syncSettingsLayout),
-    );
-    assert.equal(
-      syncSettingsLayout.saveHeight >= 44,
-      true,
-      JSON.stringify(syncSettingsLayout),
-    );
+    assert.equal(syncSettingsLayout.horizontalOverflow, false, JSON.stringify(syncSettingsLayout));
+    assert.equal(syncSettingsLayout.panelInsideViewport, true, JSON.stringify(syncSettingsLayout));
+    assert.equal(syncSettingsLayout.inputHeight >= 44, true, JSON.stringify(syncSettingsLayout));
+    assert.equal(syncSettingsLayout.saveHeight >= 44, true, JSON.stringify(syncSettingsLayout));
 
     const syncSettingsViewport = await readNativeWebTapViewport(driver);
-    await clickWebElementNatively(
-      driver,
-      "#kakomonn-reader-sync-token",
-    );
+    await clickWebElementNatively(driver, "#kakomonn-reader-sync-token");
     await driver.typeKeys("test-sync-token");
     assert.equal(
-      await driver.execute(
-        () => document.querySelector("#kakomonn-reader-sync-token").value,
-      ),
+      await driver.execute(() => document.querySelector("#kakomonn-reader-sync-token").value),
       "test-sync-token",
     );
     await driver.execute(() => document.activeElement?.blur());
     await driver.waitUntil(
       () =>
         readNativeWebTapViewport(driver).then(
-          (viewport) =>
-            JSON.stringify(viewport) === JSON.stringify(syncSettingsViewport),
+          (viewport) => JSON.stringify(viewport) === JSON.stringify(syncSettingsViewport),
         ),
       {
         interval: 250,
@@ -1366,33 +1209,21 @@ async function runTest() {
         timeoutMsg: "Safari did not restore the pre-keyboard viewport",
       },
     );
-    await waitForElement(
-      driver,
-      "#kakomonn-reader-sync-settings-save",
-    );
-    await clickWebElementNatively(
-      driver,
-      "#kakomonn-reader-sync-settings-save",
-    );
-    await driver.waitUntil(
-      () => driver.getUrl().then((url) => url === nextQuestionURL),
-      {
-        interval: 250,
-        timeout: 30_000,
-        timeoutMsg: "The configured launcher did not open the next question",
-      },
-    );
+    await waitForElement(driver, "#kakomonn-reader-sync-settings-save");
+    await clickWebElementNatively(driver, "#kakomonn-reader-sync-settings-save");
+    await driver.waitUntil(() => driver.getUrl().then((url) => url === nextQuestionURL), {
+      interval: 250,
+      timeout: 30_000,
+      timeoutMsg: "The configured launcher did not open the next question",
+    });
     const launcherTransition = await driver.execute(() => ({
       documentSentinel: window.__launcherDocumentSentinel,
-      frameURL: document.querySelector("#kakomonn-reader-frame")?.contentWindow
-        ?.location.href,
+      frameURL: document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href,
       frameInitialized:
         document
           .querySelector("#kakomonn-reader-frame")
-          ?.contentDocument?.getElementById("kakomonn-reader-dark-mode") !==
-        null,
-      readerControlsVisible:
-        document.querySelector("#kakomonn-reader-controls") !== null,
+          ?.contentDocument?.getElementById("kakomonn-reader-dark-mode") !== null,
+      readerControlsVisible: document.querySelector("#kakomonn-reader-controls") !== null,
       settingsButtonVisible:
         document.querySelector("#kakomonn-reader-sync-settings-button") !== null,
     }));

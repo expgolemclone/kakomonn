@@ -16,17 +16,10 @@ export async function handleNext(url, env) {
   }
   const site = url.searchParams.get("site");
   const excludeQuestionId = url.searchParams.get("excludeQuestionId");
-  if (
-    !isSite(site) ||
-    (excludeQuestionId !== null && !isQuestionId(excludeQuestionId))
-  ) {
+  if (!isSite(site) || (excludeQuestionId !== null && !isQuestionId(excludeQuestionId))) {
     return errorResponse("invalid_request", 400);
   }
-  const next = await getLearningStateStub(env).getNextState(
-    site,
-    Date.now(),
-    excludeQuestionId
-  );
+  const next = await getLearningStateStub(env).getNextState(site, Date.now(), excludeQuestionId);
   if (next?.error === "catalog_missing") {
     return errorResponse("catalog_missing", 409);
   }

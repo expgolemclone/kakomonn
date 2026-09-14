@@ -31,9 +31,6 @@ test("reader runtime recycle tracker ignores duplicate and non-question loads", 
 
 test("reader runtime recycle tracker rejects invalid transition limits", () => {
   for (const transitionLimit of [0, -1, 1.5, Number.NaN]) {
-    assert.throws(
-      () => createReaderRuntimeRecycleTracker(origin, transitionLimit),
-      TypeError,
-    );
+    assert.throws(() => createReaderRuntimeRecycleTracker(origin, transitionLimit), TypeError);
   }
 });

@@ -16,7 +16,7 @@ test("reader build is reproducible, bundled, and content-addressed", async () =>
   assert.equal(first.source.includes("data:audio/mpeg;base64,"), true);
   assert.equal(first.source.match(/data:audio\/mpeg;base64,/g)?.length, 5);
   assert.equal(first.source.includes(fingerprintPlaceholder), false);
-  assert.equal(first.source.includes("from \"../../contracts/kakomonn.mjs\""), false);
+  assert.equal(first.source.includes('from "../../contracts/kakomonn.mjs"'), false);
 
   const template = first.source.replace(first.fingerprint, fingerprintPlaceholder);
   assert.equal(createHash("sha256").update(template).digest("hex"), first.fingerprint);

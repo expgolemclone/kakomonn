@@ -7,10 +7,7 @@ import kakomonnConfig from "./kakomonn-config.cjs";
 import chromeDevTools from "./chrome-devtools.cjs";
 import windowsChromeProfile from "./windows-chrome-profile.cjs";
 
-const {
-  kakomonnFreeEnvironment,
-  readKakomonnConfiguration,
-} = kakomonnConfig;
+const { kakomonnFreeEnvironment, readKakomonnConfiguration } = kakomonnConfig;
 const {
   TAMPERMONKEY_BETA_EXTENSION_ID,
   activePortPath,
@@ -26,11 +23,9 @@ const {
   stopDedicatedChrome,
 } = windowsChromeProfile;
 
-export const KAKOMONN_OPEN_URL =
-  "https://kakomonn-sync.kakomonn.workers.dev/open";
+export const KAKOMONN_OPEN_URL = "https://kakomonn-sync.kakomonn.workers.dev/open";
 export { CHROME_AUTOPLAY_ARGUMENT, CHROME_REMOTE_DEBUGGING_ARGUMENT };
-export const CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT =
-  "--hide-crash-restore-bubble";
+export const CHROME_HIDE_CRASH_RESTORE_BUBBLE_ARGUMENT = "--hide-crash-restore-bubble";
 export const CHROME_BOOTSTRAP_URL = "about:blank";
 const READER_METADATA_PATH = fileURLToPath(
   new URL("../kakomonn-reader/src/userscript.meta.txt", import.meta.url),
@@ -39,13 +34,9 @@ const READER_METADATA_PATH = fileURLToPath(
 export function readUserscriptIdentity({ readFile = readFileSync } = {}) {
   const source = readFile(READER_METADATA_PATH, "utf8");
   const readDirective = (directive) => {
-    const matches = [
-      ...source.matchAll(new RegExp(`^// @${directive}\\s+(.+)$`, "gm")),
-    ];
+    const matches = [...source.matchAll(new RegExp(`^// @${directive}\\s+(.+)$`, "gm"))];
     if (matches.length !== 1 || matches[0][1].trim() === "") {
-      throw new Error(
-        `Reader metadata must contain exactly one @${directive} directive`,
-      );
+      throw new Error(`Reader metadata must contain exactly one @${directive} directive`);
     }
     return matches[0][1].trim();
   };
@@ -66,8 +57,7 @@ function requirePathType(candidatePath, expectedType, stat = statSync) {
     throw error;
   }
 
-  const matches =
-    expectedType === "Chrome executable" ? stats.isFile() : stats.isDirectory();
+  const matches = expectedType === "Chrome executable" ? stats.isFile() : stats.isDirectory();
   if (!matches) {
     throw new Error(`${expectedType} has an unexpected type: ${candidatePath}`);
   }
@@ -94,13 +84,7 @@ export function resolveKakomonnLaunch({
 
   const executablePath = path.win32.resolve(
     configuration.KAKOMONN_CHROME_EXECUTABLE ??
-      path.win32.join(
-        programFiles,
-        "Google",
-        "Chrome",
-        "Application",
-        "chrome.exe",
-      ),
+      path.win32.join(programFiles, "Google", "Chrome", "Application", "chrome.exe"),
   );
   const userDataDir = path.win32.resolve(
     configuration.KAKOMONN_CHROME_USER_DATA_DIR ??
@@ -168,20 +152,13 @@ export async function ensureKakomonnBrowser({
   let port;
   if (coldStart) {
     removeFile(activePortPath(launch.userDataDir), { force: true });
-    const browserProcess = spawnProcess(
-      launch.executablePath,
-      launch.arguments,
-      {
-        detached: true,
-        env: kakomonnFreeEnvironment(systemEnvironment),
-        stdio: "ignore",
-      },
-    );
+    const browserProcess = spawnProcess(launch.executablePath, launch.arguments, {
+      detached: true,
+      env: kakomonnFreeEnvironment(systemEnvironment),
+      stdio: "ignore",
+    });
     browserProcess.unref();
-    port = await waitForDevToolsPort(
-      launch.userDataDir,
-      browserProcess,
-    );
+    port = await waitForDevToolsPort(launch.userDataDir, browserProcess);
   } else {
     port = readDevToolsPort(launch.userDataDir);
   }
@@ -213,9 +190,7 @@ export async function openKakomonnURL({
     systemEnvironment,
   });
   if (!isCompatibleKakomonnProfile(profileState)) {
-    throw new Error(
-      "Dedicated Chrome is not ready for the application URL",
-    );
+    throw new Error("Dedicated Chrome is not ready for the application URL");
   }
   const port = readDevToolsPort(launch.userDataDir);
 
@@ -242,9 +217,7 @@ if (scriptPath === fileURLToPath(import.meta.url)) {
     } else if (phase === "url") {
       await openKakomonnURL();
     } else {
-      throw new Error(
-        "open-kakomonn requires exactly one phase: browser or url",
-      );
+      throw new Error("open-kakomonn requires exactly one phase: browser or url");
     }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

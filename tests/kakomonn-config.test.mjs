@@ -47,10 +47,7 @@ test("returns an empty frozen configuration when .env is absent", () => {
 
 test("rejects duplicate and unsupported Kakomonn settings", () => {
   assert.throws(
-    () =>
-      configurationFrom(
-        "KAKOMONN_SYNC_TOKEN=first\nKAKOMONN_SYNC_TOKEN=second\n",
-      ),
+    () => configurationFrom("KAKOMONN_SYNC_TOKEN=first\nKAKOMONN_SYNC_TOKEN=second\n"),
     /Duplicate Kakomonn configuration key: KAKOMONN_SYNC_TOKEN/,
   );
   assert.throws(
@@ -63,9 +60,7 @@ test("requires configured values without consulting process environment", () => 
   const original = process.env.KAKOMONN_SYNC_TOKEN;
   process.env.KAKOMONN_SYNC_TOKEN = "stale-process-token";
   try {
-    const configuration = configurationFrom(
-      "KAKOMONN_SYNC_TOKEN=token-from-file\n",
-    );
+    const configuration = configurationFrom("KAKOMONN_SYNC_TOKEN=token-from-file\n");
     assert.equal(
       requireKakomonnConfiguration(configuration, "KAKOMONN_SYNC_TOKEN"),
       "token-from-file",

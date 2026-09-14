@@ -19,7 +19,7 @@ describe("v11 speech token", () => {
       async (url, options) => {
         upstreamCall = { url, options };
         return new Response("test-azure-token");
-      }
+      },
     );
 
     expect(response.status).toBe(200);
@@ -28,7 +28,7 @@ describe("v11 speech token", () => {
       expiresInSeconds: 600,
     });
     expect(upstreamCall.url).toBe(
-      "https://japaneast.api.cognitive.microsoft.com/sts/v1.0/issueToken"
+      "https://japaneast.api.cognitive.microsoft.com/sts/v1.0/issueToken",
     );
     expect(upstreamCall.options).toEqual({
       method: "POST",
@@ -46,18 +46,15 @@ describe("v11 speech token", () => {
     });
     const rejected = await issueSpeechToken(
       { AZURE_SPEECH_KEY: "incorrect" },
-      async () => new Response("denied", { status: 401 })
+      async () => new Response("denied", { status: 401 }),
     );
     const malformed = await issueSpeechToken(
       { AZURE_SPEECH_KEY: "configured" },
-      async () => new Response("invalid token with spaces")
+      async () => new Response("invalid token with spaces"),
     );
-    const unavailable = await issueSpeechToken(
-      { AZURE_SPEECH_KEY: "configured" },
-      async () => {
-        throw new Error("network failed");
-      }
-    );
+    const unavailable = await issueSpeechToken({ AZURE_SPEECH_KEY: "configured" }, async () => {
+      throw new Error("network failed");
+    });
     const interruptedBody = await issueSpeechToken(
       { AZURE_SPEECH_KEY: "configured" },
       async () => ({
@@ -65,7 +62,7 @@ describe("v11 speech token", () => {
         async text() {
           throw new Error("upstream body interrupted");
         },
-      })
+      }),
     );
 
     expect(unconfigured.status).toBe(500);
@@ -95,7 +92,7 @@ describe("v11 speech token", () => {
       new Request("https://example.test/v11/speech-token", {
         headers: AUTHORIZATION,
       }),
-      { SYNC_TOKEN: "test-sync-token" }
+      { SYNC_TOKEN: "test-sync-token" },
     );
 
     expect(response.status).toBe(405);

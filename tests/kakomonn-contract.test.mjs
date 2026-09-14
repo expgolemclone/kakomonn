@@ -50,13 +50,7 @@ const nextQuestion = Object.freeze({
 
 test("question IDs use canonical arbitrary-precision numeric ordering", () => {
   assert.deepEqual(
-    canonicalQuestionIds([
-      "9007199254740993",
-      "10",
-      "2",
-      "0002",
-      "9007199254740992",
-    ]),
+    canonicalQuestionIds(["9007199254740993", "10", "2", "0002", "9007199254740992"]),
     ["0002", "2", "10", "9007199254740992", "9007199254740993"],
   );
   assert.throws(() => canonicalQuestionIds(["1", "not-a-question"]));
@@ -91,10 +85,13 @@ test("sync responses are exact and bound to the requested site", () => {
     false,
   );
   assert.equal(
-    isLearningState({
-      ...state,
-      learningMetrics: { ...learningMetrics, dailyKpiCompleted: true },
-    }, site),
+    isLearningState(
+      {
+        ...state,
+        learningMetrics: { ...learningMetrics, dailyKpiCompleted: true },
+      },
+      site,
+    ),
     false,
   );
 
@@ -118,13 +115,16 @@ test("sync responses are exact and bound to the requested site", () => {
   };
   assert.equal(isAttemptResponse(attemptResponse, site), true);
   assert.equal(
-    isAttemptResponse({
-      ...attemptResponse,
-      celebration: {
-        ...attemptResponse.celebration,
-        site: "shindans.kakomonn.com",
+    isAttemptResponse(
+      {
+        ...attemptResponse,
+        celebration: {
+          ...attemptResponse.celebration,
+          site: "shindans.kakomonn.com",
+        },
       },
-    }, site),
+      site,
+    ),
     false,
   );
 });
@@ -163,12 +163,16 @@ test("history responses require consecutive Tokyo dates and coherent rows", () =
   };
   assert.equal(isHistoryResponse(history, site, 3), true);
   assert.equal(
-    isHistoryResponse({
-      ...history,
-      days: history.days.map((day, index) =>
-        index === 1 ? { ...day, date: "2026-08-08" } : day,
-      ),
-    }, site, 3),
+    isHistoryResponse(
+      {
+        ...history,
+        days: history.days.map((day, index) =>
+          index === 1 ? { ...day, date: "2026-08-08" } : day,
+        ),
+      },
+      site,
+      3,
+    ),
     false,
   );
 });
@@ -179,65 +183,75 @@ test("daily details rows are bound to the requested Tokyo date", () => {
     date: "2026-08-10",
     timeZone: "Asia/Tokyo",
     tables: {
-      stability_history: [{
-        site,
-        date: "2026-08-10",
-        opening_stability_days: 8,
-        closing_stability_days: 10,
-        attempted_question_count: 1,
-        new_question_count: 1,
-        attempt_count: 1,
-        correct_attempt_count: 1,
-      }],
-      attempts: [{
-        site,
-        operation_id: "00000000000000000000000000000001",
-        question_id: "45124",
-        attempted_at_ms: Date.parse("2026-08-09T15:00:00.000Z"),
-        answer_result: "correct",
-        previous_card_stability_days: 5.5,
-        resulting_card_stability_days: 10.5,
-      }],
+      stability_history: [
+        {
+          site,
+          date: "2026-08-10",
+          opening_stability_days: 8,
+          closing_stability_days: 10,
+          attempted_question_count: 1,
+          new_question_count: 1,
+          attempt_count: 1,
+          correct_attempt_count: 1,
+        },
+      ],
+      attempts: [
+        {
+          site,
+          operation_id: "00000000000000000000000000000001",
+          question_id: "45124",
+          attempted_at_ms: Date.parse("2026-08-09T15:00:00.000Z"),
+          answer_result: "correct",
+          previous_card_stability_days: 5.5,
+          resulting_card_stability_days: 10.5,
+        },
+      ],
     },
   };
   assert.equal(isDailyDetailsResponse(details, site, "2026-08-10"), true);
   assert.equal(
-    isDailyDetailsResponse({
-      ...details,
-      tables: {
-        ...details.tables,
-        attempts: [{
-          ...details.tables.attempts[0],
-          attempted_at_ms: Date.parse("2026-08-10T15:00:00.000Z"),
-        }],
+    isDailyDetailsResponse(
+      {
+        ...details,
+        tables: {
+          ...details.tables,
+          attempts: [
+            {
+              ...details.tables.attempts[0],
+              attempted_at_ms: Date.parse("2026-08-10T15:00:00.000Z"),
+            },
+          ],
+        },
       },
-    }, site, "2026-08-10"),
+      site,
+      "2026-08-10",
+    ),
     false,
   );
   assert.equal(
-    isDailyDetailsResponse({
-      ...details,
-      tables: {
-        ...details.tables,
-        stability_history: [{
-          ...details.tables.stability_history[0],
-          attempt_count: 2,
-        }],
+    isDailyDetailsResponse(
+      {
+        ...details,
+        tables: {
+          ...details.tables,
+          stability_history: [
+            {
+              ...details.tables.stability_history[0],
+              attempt_count: 2,
+            },
+          ],
+        },
       },
-    }, site, "2026-08-10"),
+      site,
+      "2026-08-10",
+    ),
     false,
   );
 });
 
 test("dashboard bridge messages use exact request and response shapes", () => {
-  assert.equal(
-    isDashboardBridgeRequest({ id: 1, operation: "dashboard", site: null }),
-    true,
-  );
-  assert.equal(
-    isDashboardBridgeRequest({ id: 2, operation: "dashboard", site }),
-    true,
-  );
+  assert.equal(isDashboardBridgeRequest({ id: 1, operation: "dashboard", site: null }), true);
+  assert.equal(isDashboardBridgeRequest({ id: 2, operation: "dashboard", site }), true);
   assert.equal(
     isDashboardBridgeRequest({
       date: "2026-08-10",
@@ -258,15 +272,9 @@ test("dashboard bridge messages use exact request and response shapes", () => {
   }
   assert.equal(dashboardBridgeRequestId({ id: 4, operation: "unknown" }), 4);
   assert.equal(dashboardBridgeRequestId({ id: -1 }), null);
+  assert.equal(isDashboardBridgeResponse({ data: { sites: [] }, id: 5, ok: true }, 5), true);
   assert.equal(
-    isDashboardBridgeResponse({ data: { sites: [] }, id: 5, ok: true }, 5),
-    true,
-  );
-  assert.equal(
-    isDashboardBridgeResponse(
-      { code: "token_missing", id: 5, ok: false, status: 0 },
-      5,
-    ),
+    isDashboardBridgeResponse({ code: "token_missing", id: 5, ok: false, status: 0 }, 5),
     true,
   );
   assert.equal(
@@ -276,8 +284,5 @@ test("dashboard bridge messages use exact request and response shapes", () => {
     ),
     false,
   );
-  assert.equal(
-    isDashboardBridgeResponse({ data: { sites: [] }, id: 6, ok: true }, 5),
-    false,
-  );
+  assert.equal(isDashboardBridgeResponse({ data: { sites: [] }, id: 6, ok: true }, 5), false);
 });

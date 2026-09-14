@@ -2,9 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const {
-  readKakomonnConfiguration,
-} = require("../../scripts/kakomonn-config.cjs");
+const { readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
 const {
   CURRENT_QUESTION_URL,
   DEFAULT_SYNC_API_ORIGIN,
@@ -46,13 +44,10 @@ function nextCalendarDate(date) {
 
 async function readLearningActivity(token, date) {
   const query = new URLSearchParams({ date, site });
-  const response = await fetch(
-    `${DEFAULT_SYNC_API_ORIGIN}/v11/daily-details?${query}`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(15_000),
-    },
-  );
+  const response = await fetch(`${DEFAULT_SYNC_API_ORIGIN}/v11/daily-details?${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15_000),
+  });
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.site, site);
@@ -85,14 +80,8 @@ async function main() {
   const userscript = fs.readFileSync(userscriptPath, "utf8");
   const expectedBuildFingerprint = extractBuildFingerprint(userscript);
   const baselineState = await readLearningState(token);
-  const observedDates = [
-    baselineState.today,
-    nextCalendarDate(baselineState.today),
-  ];
-  const baselineActivities = await readLearningActivities(
-    token,
-    observedDates,
-  );
+  const observedDates = [baselineState.today, nextCalendarDate(baselineState.today)];
+  const baselineActivities = await readLearningActivities(token, observedDates);
 
   const setupChrome = await launchChromeWithCurrentUserscript({
     configuration,
@@ -107,11 +96,7 @@ async function main() {
       waitUntil: "domcontentloaded",
       timeout: 60_000,
     });
-    const configuredState = await configureSyncToken(
-      setupPage,
-      token,
-      expectedBuildFingerprint,
-    );
+    const configuredState = await configureSyncToken(setupPage, token, expectedBuildFingerprint);
     assert.equal(configuredState.settingsOpen, false);
     assert.equal(configuredState.topControlsPresent, false);
     const launch = await openKakomonnURL({ configuration });
@@ -120,14 +105,15 @@ async function main() {
     setupPage = null;
     page = await waitUntil(
       "the production open bridge tab",
-      async () => setupChrome.context.pages().find((candidate) => {
-        try {
-          const url = new URL(candidate.url());
-          return url.href === openURL || url.hostname === site;
-        } catch {
-          return false;
-        }
-      }) ?? null,
+      async () =>
+        setupChrome.context.pages().find((candidate) => {
+          try {
+            const url = new URL(candidate.url());
+            return url.href === openURL || url.hostname === site;
+          } catch {
+            return false;
+          }
+        }) ?? null,
       30_000,
     );
     const outcome = await waitUntil(
@@ -135,19 +121,15 @@ async function main() {
       async () => {
         const state = await readReaderState(page);
         const launcher = await page.evaluate(() => ({
-          state:
-            document.querySelector("#kakomonn-next-question-panel")?.dataset.state ?? null,
-          title:
-            document.querySelector("#kakomonn-next-question-title")?.textContent ?? null,
+          state: document.querySelector("#kakomonn-next-question-panel")?.dataset.state ?? null,
+          title: document.querySelector("#kakomonn-next-question-title")?.textContent ?? null,
         }));
         if (launcher.state === "service-error") {
           return { kind: "service-error", launcher, state };
         }
         if (
           state.buildFingerprint === expectedBuildFingerprint &&
-          /^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(
-            state.outerURL,
-          ) &&
+          /^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(state.outerURL) &&
           state.frameURL === state.outerURL
         ) {
           return { kind: "ready", launcher, state };
@@ -181,32 +163,35 @@ async function main() {
       baselineActivities,
       "prewarmed open must not record learning activity",
     );
-    console.log(JSON.stringify({
-      browser: "Google Chrome with Tampermonkey Beta",
-      browserStart: "warm browser with prewarmed transport",
-      buildFingerprint: expectedBuildFingerprint,
-      scheduledQuestionURL: outcome.state.outerURL,
-      startURL: openURL,
-      status: "passed",
-    }));
+    console.log(
+      JSON.stringify({
+        browser: "Google Chrome with Tampermonkey Beta",
+        browserStart: "warm browser with prewarmed transport",
+        buildFingerprint: expectedBuildFingerprint,
+        scheduledQuestionURL: outcome.state.outerURL,
+        startURL: openURL,
+        status: "passed",
+      }),
+    );
   } catch (error) {
-    const diagnostics = page === null
-      ? { page: null }
-      : await page.evaluate(() => ({
-          bridgeError:
-            document.querySelector("#open-error-detail")?.textContent ?? null,
-          bridgeState:
-            document.documentElement.dataset.kakomonnReaderBridgeState ?? null,
-          buildFingerprint:
-            document.querySelector("#kakomonn-reader-shell")?.dataset.buildFingerprint ?? null,
-          launcherState:
-            document.querySelector("#kakomonn-next-question-panel")?.dataset.state ?? null,
-          title: document.title,
-          url: location.href,
-        })).catch((diagnosticError) => ({
-          error: String(diagnosticError),
-          url: page.url(),
-        }));
+    const diagnostics =
+      page === null
+        ? { page: null }
+        : await page
+            .evaluate(() => ({
+              bridgeError: document.querySelector("#open-error-detail")?.textContent ?? null,
+              bridgeState: document.documentElement.dataset.kakomonnReaderBridgeState ?? null,
+              buildFingerprint:
+                document.querySelector("#kakomonn-reader-shell")?.dataset.buildFingerprint ?? null,
+              launcherState:
+                document.querySelector("#kakomonn-next-question-panel")?.dataset.state ?? null,
+              title: document.title,
+              url: location.href,
+            }))
+            .catch((diagnosticError) => ({
+              error: String(diagnosticError),
+              url: page.url(),
+            }));
     throw new Error(`${error.message} Diagnostics: ${JSON.stringify(diagnostics)}`, {
       cause: error,
     });

@@ -3,15 +3,8 @@ import { access, readFile, readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  celebrationSearch,
-  parseCelebration,
-} from "../../contracts/kakomonn.mjs";
-import {
-  chooseCelebration,
-  randomIndex,
-  validateManifest,
-} from "../celebration-selection.mjs";
+import { celebrationSearch, parseCelebration } from "../../contracts/kakomonn.mjs";
+import { chooseCelebration, randomIndex, validateManifest } from "../celebration-selection.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const expectedIds = [
@@ -35,7 +28,10 @@ const expectedIds = [
 const manifest = validateManifest(
   JSON.parse(await readFile(resolve(projectRoot, "celebrations.json"), "utf8")),
 );
-assert.deepEqual(manifest.experiences.map(({ id }) => id), expectedIds);
+assert.deepEqual(
+  manifest.experiences.map(({ id }) => id),
+  expectedIds,
+);
 
 const celebration = {
   site: "chushoks.kakomonn.com",
@@ -73,10 +69,7 @@ for (const experience of manifest.experiences) {
 await access(resolve(projectRoot, "dist", "index.html"));
 await access(resolve(projectRoot, "dist", "shared", "experience-runtime.js"));
 
-for (const sourcePath of [
-  resolve(projectRoot, "index.html"),
-  resolve(projectRoot, "router.js"),
-]) {
+for (const sourcePath of [resolve(projectRoot, "index.html"), resolve(projectRoot, "router.js")]) {
   const source = await readFile(sourcePath, "utf8");
   assert.equal(source.includes("data-milestone"), false);
   assert.equal(/[\u3040-\u30ff\u3400-\u9fff]/u.test(source), false);
@@ -86,8 +79,7 @@ for (const sourcePath of [
 const routerSource = await readFile(resolve(projectRoot, "router.js"), "utf8");
 assert.equal(routerSource.includes("entryUrl.search"), false);
 assert.ok(
-  routerSource.indexOf("frame.hidden = false") <
-    routerSource.indexOf("frame.src = entryUrl.href"),
+  routerSource.indexOf("frame.hidden = false") < routerSource.indexOf("frame.src = entryUrl.href"),
 );
 
 const perigeeSource = await readFile(

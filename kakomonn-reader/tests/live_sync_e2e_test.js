@@ -79,13 +79,15 @@ function assertSyncState(state) {
   assert.equal(metrics.dueCardsCompleted, metrics.dueCardsRemaining === 0);
   assert.equal(Number.isSafeInteger(metrics.todayNewQuestionCount), true);
   assert.equal(metrics.todayNewQuestionCount >= 0, true);
-  assert.equal(metrics.newQuestionGoal, 50);
+  assert.equal(metrics.newQuestionGoal, 10);
   assert.equal(Number.isSafeInteger(metrics.newQuestionsRemaining), true);
   assert.equal(
     metrics.newQuestionsRemaining,
     Math.max(0, metrics.newQuestionGoal - metrics.todayNewQuestionCount),
   );
   assert.equal(Number.isSafeInteger(metrics.todayStabilityDaysDelta), true);
+  assert.equal(Number.isSafeInteger(metrics.todayStudyTimeMs), true);
+  assert.equal(metrics.todayStudyTimeMs >= 0, true);
   assert.equal(Number.isSafeInteger(metrics.attemptedQuestionCount), true);
   assert.equal(metrics.attemptedQuestionCount >= 0, true);
   assert.equal(Number.isSafeInteger(metrics.todayAttemptedQuestionCount), true);

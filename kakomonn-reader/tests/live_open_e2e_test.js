@@ -158,10 +158,32 @@ async function main() {
       "prewarmed open exceeded its observed learning dates",
     );
     const finalActivities = await readLearningActivities(token, observedDates);
-    assert.deepEqual(
-      finalActivities,
-      baselineActivities,
-      "prewarmed open must not record learning activity",
+    for (const [index, finalEntry] of finalActivities.entries()) {
+      const baselineEntry = baselineActivities[index];
+      assert.equal(finalEntry.date, baselineEntry.date);
+      assert.deepEqual(
+        finalEntry.activity.attempts,
+        baselineEntry.activity.attempts,
+        "prewarmed open must not record attempts",
+      );
+      assert.deepEqual(
+        finalEntry.activity.stability_history,
+        baselineEntry.activity.stability_history,
+        "prewarmed open must not change stability history",
+      );
+      const baselineStudyTimeMs = baselineEntry.activity.study_time_daily[0]?.study_time_ms ?? 0;
+      const finalStudyTimeMs = finalEntry.activity.study_time_daily[0]?.study_time_ms ?? 0;
+      assert.equal(
+        finalStudyTimeMs >= baselineStudyTimeMs,
+        true,
+        "prewarmed open must not reduce study time",
+      );
+    }
+    assert.equal(
+      finalState.learningMetrics.todayStudyTimeMs >
+        baselineState.learningMetrics.todayStudyTimeMs,
+      true,
+      "foreground question time must be recorded",
     );
     console.log(
       JSON.stringify({
@@ -170,6 +192,9 @@ async function main() {
         buildFingerprint: expectedBuildFingerprint,
         scheduledQuestionURL: outcome.state.outerURL,
         startURL: openURL,
+        studyTimeDeltaMs:
+          finalState.learningMetrics.todayStudyTimeMs -
+          baselineState.learningMetrics.todayStudyTimeMs,
         status: "passed",
       }),
     );

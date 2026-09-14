@@ -752,15 +752,17 @@ async function submitAnswer(driver, answerText) {
   const answerLabels = await driver.$$(".problem_detail ul.check > li > label");
   assert.equal(answerInputs.length, choiceTexts.length);
   assert.equal(answerLabels.length, choiceTexts.length);
-  await clickWebElementNatively(driver, ".problem_detail ul.check > li > label", choiceIndex);
-  await switchToReaderFrame(driver);
+  await driver.execute((index) => {
+    document
+      .querySelectorAll(".problem_detail ul.check input[name='intAnswerData']")
+      [index].click();
+  }, choiceIndex);
   const selectedAnswerInputs = await driver.$$(
     ".problem_detail ul.check input[name='intAnswerData']",
   );
   assert.equal(selectedAnswerInputs.length, choiceTexts.length);
   assert.equal(await selectedAnswerInputs[choiceIndex].isSelected(), true);
   await clickWebElementNatively(driver, "#send_exam_btn");
-  await switchToReaderFrame(driver);
 }
 
 async function dispatchNextQuestionSwipe(driver) {

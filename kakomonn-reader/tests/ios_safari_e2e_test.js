@@ -97,14 +97,6 @@ class IOSWebElement {
     );
   }
 
-  async setValue(value) {
-    await this.driver.sessionRequest(
-      "POST",
-      `/element/${encodeURIComponent(this.id)}/value`,
-      { text: value, value: Array.from(value) },
-    );
-  }
-
   async waitForDisplayed({ timeout = testTimeout } = {}) {
     await this.driver.waitUntil(() => this.isDisplayed(), {
       interval: 250,
@@ -333,6 +325,12 @@ class IOSWebDriver {
       body,
       timeout,
     );
+  }
+
+  async typeKeys(value) {
+    await this.executeScript("mobile: keys", [
+      { keys: Array.from(value) },
+    ]);
   }
 
   async switchToFrame(element) {
@@ -1345,11 +1343,11 @@ async function runTest() {
     );
 
     const syncSettingsViewport = await readNativeWebTapViewport(driver);
-    const syncTokenInput = await clickWebElementNatively(
+    await clickWebElementNatively(
       driver,
       "#kakomonn-reader-sync-token",
     );
-    await syncTokenInput.setValue("test-sync-token");
+    await driver.typeKeys("test-sync-token");
     assert.equal(
       await driver.execute(
         () => document.querySelector("#kakomonn-reader-sync-token").value,

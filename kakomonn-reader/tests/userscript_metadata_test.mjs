@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const scriptPath = new URL("../kakomonn-reader.user.js", import.meta.url);
+const metadataPath = new URL("../src/userscript.meta.txt", import.meta.url);
 const expectedMatches = new Set([
   "https://*.kakomonn.com/*",
   "https://kakomonn-sync.kakomonn.workers.dev/",
@@ -35,11 +36,16 @@ function single(entries, key) {
 }
 
 test("generated userscript metadata is valid", async () => {
-  const entries = metadataEntries(await readFile(scriptPath, "utf8"));
+  const [scriptSource, metadataSource] = await Promise.all([
+    readFile(scriptPath, "utf8"),
+    readFile(metadataPath, "utf8"),
+  ]);
+  const entries = metadataEntries(scriptSource);
+  const sourceEntries = metadataEntries(metadataSource);
   single(entries, "name");
   single(entries, "namespace");
   single(entries, "description");
-  assert.equal(single(entries, "version"), "2.3.2");
+  assert.equal(single(entries, "version"), single(sourceEntries, "version"));
   assert.equal(single(entries, "run-at"), "document-end");
   assert.equal(entries.has("noframes"), false);
   assert.deepEqual(new Set(entries.get("match")), expectedMatches);

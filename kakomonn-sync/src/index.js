@@ -2,6 +2,7 @@ import { LearningState, getLearningStateStub } from "./learning-store.js";
 import { isAuthorized } from "./auth.js";
 import { errorResponse, jsonResponse } from "./http.js";
 import { handleAttempts } from "./api/attempts.js";
+import { handleCopyFailures } from "./api/copy-failures.js";
 import { handleState } from "./api/state.js";
 import { handleHistory } from "./api/history.js";
 import { handleDailyDetails } from "./api/daily-details.js";
@@ -26,6 +27,7 @@ export async function handleRequest(request, env, fetcher = fetch) {
     ["/daily-details", ["GET"]],
     ["/dashboard", ["GET"]],
     ["/attempts", ["POST"]],
+    ["/copy-failures", ["POST"]],
     ["/study-time", ["POST"]],
     ["/next", ["GET"]],
     ["/questions", ["POST"]],
@@ -84,6 +86,9 @@ export async function handleRequest(request, env, fetcher = fetch) {
   }
   if (route === "/attempts") {
     return handleAttempts(request, env);
+  }
+  if (route === "/copy-failures") {
+    return handleCopyFailures(request, env, fetcher);
   }
   if (route === "/study-time") {
     return handleStudyTime(request, env);

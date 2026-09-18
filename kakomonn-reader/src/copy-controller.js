@@ -1,3 +1,5 @@
+import { reportCopyFailure } from "./copy-failure-report.js";
+
 export function installCopyController(app) {
   const CLIPBOARD_WRITE_TIMEOUT_MS = 5000;
   let automaticCopyOperation = null;
@@ -111,14 +113,29 @@ export function installCopyController(app) {
     await operation.writePromise;
   }
 
+  async function failAutomaticCopy(operationId, questionId, reason) {
+    void reportCopyFailure(app, questionId, reason);
+    if (app.pendingAttempt?.operationId !== operationId) {
+      return true;
+    }
+    try {
+      await app.updatePendingAttempt(operationId, (current) => ({
+        ...current,
+        copy: { state: "not-required" },
+      }));
+    } catch (error) {
+      showCopyStorageError(error);
+      return false;
+    }
+    void app.maybePreparePendingDestination();
+    return true;
+  }
+
   function showCopyContentError() {
-    app.showReaderError(
-      "markdown-content",
-      "Markdownを作成できません",
-      "問題文, 選択肢, 回答, 解説のいずれかを取得できませんでした.",
-      { code: "copy_content_unavailable" },
-      { label: "コピーを再試行", run: retryPendingCopy },
-    );
+    const operation = app.pendingAttempt;
+    return operation === null
+      ? Promise.resolve(false)
+      : failAutomaticCopy(operation.operationId, operation.questionId, "markdown_unavailable");
   }
 
   function clipboardWriteWithTimeout(writePromise) {
@@ -177,7 +194,7 @@ export function installCopyController(app) {
     );
   }
 
-  async function completeClipboardWrite(operationId, markdown, writePromise) {
+  async function completeClipboardWrite(operationId, questionId, markdown, writePromise) {
     try {
       await clipboardWriteWithTimeout(writePromise);
       if (
@@ -207,13 +224,10 @@ export function installCopyController(app) {
       }
       return true;
     } catch (error) {
-      if (
-        latestAutomaticCopyOperationId === operationId &&
-        (app.pendingAttempt === null || app.pendingAttempt.operationId === operationId)
-      ) {
-        showClipboardWriteError(error, markdown);
-      }
-      return false;
+      const reason = error?.code === "clipboard_write_timeout"
+        ? "clipboard_write_timeout"
+        : "clipboard_write_failed";
+      return failAutomaticCopy(operationId, questionId, reason);
     } finally {
       if (automaticCopyOperation?.operationId === operationId) {
         automaticCopyOperation = null;
@@ -231,6 +245,7 @@ export function installCopyController(app) {
     }
 
     const operationId = app.pendingAttempt.operationId;
+    const questionId = app.pendingAttempt.questionId;
     if (automaticCopyOperation?.operationId === operationId) {
       return automaticCopyOperation.dispatchPromise;
     }
@@ -239,13 +254,17 @@ export function installCopyController(app) {
     const dispatchPromise = (async () => {
       let markdown = app.pendingAttempt.copy.markdown ?? "";
       if (app.pendingAttempt.copy.state === "required") {
-        const copyDocument = app.buildCopyMarkdown(app.frameDocument);
+        let copyDocument;
+        try {
+          copyDocument = app.buildCopyMarkdown(app.frameDocument);
+        } catch {
+          return failAutomaticCopy(operationId, questionId, "markdown_unavailable");
+        }
         if (copyDocument.state === "locked") {
           return false;
         }
         if (copyDocument.state !== "ready") {
-          showCopyContentError();
-          return false;
+          return failAutomaticCopy(operationId, questionId, "markdown_unavailable");
         }
         markdown = copyDocument.markdown;
         try {
@@ -262,13 +281,13 @@ export function installCopyController(app) {
       const writePromise = writeMarkdownToClipboard(markdown, retryFromGesture);
       void writePromise.catch(() => {});
       if (app.isIPhoneSafari) {
-        const completionPromise = completeClipboardWrite(operationId, markdown, writePromise);
+        const completionPromise = completeClipboardWrite(operationId, questionId, markdown, writePromise);
         void completionPromise;
         void app.maybePreparePendingDestination();
         return true;
       }
 
-      return completeClipboardWrite(operationId, markdown, writePromise);
+      return completeClipboardWrite(operationId, questionId, markdown, writePromise);
     })();
     automaticCopyOperation = {
       dispatchPromise,

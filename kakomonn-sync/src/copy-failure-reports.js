@@ -4,7 +4,8 @@ import { COPY_FAILURE_STAGES, isCopyFailure } from "../../contracts/kakomonn.mjs
 export const COPY_FAILURE_COMMENTS_URL =
   "https://api.github.com/repos/expgolemclone/kakomonn/issues/29/comments";
 const GITHUB_API_VERSION = "2026-03-10";
-const REQUEST_TIMEOUT_MS = 30000;
+const GITHUB_REDIRECT_MODE = "manual";
+const REQUEST_TIMEOUT_MS = 10000;
 const RETRY_MIN_MS = 60000;
 const RETRY_MAX_MS = 6 * 60 * 60 * 1000;
 
@@ -21,10 +22,9 @@ export function copyFailureComment(report) {
 }
 
 class DeliveryError extends Error {
-  constructor(retryAtMs = 0, status = null) {
+  constructor(retryAtMs = 0) {
     super("copy_failure_delivery_failed");
     this.retryAtMs = retryAtMs;
-    this.status = status;
   }
 }
 
@@ -81,7 +81,7 @@ export class CopyFailureReports extends DurableObject {
     const token = this.env.GITHUB_COPY_FAILURE_TOKEN;
     if (typeof token !== "string" || token.length === 0) return;
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(
-      `${token}\0${COPY_FAILURE_COMMENTS_URL}\0${GITHUB_API_VERSION}`,
+      `${token}\0${COPY_FAILURE_COMMENTS_URL}\0${GITHUB_API_VERSION}\0${GITHUB_REDIRECT_MODE}`,
     ));
     const fingerprint = Array.from(new Uint8Array(digest), (byte) =>
       byte.toString(16).padStart(2, "0")).join("");
@@ -113,7 +113,7 @@ export class CopyFailureReports extends DurableObject {
     if (typeof token !== "string" || token.length === 0) throw new DeliveryError();
     const response = await fetch(url, {
       method,
-      redirect: "error",
+      redirect: GITHUB_REDIRECT_MODE,
       headers: {
         Accept: "application/vnd.github+json",
         Authorization: `Bearer ${token}`,
@@ -124,7 +124,7 @@ export class CopyFailureReports extends DurableObject {
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!response.ok) throw new DeliveryError(rateLimitRetryAt(response), response.status);
+    if (!response.ok) throw new DeliveryError(rateLimitRetryAt(response));
     return response.json();
   }
 
@@ -186,8 +186,6 @@ export class CopyFailureReports extends DurableObject {
              WHERE site = ? AND question_id = ? AND stage = ?`, commentId, ...keys,
           );
         } catch (error) {
-          console.error("copy_failure_delivery_attempt", error?.status ?? error?.name ?? "unknown",
-            error?.message ?? "no-message");
           const delay = Math.min(RETRY_MAX_MS, RETRY_MIN_MS * 2 ** Math.min(row.retry_count, 9));
           const retryAtMs = Math.max(Date.now() + delay, error?.retryAtMs ?? 0);
           this.ctx.storage.sql.exec(

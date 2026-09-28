@@ -166,6 +166,7 @@ describe("durable GitHub delivery", () => {
       expect(github).toHaveBeenCalledTimes(1);
       const [, options] = github.mock.calls[0];
       expect(options.headers.Authorization).toBe("Bearer test-github-secret");
+      expect(options.redirect).toBe("manual");
       expect(options.body).not.toContain("test-github-secret");
     } finally {
       vi.stubGlobal("fetch", original);

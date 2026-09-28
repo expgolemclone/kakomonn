@@ -454,15 +454,14 @@ async function connectDedicatedChrome({
           await Promise.race([session.send("Browser.close").catch(() => null), delay(3_000)]);
         }
       }
-      let exited =
+      const exited =
         browserProcess === null ? false : await waitForProcessExit(browserProcess, 3_000);
       if (browserProcess !== null && !exited && !browserProcess.killed) {
         browserProcess.kill();
-        exited = await waitForProcessExit(browserProcess, 3_000);
+        await waitForProcessExit(browserProcess, 3_000);
       }
-      if (!exited) {
-        stopDedicatedChrome(userDataDir, { systemEnvironment });
-      }
+      // Chrome may hand off startup to another process before this child exits.
+      stopDedicatedChrome(userDataDir, { systemEnvironment });
     },
   };
 }

@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const { readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
+const { inspectDedicatedChrome } = require("../../scripts/windows-chrome-profile.cjs");
 const {
   CURRENT_QUESTION_URL,
   DEFAULT_SYNC_API_ORIGIN,
@@ -226,6 +227,11 @@ async function main() {
     }
     await setupChrome.close();
   }
+  assert.equal(
+    inspectDedicatedChrome(userDataDir).processCount,
+    0,
+    "live open must finish dedicated Chrome cleanup before returning",
+  );
 }
 
 if (require.main === module) {

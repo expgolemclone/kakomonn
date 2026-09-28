@@ -171,3 +171,19 @@ test("production issues Azure speech tokens with the configured key", async () =
   const body = await response.json();
   assert.equal(isSpeechTokenResponse(body), true);
 });
+
+test("production authenticates copy failures and rejects private fields before acceptance", async () => {
+  const url = new URL("/v12/copy-failures", productionOrigin);
+  const unauthorized = await fetch(url, { method: "POST", body: "{}" });
+  assert.equal(unauthorized.status, 401);
+  const invalid = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${syncToken()}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      site: "chushoks.kakomonn.com", questionId: "86956",
+      reason: "markdown_unavailable", markdown: "must not be accepted",
+    }),
+  });
+  assert.equal(invalid.status, 400);
+  assert.deepEqual(await invalid.json(), { error: "invalid_request" });
+});

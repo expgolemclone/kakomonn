@@ -1,108 +1,66 @@
+import { reportCopyFailure } from "./copy-failure-report.js";
+
 export function installCopyController(app) {
-  const CLIPBOARD_WRITE_TIMEOUT_MS = 5000;
+  const COPY_TIMEOUT_MS = 5000;
   let automaticCopyOperation = null;
-  let latestAutomaticCopyOperationId = null;
 
   function selectedAnswerIsReady() {
     const controls = app.currentQuestionControls();
-    return (
-      controls !== null &&
-      controls.answerChoiceControls.filter(app.isSelectedAnswerChoice).length === 1
-    );
+    return controls !== null &&
+      controls.answerChoiceControls.filter(app.isSelectedAnswerChoice).length === 1;
   }
 
   function beginAutomaticCopyFromGesture() {
     const questionId = app.currentQuestionId();
-    if (
-      questionId === null ||
-      app.getCurrentAnswerResult() !== "unknown" ||
-      !selectedAnswerIsReady()
-    ) {
-      return null;
-    }
+    if (questionId === null || app.getCurrentAnswerResult() !== "unknown" ||
+        !selectedAnswerIsReady()) return null;
     if (app.answerCopyOperation?.questionId === questionId) {
       return app.answerCopyOperation.operationId;
     }
-
-    if (app.answerCopyOperation?.rejectMarkdown !== undefined) {
-      app.answerCopyOperation.rejectMarkdown(new Error("answer copy operation was replaced"));
-    }
-
+    discardAnswerCopyOperation();
     const operation = {
-      operationId: app.createOperationId(),
-      questionId,
-      resolveMarkdown: null,
-      rejectMarkdown: null,
-      writePromise: null,
+      operationId: app.createOperationId(), questionId,
+      resolveMarkdown: null, rejectMarkdown: null, writePromise: null,
     };
     if (app.isIPhoneSafari) {
       try {
-        if (
-          typeof navigator.clipboard !== "object" ||
-          navigator.clipboard === null ||
-          typeof navigator.clipboard.write !== "function" ||
-          typeof ClipboardItem !== "function"
-        ) {
+        if (typeof navigator.clipboard?.write !== "function" ||
+            typeof ClipboardItem !== "function") {
           throw new Error("Clipboard.write API is unavailable");
         }
         const markdownPromise = new Promise((resolve, reject) => {
           operation.resolveMarkdown = resolve;
           operation.rejectMarkdown = reject;
         });
-        const clipboardItem = new ClipboardItem({
-          "text/plain": markdownPromise.then(
-            (markdown) => new Blob([markdown], { type: "text/plain" }),
-          ),
-        });
-        operation.writePromise = navigator.clipboard.write([clipboardItem]);
-        void operation.writePromise.catch(() => {});
+        const blobPromise = markdownPromise.then(
+          (markdown) => new Blob([markdown], { type: "text/plain" }),
+        );
+        void blobPromise.catch(() => {});
+        const item = new ClipboardItem({ "text/plain": blobPromise });
+        operation.writePromise = Promise.resolve(navigator.clipboard.write([item]));
       } catch (error) {
         operation.writePromise = Promise.reject(error);
-        void operation.writePromise.catch(() => {});
       }
+      void operation.writePromise.catch(() => {});
     }
     app.answerCopyOperation = operation;
     return operation.operationId;
   }
 
   function discardAnswerCopyOperation() {
-    if (typeof app.answerCopyOperation?.rejectMarkdown === "function") {
-      app.answerCopyOperation.rejectMarkdown(new Error("answer copy operation was cancelled"));
-    }
+    app.answerCopyOperation?.rejectMarkdown?.(new Error("answer copy operation was cancelled"));
     app.answerCopyOperation = null;
   }
 
-  async function writeMarkdownToClipboard(markdown, retryFromGesture) {
+  async function writeMarkdownToClipboard(markdown, operationId) {
     if (!app.isIPhoneSafari) {
-      const copied = await GM.setClipboard(markdown);
-      if (copied === false) {
+      if (await GM.setClipboard(markdown) === false) {
         throw new Error("clipboard write was rejected");
       }
       return;
     }
-
-    if (retryFromGesture) {
-      if (
-        typeof navigator.clipboard !== "object" ||
-        navigator.clipboard === null ||
-        typeof navigator.clipboard.write !== "function" ||
-        typeof ClipboardItem !== "function"
-      ) {
-        throw new Error("Clipboard.write API is unavailable");
-      }
-      const clipboardItem = new ClipboardItem({
-        "text/plain": new Blob([markdown], { type: "text/plain" }),
-      });
-      await navigator.clipboard.write([clipboardItem]);
-      return;
-    }
-
     const operation = app.answerCopyOperation;
-    if (
-      operation === null ||
-      operation.operationId !== app.pendingAttempt?.operationId ||
-      operation.writePromise === null
-    ) {
+    if (operation?.operationId !== operationId || operation.writePromise === null) {
       throw new Error("clipboard write was not started by the answer gesture");
     }
     operation.resolveMarkdown?.(markdown);
@@ -111,191 +69,137 @@ export function installCopyController(app) {
     await operation.writePromise;
   }
 
-  function showCopyContentError() {
-    app.showReaderError(
-      "markdown-content",
-      "Markdownを作成できません",
-      "問題文, 選択肢, 回答, 解説のいずれかを取得できませんでした.",
-      { code: "copy_content_unavailable" },
-      { label: "コピーを再試行", run: retryPendingCopy },
-    );
+  function withCopyTimeout(promise) {
+    let timeout;
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeout = window.setTimeout(() => {
+          const error = new Error("clipboard write timed out");
+          error.code = "clipboard_write_timeout";
+          reject(error);
+        }, COPY_TIMEOUT_MS);
+      }),
+    ]).finally(() => window.clearTimeout(timeout));
   }
 
-  function clipboardWriteWithTimeout(writePromise) {
+  function prepareMarkdown(documentNode) {
     return new Promise((resolve, reject) => {
-      let settled = false;
-      const settle = (callback, value) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        window.clearTimeout(timeout);
-        callback(value);
+      let observer = null;
+      let timeout = null;
+      const finish = (result, error = null) => {
+        observer?.disconnect();
+        if (timeout !== null) window.clearTimeout(timeout);
+        if (error !== null) reject(error);
+        else resolve(result);
       };
-      const timeout = window.setTimeout(() => {
-        const error = new Error("clipboard write timed out");
-        error.code = "clipboard_write_timeout";
-        settle(reject, error);
-      }, CLIPBOARD_WRITE_TIMEOUT_MS);
-      Promise.resolve(writePromise).then(
-        (value) => settle(resolve, value),
-        (error) => settle(reject, error),
-      );
+      const inspect = () => {
+        try {
+          const result = app.buildCopyMarkdown(documentNode);
+          if (result.state !== "locked") finish(result);
+          return result.state;
+        } catch (error) {
+          finish(null, error);
+          return "failed";
+        }
+      };
+      if (inspect() !== "locked") return;
+      observer = new MutationObserver(inspect);
+      observer.observe(documentNode.body, {
+        subtree: true, childList: true, characterData: true, attributes: true,
+      });
+      timeout = window.setTimeout(() => finish({ state: "unavailable" }), COPY_TIMEOUT_MS);
     });
   }
 
-  async function retryMarkdownCopy(markdown) {
+  async function setCopyState(operationId, copy) {
+    if (app.pendingAttempt?.operationId !== operationId) return;
     try {
-      await clipboardWriteWithTimeout(writeMarkdownToClipboard(markdown, true));
-      return true;
+      await app.updatePendingAttempt(operationId, (current) => ({ ...current, copy }));
     } catch (error) {
-      showClipboardWriteError(error, markdown);
-      return false;
+      if (app.pendingAttempt?.operationId !== operationId) return;
+      // A failure to persist the answer operation is a storage error, not a clipboard error.
+      app.showReaderError("attempt-storage", "解答記録を保存できません",
+        "Userscript storageを確認し, ページを再読み込みしてください.", error);
+      throw error;
     }
   }
 
-  function showClipboardWriteError(error, markdown) {
-    const retryAction = app.isIPhoneSafari
-      ? () => retryMarkdownCopy(markdown)
-      : retryPendingCopy;
-    app.showReaderError(
-      "clipboard-write",
-      "クリップボードへコピーできません",
-      "BrowserまたはUserscript managerのclipboard権限を確認してください.",
-      error,
-      { label: "コピーを再試行", run: retryAction },
-    );
+  async function failAutomaticCopy(operationId, questionId, reason) {
+    void reportCopyFailure(app, questionId, reason);
+    if (app.answerCopyOperation?.operationId === operationId) discardAnswerCopyOperation();
+    await setCopyState(operationId, { state: "failed" });
+    void app.maybePreparePendingDestination();
+    return true;
   }
 
-  function showCopyStorageError(error) {
-    app.showReaderError(
-      "copy-storage",
-      "Markdownを保存できません",
-      "Userscript storageへコピー待ちのMarkdownを保存できませんでした.",
-      error,
-      { label: "コピーを再試行", run: retryPendingCopy },
-    );
-  }
-
-  async function completeClipboardWrite(operationId, markdown, writePromise) {
+  async function completeClipboardWrite(operationId, questionId, writePromise) {
+    let reason = null;
     try {
-      await clipboardWriteWithTimeout(writePromise);
-      if (
-        app.pendingAttempt?.operationId === operationId &&
-        app.pendingAttempt.copy.state === "ready"
-      ) {
-        try {
-          await app.updatePendingAttempt(operationId, (current) => ({
-            ...current,
-            copy: { state: "completed" },
-          }));
-        } catch (error) {
-          if (app.pendingAttempt?.operationId === operationId) {
-            showCopyStorageError(error);
-            return false;
-          }
-        }
-      }
-      if (app.answerCopyOperation?.operationId === operationId) {
-        discardAnswerCopyOperation();
-      }
-      if (
-        latestAutomaticCopyOperationId === operationId ||
-        app.pendingAttempt?.operationId === operationId
-      ) {
-        await app.maybePreparePendingDestination();
-      }
-      return true;
+      await withCopyTimeout(writePromise);
     } catch (error) {
-      if (
-        latestAutomaticCopyOperationId === operationId &&
-        (app.pendingAttempt === null || app.pendingAttempt.operationId === operationId)
-      ) {
-        showClipboardWriteError(error, markdown);
-      }
-      return false;
+      reason = error?.code === "clipboard_write_timeout"
+        ? "clipboard_write_timeout" : "clipboard_write_failed";
+    }
+    try {
+      if (reason !== null) return await failAutomaticCopy(operationId, questionId, reason);
+      await setCopyState(operationId, { state: "completed" });
+      if (app.answerCopyOperation?.operationId === operationId) discardAnswerCopyOperation();
+      void app.maybePreparePendingDestination();
+      return true;
     } finally {
-      if (automaticCopyOperation?.operationId === operationId) {
-        automaticCopyOperation = null;
-      }
+      if (automaticCopyOperation?.operationId === operationId) automaticCopyOperation = null;
       app.updateSyncDependentControls();
     }
   }
 
-  function processPendingAutomaticCopy(retryFromGesture = false) {
-    if (
-      app.pendingAttempt === null ||
-      !["required", "ready"].includes(app.pendingAttempt.copy.state)
-    ) {
-      return Promise.resolve(app.pendingAttempt?.copy.state === "completed");
+  function processPendingAutomaticCopy() {
+    const operation = app.pendingAttempt;
+    if (operation === null || !["required", "ready"].includes(operation.copy.state)) {
+      return Promise.resolve(["completed", "failed"].includes(operation?.copy.state));
     }
-
-    const operationId = app.pendingAttempt.operationId;
+    const { operationId, questionId } = operation;
     if (automaticCopyOperation?.operationId === operationId) {
       return automaticCopyOperation.dispatchPromise;
     }
-    latestAutomaticCopyOperationId = operationId;
-
+    const documentNode = app.frameDocument;
     const dispatchPromise = (async () => {
-      let markdown = app.pendingAttempt.copy.markdown ?? "";
-      if (app.pendingAttempt.copy.state === "required") {
-        const copyDocument = app.buildCopyMarkdown(app.frameDocument);
-        if (copyDocument.state === "locked") {
-          return false;
+      let markdown = operation.copy.markdown;
+      if (operation.copy.state === "required") {
+        let copyDocument;
+        try {
+          copyDocument = await prepareMarkdown(documentNode);
+        } catch {
+          return failAutomaticCopy(operationId, questionId, "markdown_unavailable");
         }
         if (copyDocument.state !== "ready") {
-          showCopyContentError();
-          return false;
+          return failAutomaticCopy(operationId, questionId, "markdown_unavailable");
         }
         markdown = copyDocument.markdown;
-        try {
-          await app.updatePendingAttempt(operationId, (current) => ({
-            ...current,
-            copy: { state: "ready", markdown },
-          }));
-        } catch (error) {
-          showCopyStorageError(error);
-          return false;
-        }
+        await setCopyState(operationId, { state: "ready", markdown });
       }
-
-      const writePromise = writeMarkdownToClipboard(markdown, retryFromGesture);
-      void writePromise.catch(() => {});
+      if (app.pendingAttempt?.operationId !== operationId) return false;
+      const completion = completeClipboardWrite(
+        operationId, questionId, writeMarkdownToClipboard(markdown, operationId),
+      );
       if (app.isIPhoneSafari) {
-        const completionPromise = completeClipboardWrite(operationId, markdown, writePromise);
-        void completionPromise;
+        void completion.catch(() => {});
         void app.maybePreparePendingDestination();
         return true;
       }
-
-      return completeClipboardWrite(operationId, markdown, writePromise);
+      return completion;
     })();
-    automaticCopyOperation = {
-      dispatchPromise,
-      operationId,
-    };
-    void dispatchPromise.then((dispatched) => {
-      if (!dispatched && automaticCopyOperation?.operationId === operationId) {
-        automaticCopyOperation = null;
-        app.updateSyncDependentControls();
-      }
+    automaticCopyOperation = { dispatchPromise, operationId };
+    void dispatchPromise.catch(() => {
+      if (automaticCopyOperation?.operationId === operationId) automaticCopyOperation = null;
     });
-    return dispatchPromise;
-  }
-
-  function retryPendingCopy() {
-    return processPendingAutomaticCopy(true);
+    return dispatchPromise.catch(() => false);
   }
 
   Object.defineProperties(app, {
     selectedAnswerIsReady: { enumerable: false, get: () => selectedAnswerIsReady },
     beginAutomaticCopyFromGesture: { enumerable: false, get: () => beginAutomaticCopyFromGesture },
     discardAnswerCopyOperation: { enumerable: false, get: () => discardAnswerCopyOperation },
-    writeMarkdownToClipboard: { enumerable: false, get: () => writeMarkdownToClipboard },
-    showCopyContentError: { enumerable: false, get: () => showCopyContentError },
-    showClipboardWriteError: { enumerable: false, get: () => showClipboardWriteError },
-    showCopyStorageError: { enumerable: false, get: () => showCopyStorageError },
     processPendingAutomaticCopy: { enumerable: false, get: () => processPendingAutomaticCopy },
-    retryPendingCopy: { enumerable: false, get: () => retryPendingCopy },
   });
 }

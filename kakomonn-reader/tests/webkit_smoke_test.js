@@ -889,37 +889,16 @@ async function main() {
         explanation.hidden = false;
       }
     });
-    await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-error-title").innerText(),
-      "クリップボードへコピーできません",
-    );
-    assert.equal(await page.locator("#kakomonn-reader-error-retry").innerText(), "コピーを再試行");
-    assert.equal(await page.locator("#kakomonn-reader-error-retry").isVisible(), true);
+    await page.waitForFunction(() => window.__syncMock.calls.some(
+      (call) => new URL(call.url).pathname === "/v12/copy-failures"));
+    assert.equal(await page.locator("#kakomonn-reader-error-dialog").getAttribute("open"), null);
+    assert.deepEqual(await page.evaluate(() => window.__syncMock.calls.filter(
+      (call) => new URL(call.url).pathname === "/v12/copy-failures").map((call) => call.body)), [
+      { site: "chushoks.kakomonn.com", questionId: "86956", reason: "clipboard_write_failed" },
+    ]);
     assert.equal(await page.evaluate(() => window.__copiedTexts.length), 0);
-    assert.equal(await page.evaluate(() => window.__pageClipboardWrites.length), 0);
-    assert.deepEqual(await page.evaluate(() => window.__syncMock.clipboardWrites), []);
-    await page.evaluate(() => {
-      window.__clipboardWriteFails = false;
-    });
-    await page.locator("#kakomonn-reader-error-retry").tap();
-    await page.waitForFunction(
-      () => window.__copiedTexts.length === 1 && history.state?.entryType === "current",
-    );
     assert.equal(await page.evaluate(() => window.__readerPopstateCount), 0);
     assert.equal(await page.evaluate(() => history.length), historyLengthBeforeIncorrect);
-    assert.equal(await page.evaluate(() => window.__copiedTexts[0]), expectedCopiedMarkdown);
-    assert.deepEqual(await page.evaluate(() => window.__pageClipboardWrites), [
-      expectedCopiedMarkdown,
-    ]);
-    assert.equal(
-      (await page.evaluate(() => window.__copiedTexts[0])).split(
-        "https://cdn.example.test/webkit-explanation-1.png",
-      ).length - 1,
-      1,
-    );
     assert.deepEqual(await dispatchNextQuestionSwipe(childFrame), {
       dispatchResult: false,
       endDefaultPrevented: true,
@@ -1071,6 +1050,10 @@ async function main() {
       (await correctPage.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null,
       false,
     );
+    assert.deepEqual(await correctPage.evaluate(() => window.__syncMock.calls.filter(
+      (call) => new URL(call.url).pathname === "/v12/copy-failures").map((call) => call.body)), [
+      { site: "chushoks.kakomonn.com", questionId: "86956", reason: "clipboard_write_timeout" },
+    ]);
     assert.deepEqual(correctPageErrors, []);
     await correctPage.close();
     await context.close();

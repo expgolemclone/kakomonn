@@ -73,7 +73,7 @@ export function installSyncController(app) {
         keys === "markdown,state" && typeof value.markdown === "string" && value.markdown.length > 0
       );
     }
-    return keys === "state" && ["required", "completed", "not-required"].includes(value.state);
+    return keys === "state" && ["required", "completed", "failed", "not-required"].includes(value.state);
   }
 
   function isPendingAttempt(value) {

@@ -7,6 +7,24 @@ const QUESTION_ID_MAX = "9223372036854775807";
 const DAY_MS = 86_400_000;
 const TOKYO_OFFSET_MS = 9 * 60 * 60 * 1000;
 
+export const COPY_FAILURE_STAGES = Object.freeze({
+  markdown_unavailable: "markdown",
+  clipboard_write_failed: "clipboard",
+  clipboard_write_timeout: "clipboard",
+});
+
+export function isCopyFailure(value) {
+  return (
+    hasExactKeys(value, ["site", "questionId", "reason"]) &&
+    isSite(value.site) && isQuestionId(value.questionId) &&
+    typeof value.reason === "string" && Object.hasOwn(COPY_FAILURE_STAGES, value.reason)
+  );
+}
+
+export function isCopyFailureAcceptance(value) {
+  return hasExactKeys(value, ["accepted"]) && value.accepted === true;
+}
+
 export const LEARNING_METRIC_KEYS = Object.freeze([
   "attemptedQuestionCount",
   "dailyKpiCompleted",

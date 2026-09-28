@@ -20,11 +20,19 @@
       {
         "name": "LEARNING_STATE",
         "class_name": "LearningState"
+      },
+      {
+        "name": "COPY_FAILURE_REPORTS",
+        "class_name": "CopyFailureReports"
       }
     ]
   },
   "exports": {
     "LearningState": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "CopyFailureReports": {
       "type": "durable-object",
       "storage": "sqlite"
     }

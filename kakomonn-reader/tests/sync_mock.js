@@ -287,6 +287,10 @@ function installSyncMockInWindow({
       }
 
       const pathname = requestURL.pathname;
+      if (call.method === "POST" && pathname === "/v12/copy-failures") {
+        respondJSON(200, { accepted: true });
+        return;
+      }
       if (
         call.method === "GET" &&
         pathname === "/v12/state" &&

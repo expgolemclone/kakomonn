@@ -1556,7 +1556,7 @@ async function runIncorrectEnterReservationCase(context, script) {
   }
 }
 
-async function runIncorrectEnterCopyRetryCase(context, script) {
+async function runIncorrectEnterCopyFailureCase(context, script) {
   const page = await context.newPage();
   const errors = await preparePage(page, "audio");
   const childFrame = await loadMockQuestion(page, script);
@@ -1571,19 +1571,6 @@ async function runIncorrectEnterCopyRetryCase(context, script) {
     await page.keyboard.press("Enter");
     await page.evaluate(() => window.__syncMock.releaseHeldSetValue());
 
-    await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
-    );
-    assert.equal(
-      await page.locator("#kakomonn-reader-error-title").innerText(),
-      "クリップボードへコピーできません",
-    );
-    assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
-
-    await page.evaluate(() => {
-      window.__clipboardWriteFails = false;
-    });
-    await page.locator("#kakomonn-reader-error-retry").click();
     await page.waitForFunction(
       ({ pendingAttemptKey, nextURL }) =>
         window.__getGMValue(pendingAttemptKey) === null &&
@@ -1601,8 +1588,13 @@ async function runIncorrectEnterCopyRetryCase(context, script) {
         ).length,
         copies: window.__copiedTexts.length,
       })),
-      { attempts: 1, copies: 1 },
+      { attempts: 1, copies: 0 },
     );
+    assert.equal(await page.locator("#kakomonn-reader-error-dialog").getAttribute("open"), null);
+    assert.deepEqual(await page.evaluate(() => window.__syncMock.calls.filter(
+      (call) => new URL(call.url).pathname === "/v12/copy-failures").map((call) => call.body)), [
+      { site: "chushoks.kakomonn.com", questionId: "45124", reason: "clipboard_write_failed" },
+    ]);
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
@@ -2473,7 +2465,7 @@ async function main() {
 
     await assertIncorrectSkip(context, script);
     await runIncorrectEnterReservationCase(context, script);
-    await runIncorrectEnterCopyRetryCase(context, script);
+    await runIncorrectEnterCopyFailureCase(context, script);
     await runIncorrectEnterSyncRetryCase(context, script);
     await runMismatchedCelebrationRejectedCase(context, script);
     await runIncorrectCelebrationEnterCase(context, script);

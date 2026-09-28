@@ -40,7 +40,7 @@ export function installNavigationController(app) {
 
   function isCopyReadyForNavigation(operation) {
     return (
-      ["completed", "not-required"].includes(operation.copy.state) ||
+      ["completed", "failed", "not-required"].includes(operation.copy.state) ||
       (app.isIPhoneSafari && operation.copy.state === "ready")
     );
   }
@@ -422,7 +422,7 @@ export function installNavigationController(app) {
       app.pendingAttempt === null ||
       app.pendingAttempt.operationId !== state.operationId ||
       app.pendingAttempt.phase !== "recorded" ||
-      app.pendingAttempt.copy.state !== "completed" ||
+      !isCopyReadyForNavigation(app.pendingAttempt) ||
       app.pendingAttempt.nextURL !== location.href
     ) {
       app.navigationInProgress = false;

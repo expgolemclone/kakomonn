@@ -61,9 +61,25 @@ npm run deploy:kakomonn-sync
 
 `SYNC_TOKEN`には暗号学的に安全な256bit以上のrandom値を設定します.デプロイで表示された`workers.dev` URLは`kakomonn-reader`の`SYNC_API_URL`へ設定します.tokenとkeyはsourceや設定fileへ保存しません.
 
+## コピー失敗の自動報告
+
+Readerのコピー失敗を[Issue #29](https://github.com/expgolemclone/kakomonn/issues/29)のcommentへ記録します. site, 問題ID, 段階ごとの初回だけを報告し, 件数は更新しません. 段階はMarkdown生成またはclipboard書き込みです. Workerの受付後はSQLite Durable Objectへ保存した配送状態を正本とし, GitHub commentはその公開結果です. 問題本文, 解説, 学習履歴, clipboard内容, tokenは送信しません.
+
+GitHub PATは全Reader共通でWorker側のSecretに1つだけ登録します. GitHubで対象repositoryを`expgolemclone/kakomonn`だけに限定したfine-grained PATを作成し, `Issues: Read and write`を付与してください. PATをrepository, .env, browser, URLへ保存しません.
+
+```powershell
+node --use-system-ca node_modules/wrangler/bin/wrangler.js secret put GITHUB_COPY_FAILURE_TOKEN --config kakomonn-sync/wrangler.jsonc
+```
+
+未送信報告がある場合だけalarmを使用し, 配送失敗は1分から最大6時間の指数backoffで再送します. GitHubのrate limit待機指示は優先します. 投稿結果が不明な場合はcomment内のmarkerを照合してから再送します. Secret未設定でも報告を受け付け, 配送待ちとして保持します. queueが空ならalarmを停止します. Cron, polling, 永続log, traceは使用しません.
+
+Readerは報告の応答を待たず学習を継続します. Worker受付前の通信失敗とReader終了前に未受付の報告は再送保証の対象外です. APIはコピー失敗時だけ呼び出し, 通常の解答は従来どおり1回のWorker requestと1回のLearningState RPCで処理します. Worker deploymentのproduction検証後にReaderをreleaseします.
+
+deployment後は`npm run test:kakomonn-copy-failure-production`で, 実Chromeと実Tampermonkey, 本番同期とGitHub配送を検証します. 実問題pageの解説番号DOMだけを欠落させてMarkdown生成失敗を発生させ, 同期後の自動遷移, comment到達と重複抑止を確認します. GitHubの確認と検証注記には認証済みgh CLIを使用します. 収集commentには制御下の本番検証であり, 元pageの不具合を示す記録ではないことを追記します. この検証は本番に解答を記録するため, deploymentごとに1回だけ実行し, 完全testの代わりにはしません.
+
 ## API
 
-APIは`/v12`だけを提供し, LearningState Durable Objectを唯一のsource of truthとします.
+APIは`/v12`だけを提供し, 学習状態はLearningState Durable Object, コピー失敗報告の配送状態はCopyFailureReports Durable Objectで管理します.
 
 ### Endpoints
 
@@ -77,6 +93,7 @@ APIは`/v12`だけを提供し, LearningState Durable Objectを唯一のsource o
 - `GET /v12/next`は, FSRSに基づく次の問題と同時点の`state`を1回のDurable Object RPCで返します.
 - `POST /v12/questions`は, siteの問題catalogを世代番号付きで置き換え, 更新後の次の問題を返します. 世代競合時は現在のcatalogと次の問題を返します.
 - `POST /v12/speech-token`は, 有効期間600秒のAzure Speech tokenを返します.
+- `POST /v12/copy-failures`は, 同期tokenで認証し, `site`, `questionId`, `reason`だけを受け取ります. `reason`は`markdown_unavailable`, `clipboard_write_failed`, `clipboard_write_timeout`に限定し, 永続受付後に`{ accepted: true }`を返します. 問題URLはWorkerで生成します.
 
 ### learningMetrics contract
 

@@ -20,9 +20,10 @@ export function copyFailureComment(report) {
 }
 
 class DeliveryError extends Error {
-  constructor(retryAtMs = 0) {
+  constructor(retryAtMs = 0, status = null) {
     super("copy_failure_delivery_failed");
     this.retryAtMs = retryAtMs;
+    this.status = status;
   }
 }
 
@@ -120,7 +121,7 @@ export class CopyFailureReports extends DurableObject {
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!response.ok) throw new DeliveryError(rateLimitRetryAt(response));
+    if (!response.ok) throw new DeliveryError(rateLimitRetryAt(response), response.status);
     return response.json();
   }
 
@@ -182,6 +183,7 @@ export class CopyFailureReports extends DurableObject {
              WHERE site = ? AND question_id = ? AND stage = ?`, commentId, ...keys,
           );
         } catch (error) {
+          console.error("copy_failure_delivery_attempt", error?.status ?? error?.name ?? "unknown");
           const delay = Math.min(RETRY_MAX_MS, RETRY_MIN_MS * 2 ** Math.min(row.retry_count, 9));
           const retryAtMs = Math.max(Date.now() + delay, error?.retryAtMs ?? 0);
           this.ctx.storage.sql.exec(

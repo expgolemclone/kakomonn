@@ -30,11 +30,39 @@ beforeEach(async () => {
     state.storage.sql.exec("DELETE FROM copy_failures");
     await state.storage.deleteAlarm();
     await state.storage.delete("retryAfterMs");
+    await state.storage.delete("githubCredentialFingerprint");
   });
 });
 afterEach(() => vi.restoreAllMocks());
 
 describe("copy failure acceptance", () => {
+  it("resumes the durable queue when the GitHub credential changes", async () => {
+    await runInDurableObject(stub(), async (instance, state) => {
+      const originalEnvironment = instance.env;
+      try {
+        instance.env = { ...originalEnvironment, GITHUB_COPY_FAILURE_TOKEN: "old-test-secret" };
+        await instance.accept(report());
+        const deferredUntil = Date.now() + 60 * 60 * 1000;
+        state.storage.sql.exec(
+          "UPDATE copy_failures SET retry_count = 4, next_attempt_ms = ?", deferredUntil,
+        );
+        await state.storage.put("retryAfterMs", deferredUntil);
+        await instance.accept(report());
+        expect(state.storage.sql.exec("SELECT next_attempt_ms FROM copy_failures").toArray()[0]
+          .next_attempt_ms).toBe(deferredUntil);
+
+        instance.env = { ...originalEnvironment, GITHUB_COPY_FAILURE_TOKEN: "new-test-secret" };
+        await instance.accept(report());
+        const [row] = state.storage.sql.exec("SELECT * FROM copy_failures").toArray();
+        expect(row.retry_count).toBe(0);
+        expect(row.next_attempt_ms).toBeLessThan(Date.now() + 5000);
+        expect(await state.storage.get("retryAfterMs")).toBeUndefined();
+        expect(await state.storage.getAlarm()).toBeLessThan(Date.now() + 5000);
+      } finally {
+        instance.env = originalEnvironment;
+      }
+    });
+  });
   it("acknowledges durable acceptance even when GitHub has no configured secret", async () => {
     const fetcher = vi.fn();
     const response = await handleRequest(request(), env, fetcher);

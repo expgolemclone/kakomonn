@@ -71,7 +71,7 @@ GitHub PATは全Reader共通でWorker側のSecretに1つだけ登録します. G
 node --use-system-ca node_modules/wrangler/bin/wrangler.js secret put GITHUB_COPY_FAILURE_TOKEN --config kakomonn-sync/wrangler.jsonc
 ```
 
-未送信報告がある場合だけalarmを使用し, 配送失敗は1分から最大6時間の指数backoffで再送します. GitHubのrate limit待機指示は優先します. Secretを交換した後の次の報告受理時には, credentialのfingerprintだけで変更を検出し, 古いcredentialによる待機を解除します. 投稿結果が不明な場合はcomment内のmarkerを照合してから再送します. Secret未設定でも報告を受け付け, 配送待ちとして保持します. queueが空ならalarmを停止します. Cron, polling, 永続log, traceは使用しません.
+未送信報告がある場合だけalarmを使用し, 配送失敗は1分から最大6時間の指数backoffで再送します. GitHubのrate limit待機指示は優先します. SecretまたはGitHub配送先の設定を変更した後の次の報告受理時には, 配送設定のfingerprintだけで変更を検出し, 古い設定による待機を解除します. 投稿結果が不明な場合はcomment内のmarkerを照合してから再送します. Secret未設定でも報告を受け付け, 配送待ちとして保持します. queueが空ならalarmを停止します. Cron, polling, 永続log, traceは使用しません.
 
 Readerは報告の応答を待たず学習を継続します. Worker受付前の通信失敗とReader終了前に未受付の報告は再送保証の対象外です. APIはコピー失敗時だけ呼び出し, 通常の解答は従来どおり1回のWorker requestと1回のLearningState RPCで処理します. Worker deploymentのproduction検証後にReaderをreleaseします.
 

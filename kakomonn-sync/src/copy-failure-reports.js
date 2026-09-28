@@ -3,6 +3,7 @@ import { COPY_FAILURE_STAGES, isCopyFailure } from "../../contracts/kakomonn.mjs
 
 export const COPY_FAILURE_COMMENTS_URL =
   "https://api.github.com/repos/expgolemclone/kakomonn/issues/29/comments";
+const GITHUB_API_VERSION = "2026-03-10";
 const REQUEST_TIMEOUT_MS = 10000;
 const RETRY_MIN_MS = 60000;
 const RETRY_MAX_MS = 6 * 60 * 60 * 1000;
@@ -79,7 +80,9 @@ export class CopyFailureReports extends DurableObject {
   async resumeAfterCredentialChange() {
     const token = this.env.GITHUB_COPY_FAILURE_TOKEN;
     if (typeof token !== "string" || token.length === 0) return;
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(
+      `${token}\0${COPY_FAILURE_COMMENTS_URL}\0${GITHUB_API_VERSION}`,
+    ));
     const fingerprint = Array.from(new Uint8Array(digest), (byte) =>
       byte.toString(16).padStart(2, "0")).join("");
     if (await this.ctx.storage.get("githubCredentialFingerprint") === fingerprint) return;
@@ -116,7 +119,7 @@ export class CopyFailureReports extends DurableObject {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         "User-Agent": "kakomonn-sync",
-        "X-GitHub-Api-Version": "2026-03-10",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

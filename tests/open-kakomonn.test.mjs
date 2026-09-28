@@ -21,6 +21,7 @@ const {
   readDevToolsActivePort,
   tampermonkeyReadyExpression,
   waitForDevToolsActivePort,
+  waitForKakomonnLaunch,
 } = chromeDevTools;
 const { inspectDedicatedChrome, inspectDedicatedChromePowerShell, stopDedicatedChromePowerShell } =
   windowsChromeProfile;
@@ -650,6 +651,9 @@ test("prewarms Tampermonkey before creating the fixed application target", async
     },
     tampermonkeyExtensionId: "tampermonkey-beta",
     userscriptIdentity: USERSCRIPT_IDENTITY,
+    async waitForLaunch(applicationTarget) {
+      operations.push({ waitForLaunch: applicationTarget.id });
+    },
   });
   assert.deepEqual(result, { port: 9222, targetId: "application-target" });
   const navigations = operations.filter((operation) => operation?.method === "Page.navigate");
@@ -670,6 +674,9 @@ test("prewarms Tampermonkey before creating the fixed application target", async
   assert.deepEqual(operations[applicationTargetIndex + 1], {
     closeTarget: "prepared-target",
     port: 9222,
+  });
+  assert.deepEqual(operations[applicationTargetIndex + 2], {
+    waitForLaunch: "application-target",
   });
   assert.match(TAMPERMONKEY_READY_EXPRESSION, /chrome\.storage\.local\.get/);
   assert.equal(operations.at(-1), "disconnect");
@@ -730,4 +737,121 @@ test("closes the bootstrap target without opening the app when Tampermonkey is n
   );
   assert.deepEqual(navigations, ["chrome-extension://tampermonkey-beta/options.html#nav=settings"]);
   assert.deepEqual(closedTargets, [{ port: 9222, targetId: "failed-target" }]);
+});
+
+function applicationSession(states) {
+  const operations = [];
+  let stateIndex = 0;
+  const session = {
+    close() {
+      operations.push("close");
+    },
+    async command(method) {
+      operations.push(method);
+      if (method === "Runtime.evaluate") {
+        return { result: { value: states[stateIndex] } };
+      }
+      if (method === "Page.reload") {
+        stateIndex += 1;
+      }
+      return {};
+    },
+    async waitForEvent(method) {
+      operations.push(`wait:${method}`);
+    },
+  };
+  return { operations, session };
+}
+
+test("reloads an early runtime failure and observes the question in the same target", async () => {
+  const { operations, session } = applicationSession([
+    {
+      href: KAKOMONN_OPEN_URL,
+      bridgeState: "error",
+      bridgeError: "runtime_unavailable",
+      openError: "context=open-bridge | code=reader_unavailable",
+    },
+    {
+      href: "https://chushoks.kakomonn.com/questions/45124",
+      bridgeState: null,
+      bridgeError: null,
+      openError: null,
+    },
+  ]);
+  let elapsedMs = 0;
+  const result = await waitForKakomonnLaunch(
+    { webSocketDebuggerUrl: "ws://application-target" },
+    {
+      async connectSession(url) {
+        assert.equal(url, "ws://application-target");
+        return session;
+      },
+      async delayImpl(ms) {
+        elapsedMs += ms;
+      },
+      now: () => elapsedMs,
+    },
+  );
+  assert.equal(result, "ready");
+  assert.deepEqual(operations, [
+    "Page.enable",
+    "Runtime.evaluate",
+    "wait:Page.frameNavigated",
+    "Page.reload",
+    "Runtime.evaluate",
+    "close",
+  ]);
+});
+
+test("keeps terminal bridge results visible without retrying", async () => {
+  for (const [bridgeState, bridgeError, expected] of [
+    ["empty", null, "empty"],
+    ["unauthorized", null, "unauthorized"],
+    ["error", "invalid_response", null],
+  ]) {
+    const { operations, session } = applicationSession([
+      { href: KAKOMONN_OPEN_URL, bridgeState, bridgeError, openError: null },
+    ]);
+    const options = {
+      connectSession: async () => session,
+      delayImpl: async () => {},
+    };
+    if (expected === null) {
+      await assert.rejects(
+        waitForKakomonnLaunch({ webSocketDebuggerUrl: "ws://target" }, options),
+        /Kakomonn reader bridge failed: invalid_response/,
+      );
+    } else {
+      assert.equal(
+        await waitForKakomonnLaunch({ webSocketDebuggerUrl: "ws://target" }, options),
+        expected,
+      );
+    }
+    assert.equal(operations.includes("Page.reload"), false);
+    assert.equal(operations.at(-1), "close");
+  }
+});
+
+test("stops transient bridge retries at the startup deadline", async () => {
+  const { operations, session } = applicationSession([
+    { href: KAKOMONN_OPEN_URL, bridgeState: "error", bridgeError: "network_error" },
+    { href: KAKOMONN_OPEN_URL, bridgeState: "error", bridgeError: "network_error" },
+  ]);
+  let elapsedMs = 0;
+  await assert.rejects(
+    waitForKakomonnLaunch(
+      { webSocketDebuggerUrl: "ws://target" },
+      {
+        connectSession: async () => session,
+        async delayImpl(ms) {
+          elapsedMs += ms;
+        },
+        now: () => elapsedMs,
+        timeoutMs: 500,
+      },
+    ),
+    /did not become ready: Kakomonn reader bridge is not ready: network_error/,
+  );
+  assert.equal(operations.filter((operation) => operation === "Page.reload").length, 1);
+  assert.equal(operations.at(-1), "close");
 });

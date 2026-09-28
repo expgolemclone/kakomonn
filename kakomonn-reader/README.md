@@ -45,7 +45,7 @@ Releaseのtagは`kakomonn-reader-v<version>`,titleは`kakomonn-reader v<version>
 
 ## 動作環境
 
-Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` modeとiPhone Safari + Tampermonkeyだけに対応します. Windows launcherはcold Chromeでは`about:blank`だけを開き, 起動済みChromeから再実行した場合だけ固定`/open`へ遷移します. 両端末とも問題文と解説にはAzure Speechの`ja-JP-NanamiNeural`を使用し, 短期tokenの取得後はAzureから音声を直接受信します. 長文では現在のchunk再生開始時に次の1chunkを先読みします. 同期と問題pageの準備が完了すると, 問題文の自動読み上げを試みます. iPhone Safariが初回の自動再生を拒否した場合は, 最初の画面tapで読み上げを再試行し, 以降の問題は自動で読み上げます. 問題文と解説の読み上げにはインターネット接続が必要です.
+Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` modeとiPhone Safari + Tampermonkeyだけに対応します. Windows launcherはcold Chromeを`about:blank`で起動してから別processで固定`/open`を開き, 起動直後の一時的なruntimeまたは通信失敗時だけ同じtabを再読み込みします. 両端末とも問題文と解説にはAzure Speechの`ja-JP-NanamiNeural`を使用し, 短期tokenの取得後はAzureから音声を直接受信します. 長文では現在のchunk再生開始時に次の1chunkを先読みします. 同期と問題pageの準備が完了すると, 問題文の自動読み上げを試みます. iPhone Safariが初回の自動再生を拒否した場合は, 最初の画面tapで読み上げを再試行し, 以降の問題は自動で読み上げます. 問題文と解説の読み上げにはインターネット接続が必要です.
 
 ## 学習記録の同期設定
 

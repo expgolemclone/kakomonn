@@ -663,8 +663,20 @@ async function assertReaderBridge(browser, script) {
   await errorPage.waitForFunction(
     () => document.documentElement.dataset.kakomonnReaderBridgeState === "error",
   );
+  assert.equal(
+    await errorPage.locator("html").getAttribute("data-kakomonn-reader-bridge-error"),
+    "storage_unavailable",
+  );
   assert.equal(await errorPage.locator("#kakomonn-reader-shell").count(), 0);
   assert.deepEqual(errorErrors, []);
+
+  const runtimePage = await context.newPage();
+  await runtimePage.goto(`${SYNC_API_ORIGIN}/open`);
+  await runtimePage.addScriptTag({ content: script });
+  assert.equal(
+    await runtimePage.locator("html").getAttribute("data-kakomonn-reader-bridge-error"),
+    "runtime_unavailable",
+  );
   await context.close();
 }
 

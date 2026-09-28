@@ -82,6 +82,11 @@ export async function startReader() {
   const isDashboardBridge = location.origin === SYNC_API_URL && location.pathname === "/";
   const NEXT_QUESTION_SITE_ID = "chushoks.kakomonn.com";
   const READER_BRIDGE_TARGET_ATTRIBUTE = "data-kakomonn-reader-bridge-target";
+  const READER_BRIDGE_ERROR_ATTRIBUTE = "data-kakomonn-reader-bridge-error";
+  function failReaderBridge(code) {
+    document.documentElement.setAttribute(READER_BRIDGE_ERROR_ATTRIBUTE, code);
+    document.documentElement.dataset.kakomonnReaderBridgeState = "error";
+  }
   const isNextQuestionLauncher =
     location.hostname === NEXT_QUESTION_SITE_ID &&
     location.pathname === "/createques" &&
@@ -196,15 +201,17 @@ export async function startReader() {
     typeof GM.setClipboard !== "function"
   ) {
     if (isReaderBridge) {
-      document.documentElement.dataset.kakomonnReaderBridgeState = "error";
+      failReaderBridge("runtime_unavailable");
     }
     return;
   }
   if (isReaderBridge) {
+    let phase = "storage";
     try {
       const storedToken = await GM.getValue(SYNC_TOKEN_KEY, "");
       const token = typeof storedToken === "string" ? storedToken.trim() : "";
       const parameters = new URLSearchParams({ site: NEXT_QUESTION_SITE_ID });
+      phase = "request";
       const result = await requestSyncResponse(
         "GET",
         `/v12/next?${parameters}`,
@@ -215,6 +222,7 @@ export async function startReader() {
         document.documentElement.dataset.kakomonnReaderBridgeState = "empty";
         return;
       }
+      phase = "storage";
       await GM.setValue(LAUNCH_HANDOFF_KEY, {
         createdAtMs: Date.now(),
         questionURL: result.question.url,
@@ -223,8 +231,17 @@ export async function startReader() {
       document.documentElement.setAttribute(READER_BRIDGE_TARGET_ATTRIBUTE, result.question.url);
       document.documentElement.dataset.kakomonnReaderBridgeState = "ready";
     } catch (error) {
-      document.documentElement.dataset.kakomonnReaderBridgeState =
-        error?.code === "unauthorized" ? "unauthorized" : "error";
+      if (phase === "request" && error?.code === "unauthorized") {
+        document.documentElement.dataset.kakomonnReaderBridgeState = "unauthorized";
+      } else {
+        failReaderBridge(
+          phase === "storage"
+            ? "storage_unavailable"
+            : typeof error?.code === "string" && /^[a-z][a-z0-9_]*$/.test(error.code)
+              ? error.code
+              : "request_failed",
+        );
+      }
     }
     return;
   }

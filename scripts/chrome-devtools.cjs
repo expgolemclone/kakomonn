@@ -4,7 +4,15 @@ const path = require("node:path");
 const DEVTOOLS_ACTIVE_PORT_FILE = "DevToolsActivePort";
 const DEVTOOLS_HOST = "127.0.0.1";
 const DEVTOOLS_TIMEOUT_MS = 30_000;
+const LAUNCH_RETRY_DELAY_MS = 250;
 const TAMPERMONKEY_BETA_EXTENSION_ID = "gcalenpjmijncebpfijmoaglllgpjagf";
+const TRANSIENT_BRIDGE_ERRORS = new Set([
+  "runtime_unavailable",
+  "storage_unavailable",
+  "network_error",
+  "request_aborted",
+  "request_timeout",
+]);
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -234,6 +242,81 @@ async function readPageState(session) {
   return state;
 }
 
+async function readApplicationState(session) {
+  const evaluated = await session.command("Runtime.evaluate", {
+    expression: `({
+      href: location.href,
+      bridgeState: document.documentElement.dataset.kakomonnReaderBridgeState ?? null,
+      bridgeError: document.documentElement.dataset.kakomonnReaderBridgeError ?? null,
+      openError: document.querySelector("#open-error-detail")?.textContent ?? null
+    })`,
+    returnByValue: true,
+  });
+  if (evaluated.exceptionDetails || typeof evaluated.result?.value?.href !== "string") {
+    throw new Error("Chrome application state evaluation failed");
+  }
+  return evaluated.result.value;
+}
+
+async function waitForKakomonnLaunch(
+  target,
+  {
+    connectSession = connectDevToolsSession,
+    delayImpl = delay,
+    now = Date.now,
+    timeoutMs = DEVTOOLS_TIMEOUT_MS,
+  } = {},
+) {
+  const session = await connectSession(target.webSocketDebuggerUrl);
+  let lastError = null;
+  try {
+    await session.command("Page.enable");
+    const deadline = now() + timeoutMs;
+    while (now() < deadline) {
+      let state;
+      try {
+        state = await readApplicationState(session);
+      } catch (error) {
+        lastError = error;
+        await delayImpl(100);
+        continue;
+      }
+      if (/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(state.href)) {
+        return "ready";
+      }
+      if (state.bridgeState === "ready") {
+        return "ready";
+      }
+      if (state.bridgeState === "empty" || state.bridgeState === "unauthorized") {
+        return state.bridgeState;
+      }
+      const timedOut = state.openError?.includes("code=reader_ready_timeout") === true;
+      if (state.bridgeState === "error" || timedOut) {
+        const code = state.bridgeError ?? (timedOut ? "reader_ready_timeout" : "unknown");
+        if (!TRANSIENT_BRIDGE_ERRORS.has(code) && code !== "reader_ready_timeout") {
+          throw new Error(`Kakomonn reader bridge failed: ${code}`);
+        }
+        lastError = new Error(`Kakomonn reader bridge is not ready: ${code}`);
+        if (now() + LAUNCH_RETRY_DELAY_MS >= deadline) {
+          break;
+        }
+        await delayImpl(LAUNCH_RETRY_DELAY_MS);
+        await Promise.all([
+          session.waitForEvent("Page.frameNavigated"),
+          session.command("Page.reload"),
+        ]);
+        continue;
+      }
+      await delayImpl(100);
+    }
+    throw new Error(
+      `Kakomonn reader bridge did not become ready: ${lastError?.message ?? "no userscript response"}`,
+    );
+  } finally {
+    session.close();
+  }
+}
+
 async function navigateAndWait(
   session,
   url,
@@ -317,11 +400,13 @@ async function prepareKakomonnPage(
     target: suppliedTarget = null,
     tampermonkeyExtensionId,
     userscriptIdentity,
+    waitForLaunch = waitForKakomonnLaunch,
   },
 ) {
   const target = suppliedTarget ?? (await createTarget(port));
   let session = null;
   let applicationTarget = null;
+  let bootstrapClosed = false;
   try {
     session = await connectSession(target.webSocketDebuggerUrl);
     await session.command("Page.enable");
@@ -345,12 +430,13 @@ async function prepareKakomonnPage(
     }
     applicationTarget = await createTarget(port, openURL);
     await closeTarget(port, target.id);
+    bootstrapClosed = true;
+    await waitForLaunch(applicationTarget);
     return Object.freeze({ port, targetId: applicationTarget.id });
   } catch (error) {
-    if (applicationTarget !== null) {
-      await closeTarget(port, applicationTarget.id).catch(() => null);
+    if (!bootstrapClosed) {
+      await closeTarget(port, target.id).catch(() => null);
     }
-    await closeTarget(port, target.id).catch(() => null);
     throw error;
   } finally {
     session?.close();
@@ -369,6 +455,7 @@ module.exports = {
   navigateAndWait,
   readPageState,
   tampermonkeyReadyExpression,
+  waitForKakomonnLaunch,
   prepareKakomonnPage,
   readDevToolsActivePort,
   waitForDevToolsActivePort,

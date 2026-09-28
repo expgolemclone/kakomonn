@@ -7,6 +7,7 @@ const { inspectDedicatedChrome } = require("../../scripts/windows-chrome-profile
 const {
   CURRENT_QUESTION_URL,
   DEFAULT_SYNC_API_ORIGIN,
+  connectDedicatedChrome,
   launchChromeWithCurrentUserscript,
   readChromeUserDataDir,
   resolveSyncToken,
@@ -66,7 +67,7 @@ async function readLearningActivities(token, dates) {
 }
 
 async function main() {
-  const { openKakomonnURL } = await import("../../scripts/open-kakomonn.mjs");
+  const { ensureKakomonnBrowser, openKakomonnURL } = await import("../../scripts/open-kakomonn.mjs");
   const configuration = readKakomonnConfiguration({
     envFilePath: repositoryEnvPath,
   });
@@ -89,6 +90,7 @@ async function main() {
     userDataDir,
     userscriptPath,
   });
+  let activeChrome = null;
   let setupPage = null;
   let page = null;
   try {
@@ -100,14 +102,21 @@ async function main() {
     const configuredState = await configureSyncToken(setupPage, token, expectedBuildFingerprint);
     assert.equal(configuredState.settingsOpen, false);
     assert.equal(configuredState.topControlsPresent, false);
-    const launch = await openKakomonnURL({ configuration });
-    assert.equal(launch.applicationOpened, true);
     await setupPage.close();
     setupPage = null;
+    await setupChrome.close();
+    const browserLaunch = await ensureKakomonnBrowser({ configuration });
+    assert.equal(browserLaunch.browserStarted, true);
+    activeChrome = await connectDedicatedChrome({
+      port: browserLaunch.devToolsPort,
+      userDataDir,
+    });
+    const launch = await openKakomonnURL({ configuration });
+    assert.equal(launch.applicationOpened, true);
     page = await waitUntil(
       "the production open bridge tab",
       async () =>
-        setupChrome.context.pages().find((candidate) => {
+        activeChrome.context.pages().find((candidate) => {
           try {
             const url = new URL(candidate.url());
             return url.href === openURL || url.hostname === site;
@@ -118,7 +127,7 @@ async function main() {
       30_000,
     );
     const outcome = await waitUntil(
-      "a scheduled question from the warm production launch",
+      "a scheduled question from the cold production launch",
       async () => {
         const state = await readReaderState(page);
         const launcher = await page.evaluate(() => ({
@@ -156,7 +165,7 @@ async function main() {
     assert.equal(
       observedDates.includes(finalState.today),
       true,
-      "prewarmed open exceeded its observed learning dates",
+      "cold open exceeded its observed learning dates",
     );
     const finalActivities = await readLearningActivities(token, observedDates);
     for (const [index, finalEntry] of finalActivities.entries()) {
@@ -165,19 +174,19 @@ async function main() {
       assert.deepEqual(
         finalEntry.activity.attempts,
         baselineEntry.activity.attempts,
-        "prewarmed open must not record attempts",
+        "cold open must not record attempts",
       );
       assert.deepEqual(
         finalEntry.activity.stability_history,
         baselineEntry.activity.stability_history,
-        "prewarmed open must not change stability history",
+        "cold open must not change stability history",
       );
       const baselineStudyTimeMs = baselineEntry.activity.study_time_daily[0]?.study_time_ms ?? 0;
       const finalStudyTimeMs = finalEntry.activity.study_time_daily[0]?.study_time_ms ?? 0;
       assert.equal(
         finalStudyTimeMs >= baselineStudyTimeMs,
         true,
-        "prewarmed open must not reduce study time",
+        "cold open must not reduce study time",
       );
     }
     assert.equal(
@@ -189,7 +198,7 @@ async function main() {
     console.log(
       JSON.stringify({
         browser: "Google Chrome with Tampermonkey Beta",
-        browserStart: "warm browser with prewarmed transport",
+        browserStart: "cold browser with bounded bridge retry",
         buildFingerprint: expectedBuildFingerprint,
         scheduledQuestionURL: outcome.state.outerURL,
         startURL: openURL,
@@ -225,6 +234,7 @@ async function main() {
     if (setupPage !== null) {
       await setupPage.close().catch(() => null);
     }
+    await activeChrome?.close();
     await setupChrome.close();
   }
   assert.equal(

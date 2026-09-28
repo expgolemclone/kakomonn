@@ -24,7 +24,7 @@
 npm run open:kakomonn
 ```
 
-Chromeが同じ専用profileで起動済みの場合は, processの起動optionを確認します. 必要なoptionで起動済みなら再起動せず, そうでなければその専用profileのChromeだけを終了して起動し直します. commandは内部でbrowser起動とURL表示を別processとして直列実行し, 1回の実行でChromeを準備した後にTampermonkey Betaを確認して固定`/open`の専用tabを追加します. 固定URLをChromeのcold起動引数として渡す経路はありません. 通常利用するChrome profileまたはその配下は指定できません. 完全testもこの専用profileの既存Chrome processを終了するため, test前に専用profileでの作業を保存してください.
+Chromeが同じ専用profileで起動済みの場合は, processの起動optionを確認します. 必要なoptionで起動済みなら再起動せず, そうでなければその専用profileのChromeだけを終了して起動し直します. commandは内部でbrowser起動とURL表示を別processとして直列実行し, 1回の実行でChromeを準備した後にTampermonkey Betaを確認して固定`/open`の専用tabを追加します. 起動直後にuserscriptのruntimeまたは通信が一時的に利用できない場合は, 同じtabを30秒以内で再読み込みします. 固定URLをChromeのcold起動引数として渡す経路はありません. 通常利用するChrome profileまたはその配下は指定できません. 完全testもこの専用profileの既存Chrome processを終了するため, test前に専用profileでの作業を保存してください.
 
 Readerで同期tokenを設定すると, 同じbrowser profileのsync dashboardもUserscript専用storageの同じtokenで自動接続します. Dashboardへtokenを再入力する必要はありません.
 
@@ -63,9 +63,9 @@ KAKOMONN_SYNC_TOKEN=<SYNC_TOKEN>
 npm test
 ```
 
-上記のinstallでPlaywrightと対応するChromiumおよびWebKitも導入します. 完全testはlocal testとsmoke testに続けて, 実サイトE2Eと, 専用profileの最小化Chrome, 実Tampermonkey Beta, 本番同期Workerを使用するlive E2Eを実行します. test scriptは専用profileの既存processの終了から起動, userscript更新, test後の終了までを所有し, Tampermonkey Betaを`UserScripts API Dynamic` modeへ設定します. 実userscript通信を完了したwarm Chromeだけでproduction launcherから本番の固定`/open`を開く解答なしE2Eを実行し, 解答履歴と定着状態を変更せずforegroundの勉強時間だけが記録されることを検証してから, 実Chrome上で解答記録を送信します. 本番の解答履歴と定着状態, 外側URLとiframeの次問遷移, 実OS clipboardへのMarkdownコピーまでを検証します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません. 専用profile, Tampermonkey Beta, 本番token, 最新buildのいずれかが欠けている場合は失敗し, live E2Eをskipまたはforce通過させるoptionはありません.
+上記のinstallでPlaywrightと対応するChromiumおよびWebKitも導入します. 完全testはlocal testとsmoke testに続けて, 実サイトE2Eと, 専用profileの最小化Chrome, 実Tampermonkey Beta, 本番同期Workerを使用するlive E2Eを実行します. test scriptは専用profileの既存processの終了から起動, userscript更新, test後の終了までを所有し, Tampermonkey Betaを`UserScripts API Dynamic` modeへ設定します. userscript更新と同期token設定後にChromeをcold再起動し, production launcherから本番の固定`/open`を開く解答なしE2Eを実行します. 解答履歴と定着状態を変更せずforegroundの勉強時間だけが記録されることを検証してから, 実Chrome上で解答記録を送信します. 本番の解答履歴と定着状態, 外側URLとiframeの次問遷移, 実OS clipboardへのMarkdownコピーまでを検証します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません. 専用profile, Tampermonkey Beta, 本番token, 最新buildのいずれかが欠けている場合は失敗し, live E2Eをskipまたはforce通過させるoptionはありません.
 
-ReaderのTampermonkey metadata, ES2020構文, build fingerprintもこの完全testで検証します. prewarmed production launcherの解答なしE2Eだけを再実行する場合は`npm run test:kakomonn-live-open`, 解答を含むlive E2Eだけを再実行する場合は`npm run test:kakomonn-live-sync`, Chromiumとmobile相当のPlaywright WebKitを使うsmoke testだけを実行する場合は`npm run test:smoke`を使用します. いずれも完全な完了条件の代替にはなりません.
+ReaderのTampermonkey metadata, ES2020構文, build fingerprintもこの完全testで検証します. cold起動からのproduction launcherの解答なしE2Eだけを再実行する場合は`npm run test:kakomonn-live-open`, 解答を含むlive E2Eだけを再実行する場合は`npm run test:kakomonn-live-sync`, Chromiumとmobile相当のPlaywright WebKitを使うsmoke testだけを実行する場合は`npm run test:smoke`を使用します. いずれも完全な完了条件の代替にはなりません.
 
 ## iOS Safari CI
 

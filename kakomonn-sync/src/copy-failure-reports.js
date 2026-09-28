@@ -4,7 +4,7 @@ import { COPY_FAILURE_STAGES, isCopyFailure } from "../../contracts/kakomonn.mjs
 export const COPY_FAILURE_COMMENTS_URL =
   "https://api.github.com/repos/expgolemclone/kakomonn/issues/29/comments";
 const GITHUB_API_VERSION = "2026-03-10";
-const REQUEST_TIMEOUT_MS = 10000;
+const REQUEST_TIMEOUT_MS = 30000;
 const RETRY_MIN_MS = 60000;
 const RETRY_MAX_MS = 6 * 60 * 60 * 1000;
 
@@ -186,7 +186,8 @@ export class CopyFailureReports extends DurableObject {
              WHERE site = ? AND question_id = ? AND stage = ?`, commentId, ...keys,
           );
         } catch (error) {
-          console.error("copy_failure_delivery_attempt", error?.status ?? error?.name ?? "unknown");
+          console.error("copy_failure_delivery_attempt", error?.status ?? error?.name ?? "unknown",
+            error?.message ?? "no-message");
           const delay = Math.min(RETRY_MAX_MS, RETRY_MIN_MS * 2 ** Math.min(row.retry_count, 9));
           const retryAtMs = Math.max(Date.now() + delay, error?.retryAtMs ?? 0);
           this.ctx.storage.sql.exec(

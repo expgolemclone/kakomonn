@@ -93,6 +93,7 @@ APIは`/v12`だけを提供し, 学習状態はLearningState Durable Object, コ
 - `GET /v12/next`は, FSRSに基づく次の問題と同時点の`state`を1回のDurable Object RPCで返します.
 - `POST /v12/questions`は, siteの問題catalogを世代番号付きで置き換え, 更新後の次の問題を返します. 世代競合時は現在のcatalogと次の問題を返します.
 - `POST /v12/speech-token`は, 有効期間600秒のAzure Speech tokenを返します.
+- 同じCloudflare accountの`smec-second-private`は, `SpeechTokenEntrypoint.issueToken()`をService Bindingから呼び出して同じ短期tokenを取得します. このRPCはpublic HTTP routeを追加せず, Azure Speech keyの登録先をこのWorkerだけに保ちます.
 - `POST /v12/copy-failures`は, 同期tokenで認証し, `site`, `questionId`, `reason`だけを受け取ります. `reason`は`markdown_unavailable`, `clipboard_write_failed`, `clipboard_write_timeout`に限定し, 永続受付後に`{ accepted: true }`を返します. 問題URLはWorkerで生成します.
 
 ### learningMetrics contract

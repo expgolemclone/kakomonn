@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { handleRequest } from "../src/index.js";
-import { issueSpeechToken } from "../src/speech.js";
+import { issueSpeechToken, issueSpeechTokenForBinding } from "../src/speech.js";
 
 const AUTHORIZATION = { Authorization: "Bearer test-sync-token" };
 
@@ -97,5 +97,18 @@ describe("v12 speech token", () => {
 
     expect(response.status).toBe(405);
     expect(response.headers.get("Allow")).toBe("POST");
+  });
+
+  it("returns the existing token response through the internal service binding", async () => {
+    const result = await issueSpeechTokenForBinding(
+      { AZURE_SPEECH_KEY: "test-speech-key" },
+      async () => new Response("test-azure-token"),
+    );
+    expect(result).toEqual({
+      status: 200,
+      body: { token: "test-azure-token", expiresInSeconds: 600 },
+    });
+    const missing = await issueSpeechTokenForBinding({});
+    expect(missing).toEqual({ status: 500, body: { error: "server_misconfigured" } });
   });
 });

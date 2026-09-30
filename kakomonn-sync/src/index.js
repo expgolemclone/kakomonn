@@ -12,6 +12,7 @@ import { handleQuestions } from "./api/questions.js";
 import { handleStudyTime } from "./api/study-time.js";
 import { issueSpeechToken } from "./speech.js";
 export { CopyFailureReports } from "./copy-failure-reports.js";
+export { SpeechTokenEntrypoint } from "./speech-entrypoint.js";
 
 export { LearningState, issueSpeechToken };
 export * from "./fsrs.js";

@@ -39,3 +39,8 @@ export async function issueSpeechToken(env, fetcher = fetch) {
   }
   return jsonResponse({ token, expiresInSeconds: TOKEN_TTL_SECONDS });
 }
+
+export async function issueSpeechTokenForBinding(env, fetcher = fetch) {
+  const response = await issueSpeechToken(env, fetcher);
+  return { status: response.status, body: await response.json() };
+}

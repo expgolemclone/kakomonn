@@ -8,7 +8,7 @@
 [![Playwright](https://img.shields.io/badge/Playwright-2EAD33?style=flat-square&logo=playwright&logoColor=white)](https://playwright.dev/)
 [![License](https://img.shields.io/badge/License-MIT-A31F34?style=flat-square)](LICENSE)
 
-中小企業診断士試験の過去問学習を支援するユーザースクリプトと関連serviceを管理するリポジトリです.
+kakomonn.comの各資格サイトでの過去問学習を支援するユーザースクリプトと関連serviceを管理するリポジトリです.
 
 ## Documents
 

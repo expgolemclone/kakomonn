@@ -16,6 +16,8 @@ dashboardは[`learningMetrics`](#learningmetrics-contract)のprimary KPIと残�
 
 ## 次の問題を開く
 
+固定URLの起動先は現在`chushoks.kakomonn.com`です. 他の資格サイトでは, 対象サイトの問題ページを直接開いて`kakomonn-reader`を使用します.
+
 Windowsのopen commandまたはiPhone Safariから, 次の固定URLでFSRSに基づく次の問題へ移動できます. iPhoneでは最新の`kakomonn-reader`をTampermonkeyへinstallして同期tokenを保存し, URLをbookmarkまたはshortcutへ設定します.
 
 ```text

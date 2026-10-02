@@ -93,7 +93,6 @@ export async function startReader() {
     location.search === "" &&
     location.hash === "#kakomonn-next";
   let shouldLaunchNextQuestionAfterSync = isNextQuestionLauncher;
-  const CONGRATULATIONS_URL = "https://kakomonn-congratulations.kakomonn.workers.dev/";
 
   class SyncRequestError extends Error {
     constructor(code, status = 0, responseBody = null) {
@@ -491,7 +490,6 @@ export async function startReader() {
         shouldLaunchNextQuestionAfterSync = value;
       },
     },
-    CONGRATULATIONS_URL: { enumerable: false, get: () => CONGRATULATIONS_URL },
     SyncRequestError: { enumerable: false, get: () => SyncRequestError },
     gmXMLHttpRequest: { enumerable: false, get: () => gmXMLHttpRequest },
     requestSyncResponse: { enumerable: false, get: () => requestSyncResponse },

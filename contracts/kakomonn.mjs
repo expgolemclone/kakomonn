@@ -545,37 +545,6 @@ export function isSpeechTokenResponse(value) {
   );
 }
 
-export function parseCelebration(search) {
-  const parameters = new URLSearchParams(search);
-  const keys = Array.from(parameters.keys()).sort();
-  if (
-    keys.length !== CELEBRATION_KEYS.length ||
-    keys.some((key, index) => key !== CELEBRATION_KEYS[index])
-  ) {
-    throw new TypeError("Celebration parameters are invalid.");
-  }
-  const celebration = {
-    dailyKpiCompleted: parameters.get("dailyKpiCompleted") === "true",
-    date: parameters.get("date"),
-    site: parameters.get("site"),
-  };
-  if (!isCelebration(celebration)) {
-    throw new TypeError("Celebration identity or metrics are invalid.");
-  }
-  return celebration;
-}
-
-export function celebrationSearch(celebration) {
-  if (!isCelebration(celebration)) {
-    throw new TypeError("Celebration is invalid.");
-  }
-  const parameters = new URLSearchParams();
-  for (const key of CELEBRATION_KEYS) {
-    parameters.set(key, String(celebration[key]));
-  }
-  return parameters.toString();
-}
-
 export function isAnswerResult(value) {
   return value === "correct" || value === "incorrect";
 }

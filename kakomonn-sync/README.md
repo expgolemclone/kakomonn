@@ -101,7 +101,7 @@ APIは`/v12`だけを提供し, 学習状態はLearningState Durable Object, コ
 ### learningMetrics contract
 
 `GET /v12/state`と`POST /v12/attempts`は次の値を`learningMetrics`として返します. 日付の境界は日本時間です.
-runtimeで共有するvalidationとcelebration contractの正本はrepository rootの`contracts/kakomonn.mjs`です.
+学習APIのvalidationと達成eventの正本はrepository rootの`contracts/kakomonn.mjs`です. 祝福URLの契約は[congratulations](https://github.com/expgolemclone/congratulations)のpackageを使用します.
 
 | Field | Definition |
 | --- | --- |

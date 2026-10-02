@@ -1514,7 +1514,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
     await page.waitForURL(
       (url) => url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
-    assert.equal(new URL(page.url()).searchParams.get("dailyKpiCompleted"), "true");
+    assert.equal(new URL(page.url()).searchParams.get("achievement"), "daily-study-quota");
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
@@ -1736,7 +1736,7 @@ async function runIncorrectCelebrationEnterCase(context, script) {
     await page.waitForURL(
       (url) => url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
-    assert.equal(new URL(page.url()).searchParams.get("dailyKpiCompleted"), "true");
+    assert.equal(new URL(page.url()).searchParams.get("achievement"), "daily-study-quota");
     assert.deepEqual(errors, []);
   } finally {
     await page.close();
@@ -1763,7 +1763,7 @@ async function runOrphanedCelebrationRecoveryCase(context, script) {
     await page.waitForURL(
       (url) => url.origin === "https://kakomonn-congratulations.kakomonn.workers.dev",
     );
-    assert.equal(new URL(page.url()).searchParams.get("dailyKpiCompleted"), "true");
+    assert.equal(new URL(page.url()).searchParams.get("achievement"), "daily-study-quota");
     assert.deepEqual(errors, []);
   } finally {
     await page.close();

@@ -547,13 +547,13 @@ async function main() {
     } else {
       const celebrationURL = new URL(navigationResult.outerURL);
       assert.deepEqual([...celebrationURL.searchParams.keys()].sort(), [
-        "dailyKpiCompleted",
+        "achievement",
         "date",
-        "site",
+        "source",
       ]);
-      assert.equal(celebrationURL.searchParams.get("site"), finalState.site);
+      assert.equal(celebrationURL.searchParams.get("source"), finalState.site);
       assert.equal(celebrationURL.searchParams.get("date"), finalState.today);
-      assert.equal(celebrationURL.searchParams.get("dailyKpiCompleted"), "true");
+      assert.equal(celebrationURL.searchParams.get("achievement"), "daily-study-quota");
       assert.equal(finalState.learningMetrics.dailyKpiCompleted, true);
     }
     console.log(

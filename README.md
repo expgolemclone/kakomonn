@@ -14,7 +14,7 @@ kakomonn.comの各資格サイトでの過去問学習を支援するユーザ�
 
 - [`kakomonn-reader`](kakomonn-reader/README.md)
 - [`kakomonn-sync`](kakomonn-sync/README.md)
-- [`congratulations`](congratulations/README.md)
+- [`congratulations`](https://github.com/expgolemclone/congratulations)
 
 ## 普段使いのChrome
 
@@ -34,7 +34,7 @@ iPhone Safariの設定と固定URLは, [`kakomonn-sync`の次の問題を開く�
 
 ## テスト
 
-Node.js 22.12以上を使用します. rootの単一npm packageがreader, sync, congratulationsのbuildとtestを管理します.
+Node.js 22.12以上を使用します. rootの単一npm packageがreaderとsyncのbuildとtestを管理します. 共通祝福は独立したcongratulations repositoryが管理します.
 
 Repositoryの変更をpushまたはdeployする前に, このsectionの完全testを通過させます.
 
@@ -81,14 +81,14 @@ npm run test:kakomonn-ios-safari
 
 ## Release and deployment
 
-単一componentの手順は, [`kakomonn-sync`のデプロイ](kakomonn-sync/README.md#デプロイ), [`congratulations`のdeployment](congratulations/README.md#development-and-testing), [`kakomonn-reader`のrelease](kakomonn-reader/README.md#release)をそれぞれ正本とします.
+単一componentの手順は, [`kakomonn-sync`のデプロイ](kakomonn-sync/README.md#デプロイ), [共通祝福のdeployment](https://github.com/expgolemclone/congratulations#development-and-testing), [`kakomonn-reader`のrelease](kakomonn-reader/README.md#release)をそれぞれ正本とします.
 
 sync API, reader, congratulationsを跨ぐ破壊的変更は, 次の順序で完了します.
 
 1. このREADMEの完全testを通過させます.
 2. jjの`main`だけをoriginへpushします.
 3. sync Workerをdeployし, 同期serviceのproduction検証を完了します.
-4. congratulations Workerをdeployし, 祝福serviceのproduction検証を完了します.
+4. 共通祝福の変更がある場合は独立repoからdeployし, production検証を完了します.
 5. readerをreleaseし, 本番syncを使うlive E2EとGitHub Releaseを完了します.
 
 途中の工程を省略した状態は完了として扱いません.

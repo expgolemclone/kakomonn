@@ -30,29 +30,3 @@ test("sync invokes the Worker only for APIs and disables persistent telemetry", 
   assert.deepEqual(config.observability, { enabled: false });
 });
 
-test("congratulations caches stable and content-addressed assets", async () => {
-  const source = await headersSource("congratulations/public/_headers");
-  assert.match(source, /^\/\*\n  Cache-Control: no-cache\n/);
-  assert.equal(source.includes("Cache-Control: no-store"), false);
-  assert.match(
-    source,
-    /Content-Security-Policy: default-src 'self';.*frame-ancestors 'self';.*object-src 'none'/,
-  );
-
-  for (const path of [
-    "/assets/*",
-    "/vendor/*",
-    "/experiences/conche/_astro/*",
-    "/experiences/glyphica/_next/static/*",
-    "/experiences/halfstep/assets/*",
-  ]) {
-    assert.match(
-      source,
-      new RegExp(
-        `${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n` +
-          "  ! Cache-Control\\n" +
-          "  Cache-Control: public, max-age=31536000, immutable",
-      ),
-    );
-  }
-});

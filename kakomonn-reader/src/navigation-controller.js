@@ -1,3 +1,4 @@
+import { celebrationURL } from "@expgolemclone/celebration-contract";
 import { isQuestionId } from "../../contracts/kakomonn.mjs";
 
 export function installNavigationController(app) {
@@ -350,11 +351,8 @@ export function installNavigationController(app) {
   }
 
   function congratulationsURL(celebration) {
-    const url = new URL(app.CONGRATULATIONS_URL);
-    url.searchParams.set("site", celebration.site);
-    url.searchParams.set("date", celebration.date);
-    url.searchParams.set("dailyKpiCompleted", "true");
-    return url.href;
+    return celebrationURL({ source: celebration.site, date: celebration.date,
+      achievement: "daily-study-quota" });
   }
 
   async function transitionToPendingCelebration(historyIndex, failureDetail) {

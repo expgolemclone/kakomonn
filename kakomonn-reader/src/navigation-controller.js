@@ -1,4 +1,4 @@
-import { celebrationURL } from "@expgolemclone/celebration-contract";
+import { celebrationURL } from "@expgolemclone/congratulations/celebration";
 import { isQuestionId } from "../../contracts/kakomonn.mjs";
 
 export function installNavigationController(app) {

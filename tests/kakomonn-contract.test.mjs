@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { celebrationURL, parseCelebration } from "@expgolemclone/congratulations/celebration";
 
 import {
   canonicalQuestionIds,
@@ -50,6 +52,19 @@ const nextQuestion = Object.freeze({
   url: `https://${site}/questions/45124`,
   kind: "review",
   dueMs: 1_786_320_000_000,
+});
+
+test("Reader uses the released congratulations public entry", async () => {
+  const value = { source: site, date: "2026-10-03", achievement: "daily-study-quota" };
+  assert.deepEqual(parseCelebration(new URL(celebrationURL(value)).search), value);
+  const dependency = "@expgolemclone/congratulations";
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const lock = JSON.parse(await readFile(new URL("../package-lock.json", import.meta.url), "utf8"));
+  const installed = lock.packages[`node_modules/${dependency}`];
+  assert.equal(installed.resolved, manifest.dependencies[dependency]);
+  assert.equal(lock.packages[""].dependencies[dependency], manifest.dependencies[dependency]);
+  const navigation = await readFile(new URL("../kakomonn-reader/src/navigation-controller.js", import.meta.url), "utf8");
+  assert(navigation.includes(`from "${dependency}/celebration"`));
 });
 
 test("question IDs use canonical arbitrary-precision numeric ordering", () => {

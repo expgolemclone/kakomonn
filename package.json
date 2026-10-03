@@ -48,7 +48,7 @@
     "wrangler": "4.120.0"
   },
   "dependencies": {
-    "@expgolemclone/celebration-contract": "https://github.com/expgolemclone/congratulations/releases/download/v1.0.0/expgolemclone-celebration-contract-1.0.0.tgz",
+    "@expgolemclone/congratulations": "https://github.com/expgolemclone/congratulations/releases/download/v2.0.0/expgolemclone-congratulations-2.0.0.tgz",
     "ts-fsrs": "5.4.1"
   }
 }

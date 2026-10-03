@@ -293,8 +293,23 @@ class IOSWebDriver {
     );
   }
 
-  async typeKeys(value) {
-    await this.executeScript("mobile: keys", [{ keys: Array.from(value) }]);
+  async typeText(value) {
+    assert.equal(typeof value, 'string');
+    const context = await this.getContext();
+    await this.switchToContext('NATIVE_APP');
+    try {
+      // mobile: keys models individual hardware keys, each with XCTest idle
+      // waits. Text belongs to the focused native input's W3C value command.
+      const element = await this.sessionRequest('GET', '/element/active');
+      const id = element[webDriverElementKey];
+      assert.equal(typeof id, 'string');
+      const endpoint = `/element/${encodeURIComponent(id)}`;
+      const type = await this.sessionRequest('GET', `${endpoint}/attribute/type`);
+      assert.match(type, /^XCUIElementType(?:Secure)?TextField$/);
+      await this.sessionRequest('POST', `${endpoint}/value`, { text: value });
+    } finally {
+      await this.switchToContext(context);
+    }
   }
 
   async switchToFrame(element) {
@@ -1260,7 +1275,7 @@ async function runTest() {
 
     const syncSettingsViewport = await readNativeWebTapViewport(driver);
     await clickWebElementNatively(driver, "#kakomonn-reader-sync-token");
-    await driver.typeKeys("test-sync-token");
+    await driver.typeText("test-sync-token");
     assert.equal(
       await driver.execute(() => document.querySelector("#kakomonn-reader-sync-token").value),
       "test-sync-token",
@@ -1323,7 +1338,7 @@ async function runTest() {
   }
 }
 
-module.exports = { resolveAppiumCli, resolveAppiumRuntimeDirectory };
+module.exports = { IOSWebDriver, resolveAppiumCli, resolveAppiumRuntimeDirectory };
 
 if (require.main === module) {
   runTest().then(

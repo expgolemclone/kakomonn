@@ -7,7 +7,45 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
-const { resolveAppiumCli, resolveAppiumRuntimeDirectory } = require('../kakomonn-reader/tests/ios_safari_e2e_test.js');
+const { IOSWebDriver, resolveAppiumCli, resolveAppiumRuntimeDirectory } = require('../kakomonn-reader/tests/ios_safari_e2e_test.js');
+
+test('types text once through the actual focused native field and restores Safari context', async () => {
+  for (const failure of [false, true]) {
+    const driver = new IOSWebDriver(0, 'fixture');
+    const calls = [];
+    driver.sessionRequest = async (method, endpoint, body) => {
+      calls.push([method, endpoint, body]);
+      if (endpoint === '/context' && method === 'GET') return 'WEBVIEW_fixture';
+      if (endpoint === '/element/active') return { 'element-6066-11e4-a52e-4f735466cecf': 'focused-field' };
+      if (endpoint.endsWith('/attribute/type')) return 'XCUIElementTypeSecureTextField';
+      if (endpoint.endsWith('/value') && failure) throw new Error('native typing failed');
+    };
+    if (failure) await assert.rejects(driver.typeText('fixture token'), /native typing failed/);
+    else await driver.typeText('fixture token');
+    assert.deepEqual(calls, [
+      ['GET', '/context', undefined],
+      ['POST', '/context', { name: 'NATIVE_APP' }],
+      ['GET', '/element/active', undefined],
+      ['GET', '/element/focused-field/attribute/type', undefined],
+      ['POST', '/element/focused-field/value', { text: 'fixture token' }],
+      ['POST', '/context', { name: 'WEBVIEW_fixture' }],
+    ]);
+  }
+});
+
+test('refuses to type into the wrong native element and restores context', async () => {
+  const driver = new IOSWebDriver(0, 'fixture');
+  const calls = [];
+  driver.sessionRequest = async (method, endpoint, body) => {
+    calls.push([method, endpoint, body]);
+    if (endpoint === '/context' && method === 'GET') return 'WEBVIEW_fixture';
+    if (endpoint === '/element/active') return { 'element-6066-11e4-a52e-4f735466cecf': 'wrong-control' };
+    if (endpoint.endsWith('/attribute/type')) return 'XCUIElementTypeButton';
+  };
+  await assert.rejects(driver.typeText('fixture token'), /XCUIElementTypeButton/);
+  assert.equal(calls.some(([, endpoint]) => endpoint.endsWith('/value')), false);
+  assert.deepEqual(calls.at(-1), ['POST', '/context', { name: 'WEBVIEW_fixture' }]);
+});
 
 test('launches the installed Appium CLI contract, not its programmatic main export', () => {
   const manifestPath = require.resolve('appium/package.json');

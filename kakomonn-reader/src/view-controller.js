@@ -48,7 +48,7 @@ export function installViewController(app) {
 
   const carriedCorrectFeedback = document.createElement("div");
   carriedCorrectFeedback.id = "kakomonn-reader-carried-correct-feedback";
-  carriedCorrectFeedback.className = "kakomonn-reader-correct-feedback";
+  carriedCorrectFeedback.className = "congratulations-feedback";
   carriedCorrectFeedback.hidden = true;
   carriedCorrectFeedback.setAttribute("aria-hidden", "true");
 
@@ -265,10 +265,10 @@ export function installViewController(app) {
     carriedCorrectFeedback.dataset.state = "entering";
     carriedCorrectFeedback.removeAttribute("style");
 
-    let feedback = resultBox.querySelector(":scope > .kakomonn-reader-correct-feedback");
+    let feedback = resultBox.querySelector(":scope > .congratulations-feedback");
     if (feedback === null) {
       feedback = sourceDocument.createElement("div");
-      feedback.className = "kakomonn-reader-correct-feedback";
+      feedback.className = "congratulations-feedback";
       resultBox.appendChild(feedback);
     }
     app.renderCorrectFeedbackElement(feedback, variant);

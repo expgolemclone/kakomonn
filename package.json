@@ -22,7 +22,7 @@
     "test:open-kakomonn": "node --test tests/open-kakomonn.test.mjs",
     "test:release-script": "node --test tests/release-kakomonn-reader.test.mjs",
     "test:live-sync-script": "node --test kakomonn-reader/tests/live_sync_e2e_unit_test.js",
-    "test:kakomonn-reader": "npm run build:kakomonn-reader && node --test kakomonn-reader/tests/copy_controller_test.mjs kakomonn-reader/tests/build_test.mjs kakomonn-reader/tests/correct_feedback_test.mjs kakomonn-reader/tests/runtime_recycle_test.mjs kakomonn-reader/tests/swipe_navigation_test.mjs kakomonn-reader/tests/userscript_metadata_test.mjs && es-check es2020 kakomonn-reader/kakomonn-reader.user.js",
+    "test:kakomonn-reader": "npm run build:kakomonn-reader && node --test kakomonn-reader/tests/copy_controller_test.mjs kakomonn-reader/tests/build_test.mjs kakomonn-reader/tests/feedback_kpi_test.mjs kakomonn-reader/tests/runtime_recycle_test.mjs kakomonn-reader/tests/swipe_navigation_test.mjs kakomonn-reader/tests/userscript_metadata_test.mjs && es-check es2020 kakomonn-reader/kakomonn-reader.user.js",
     "test:kakomonn-sync": "vitest run --config kakomonn-sync/vitest.config.mjs",
     "test:kakomonn-sync-production": "npm run build:kakomonn-sync && node --use-system-ca --test kakomonn-sync/tests/production_deployment_test.js",
     "test:kakomonn-dashboard": "npm run build:kakomonn-sync && node kakomonn-sync/tests/dashboard_e2e_test.js",
@@ -48,7 +48,7 @@
     "wrangler": "4.120.0"
   },
   "dependencies": {
-    "@expgolemclone/congratulations": "https://github.com/expgolemclone/congratulations/releases/download/v2.0.0/expgolemclone-congratulations-2.0.0.tgz",
+    "@expgolemclone/congratulations": "https://github.com/expgolemclone/congratulations/releases/download/v2.1.0/expgolemclone-congratulations-2.1.0.tgz",
     "ts-fsrs": "5.4.1"
   }
 }

@@ -1,3 +1,5 @@
+import { playCorrectFeedbackAudio } from '@expgolemclone/congratulations/feedback';
+
 export function installSpeechController(app) {
   function showSpeechGestureError(error = null) {
     const detail = { code: "autoplay_blocked" };
@@ -325,52 +327,6 @@ export function installSpeechController(app) {
     void playSpeechChunk(session, 0);
   }
 
-  function writeWaveText(view, offset, value) {
-    for (let index = 0; index < value.length; index += 1) {
-      view.setUint8(offset + index, value.charCodeAt(index));
-    }
-  }
-
-  function createCorrectChimeWave(variant) {
-    const { duration, gain, tones } = variant.chime;
-    const sampleCount = Math.ceil(app.CORRECT_CHIME_SAMPLE_RATE * duration);
-    const buffer = new ArrayBuffer(44 + sampleCount * 2);
-    const view = new DataView(buffer);
-
-    writeWaveText(view, 0, "RIFF");
-    view.setUint32(4, 36 + sampleCount * 2, true);
-    writeWaveText(view, 8, "WAVE");
-    writeWaveText(view, 12, "fmt ");
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, app.CORRECT_CHIME_SAMPLE_RATE, true);
-    view.setUint32(28, app.CORRECT_CHIME_SAMPLE_RATE * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    writeWaveText(view, 36, "data");
-    view.setUint32(40, sampleCount * 2, true);
-
-    for (let index = 0; index < sampleCount; index += 1) {
-      const time = index / app.CORRECT_CHIME_SAMPLE_RATE;
-      let sample = 0;
-      for (const tone of tones) {
-        const toneTime = time - tone.start;
-        if (toneTime < 0 || toneTime >= tone.duration) {
-          continue;
-        }
-        const progress = toneTime / tone.duration;
-        const attack = Math.min(1, toneTime / 0.008);
-        const release = (1 - progress) ** 2;
-        sample += Math.sin(2 * Math.PI * tone.frequency * toneTime) * attack * release * gain;
-      }
-      const clampedSample = Math.max(-1, Math.min(1, sample));
-      view.setInt16(44 + index * 2, clampedSample * 0x7fff, true);
-    }
-
-    return buffer;
-  }
-
   function playFeedbackAudio(source, runId, label) {
     if (app.speechAudio === null || runId !== app.speechRunId) {
       return Promise.resolve(false);
@@ -488,20 +444,8 @@ export function installSpeechController(app) {
       (prepared) => ({ error: null, prepared }),
       (error) => ({ error, prepared: null }),
     );
-    const chimeCompleted = await playFeedbackAudio(
-      new Blob([createCorrectChimeWave(variant)], { type: "audio/wav" }),
-      runId,
-      "正解音",
-    );
-    if (!chimeCompleted || runId !== app.speechRunId) {
-      return;
-    }
-
-    const voiceCompleted = await playFeedbackAudio(
-      app.FEEDBACK_AUDIO_DATA_URLS[variant.id],
-      runId,
-      variant.speechText,
-    );
+    const voiceCompleted = await playCorrectFeedbackAudio(variant,
+      (source, label) => playFeedbackAudio(source, runId, label));
     if (!voiceCompleted || runId !== app.speechRunId) {
       return false;
     }

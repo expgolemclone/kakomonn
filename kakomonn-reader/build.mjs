@@ -10,29 +10,25 @@ const sourceDirectory = resolve(readerRoot, "src");
 const outputPath = resolve(readerRoot, "kakomonn-reader.user.js");
 const fingerprintPlaceholder = "__KAKOMONN_READER_BUILD_FINGERPRINT__";
 const versionPattern = /^\/\/ @version\s+(\d+\.\d+\.\d+)\s*$/gm;
-const feedbackAssets = new Map([
-  ["__KAKOMONN_FEEDBACK_NORMAL__", "correct-normal.mp3"],
-  ["__KAKOMONN_FEEDBACK_RARE__", "correct-rare.mp3"],
-  ["__KAKOMONN_FEEDBACK_SUPER_RARE__", "correct-super-rare.mp3"],
-  ["__KAKOMONN_FEEDBACK_SSR__", "correct-ssr.mp3"],
-  ["__KAKOMONN_FEEDBACK_INCORRECT__", "incorrect.mp3"],
-]);
-
-function replaceExactlyOnce(source, placeholder, replacement) {
-  const occurrences = source.split(placeholder).length - 1;
-  if (occurrences !== 1) {
-    throw new Error(`${placeholder} must occur exactly once, found ${occurrences}`);
-  }
-  return source.replace(placeholder, replacement);
-}
-
 async function bundleReader() {
   const result = await build({
     configFile: false,
     root: readerRoot,
     logLevel: "silent",
+    plugins: [{
+      name: "reader-inline-module-url",
+      enforce: "post",
+      transform(code) {
+        // Vite has already inlined the assets. A userscript has no module file URL,
+        // and an inline currentScript has an empty src, which is not a valid base.
+        if (code.includes("import.meta.url")) {
+          return { code: code.replaceAll("import.meta.url", "document.baseURI"), map: null };
+        }
+      },
+    }],
     build: {
       target: "es2020",
+      assetsInlineLimit: Infinity,
       minify: false,
       write: false,
       rollupOptions: {
@@ -64,10 +60,6 @@ export async function buildReader() {
   }
 
   let source = `${metadata}\n\n${await bundleReader()}\n`;
-  for (const [placeholder, assetName] of feedbackAssets) {
-    const asset = await readFile(resolve(readerRoot, "assets", "feedback", assetName));
-    source = replaceExactlyOnce(source, placeholder, asset.toString("base64"));
-  }
   if (source.split(fingerprintPlaceholder).length - 1 !== 1) {
     throw new Error("build fingerprint placeholder must occur exactly once");
   }

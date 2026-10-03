@@ -920,16 +920,16 @@ async function runCorrectFeedbackCase(context, script) {
     await page.waitForFunction(() => window.__audioInstance?.src === "");
 
     await markAnswerResult(childFrame, "correct");
-    await childFrame.waitForSelector(".kakomonn-reader-correct-feedback");
+    await childFrame.waitForSelector(".congratulations-feedback");
     assert.deepEqual(
-      await childFrame.locator(".kakomonn-reader-correct-feedback").evaluate((element) => {
+      await childFrame.locator(".congratulations-feedback").evaluate((element) => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
         return {
           animationName: style.animationName,
-          badge: element.querySelector(".kakomonn-reader-correct-feedback-badge")?.textContent,
+          badge: element.querySelector(".congratulations-feedback-badge")?.textContent,
           display: style.display,
-          message: element.querySelector(".kakomonn-reader-correct-feedback-message")?.textContent,
+          message: element.querySelector(".congratulations-feedback-message")?.textContent,
           pointerEvents: style.pointerEvents,
           rarity: element.dataset.rarity,
           withinViewport:
@@ -976,7 +976,7 @@ async function runCorrectFeedbackCase(context, script) {
         typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
-    await childFrame.locator(".kakomonn-reader-correct-feedback").waitFor({
+    await childFrame.locator(".congratulations-feedback").waitFor({
       state: "hidden",
     });
     assert.equal(
@@ -1132,7 +1132,7 @@ async function runSpeechLookaheadCase(context, script) {
         audioSource: window.__audioInstance?.src,
         audioPlayCalls: window.__audioPlayCalls,
         abortedRequestCount: window.__syncMock.abortedRequestCount,
-        feedback: document.querySelector(".kakomonn-reader-correct-feedback")?.outerHTML,
+        feedback: document.querySelector(".congratulations-feedback")?.outerHTML,
         heldSpeechRequest: window.__syncMock.releaseHeldSpeechRequest !== null,
         readerError: document.querySelector("#kakomonn-reader-error-detail")?.textContent,
       }));
@@ -1305,7 +1305,7 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
       () => window.__audioPlayCalls >= 1 && window.__audioInstance?.src === "",
     );
     await markAnswerResult(childFrame, "correct");
-    const feedback = childFrame.locator(".kakomonn-reader-correct-feedback");
+    const feedback = childFrame.locator(".congratulations-feedback");
     await feedback.waitFor();
     assert.deepEqual(
       await feedback.evaluate((element) => {
@@ -1313,13 +1313,13 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
         const style = getComputedStyle(element);
         return {
           animationName: style.animationName,
-          badge: element.querySelector(".kakomonn-reader-correct-feedback-badge")?.textContent,
+          badge: element.querySelector(".congratulations-feedback-badge")?.textContent,
           coversViewport:
             Math.abs(rect.left) <= 1 &&
             Math.abs(rect.top) <= 1 &&
             rect.right >= innerWidth - 1 &&
             rect.bottom >= innerHeight - 1,
-          message: element.querySelector(".kakomonn-reader-correct-feedback-message")?.textContent,
+          message: element.querySelector(".congratulations-feedback-message")?.textContent,
           pointerEvents: style.pointerEvents,
           position: style.position,
           rarity: element.dataset.rarity,
@@ -1419,11 +1419,11 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
     );
 
     const queuedFeedback = childFrame.locator(
-      '.kakomonn-reader-correct-feedback[data-rarity="ssr"]',
+      '.congratulations-feedback[data-rarity="ssr"]',
     );
     await queuedFeedback.waitFor();
     assert.equal(
-      await queuedFeedback.locator(".kakomonn-reader-correct-feedback-message").innerText(),
+      await queuedFeedback.locator(".congratulations-feedback-message").innerText(),
       "Legendary! That's Right!!",
     );
     await finishManualAudio(page);
@@ -1488,7 +1488,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
     await page.waitForTimeout(200);
     assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
     assert.equal(
-      await childFrame.locator(".kakomonn-reader-correct-feedback-message").innerText(),
+      await childFrame.locator(".congratulations-feedback-message").innerText(),
       "That's Right!!",
     );
 

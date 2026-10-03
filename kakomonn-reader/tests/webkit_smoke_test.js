@@ -987,13 +987,13 @@ async function main() {
         explanation.hidden = false;
       }
     });
-    await correctFrame.waitForSelector(".kakomonn-reader-correct-feedback");
+    await correctFrame.waitForSelector(".congratulations-feedback");
     assert.deepEqual(
-      await correctFrame.locator(".kakomonn-reader-correct-feedback").evaluate((element) => {
+      await correctFrame.locator(".congratulations-feedback").evaluate((element) => {
         const rect = element.getBoundingClientRect();
         return {
-          badge: element.querySelector(".kakomonn-reader-correct-feedback-badge")?.textContent,
-          message: element.querySelector(".kakomonn-reader-correct-feedback-message")?.textContent,
+          badge: element.querySelector(".congratulations-feedback-badge")?.textContent,
+          message: element.querySelector(".congratulations-feedback-message")?.textContent,
           pointerEvents: getComputedStyle(element).pointerEvents,
           rarity: element.dataset.rarity,
           withinViewport:

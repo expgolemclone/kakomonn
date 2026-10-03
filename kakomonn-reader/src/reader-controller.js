@@ -16,12 +16,12 @@ import {
   CORRECT_FEEDBACK_CSS,
   CORRECT_FEEDBACK_LEAVE_DURATION_MS,
   CORRECT_FEEDBACK_MINIMUM_DURATION_MS,
-  calculateKpiQuestionsRemaining,
   chooseCorrectFeedbackVariant,
   renderCorrectFeedbackElement,
-  resolveCorrectFeedbackKpi,
-  waitForCorrectFeedbackKpi as waitForCorrectFeedbackKpiResult,
-} from "./correct-feedback.js";
+  FEEDBACK_AUDIO_URLS,
+} from "@expgolemclone/congratulations/feedback";
+import { calculateKpiQuestionsRemaining, resolveCorrectFeedbackKpi,
+  waitForCorrectFeedbackKpi as waitForCorrectFeedbackKpiResult } from "./feedback-kpi.js";
 import { buildCopyMarkdown, directChild, isSelectedAnswerChoice } from "./markdown.js";
 import { installReaderStyles } from "./styles.js";
 import { createSyncRequest } from "./sync-request.js";
@@ -268,6 +268,16 @@ export async function startReader() {
       --kakomonn-frame-muted: #a8b0bb;
       --kakomonn-frame-border: #343b45;
       --kakomonn-frame-link: #8ab4f8;
+      --kakomonn-frame-correct: #52e1b6;
+      --kakomonn-frame-incorrect: #e89292;
+    }
+
+    #js-answer-result-box.is-correct::before {
+      border-top-color: var(--kakomonn-frame-correct);
+    }
+
+    #js-answer-result-box.is-wrong::before {
+      background-color: var(--kakomonn-frame-incorrect);
     }
   
     header.l-header {
@@ -391,13 +401,7 @@ export async function startReader() {
   const JAPANESE_SPEECH_LOCALE = "ja-JP";
   const JAPANESE_SPEECH_VOICE_NAME = "ja-JP-NanamiNeural";
   const AZURE_SPEECH_OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3";
-  const FEEDBACK_AUDIO_DATA_URLS = Object.freeze({
-    normal: "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_NORMAL__",
-    rare: "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_RARE__",
-    "super-rare": "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_SUPER_RARE__",
-    ssr: "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_SSR__",
-    incorrect: "data:audio/mpeg;base64,__KAKOMONN_FEEDBACK_INCORRECT__",
-  });
+  const FEEDBACK_AUDIO_DATA_URLS = FEEDBACK_AUDIO_URLS;
   const SILENT_AUDIO_DATA_URL =
     "data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
   const SPEECH_GESTURE_STATUS = "画面をクリックまたはタップすると読み上げます";

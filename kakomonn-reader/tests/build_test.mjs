@@ -15,6 +15,8 @@ test("reader build is reproducible, bundled, and content-addressed", async () =>
   assert.equal(first.source.startsWith("// ==UserScript==\n"), true);
   assert.equal(first.source.includes("data:audio/mpeg;base64,"), true);
   assert.equal(first.source.match(/data:audio\/mpeg;base64,/g)?.length, 5);
+  assert.equal(first.source.includes('import.meta.url'), false);
+  assert.equal(first.source.includes('document.currentScript.src'), false);
   assert.equal(first.source.includes(fingerprintPlaceholder), false);
   assert.equal(first.source.includes('from "../../contracts/kakomonn.mjs"'), false);
 

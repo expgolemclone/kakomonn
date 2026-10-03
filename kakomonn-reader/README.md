@@ -23,7 +23,7 @@ kakomonn.comの各資格サイトの過去問ページ向けユーザースク�
 npm run build:kakomonn-reader
 ```
 
-`src/`にはapp stateを所有するreader controllerと, content抽出, Markdown生成, catalog取得, correct feedback, styleのES moduleがあります. Viteが依存関係を解決して1つのuserscriptへbundleし, `build.mjs`が`assets/feedback/`の5音声をbase64 data URLとして埋め込み, metadataとbundleと音声を含むfingerprintを付けて`kakomonn-reader.user.js`を生成します. 通常installでは[Latest Release asset](https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js)をTampermonkeyへ登録してください.
+`src/`にはapp stateを所有するreader controllerと, content抽出, Markdown生成, catalog取得, KPI音声の待機, styleのES moduleがあります. 正解演出の定義, 表示, 効果音と5音声は`@expgolemclone/congratulations/feedback`を正本とします. Viteが共通moduleと音声のdata URLを1つのuserscriptへbundleし, `build.mjs`がmetadataとbundleを含むfingerprintを付けて`kakomonn-reader.user.js`を生成します. 通常installでは[Latest Release asset](https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js)をTampermonkeyへ登録してください.
 
 ## Release
 

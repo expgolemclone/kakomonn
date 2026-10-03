@@ -6,15 +6,15 @@
   },
   "scripts": {
     "build": "npm run build:kakomonn-reader && npm run build:kakomonn-sync",
-    "postinstall": "playwright install chromium webkit",
     "open:kakomonn": "npm run open:kakomonn:browser && npm run open:kakomonn:url",
     "open:kakomonn:browser": "node --use-system-ca scripts/open-kakomonn.mjs browser",
     "open:kakomonn:url": "node --use-system-ca scripts/open-kakomonn.mjs url",
     "build:kakomonn-reader": "node kakomonn-reader/build.mjs",
-    "build:kakomonn-sync": "vite build --config kakomonn-sync/vite.config.js",
+    "build:kakomonn-sync": "vite build --config kakomonn-sync/vite.config.mjs",
     "test": "npm run test:local && npm run test:smoke && npm run test:kakomonn-live-site && npm run test:kakomonn-live-open && npm run test:kakomonn-live-sync",
     "test:local": "npm run test:contracts && npm run test:repository-naming && npm run test:static-cache-policy && npm run test:kakomonn-config && npm run test:kakomonn-sync-launcher && npm run test:open-kakomonn && npm run test:release-script && npm run test:live-sync-script && npm run test:kakomonn-reader && npm run test:kakomonn-sync",
     "test:contracts": "node --test tests/kakomonn-contract.test.mjs",
+    "test:chrome-policy": "pwsh -NoProfile -File scripts/test-chrome-policy.ps1",
     "test:repository-naming": "node --test tests/repository_naming_test.mjs",
     "test:static-cache-policy": "node --test tests/static-cache-policy.test.mjs",
     "test:kakomonn-config": "node --test tests/kakomonn-config.test.mjs",
@@ -22,7 +22,7 @@
     "test:open-kakomonn": "node --test tests/open-kakomonn.test.mjs",
     "test:release-script": "node --test tests/release-kakomonn-reader.test.mjs",
     "test:live-sync-script": "node --test kakomonn-reader/tests/live_sync_e2e_unit_test.js",
-    "test:kakomonn-reader": "npm run build:kakomonn-reader && node --test kakomonn-reader/tests/copy_controller_test.mjs kakomonn-reader/tests/build_test.mjs kakomonn-reader/tests/feedback_kpi_test.mjs kakomonn-reader/tests/runtime_recycle_test.mjs kakomonn-reader/tests/swipe_navigation_test.mjs kakomonn-reader/tests/userscript_metadata_test.mjs && es-check es2020 kakomonn-reader/kakomonn-reader.user.js",
+    "test:kakomonn-reader": "npm run build:kakomonn-reader && node --test kakomonn-reader/tests/copy_controller_test.mjs kakomonn-reader/tests/build_test.mjs kakomonn-reader/tests/feedback_kpi_test.mjs kakomonn-reader/tests/runtime_recycle_test.mjs kakomonn-reader/tests/swipe_navigation_test.mjs kakomonn-reader/tests/userscript_metadata_test.mjs && acorn --ecma2020 --silent kakomonn-reader/kakomonn-reader.user.js",
     "test:kakomonn-sync": "vitest run --config kakomonn-sync/vitest.config.mjs",
     "test:kakomonn-sync-production": "npm run build:kakomonn-sync && node --use-system-ca --test kakomonn-sync/tests/production_deployment_test.js",
     "test:kakomonn-dashboard": "npm run build:kakomonn-sync && node kakomonn-sync/tests/dashboard_e2e_test.js",
@@ -34,21 +34,21 @@
     "test:kakomonn-live-dashboard": "npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader/tests/live_dashboard_e2e_test.js",
     "test:kakomonn-live-sync": "npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader/tests/live_sync_e2e_test.js",
     "release:kakomonn-reader": "node scripts/release-kakomonn-reader.mjs",
-    "deploy:kakomonn-sync": "npm run test:kakomonn-sync && npm run test:kakomonn-dashboard && node --use-system-ca node_modules/wrangler/bin/wrangler.js deploy --config kakomonn-sync/wrangler.jsonc && npm run test:kakomonn-sync-production && npm run test:kakomonn-live-dashboard && npm run test:kakomonn-copy-failure-production",
+    "deploy:kakomonn-sync": "npm run test:kakomonn-sync && npm run test:kakomonn-dashboard && envx-node wrangler deploy --config kakomonn-sync/wrangler.jsonc && npm run test:kakomonn-sync-production && npm run test:kakomonn-live-dashboard && npm run test:kakomonn-copy-failure-production",
     "test:kakomonn-copy-failure-production": "npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader/tests/live_copy_failure_e2e_test.js"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "0.20.3",
-    "appium": "3.7.0",
-    "appium-xcuitest-driver": "12.10.0",
-    "es-check": "9.6.4",
-    "playwright": "1.62.0",
-    "vite": "8.1.5",
-    "vitest": "4.1.10",
-    "wrangler": "4.120.0"
+    "@cloudflare/vitest-pool-workers": "0.22.0",
+    "appium": "3.8.0",
+    "appium-xcuitest-driver": "12.13.3",
+    "acorn": "8.18.0",
+    "playwright": "1.63.0",
+    "vite": "8.3.2",
+    "vitest": "4.1.11",
+    "wrangler": "4.147.0"
   },
   "dependencies": {
     "@expgolemclone/congratulations": "https://github.com/expgolemclone/congratulations/releases/download/v2.1.0/expgolemclone-congratulations-2.1.0.tgz",
-    "ts-fsrs": "5.4.1"
+    "ts-fsrs": "5.4.2"
   }
 }

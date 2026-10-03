@@ -9,6 +9,7 @@ const {
   installSyncMock,
   PENDING_ATTEMPT_KEY,
   PENDING_CELEBRATION_KEY,
+  SPEECH_AUDIO_BYTES,
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,
 } = require("./sync_mock");
@@ -985,9 +986,9 @@ async function runCorrectFeedbackCase(context, script) {
       0,
     );
     assert.deepEqual(await page.evaluate(() => window.__audioBlobs), [
-      { size: 4, type: "audio/mpeg" },
+      { size: SPEECH_AUDIO_BYTES, type: "audio/mpeg" },
       { size: 31_796, type: "audio/wav" },
-      { size: 4, type: "audio/mpeg" },
+      { size: SPEECH_AUDIO_BYTES, type: "audio/mpeg" },
     ]);
     assert.deepEqual(errors, []);
   } finally {
@@ -1348,9 +1349,9 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
       false,
     );
     assert.deepEqual(await page.evaluate(() => window.__audioBlobs.slice(0, 3)), [
-      { size: 4, type: "audio/mpeg" },
+      { size: SPEECH_AUDIO_BYTES, type: "audio/mpeg" },
       { size: expected.waveSize, type: "audio/wav" },
-      { size: 4, type: "audio/mpeg" },
+      { size: SPEECH_AUDIO_BYTES, type: "audio/mpeg" },
     ]);
     assert.deepEqual(
       await page.evaluate(() => window.__correctFeedbackRandomCalls),

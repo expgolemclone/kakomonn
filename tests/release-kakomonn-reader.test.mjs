@@ -193,7 +193,16 @@ test("publishes the synchronized main only after the complete test suite", async
   const npmCalls = fake.calls
     .filter((call) => call.command === "npm")
     .map((call) => call.args.join(" "));
-  assert.deepEqual(npmCalls, ["ci", "test", "run build:kakomonn-reader"]);
+  assert.deepEqual(npmCalls, ['run test:chrome-policy', 'test', 'run build:kakomonn-reader']);
+  const runtimeVerification = findCall(fake.calls, 'pwsh', '-NoProfile', '-File');
+  assert.match(runtimeVerification.args[2], /[\\/]runtimes[\\/]manage\.ps1$/);
+  assert.deepEqual(runtimeVerification.args.slice(3), ['-Operation', 'Verify']);
+  assert.equal(fake.calls.indexOf(runtimeVerification) < fake.calls.findIndex(call => call.command === 'npm'), true);
+  const verifications = fake.calls.filter(call => call.command === 'pwsh');
+  assert.equal(verifications.length, 2);
+  assert.deepEqual(verifications[1].args, runtimeVerification.args);
+  assert.equal(fake.calls.indexOf(verifications[1]) > fake.calls.findIndex(call => call.command === 'npm' && call.args[0] === 'run' && call.args[1] === 'build:kakomonn-reader'), true);
+  assert.equal(fake.calls.indexOf(verifications[1]) < fake.calls.indexOf(releaseCall), true);
   assert.equal(
     fake.calls.findIndex((call) => call.command === "npm" && call.args[0] === "test") <
       fake.calls.indexOf(releaseCall),

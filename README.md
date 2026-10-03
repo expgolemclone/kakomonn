@@ -39,17 +39,20 @@ Node.js 22.12以上を使用します. rootの単一npm packageがreaderとsync�
 Repositoryの変更をpushまたはdeployする前に, このsectionの完全testを通過させます.
 
 ```bash
-npm ci
+pwsh -NoProfile -File C:/dev/settings/envx/runtimes/manage.ps1 -Operation Install
 npm run build
 ```
 
-通常利用するChrome profileはlive E2Eに使用しません. Windows Chromeでは[Tampermonkey Updator v1.1.1以上](https://github.com/expgolemclone/tampermonkey-updator/releases/latest)の`install-windows.ps1`を管理者権限のPowerShellで1回実行し, Tampermonkey Beta 5.6以上と`kakomonn-reader`をmachine policyでprovisioningします. installerは旧stableのTampermonkey policyだけを削除し, 既存browser policyを保持します. test scriptが専用user data directoryの作成, policy installの待機, `Allow User Scripts`の有効化, userscript更新, browser操作を所有します.
+通常利用するChrome profileはlive E2Eに使用しません. Windowsでは管理者権限のPowerShell 7で次を実行し, Chromeの公式`ExtensionSettings` machine policyへTampermonkey Beta 5.6以上を追加します. Chrome Web Storeからinstallし, 全Chrome profileへ適用されます. `DeveloperToolsAvailability=1`により, policy管理extensionを含む全contextでDevToolsとCDPを許可します. 開発PC向けのmachine設定であり, 全Chrome profileへ適用されます. 他のextension設定は保持し, 既存policyと競合する場合は変更せず失敗します. UACや外部installerは使用しません. PolicyのtestにはPester 6.2.0を使用します.
 
 ```powershell
-$installer = Join-Path ([IO.Path]::GetTempPath()) 'install-tampermonkey-updator.ps1'
-Invoke-WebRequest 'https://github.com/expgolemclone/tampermonkey-updator/releases/latest/download/install-windows.ps1' -OutFile $installer
-pwsh -NoProfile -File $installer
+npm run test:chrome-policy
+pwsh -NoProfile -File scripts/provision-chrome.ps1 -Operation Install -WhatIf
+pwsh -NoProfile -File scripts/provision-chrome.ps1 -Operation Install
+pwsh -NoProfile -File scripts/provision-chrome.ps1 -Operation Verify
 ```
+
+専用profileのuserscript導入, `Allow User Scripts`の有効化, 更新, cold再起動はlive testが所有します. Browser storageやSecure Preferencesを直接書き換えません.
 
 `.env.example`を`.env`へcopyし, 専用profileのpathを`KAKOMONN_CHROME_USER_DATA_DIR`へ保存できます. `KAKOMONN_CHROME_EXECUTABLE`を省略した場合は`%ProgramFiles%\Google\Chrome\Application\chrome.exe`, profileを省略した場合は`%LOCALAPPDATA%\kakomonn-chrome-e2e`を使用します. 対応keyは`.env.example`を正本とし, 未対応keyと重複keyは設定errorになります. 空の任意設定は未指定として扱います. test scriptは`.env`の値だけを読み, process環境変数の`KAKOMONN_*`は参照しません.
 
@@ -63,7 +66,7 @@ KAKOMONN_SYNC_TOKEN=<SYNC_TOKEN>
 npm test
 ```
 
-上記のinstallでPlaywrightと対応するChromiumおよびWebKitも導入します. 完全testはlocal testとsmoke testに続けて, 実サイトE2Eと, 専用profileの最小化Chrome, 実Tampermonkey Beta, 本番同期Workerを使用するlive E2Eを実行します. test scriptは専用profileの既存processの終了から起動, userscript更新, test後の終了までを所有し, Tampermonkey Betaを`UserScripts API Dynamic` modeへ設定します. userscript更新と同期token設定後にChromeをcold再起動し, production launcherから本番の固定`/open`を開く解答なしE2Eを実行します. 解答履歴と定着状態を変更せずforegroundの勉強時間だけが記録されることを検証してから, 実Chrome上で解答記録を送信します. 本番の解答履歴と定着状態, 外側URLとiframeの次問遷移, 実OS clipboardへのMarkdownコピーまでを検証します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません. 専用profile, Tampermonkey Beta, 本番token, 最新buildのいずれかが欠けている場合は失敗し, live E2Eをskipまたはforce通過させるoptionはありません.
+共通環境のinstallでPlaywrightと対応するChromiumおよびWebKitも導入します. repo内のnode_modulesは作成しません. 完全testはlocal testとsmoke testに続けて, 実サイトE2Eと, 専用profileの最小化Chrome, 実Tampermonkey Beta, 本番同期Workerを使用するlive E2Eを実行します. test scriptは専用profileの既存processの終了から起動, userscript更新, test後の終了までを所有し, Tampermonkey Betaを`UserScripts API Dynamic` modeへ設定します. userscript更新と同期token設定後にChromeをcold再起動し, production launcherから本番の固定`/open`を開く解答なしE2Eを実行します. 解答履歴と定着状態を変更せずforegroundの勉強時間だけが記録されることを検証してから, 実Chrome上で解答記録を送信します. 本番の解答履歴と定着状態, 外側URLとiframeの次問遷移, 実OS clipboardへのMarkdownコピーまでを検証します. Tampermonkeyを模した`GM`実装や`force` clickは使用しません. 専用profile, Tampermonkey Beta, 本番token, 最新buildのいずれかが欠けている場合は失敗し, live E2Eをskipまたはforce通過させるoptionはありません. 解答E2Eのremote state検証は, browser cookieを共有しない専用APIRequestContextをscenario全体で所有し, 成否にかかわらず破棄します. 状態取得のtimeoutは15秒で, transport retryとredirectは許可しません.
 
 ReaderのTampermonkey metadata, ES2020構文, build fingerprintもこの完全testで検証します. cold起動からのproduction launcherの解答なしE2Eだけを再実行する場合は`npm run test:kakomonn-live-open`, 解答を含むlive E2Eだけを再実行する場合は`npm run test:kakomonn-live-sync`, Chromiumとmobile相当のPlaywright WebKitを使うsmoke testだけを実行する場合は`npm run test:smoke`を使用します. いずれも完全な完了条件の代替にはなりません.
 

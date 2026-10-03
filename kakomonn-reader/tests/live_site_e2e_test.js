@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
+const { CORRECT_FEEDBACK_VARIANTS } = require('@expgolemclone/congratulations/feedback');
 const {
   kakomonnFreeEnvironment,
   readKakomonnConfiguration,
@@ -103,10 +104,6 @@ async function injectReader(page, script) {
   await installReaderInChildFrames(page, script);
   await page.evaluate(
     ({ source, sourceURL }) => {
-      Object.defineProperty(window, "Audio", {
-        configurable: true,
-        value: undefined,
-      });
       (0, eval)(`${source}\n//# sourceURL=${sourceURL}`);
     },
     { source: script, sourceURL: readerSourceURL },
@@ -544,32 +541,36 @@ async function runCase(
     }, attemptStabilityDaysDelta);
     const historyLengthBefore = await submitAnswer(page, frame, answerText, inputMethod);
     console.log(JSON.stringify({ phase: "answer-submitted", answerText }));
-    await frame.getByText(expectedBanner, { exact: true }).waitFor({
-      state: "visible",
-      timeout: 15_000,
-    });
-    await page.waitForFunction(
-      (resultClass) =>
-        document
-          .querySelector("#kakomonn-reader-frame")
-          ?.contentDocument?.querySelector("#js-answer-result-box")
-          ?.classList.contains(resultClass) === true,
-      expectedResultClass,
+    if (expectedResultClass === 'is-correct') {
+      const feedback = frame.locator('.congratulations-feedback');
+      await feedback.waitFor({ state: 'visible', timeout: 15_000 });
+      const displayed = await feedback.locator('.congratulations-feedback-message').innerText();
+      assert(CORRECT_FEEDBACK_VARIANTS.some(variant => variant.displayText === displayed),
+        `Unexpected shared feedback: ${displayed}`);
+    } else {
+      await frame.getByText(expectedBanner, { exact: true }).waitFor({ state: 'visible', timeout: 15_000 });
+    }
+    const expectedColor = expectedResultClass === 'is-correct' ? 'rgb(82, 225, 182)' : 'rgb(232, 146, 146)';
+    // Answer styling settles asynchronously, and correct feedback then navigates.
+    // Capture one coherent presentation from the original frame, not three RPCs
+    // that can observe different documents across automatic navigation.
+    const presentationHandle = await page.waitForFunction(
+      ({ resultClass, color, questionURL }) => {
+        const documentNode = document.querySelector('#kakomonn-reader-frame')?.contentDocument;
+        if (documentNode?.location.href !== questionURL) return false;
+        const result = documentNode.querySelector('#js-answer-result-box');
+        if (!result?.classList.contains(resultClass)) return false;
+        const style = documentNode.defaultView.getComputedStyle(result, '::before');
+        const actualColor = resultClass === 'is-correct' ? style.borderTopColor : style.backgroundColor;
+        return actualColor === color ? { resultClasses: result.className, semanticResultColor: actualColor } : false;
+      },
+      { resultClass: expectedResultClass, color: expectedColor, questionURL: fixedQuestionUrl },
       { timeout: 15_000 },
     );
-    const resultClasses =
-      (await frame.locator("#js-answer-result-box").getAttribute("class")) ?? "";
-    assert.equal(resultClasses.split(/\s+/).includes(expectedResultClass), true);
-    const semanticResultColor = await frame
-      .locator("#js-answer-result-box")
-      .evaluate((element, resultClass) => {
-        const style = getComputedStyle(element, "::before");
-        return resultClass === "is-correct" ? style.borderTopColor : style.backgroundColor;
-      }, expectedResultClass);
-    assert.equal(
-      semanticResultColor,
-      expectedResultClass === "is-correct" ? "rgb(82, 225, 182)" : "rgb(232, 146, 146)",
-    );
+    const presentation = await presentationHandle.jsonValue();
+    await presentationHandle.dispose();
+    assert.equal(presentation.resultClasses.split(/\s+/).includes(expectedResultClass), true);
+    assert.equal(presentation.semanticResultColor, expectedColor);
 
     if (expectedResultClass === "is-wrong") {
       assert.equal(await frame.locator("body").evaluate(() => location.href), fixedQuestionUrl);

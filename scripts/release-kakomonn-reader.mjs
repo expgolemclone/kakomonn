@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import kakomonnConfig from "./kakomonn-config.cjs";
+import { runtimeManagementScript } from '@expgolemclone/envx-runtime';
 
 const { kakomonnFreeEnvironment } = kakomonnConfig;
 
@@ -203,8 +204,9 @@ export async function runRelease({
   const commitSha = initialState.mainSha;
   const repository = initialState.repository;
 
-  logger("Installing locked dependencies");
-  runCommand("npm", ["ci"]);
+  logger("Verifying shared locked dependencies without modifying active consumers");
+  runCommand('pwsh', ['-NoProfile', '-File', runtimeManagementScript(), '-Operation', 'Verify']);
+  runCommand('npm', ['run', 'test:chrome-policy']);
 
   logger("Running the complete Windows test suite and live E2E");
   runCommand("npm", ["test"]);
@@ -213,6 +215,8 @@ export async function runRelease({
   runCommand("npm", ["run", "build:kakomonn-reader"]);
   const version = readUserscriptVersion(readFile(path.join(PROJECT_ROOT, RELEASE_ASSET), "utf8"));
 
+  logger('Verifying that build and tests did not recreate private environments');
+  runCommand('pwsh', ['-NoProfile', '-File', runtimeManagementScript(), '-Operation', 'Verify']);
   logger("Rechecking main immediately before publishing");
   const finalState = assertReleaseState(runCommand, commitSha);
   if (finalState.repository.nameWithOwner !== repository.nameWithOwner) {

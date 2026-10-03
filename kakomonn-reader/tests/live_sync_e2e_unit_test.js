@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const test = require("node:test");
 
-const { assertRuntimeIdentity, extractBuildFingerprint } = require("./live_sync_e2e_test");
+const { assertRuntimeIdentity, extractBuildFingerprint, isQuestionPageReady, requestSyncState, withSyncApi } = require('./live_sync_e2e_test');
 const {
   SYNC_TOKEN_KEY,
   LEGACY_TAMPERMONKEY_EXTENSION_ID,
@@ -19,6 +19,72 @@ const {
   stopDedicatedChromePowerShell,
   writeEnvToken,
 } = require("./support/chrome_tampermonkey");
+
+test('owns and disposes the live API fixture on success and scenario failure', async () => {
+  for (const fail of [false, true]) {
+    const events = [];
+    const api = { async dispose() { events.push('dispose'); } };
+    const factory = { async newContext(options) {
+      assert.deepEqual(options, { timeout: 15_000 });
+      events.push('create');
+      return api;
+    } };
+    const run = async actual => {
+      assert.equal(actual, api);
+      events.push('scenario');
+      if (fail) throw new Error('scenario failure');
+      return 'verified';
+    };
+    if (fail) await assert.rejects(withSyncApi(run, factory), /scenario failure/);
+    else assert.equal(await withSyncApi(run, factory), 'verified');
+    assert.deepEqual(events, ['create', 'scenario', 'dispose']);
+  }
+});
+
+test('uses one bounded authenticated state request without retries or redirects', async () => {
+  let calls = 0;
+  let disposed = 0;
+  const api = { async get(url, options) {
+    calls++;
+    assert.equal(url, 'https://kakomonn-sync.kakomonn.workers.dev/v12/state?site=chushoks.kakomonn.com');
+    assert.deepEqual(options, { headers: { Authorization: 'Bearer fixture-token' }, timeout: 15_000, maxRetries: 0, maxRedirects: 0 });
+    return { status: () => 401, async dispose() { disposed++; } };
+  } };
+  await assert.rejects(requestSyncState(api, 'fixture-token'), /401/);
+  assert.equal(calls, 1);
+  assert.equal(disposed, 1);
+});
+
+test('disposes malformed state responses and propagates transport failures', async () => {
+  let disposed = 0;
+  const malformed = { async get() { return {
+    status: () => 200,
+    async json() { throw new Error('malformed production state'); },
+    async dispose() { disposed++; },
+  }; } };
+  await assert.rejects(requestSyncState(malformed, 'fixture-token'), /malformed production state/);
+  assert.equal(disposed, 1);
+  let calls = 0;
+  const offline = { async get() { calls++; throw new Error('connection failed'); } };
+  await assert.rejects(requestSyncState(offline, 'fixture-token'), /connection failed/);
+  assert.equal(calls, 1);
+});
+
+test('does not treat an offline document or a reader shell alone as a ready question', () => {
+  const ready = {
+    actionsPresent: false, frameHasAnswerChoices: true,
+    outerURL: 'https://chushoks.kakomonn.com/questions/86956',
+    frameURL: 'https://chushoks.kakomonn.com/questions/86956',
+    settingsOpen: false, errorOpen: false,
+  };
+  assert.equal(isQuestionPageReady(ready), true);
+  for (const change of [
+    { frameHasAnswerChoices: false }, { frameHasAnswerChoices: undefined },
+    { actionsPresent: true }, { settingsOpen: true }, { errorOpen: true },
+    { frameURL: 'https://chushoks.kakomonn.com/offline' },
+    { outerURL: 'https://chushoks.kakomonn.com/questions/44369' },
+  ]) assert.equal(isQuestionPageReady({ ...ready, ...change }), false);
+});
 
 const fingerprint = "a".repeat(64);
 const validRuntime = {

@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
+const { request } = require('playwright');
 const { readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
 
 const {
@@ -110,14 +110,20 @@ function assertSyncState(state) {
   return state;
 }
 
-async function requestSyncState(token) {
-  const query = new URLSearchParams({ site: "chushoks.kakomonn.com" });
-  const response = await fetch(`${DEFAULT_SYNC_API_ORIGIN}/v12/state?${query}`, {
+async function requestSyncState(api, token) {
+  const query = new URLSearchParams({ site: 'chushoks.kakomonn.com' });
+  const response = await api.get(`${DEFAULT_SYNC_API_ORIGIN}/v12/state?${query}`, {
     headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(15_000),
+    timeout: 15_000,
+    maxRetries: 0,
+    maxRedirects: 0,
   });
-  assert.equal(response.status, 200);
-  return assertSyncState(await response.json());
+  try {
+    assert.equal(response.status(), 200);
+    return assertSyncState(await response.json());
+  } finally {
+    await response.dispose();
+  }
 }
 
 function delay(milliseconds) {
@@ -174,6 +180,9 @@ async function readReaderState(page) {
         errorOpen: errorDialog?.open ?? null,
         errorTitle: document.querySelector("#kakomonn-reader-error-title")?.textContent ?? null,
         frameURL: frame?.contentWindow?.location?.href ?? null,
+        frameTitle: frame?.contentDocument?.title ?? null,
+        frameHasAnswerChoices: Boolean(frame?.contentDocument?.querySelector('input[name="intAnswerData"]')),
+        browserOnline: navigator.onLine,
         frameClientHeight: frame?.clientHeight ?? null,
         frameClientWidth: frame?.clientWidth ?? null,
         frameComputedHeight: frameStyle?.height ?? null,
@@ -242,27 +251,28 @@ async function completeStoredDestinationIfAvailable(page) {
   return true;
 }
 
+function isQuestionPageReady(state) {
+  return state.actionsPresent === false &&
+    state.frameHasAnswerChoices === true &&
+    state.outerURL === CURRENT_QUESTION_URL &&
+    state.frameURL === CURRENT_QUESTION_URL &&
+    state.settingsOpen === false &&
+    state.errorOpen === false;
+}
+
 async function waitForAutomaticQuestionSpeech(page, expectedBuildFingerprint) {
   const outcome = await waitUntil(
     "the automatic question speech before any page interaction",
     async () => {
       const state = await readReaderState(page);
-      if (
-        state.actionsPresent ||
-        state.outerURL !== CURRENT_QUESTION_URL ||
-        state.frameURL !== CURRENT_QUESTION_URL ||
-        state.settingsOpen !== false
-      ) {
-        return null;
-      }
-      return state.errorOpen ? null : state;
+      return isQuestionPageReady(state) ? state : null;
     },
     60_000,
   );
   assertRuntimeIdentity(outcome, expectedBuildFingerprint);
   await delay(2_000);
   const settled = await readReaderState(page);
-  return settled.errorOpen || settled.settingsOpen ? null : settled;
+  return isQuestionPageReady(settled) ? settled : null;
 }
 
 async function submitCorrectAnswer(page) {
@@ -415,13 +425,13 @@ async function waitForAutomaticTransition(page) {
   });
 }
 
-async function waitForSynchronizedQuestionState(page, token, frameURL) {
+async function waitForSynchronizedQuestionState(page, api, token, frameURL) {
   let lastReaderState = null;
   let lastRemoteState = null;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     [lastReaderState, lastRemoteState] = await Promise.all([
       readReaderState(page),
-      requestSyncState(token),
+      requestSyncState(api, token),
     ]);
     if (
       lastReaderState.frameURL === frameURL &&
@@ -445,7 +455,9 @@ async function waitForSynchronizedQuestionState(page, token, frameURL) {
 }
 
 async function writeFailureDiagnostics(page) {
-  const screenshotPath = path.join(os.tmpdir(), `kakomonn-live-e2e-${Date.now()}.png`);
+  const directory = path.resolve('C:/dev/tmp', `kakomonn-live-sync-${Date.now()}`);
+  fs.mkdirSync(directory, { recursive: true });
+  const screenshotPath = path.join(directory, 'failure.png');
   const diagnostics = await readReaderState(page).catch((error) => ({
     error: String(error),
   }));
@@ -479,7 +491,22 @@ async function resizeToExactViewport(page) {
   );
 }
 
+async function withSyncApi(run, requestFactory = request) {
+  // Own one API connection pool for the complete live scenario. It is separate
+  // from the Chrome profile's cookies and is disposed even if setup fails.
+  const api = await requestFactory.newContext({ timeout: 15_000 });
+  try {
+    return await run(api);
+  } finally {
+    await api.dispose();
+  }
+}
+
 async function main() {
+  return withSyncApi(runLiveSync);
+}
+
+async function runLiveSync(api) {
   const configuration = readKakomonnConfiguration({
     envFilePath: repositoryEnvPath,
   });
@@ -492,7 +519,7 @@ async function main() {
     envFilePath: repositoryEnvPath,
   });
   const expectedBuildFingerprint = readExpectedBuildFingerprint();
-  const baseline = await requestSyncState(token);
+  const baseline = await requestSyncState(api, token);
   const chrome = await launchChromeWithCurrentUserscript({
     configuration,
     userDataDir,
@@ -531,13 +558,14 @@ async function main() {
     if (navigationResult.kind === "question") {
       const synchronized = await waitForSynchronizedQuestionState(
         page,
+        api,
         token,
         navigationResult.state.frameURL,
       );
       finalState = synchronized.remoteState;
       synchronizedReaderState = synchronized.readerState;
     } else {
-      finalState = await requestSyncState(token);
+      finalState = await requestSyncState(api, token);
     }
     assert.equal(finalState.today, baseline.today);
     let frameUrl = null;
@@ -582,10 +610,13 @@ async function main() {
 
 module.exports = {
   assertRuntimeIdentity,
+  isQuestionPageReady,
   configureSyncToken,
   extractBuildFingerprint,
   readReaderState,
   resizeToExactViewport,
+  requestSyncState,
+  withSyncApi,
   waitUntil,
 };
 

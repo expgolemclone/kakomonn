@@ -1,3 +1,9 @@
+const { readFileSync } = require('node:fs');
+const { dirname, join } = require('node:path');
+const speechAudioFixture = readFileSync(join(
+  dirname(require.resolve('@expgolemclone/congratulations/feedback')), 'audio/correct-normal.mp3',
+)).toString('base64');
+
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SITE = "chushoks.kakomonn.com";
 const PENDING_ATTEMPT_KEY = `kakomonn-reader.${SITE}.v9.pending-attempt`;
@@ -31,6 +37,7 @@ function installSyncMockInWindow({
   expectedOrigin,
   expectedSpeechOrigin,
   expectedSpeechToken,
+  speechAudioBase64,
   writeClipboardToSystem,
   initialNextQuestionId,
   initialNextError,
@@ -227,7 +234,7 @@ function installSyncMockInWindow({
         }
         const response = {
           status: 200,
-          response: new Uint8Array([0x49, 0x44, 0x33, 0x04]).buffer,
+          response: Uint8Array.from(atob(speechAudioBase64), character => character.charCodeAt(0)).buffer,
           responseHeaders: "content-type: audio/mpeg",
         };
         details.onload(response);
@@ -589,6 +596,7 @@ function createSyncMockConfiguration({
   pendingCelebration = null,
   processedOperations = [],
   systemClipboard = false,
+  speechAudioBase64 = speechAudioFixture,
   site = SITE,
   nextQuestionId = "45125",
   nextError = null,
@@ -619,6 +627,7 @@ function createSyncMockConfiguration({
     expectedOrigin: SYNC_API_ORIGIN,
     expectedSpeechOrigin: AZURE_SPEECH_ORIGIN,
     expectedSpeechToken: AZURE_SPEECH_TOKEN,
+    speechAudioBase64,
     writeClipboardToSystem: systemClipboard,
     initialNextQuestionId: nextQuestionId,
     initialNextError: nextError,
@@ -640,6 +649,7 @@ module.exports = {
   PENDING_ATTEMPT_KEY,
   PENDING_CELEBRATION_KEY,
   SITE,
+  SPEECH_AUDIO_BYTES: Buffer.from(speechAudioFixture, 'base64').length,
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,
 };

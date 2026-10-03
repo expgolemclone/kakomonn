@@ -1,9 +1,81 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { runInNewContext } from 'node:vm';
 
 import chromeDevTools from "../scripts/chrome-devtools.cjs";
 import windowsChromeProfile from "../scripts/windows-chrome-profile.cjs";
+import chromeTampermonkey from '../kakomonn-reader/tests/support/chrome_tampermonkey.js';
+
+const { waitForTampermonkeyRuntime, readStoredUserscriptState, TAMPERMONKEY_EXTENSION_ID } = chromeTampermonkey;
+
+test('userscript verification compares exact source rather than trusting an embedded fingerprint', async () => {
+  const source = '// @name Reader fixture\nconst BUILD_FINGERPRINT = "a";\nconst css = `  \n`;\n';
+  const records = { '!extdb.@meta#test': { value: { uuid: 'test', name: 'Reader fixture', enabled: true, evilness: 0 } },
+    '!extdb.@source#test': { value: source } };
+  const page = { evaluate: (fn, argument) => runInNewContext(`(${fn.toString()})(argument)`, {
+    argument, chrome: { storage: { local: { get: async () => records } } },
+  }) };
+  const initial = await readStoredUserscriptState(page, 'Reader fixture', source);
+  assert.equal(initial.count, 1);
+  assert.equal(initial.sourceIsCurrent, true);
+  assert.equal(initial.reviewed, true);
+  records['!extdb.@source#test'].value = source.replace('  \n', '\n');
+  assert.equal((await readStoredUserscriptState(page, 'Reader fixture', source)).sourceIsCurrent, false);
+  records['!extdb.@meta#test'].value.evilness = 12;
+  assert.equal((await readStoredUserscriptState(page, 'Reader fixture', source)).reviewed, false);
+  records['!extdb.@meta#duplicate'] = records['!extdb.@meta#test'];
+  assert.equal((await readStoredUserscriptState(page, 'Reader fixture', source)).count, 2);
+});
+
+for (const scenario of [
+  { name: 'activates user scripts and wakes a dormant runtime', active: false },
+  { name: 'preserves already active user scripts', active: true },
+  { name: 'rejects a disabled extension', state: 'DISABLED', error: /must be enabled/ },
+  { name: 'rejects unavailable user script access', enabled: false, error: /must be enabled/ },
+  { name: 'propagates Chrome configuration errors', updateError: true, error: /configuration rejected/ },
+  { name: 'verifies the result of enabling user scripts', unchanged: true, error: /did not enable/ },
+  { name: 'verifies the actual loaded extension runtime', wrongRuntime: true, error: /runtime unavailable/ },
+]) {
+  test(`Tampermonkey provisioning ${scenario.name}`, async () => {
+    let active = scenario.active ?? false;
+    let updates = 0;
+    const chrome = { developerPrivate: {
+      getExtensionInfo: async id => {
+        assert.equal(id, TAMPERMONKEY_EXTENSION_ID);
+        return { state: scenario.state ?? 'ENABLED', userScriptsAccess: { isEnabled: scenario.enabled ?? true, isActive: active } };
+      },
+      updateExtensionConfiguration: async update => {
+        assert.equal(JSON.stringify(update), JSON.stringify({ extensionId: TAMPERMONKEY_EXTENSION_ID, userScriptsAccess: true }));
+        updates++;
+        if (scenario.updateError) throw new Error('configuration rejected');
+        if (!scenario.unchanged) active = true;
+      },
+    }, runtime: { id: scenario.wrongRuntime ? 'unrelated' : TAMPERMONKEY_EXTENSION_ID }, storage: { local: { get() {} } } };
+    const evaluate = (fn, arg) => runInNewContext(`(${fn.toString()})(argument)`, { chrome, argument: arg });
+    const pages = [];
+    const context = { newPage: async () => {
+      const page = { closed: false, goto: async url => { page.url = url; },
+        evaluate, waitForFunction: async (fn, arg, options) => {
+          assert.equal(options.timeout, 60_000);
+          if (!evaluate(fn, arg)) throw new Error('runtime unavailable');
+        }, close: async () => { page.closed = true; } };
+      pages.push(page);
+      return page;
+    } };
+    if (scenario.error) {
+      await assert.rejects(waitForTampermonkeyRuntime(context), scenario.error);
+      assert.equal(pages.every(page => page.closed), true);
+    } else {
+      const page = await waitForTampermonkeyRuntime(context);
+      assert.equal(pages[0].url, 'chrome://extensions/');
+      assert.equal(pages[0].closed, true);
+      assert.equal(page.url, `chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html#nav=settings`);
+      assert.equal(page.closed, false);
+      assert.equal(updates, scenario.active ? 0 : 1);
+    }
+  });
+}
 import {
   CHROME_AUTOPLAY_ARGUMENT,
   CHROME_BOOTSTRAP_URL,

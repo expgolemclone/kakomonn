@@ -53,9 +53,9 @@ $speechKey = az cognitiveservices account keys list --name <unique-name> --resou
 続いてCloudflareへloginし,同期tokenとAzure Speech keyをSecretへ登録してデプロイします.
 
 ```powershell
-npx wrangler login
-npx wrangler secret put SYNC_TOKEN --config kakomonn-sync/wrangler.jsonc
-$speechKey | npx wrangler secret put AZURE_SPEECH_KEY --config kakomonn-sync/wrangler.jsonc
+envx-node wrangler login
+envx-node wrangler secret put SYNC_TOKEN --config kakomonn-sync/wrangler.jsonc
+$speechKey | envx-node wrangler secret put AZURE_SPEECH_KEY --config kakomonn-sync/wrangler.jsonc
 npm run deploy:kakomonn-sync
 ```
 
@@ -70,7 +70,7 @@ Readerのコピー失敗を[Issue #29](https://github.com/expgolemclone/kakomonn
 GitHub PATは全Reader共通でWorker側のSecretに1つだけ登録します. GitHubで対象repositoryを`expgolemclone/kakomonn`だけに限定したfine-grained PATを作成し, `Issues: Read and write`を付与してください. PATをrepository, .env, browser, URLへ保存しません.
 
 ```powershell
-node --use-system-ca node_modules/wrangler/bin/wrangler.js secret put GITHUB_COPY_FAILURE_TOKEN --config kakomonn-sync/wrangler.jsonc
+envx-node wrangler secret put GITHUB_COPY_FAILURE_TOKEN --config kakomonn-sync/wrangler.jsonc
 ```
 
 未送信報告がある場合だけalarmを使用し, 配送失敗は1分から最大6時間の指数backoffで再送します. GitHubのrate limit待機指示は優先します. SecretまたはGitHub配送先の設定を変更した後の次の報告受理時には, 配送設定のfingerprintだけで変更を検出し, 古い設定による待機を解除します. 投稿結果が不明な場合はcomment内のmarkerを照合してから再送します. Secret未設定でも報告を受け付け, 配送待ちとして保持します. queueが空ならalarmを停止します. Cron, polling, 永続log, traceは使用しません.

@@ -35,7 +35,7 @@ Windowsローカルから,同期済みの`main`先端をGitHub Releaseへ公開�
 npm run release:kakomonn-reader
 ```
 
-このcommandはlockfileどおりに依存関係をinstallし, [repositoryの完全test](../README.md#テスト)をWindowsで実行します. すべての検証後にmainが変わっていないことを再確認し, 生成した`kakomonn-reader.user.js`を公開します.
+このcommandは共通runtimeのlockと配置, Chrome provisioningのtestを検証し, [repositoryの完全test](../README.md#テスト)をWindowsで実行します. Release中のinstallやrepo内のnode_modules作成は行いません. すべての検証後にmainが変わっていないことを再確認し, 生成した`kakomonn-reader.user.js`を公開します.
 
 release用のChrome profile, Tampermonkey, `.env`は, [完全testと同じ手順](../README.md#テスト)で準備します.
 
@@ -75,4 +75,4 @@ userscript metadataの`@version`をSemVerで管理します. TampermonkeyはLate
 | --- | --- |
 | Appium automation server | [appium/appium](https://github.com/appium/appium) |
 | Appium XCUITest driver | [appium/appium-xcuitest-driver](https://github.com/appium/appium-xcuitest-driver) |
-| Generated userscript syntax validation | [yowainwright/es-check](https://github.com/yowainwright/es-check) |
+| Generated userscript syntax validation | [acornjs/acorn](https://github.com/acornjs/acorn), ECMAScript 2020 parser |

@@ -399,9 +399,24 @@ async function waitForAppium(port, appiumProcess) {
   throw new Error("Appium did not become ready within 90 seconds");
 }
 
+function resolveAppiumCli() {
+  const manifestPath = require.resolve('appium/package.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const entry = manifest.bin?.appium;
+  assert.equal(typeof entry, 'string', 'Appium must declare its appium CLI');
+  return path.resolve(path.dirname(manifestPath), entry);
+}
+
+function resolveAppiumRuntimeDirectory() {
+  // Appium discovers npm-managed drivers and writes its cache relative to cwd.
+  // Use the shared npm project, never the consumer repository.
+  return path.resolve(path.dirname(require.resolve('appium/package.json')), '..', '..');
+}
+
 async function startAppium() {
   const port = await reservePort();
-  const appiumEntryPoint = require.resolve("appium");
+  const appiumEntryPoint = resolveAppiumCli();
+  const output = fs.openSync(path.join(resultDirectory, 'appium-process.log'), 'a');
   const appiumProcess = spawn(
     process.execPath,
     [
@@ -425,14 +440,20 @@ async function startAppium() {
       "0",
     ],
     {
-      cwd: repositoryRoot,
+      cwd: resolveAppiumRuntimeDirectory(),
       env: kakomonnFreeEnvironment(),
-      stdio: "ignore",
+      stdio: ['ignore', output, output],
       windowsHide: true,
     },
   );
-  await waitForAppium(port, appiumProcess);
-  return { appiumProcess, port };
+  fs.closeSync(output);
+  try {
+    await waitForAppium(port, appiumProcess);
+    return { appiumProcess, port };
+  } catch (error) {
+    await stopAppium(appiumProcess);
+    throw error;
+  }
 }
 
 async function stopAppium(appiumProcess) {
@@ -1302,10 +1323,14 @@ async function runTest() {
   }
 }
 
-runTest().then(
-  () => process.exit(0),
-  (error) => {
-    console.error(error);
-    process.exit(1);
-  },
-);
+module.exports = { resolveAppiumCli, resolveAppiumRuntimeDirectory };
+
+if (require.main === module) {
+  runTest().then(
+    () => process.exit(0),
+    (error) => {
+      console.error(error);
+      process.exit(1);
+    },
+  );
+}

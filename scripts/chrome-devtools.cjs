@@ -44,11 +44,12 @@ function readDevToolsActivePort(
 async function waitForDevToolsActivePort(
   userDataDir,
   browserProcess,
-  { delayImpl = delay, readPort = readDevToolsActivePort, timeoutMs = DEVTOOLS_TIMEOUT_MS } = {},
+  { delayImpl = delay, fetchImpl = fetch, now = Date.now,
+    readPort = readDevToolsActivePort, timeoutMs = DEVTOOLS_TIMEOUT_MS } = {},
 ) {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = now() + timeoutMs;
   let lastError = null;
-  while (Date.now() < deadline) {
+  while (now() < deadline) {
     // Chrome can hand off to another process and exit successfully on Windows.
     if (Number.isInteger(browserProcess.exitCode) && browserProcess.exitCode !== 0) {
       throw new Error(
@@ -56,7 +57,19 @@ async function waitForDevToolsActivePort(
       );
     }
     try {
-      return readPort(userDataDir);
+      const port = readPort(userDataDir);
+      // The file alone is not readiness: startup can publish a port before its
+      // HTTP endpoint is usable. Both launchers share this actual CDP handshake.
+      const response = await fetchImpl(devToolsURL(port, '/json/version'), {
+        signal: AbortSignal.timeout(Math.max(1, deadline - now())),
+      });
+      const version = await readJsonResponse(response, 'Chrome remote debugging readiness');
+      const socket = new URL(version.webSocketDebuggerUrl);
+      if (socket.protocol !== 'ws:' || socket.hostname !== DEVTOOLS_HOST ||
+          socket.port !== String(port) || !socket.pathname.startsWith('/devtools/browser/')) {
+        throw new Error('Chrome remote debugging returned an invalid browser endpoint');
+      }
+      return port;
     } catch (error) {
       lastError = error;
     }

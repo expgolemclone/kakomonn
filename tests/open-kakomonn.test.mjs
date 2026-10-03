@@ -540,7 +540,7 @@ test("reads and validates the exact dedicated Chrome DevTools port", () => {
   );
 });
 
-test("waits for the dedicated port after Chrome hands off successfully", async () => {
+test("waits for the dedicated port and live CDP endpoint after Chrome hands off successfully", async () => {
   let reads = 0;
   const port = await waitForDevToolsActivePort(
     PROFILE_PATH,
@@ -552,10 +552,45 @@ test("waits for the dedicated port after Chrome hands off successfully", async (
         if (reads === 1) throw new Error("not ready yet");
         return 49152;
       },
+      fetchImpl: async url => {
+        assert.equal(url, 'http://127.0.0.1:49152/json/version');
+        return Response.json({ webSocketDebuggerUrl: 'ws://127.0.0.1:49152/devtools/browser/ready' });
+      },
     },
   );
   assert.equal(port, 49152);
   assert.equal(reads, 2);
+});
+
+test('a published Chrome port is not ready until a live matching browser endpoint responds', async () => {
+  const endpoints = [];
+  const port = await waitForDevToolsActivePort(PROFILE_PATH, { exitCode: null }, {
+    delayImpl: async () => {},
+    readPort: () => endpoints.length === 0 ? 49000 : 49152,
+    fetchImpl: async url => {
+      endpoints.push(url);
+      if (endpoints.length === 1) throw new TypeError('ECONNREFUSED');
+      if (endpoints.length === 2) return new Response('', { status: 503 });
+      if (endpoints.length === 3) return Response.json({
+        webSocketDebuggerUrl: 'ws://127.0.0.1:49000/devtools/browser/stale',
+      });
+      return Response.json({ webSocketDebuggerUrl: 'ws://127.0.0.1:49152/devtools/browser/ready' });
+    },
+  });
+  assert.equal(port, 49152);
+  assert.deepEqual(endpoints, ['http://127.0.0.1:49000/json/version',
+    ...Array(3).fill('http://127.0.0.1:49152/json/version')]);
+});
+
+test('a port file with no reachable CDP endpoint fails at the startup deadline', async () => {
+  let elapsed = 0;
+  await assert.rejects(waitForDevToolsActivePort(PROFILE_PATH, { exitCode: null }, {
+    now: () => elapsed,
+    timeoutMs: 200,
+    delayImpl: async () => { elapsed += 100; },
+    readPort: () => 49152,
+    fetchImpl: async () => { throw new TypeError('ECONNREFUSED'); },
+  }), /remote debugging did not start: ECONNREFUSED/);
 });
 
 test("a successful Chrome exit without a dedicated port still fails", async () => {

@@ -30,22 +30,6 @@
 
 ## Tools
 
-<div align="center">
-  <h3><a href="https://kakomonn-sync.kakomonn.workers.dev/">過去問 定着dashboard</a></h3>
-  <p><sub>DEMO / 2026-08-10 / chushoks.kakomonn.com</sub></p>
-  <table>
-    <tr><th scope="row" align="left">dailyKpiCompleted</th><td align="right"><strong>達成</strong></td></tr>
-    <tr><th scope="row" align="left">dueCardsRemaining</th><td align="right"><strong>5 問</strong></td></tr>
-    <tr><th scope="row" align="left">newQuestions<br>Remaining</th><td align="right"><strong>0 問</strong></td></tr>
-    <tr><th scope="row" align="left">todayStability<br>DaysDelta</th><td align="right"><strong>+104 日</strong></td></tr>
-    <tr><th scope="row" align="left">stabilityDays</th><td align="right"><strong>9,912 日</strong></td></tr>
-    <tr><th scope="row" align="left">attempted<br>QuestionCount</th><td align="right"><strong>640 問</strong></td></tr>
-    <tr><th scope="row" align="left">todayAttempted<br>QuestionCount</th><td align="right"><strong>50 問</strong></td></tr>
-    <tr><th scope="row" align="left">todayCorrect<br>RatePercent</th><td align="right"><strong>67%</strong></td></tr>
-    <tr><th scope="row" align="left">todayStudyTimeMs</th><td align="right"><strong>3時間 30分</strong></td></tr>
-  </table>
-</div>
-
 | Component                               | 役割                                                  |
 | --------------------------------------- | ----------------------------------------------------- |
 | [**Reader**](kakomonn-reader/README.md) | 問題と解説の読み上げ, キーボード操作, Markdownコピー. |

@@ -2,7 +2,59 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const test = require("node:test");
 
-const { assertRuntimeIdentity, extractBuildFingerprint, isQuestionPageReady, requestSyncState, withSyncApi } = require('./live_sync_e2e_test');
+const { assertRuntimeIdentity, extractBuildFingerprint, isQuestionPageReady, openLaunchedQuestion, requestSyncState, withSyncApi } = require('./live_sync_e2e_test');
+
+const { blockAdRequests } = require('./support/third_party_ads');
+
+test('isolates third-party ads while preserving real questions, sync, speech, and clipboard reporting', async () => {
+  let handler;
+  await blockAdRequests({ route: async (pattern, callback) => {
+    assert.equal(pattern, '**/*');
+    handler = callback;
+  } });
+  for (const [url, expected] of [
+    ['https://pagead2.googlesyndication.com/ad.js', 'abort'],
+    ['https://securepubads.g.doubleclick.net/ad.js', 'abort'],
+    ['https://googletagmanager.com/tag.js', 'abort'],
+    ['https://cdn.anymind360.com/ad.js', 'abort'],
+    ['https://geniee.jp/ad.js', 'abort'],
+    ['https://chushoks.kakomonn.com/questions/86956', 'continue'],
+    ['https://kakomonn-sync.kakomonn.workers.dev/v12/state', 'continue'],
+    ['https://kakomonn-sync.kakomonn.workers.dev/v12/attempts', 'continue'],
+    ['https://kakomonn-sync.kakomonn.workers.dev/v12/copy-failures', 'continue'],
+    ['https://japaneast.tts.speech.microsoft.com/cognitiveservices/v1', 'continue'],
+    ['https://doubleclick.net.example.com/ad.js', 'continue'],
+  ]) {
+    const actions = [];
+    await handler({ request: () => ({ url: () => url }),
+      abort: async () => { actions.push('abort'); },
+      continue: async () => { actions.push('continue'); },
+    });
+    assert.deepEqual(actions, [expected], url);
+  }
+});
+
+test('launches through the production bootstrap before selecting the question tab', async () => {
+  const question = { url: () => 'https://chushoks.kakomonn.com/questions/86956' };
+  const unrelated = [
+    'about:blank', 'https://kakomonn-sync.kakomonn.workers.dev/open',
+    'https://chushoks.kakomonn.com/offline',
+    'https://chushoks.kakomonn.com/questions/86956?unrelated=1',
+    'https://example.com/questions/86956',
+  ].map(url => ({ url: () => url }));
+  const events = [];
+  const context = { pages: () => {
+    events.push('select');
+    return [...unrelated, question];
+  } };
+  assert.equal(await openLaunchedQuestion(context, async () => { events.push('launch'); }), question);
+  assert.deepEqual(events, ['launch', 'select']);
+});
+
+test('propagates production bootstrap failures without opening a direct question tab', async () => {
+  const context = { pages: () => { throw new Error('must not inspect pages after launch failure'); } };
+  await assert.rejects(openLaunchedQuestion(context, async () => { throw new Error('bootstrap failed'); }), /bootstrap failed/);
+});
 const {
   SYNC_TOKEN_KEY,
   LEGACY_TAMPERMONKEY_EXTENSION_ID,
@@ -75,12 +127,13 @@ test('does not treat an offline document or a reader shell alone as a ready ques
     actionsPresent: false, frameHasAnswerChoices: true,
     outerURL: 'https://chushoks.kakomonn.com/questions/86956',
     frameURL: 'https://chushoks.kakomonn.com/questions/86956',
-    settingsOpen: false, errorOpen: false,
+    settingsOpen: false, syncBusy: false, errorOpen: false,
   };
   assert.equal(isQuestionPageReady(ready), true);
   for (const change of [
     { frameHasAnswerChoices: false }, { frameHasAnswerChoices: undefined },
     { actionsPresent: true }, { settingsOpen: true }, { errorOpen: true },
+    { syncBusy: true }, { syncBusy: undefined }, { syncBusy: null },
     { frameURL: 'https://chushoks.kakomonn.com/offline' },
     { outerURL: 'https://chushoks.kakomonn.com/questions/44369' },
   ]) assert.equal(isQuestionPageReady({ ...ready, ...change }), false);

@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { request } = require('playwright');
 const { readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
+const { blockAdRequests } = require('./support/third_party_ads');
 
 const {
   CURRENT_QUESTION_URL,
@@ -194,6 +195,7 @@ async function readReaderState(page) {
         historyLength: history.length,
         outerURL: location.href,
         scriptHandler: shell?.dataset.scriptHandler ?? null,
+        syncBusy: shell === null ? null : shell.getAttribute("aria-busy") === "true",
         settingsOpen: settings?.open ?? null,
         shellClientHeight: shell?.clientHeight ?? null,
         shellClientWidth: shell?.clientWidth ?? null,
@@ -231,8 +233,18 @@ async function configureSyncToken(page, token, expectedBuildFingerprint) {
 
   return waitUntil("the production sync baseline", async () => {
     const state = await readReaderState(page);
-    return state.settingsOpen === false && state.topControlsPresent === false ? state : null;
+    return state.settingsOpen === false && state.topControlsPresent === false &&
+      state.syncBusy === false && state.errorOpen === false ? state : null;
   });
+}
+
+async function openLaunchedQuestion(context, launch) {
+  await launch();
+  return waitUntil('the production launcher question tab', async () =>
+    context.pages().find(candidate =>
+      /^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(candidate.url()),
+    ) ?? null,
+  );
 }
 
 async function completeStoredDestinationIfAvailable(page) {
@@ -257,6 +269,7 @@ function isQuestionPageReady(state) {
     state.outerURL === CURRENT_QUESTION_URL &&
     state.frameURL === CURRENT_QUESTION_URL &&
     state.settingsOpen === false &&
+    state.syncBusy === false &&
     state.errorOpen === false;
 }
 
@@ -527,24 +540,20 @@ async function runLiveSync(api) {
   });
   let page = null;
   try {
-    page = await chrome.context.newPage();
+    await blockAdRequests(chrome.context);
+    // Use the supported Windows launcher before navigating to the answer fixture.
+    // Direct cold navigation bypasses the production extension/transport bootstrap.
+    const { openKakomonnURL } = await import('../../scripts/open-kakomonn.mjs');
+    page = await openLaunchedQuestion(chrome.context, () => openKakomonnURL({ configuration }));
+    await completeStoredDestinationIfAvailable(page);
     await page.goto(CURRENT_QUESTION_URL, {
       waitUntil: "domcontentloaded",
       timeout: 60_000,
     });
     await resizeToExactViewport(page);
-
     const configuredState = await configureSyncToken(page, token, expectedBuildFingerprint);
     assert.equal(configuredState.settingsOpen, false);
     assert.equal(configuredState.topControlsPresent, false);
-    await completeStoredDestinationIfAvailable(page);
-    await page.close();
-    page = await chrome.context.newPage();
-    await page.goto(CURRENT_QUESTION_URL, {
-      waitUntil: "domcontentloaded",
-      timeout: 60_000,
-    });
-    await resizeToExactViewport(page);
     const automaticSpeechState = await waitForAutomaticQuestionSpeech(
       page,
       expectedBuildFingerprint,
@@ -612,6 +621,7 @@ module.exports = {
   assertRuntimeIdentity,
   isQuestionPageReady,
   configureSyncToken,
+  openLaunchedQuestion,
   extractBuildFingerprint,
   readReaderState,
   resizeToExactViewport,

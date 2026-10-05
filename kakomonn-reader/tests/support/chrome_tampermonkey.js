@@ -501,7 +501,7 @@ async function approveTampermonkeyChange(context) {
   for (const page of context.pages()) {
     if (!page.url().startsWith(`chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/`)) continue;
     if (!page.url().startsWith(`chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/ask.html?`)) continue;
-    const controls = page.getByRole('button', { name: /^(変更|Modify|インストール|Install)$/ });
+    const controls = page.getByRole('button', { name: /^(変更|Modify|インストール|Install|再インストール|Reinstall)$/ });
     for (let index = 0; index < await controls.count(); index++) {
       const control = controls.nth(index);
       if (await control.isVisible()) { await control.click(); break; }
@@ -685,6 +685,7 @@ module.exports = {
   SYNC_TOKEN_KEY,
   TAMPERMONKEY_EXTENSION_ID,
   assertTokenShape,
+  approveTampermonkeyChange,
   defaultChromeUserDataDir,
   defaultChromeE2EUserDataDir,
   discoverTampermonkeyStorageDirectories,

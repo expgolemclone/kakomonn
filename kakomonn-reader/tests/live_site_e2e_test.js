@@ -9,6 +9,7 @@ const {
 } = require("../../scripts/kakomonn-config.cjs");
 const { installSyncMock } = require("./sync_mock");
 const { installReaderInChildFrames } = require("./support/frame_reader");
+const { blockAdRequests } = require('./support/third_party_ads');
 const {
   assertMarkdownCopy,
   MARKDOWN_CHOICES,
@@ -278,25 +279,7 @@ async function blockThirdPartyAds(context) {
       );
     });
   }, pageErrorLocationPrefix);
-  await context.route("**/*", async (route) => {
-    const hostname = new URL(route.request().url()).hostname;
-    const isAdRequest =
-      hostname.endsWith(".googlesyndication.com") ||
-      hostname.endsWith(".doubleclick.net") ||
-      hostname === "googletagmanager.com" ||
-      hostname.endsWith(".googletagmanager.com") ||
-      hostname === "anymind360.com" ||
-      hostname.endsWith(".anymind360.com") ||
-      hostname === "geniee.jp" ||
-      hostname.endsWith(".geniee.jp");
-
-    if (isAdRequest) {
-      await route.abort();
-      return;
-    }
-
-    await route.continue();
-  });
+  await blockAdRequests(context);
 }
 
 async function runLiveCatalogCrawlCase(browser, script) {

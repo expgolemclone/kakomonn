@@ -7,7 +7,40 @@ import chromeDevTools from "../scripts/chrome-devtools.cjs";
 import windowsChromeProfile from "../scripts/windows-chrome-profile.cjs";
 import chromeTampermonkey from '../kakomonn-reader/tests/support/chrome_tampermonkey.js';
 
-const { waitForTampermonkeyRuntime, readStoredUserscriptState, TAMPERMONKEY_EXTENSION_ID } = chromeTampermonkey;
+const { approveTampermonkeyChange, waitForTampermonkeyRuntime, readStoredUserscriptState, TAMPERMONKEY_EXTENSION_ID } = chromeTampermonkey;
+
+for (const label of ['変更', 'Modify', 'インストール', 'Install', '再インストール', 'Reinstall']) {
+  test(`approves Tampermonkey's ${label} prompt without clicking unrelated controls`, async () => {
+    const clicked = [];
+    const page = (url, buttons) => ({
+      url: () => url,
+      getByRole: (role, { name }) => {
+        assert.equal(role, 'button');
+        const matches = buttons.filter(button => name.test(button.label));
+        return {
+          count: async () => matches.length,
+          nth: index => ({
+            isVisible: async () => matches[index].visible,
+            click: async () => { clicked.push(matches[index].label); },
+          }),
+        };
+      },
+    });
+    const buttons = [
+      { label, visible: false },
+      { label: 'Cancel', visible: true },
+      { label: `${label} unrelated`, visible: true },
+      { label, visible: true },
+    ];
+    await approveTampermonkeyChange({ pages: () => [
+      page('https://example.com/ask.html?aid=unrelated', buttons),
+      page(`chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/options.html`, buttons),
+      page('chrome-extension://unrelated/ask.html?aid=unrelated', buttons),
+      page(`chrome-extension://${TAMPERMONKEY_EXTENSION_ID}/ask.html?aid=fixture`, buttons),
+    ] });
+    assert.deepEqual(clicked, [label]);
+  });
+}
 
 test('userscript verification compares exact source rather than trusting an embedded fingerprint', async () => {
   const source = '// @name Reader fixture\nconst BUILD_FINGERPRINT = "a";\nconst css = `  \n`;\n';

@@ -27,7 +27,7 @@ npm run build:kakomonn-reader
 
 ## Release
 
-Windowsローカルから,同期済みの`main`先端をGitHub Releaseへ公開します. [repositoryのtest要件](../README.md#テスト)に加えてjjとGitHub CLIを用意し, `gh auth login`を完了してください.
+Windowsローカルから,同期済みの`main`先端をGitHub Releaseへ公開します. [repositoryのtest要件](../docs/guide.md#テスト)に加えてjjとGitHub CLIを用意し, `gh auth login`を完了してください.
 
 変更をjjで`main`へ統合してoriginへpushした後,repository rootで次の1commandを実行します.
 
@@ -35,9 +35,9 @@ Windowsローカルから,同期済みの`main`先端をGitHub Releaseへ公開�
 npm run release:kakomonn-reader
 ```
 
-このcommandは共通runtimeのlockと配置, Chrome provisioningのtestを検証し, [repositoryの完全test](../README.md#テスト)をWindowsで実行します. Release中のinstallやrepo内のnode_modules作成は行いません. すべての検証後にmainが変わっていないことを再確認し, 生成した`kakomonn-reader.user.js`を公開します.
+このcommandは共通runtimeのlockと配置, Chrome provisioningのtestを検証し, [repositoryの完全test](../docs/guide.md#テスト)をWindowsで実行します. Release中のinstallやrepo内のnode_modules作成は行いません. すべての検証後にmainが変わっていないことを再確認し, 生成した`kakomonn-reader.user.js`を公開します.
 
-release用のChrome profile, Tampermonkey, `.env`は, [完全testと同じ手順](../README.md#テスト)で準備します.
+release用のChrome profile, Tampermonkey, `.env`は, [完全testと同じ手順](../docs/guide.md#テスト)で準備します.
 
 Releaseのtagは`kakomonn-reader-v<version>`,titleは`kakomonn-reader v<version>`です. `@version`はSemVerで手動更新し, 同期済みの`main`先端だけを`Latest`として公開します. 生成fileはrepositoryの差分へ含めません. 作業内容とmainの不一致,localとoriginまたはGitHub上のmainの不一致,local検証の失敗,検証中のmain更新,同一tagの既存Releaseのいずれかを検出した場合は公開せず終了します. 原因を解消して同じcommandを最初から実行してください. skip,force,任意revisionを指定するoptionはありません.
 
@@ -65,7 +65,7 @@ userscript metadataの`@version`をSemVerで管理します. TampermonkeyはLate
 
 ## 動作確認
 
-[repository rootのテスト手順](../README.md#テスト)を正本とします. Actual Mobile Safari E2Eの環境と実行方法は, [iOS Safari CI](../README.md#ios-safari-ci)に記載しています.
+[repository共通のテスト手順](../docs/guide.md#テスト)を正本とします. Actual Mobile Safari E2Eの環境と実行方法は, [iOS Safari CI](../docs/guide.md#ios-safari-ci)に記載しています.
 
 ## Acknowledgements
 

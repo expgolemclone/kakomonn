@@ -14,7 +14,7 @@
     / <a href="docs/guide.md">利用と開発</a>
     / <a href="kakomonn-sync/README.md#学習ログ">学習ログ</a>
   </p>
-  <p><img src="docs/assets/kakomonn-demo.gif" alt="Reader / Sync" width="960"></p>
+  <p><img src="docs/assets/kakomonn-demo.gif" alt="Reader" width="960"></p>
 </div>
 
 ---
@@ -30,7 +30,21 @@
 
 ## Tools
 
-<p align="center"><img src="docs/assets/kakomonn-dashboard.png" alt="Sync" width="1120"></p>
+<div align="center">
+  <h3><a href="https://kakomonn-sync.kakomonn.workers.dev/">過去問 定着dashboard</a></h3>
+  <p><sub>DEMO / 2026-08-10 / chushoks.kakomonn.com</sub></p>
+  <table>
+    <tr><th scope="row" align="left">dailyKpiCompleted</th><td align="right"><strong>達成</strong></td></tr>
+    <tr><th scope="row" align="left">dueCardsRemaining</th><td align="right"><strong>5 問</strong></td></tr>
+    <tr><th scope="row" align="left">newQuestions<br>Remaining</th><td align="right"><strong>0 問</strong></td></tr>
+    <tr><th scope="row" align="left">todayStability<br>DaysDelta</th><td align="right"><strong>+104 日</strong></td></tr>
+    <tr><th scope="row" align="left">stabilityDays</th><td align="right"><strong>9,912 日</strong></td></tr>
+    <tr><th scope="row" align="left">attempted<br>QuestionCount</th><td align="right"><strong>640 問</strong></td></tr>
+    <tr><th scope="row" align="left">todayAttempted<br>QuestionCount</th><td align="right"><strong>50 問</strong></td></tr>
+    <tr><th scope="row" align="left">todayCorrect<br>RatePercent</th><td align="right"><strong>67%</strong></td></tr>
+    <tr><th scope="row" align="left">todayStudyTimeMs</th><td align="right"><strong>3時間 30分</strong></td></tr>
+  </table>
+</div>
 
 | Component                               | 役割                                                  |
 | --------------------------------------- | ----------------------------------------------------- |

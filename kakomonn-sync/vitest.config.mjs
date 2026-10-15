@@ -17,6 +17,7 @@ export default defineConfig({
     }),
   ],
   test: {
+    fsModuleCachePath: nodeCacheDirectory('kakomonn-vitest-modules'),
     deps: {
       optimizer: {
         ssr: {

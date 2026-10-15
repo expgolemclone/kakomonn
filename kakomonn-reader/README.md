@@ -9,13 +9,13 @@ kakomonn.comの各資格サイトの過去問ページ向けユーザースク�
 - `q,w,e,r,t`で解答用の選択肢1から5を選びます.
 - `a,s,d,f,g`で表示選択肢1から5の取り消し線を切り替えます.
 - 問題pageを開くたびに, `問題`見出しがpage topへ来る位置まで自動でscrollします. `z`で100px下へ,`x`で100px上へscrollし,`gg`でpage topへ戻ります. 検索欄や計算欄などへ入力中はkeyboard shortcutを無効にします.
-- 正解時は`NORMAL` 88.9%, `RARE` 10%, `SUPER RARE` 1%, `SSR` 0.1%からsecure randomで1種類を選び, tierごとの`That's Right`表示, chime, 同梱した英語音声を再生します. 続けて解答保存responseの`dueCardsRemaining + newQuestionsRemaining`を数字だけで読み上げます. 不正解の定型音声は同梱assetだけを使用します.
+- Correct answers play feedback from the shared [congratulations package](https://github.com/expgolemclone/congratulations), then speak the remaining question count.
 - WindowsとiPhoneの起動経路は, [`kakomonn-sync`の次の問題を開く手順](../kakomonn-sync/README.md#次の問題を開く)を使用します. bridgeからreaderと問題iframeまでは同じuserscript session内で切り替えます.
 - 解答操作と解答後の処理は[学習記録の同期設定](#学習記録の同期設定)を参照してください.
 - 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
 - 問題画面は元サイトのheader, 右側固定操作button, `TOP` button, topのstatus, KPI, 同期設定, copy button, 次問buttonを表示せず, 問題iframeを画面全体へ広げます. 5分の残り時間は問題iframe上端の4px barへ重ねて表示します.
 - 通常進行のstatusは表示せず, 処理に失敗した場合だけerror内容, context, code, HTTP statusをdialogへ表示します. tokenとresponse bodyは表示しません.
-- 問題catalogは固定の`question/no`範囲を持ちません. 24時間ごとに`/createques`と`/list`から年度listを再発見し, 各listの全paginationにある実在の問題IDを1回取得します. 各pageの位置, 件数, 重複を同じ1巡内で検証して同期します. catalog更新はreader起動と読み上げを待たせず, 解答送信またはskipまでに完了させます. サイトが同じ構造で新年度を追加する限り, コード変更は不要です.
+- The question catalog refreshes daily from the site's year lists, including new years that retain the supported page structure.
 
 ## ビルド
 
@@ -23,7 +23,7 @@ kakomonn.comの各資格サイトの過去問ページ向けユーザースク�
 npm run build:kakomonn-reader
 ```
 
-`src/`にはapp stateを所有するreader controllerと, content抽出, Markdown生成, catalog取得, KPI音声の待機, styleのES moduleがあります. 正解演出の定義, 表示, 効果音と5音声は`@expgolemclone/congratulations/feedback`を正本とします. Viteが共通moduleと音声のdata URLを1つのuserscriptへbundleし, `build.mjs`がmetadataとbundleを含むfingerprintを付けて`kakomonn-reader.user.js`を生成します. 通常installでは[Latest Release asset](https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js)をTampermonkeyへ登録してください.
+For normal installation, register the [Latest Release asset](https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js) with Tampermonkey.
 
 ## Release
 
@@ -39,9 +39,7 @@ npm run release:kakomonn-reader
 
 release用のChrome profile, Tampermonkey, `.env`は, [完全testと同じ手順](../docs/guide.md#テスト)で準備します.
 
-Releaseのtagは`kakomonn-reader-v<version>`,titleは`kakomonn-reader v<version>`です. `@version`はSemVerで手動更新し, 同期済みの`main`先端だけを`Latest`として公開します. 生成fileはrepositoryの差分へ含めません. 作業内容とmainの不一致,localとoriginまたはGitHub上のmainの不一致,local検証の失敗,検証中のmain更新,同一tagの既存Releaseのいずれかを検出した場合は公開せず終了します. 原因を解消して同じcommandを最初から実行してください. skip,force,任意revisionを指定するoptionはありません.
-
-公開されたファイルは[GitHub Releases](https://github.com/expgolemclone/kakomonn/releases)から取得できます.
+Manually update metadata `@version` using SemVer. Publish only the synchronized `main` tip; do not track generated files. If validation or publication fails, resolve the cause and rerun the command without bypasses.
 
 ## 動作環境
 
@@ -53,7 +51,7 @@ Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` mode
 
 同期tokenが未保存または認証失敗の場合だけ, 入力dialogが開きます. Win11とiPhoneへ, Worker Secretの`SYNC_TOKEN`と同じ値を入力してください. tokenはbrowser profileごとのUserscript専用storageを唯一の保存先とし, 問題siteとsync dashboardの`localStorage`には保存されません. 同じprofileのsync dashboardはこのtokenで自動接続します. 接続済みのreaderには設定buttonを表示しません.
 
-remote stateはreader sessionの開始時に取得します. launcherから開いた場合は`/v12/next`が返したstateを引き継ぐため, 追加の`/v12/state`は呼びません. tabへ戻るたびの再取得は行わず, 同じsessionでの解答後は解答保存responseに含まれる最新指標と次問を使用します. 別端末で行った更新は, readerを再読み込みするか新しいsessionを開始した時に反映します.
+Changes from another device appear after reloading Reader or starting a new session, not merely switching back to the tab.
 
 未解答時の`Enter`は解答を実行します. 正解と不正解のどちらでも, 正誤表示時に解答記録を同期し, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でclipboardへ自動copyします. `n`または問題時間切れによるskipではcopyしません. 同期に失敗した場合は同じ解説pageへ留まり, error dialogの`同期を再試行`から再開します. 同じ操作の再送は二重加算されません. Windowsでは同期成功とcopyの成功または失敗確定後, iPhone Safariでは同期成功後にMarkdownをClipboard APIへ渡した時点で, 正解時は保存responseで取得済みの次問へ自動で移動します. iPhone Safariのclipboard完了通知が失敗またはtimeoutしても次問遷移は取り消さず, 画面通知せず失敗した問題URLと定型codeだけをIssue #29へ非同期報告します. Markdown生成失敗とWindowsのclipboard失敗でも次問遷移を妨げません. clipboard書き込みと解説表示待ちは各5秒でtimeoutし, コピー失敗のdialogと再試行UIは表示しません. 不正解時の`Enter`は次問への移動を予約し, 同期またはcopyの準備中に押した場合も準備完了後に移動します. iPhone Safariでは画面中央から左へのswipeでも次問へ進めます. swipeのedge除外領域と必要移動量はviewport幅に対する比率で判定し, Safariのedge gestureと競合しないようにします. WindowsではBrowser forwardでも移動できます. どの遷移も追加のWorker通信は行いません. 解説時間切れでは移動しません. Browser backまたは`Shift+H`では解答済みのReader履歴を飛ばしてdashboardへ戻り, dashboardからBrowser forwardすると最新の問題へ復帰します.
 

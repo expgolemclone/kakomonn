@@ -24,7 +24,7 @@ Windowsのopen commandまたはiPhone Safariから, 次の固定URLでFSRSに基
 https://kakomonn-sync.kakomonn.workers.dev/open
 ```
 
-`/open`はdashboard bridgeでreader userscriptが専用storageの同期tokenを読み, read-onlyの`GET /v12/next`が成功するまで待ちます. 応答に次問がある場合だけ安全な問題URLをDOMへ渡して直接移動するため, cold transportを問題siteへ持ち込みません. 次問がない場合とtokenが未設定または不正な場合は問題siteへ移動せず, bridge上で理由と再読み込み操作を表示します. 15秒以内に準備できない場合は, Tampermonkeyとreaderを確認するerrorを表示します. tokenをDOM, URL, dashboardの`localStorage`へ保存しません. readerでbrowser backを実行するとbridgeが`/`へ戻し, Userscript専用storageの同じtokenで最新のdashboardを読み込みます.
+`/open` waits for Reader authentication and the next question before navigating. Missing questions or transport failures show an error and retry action. Browser back returns to the dashboard. The sync token stays in Userscript storage, never the DOM, URL or dashboard `localStorage`.
 
 token未設定または認証失敗の場合は, redirect先の同期設定でtokenを保存し, 再読込せず次の問題へ進みます. 通信失敗, 問題catalog未同期, 次問なしの場合は, 原因と再試行操作を表示します.
 
@@ -73,9 +73,7 @@ GitHub PATは全Reader共通でWorker側のSecretに1つだけ登録します. G
 envx-node wrangler secret put GITHUB_COPY_FAILURE_TOKEN --config kakomonn-sync/wrangler.jsonc
 ```
 
-未送信報告がある場合だけalarmを使用し, 配送失敗は1分から最大6時間の指数backoffで再送します. GitHubのrate limit待機指示は優先します. SecretまたはGitHub配送先の設定を変更した後の次の報告受理時には, 配送設定のfingerprintだけで変更を検出し, 古い設定による待機を解除します. 投稿結果が不明な場合はcomment内のmarkerを照合してから再送します. Secret未設定でも報告を受け付け, 配送待ちとして保持します. queueが空ならalarmを停止します. Cron, polling, 永続log, traceは使用しません.
-
-Readerは報告の応答を待たず学習を継続します. Worker受付前の通信失敗とReader終了前に未受付の報告は再送保証の対象外です. APIはコピー失敗時だけ呼び出し, 通常の解答は従来どおり1回のWorker requestと1回のLearningState RPCで処理します. Worker deploymentのproduction検証後にReaderをreleaseします.
+Accepted reports are queued for delivery with rate-limit-aware retries and duplicate suppression. Reports not accepted before Reader exits are not guaranteed delivery. Reader continues without waiting. Release Reader only after Worker deployment passes production verification.
 
 deployment後は`npm run test:kakomonn-copy-failure-production`で, 実Chromeと実Tampermonkey, 本番同期とGitHub配送を検証します. 実問題pageの解説番号DOMだけを欠落させてMarkdown生成失敗を発生させ, 同期後の自動遷移, comment到達と重複抑止を確認します. GitHubの確認と検証注記には認証済みgh CLIを使用します. 収集commentには制御下の本番検証であり, 元pageの不具合を示す記録ではないことを追記します. この検証は本番に解答を記録するため, deploymentごとに1回だけ実行し, 完全testの代わりにはしません.
 
@@ -139,9 +137,7 @@ APIは`/v12`だけを提供し, 学習状態はLearningState Durable Object, コ
 
 未回答問題と`due_ms`へ到達した問題だけをFSRSの更新対象にします. 期限前の再解答はattemptとして集計しますが, cardとstabilityは変更しません.
 
-`learningMetrics`はsiteごとの`learning_metrics` rowへ保持し, 解答と同じtransactionで更新します. 勉強時間は`study_time_sessions`へsession/dateごとの最新累積値, `study_time_daily`へ日次合計を保持し, `todayStudyTimeMs`だけを当日の`learning_metrics`へ反映します. 過去日の遅延snapshotは`study_time_daily`だけを更新します. `stabilityDays`はcatalog置換時に現在のcatalogから再集計し, catalogから外れたcardの影響と増分更新の誤差を補正して, その日のhistoryへ新しい値を記録します. catalogから外れたcardの学習状態は再登録時に復元できるよう保存しますが, stabilityと次問候補には含めません.
-
-問題catalogの再同期では, 保存済みIDと新しいIDの差分だけを書き込みます. 内容が同一の場合は`updatedAtMs`だけを更新し, 問題row, generation, 学習指標, 履歴を書き直しません.
+Metrics update transactionally with answers. Catalog changes recalculate stability; removed cards retain their learning state for re-registration but do not contribute to stability or next-question selection.
 
 `kakomonn-reader`はSpeech tokenを約9分間再利用し, `ja-JP-NanamiNeural`のMP3をAzureから直接取得します. Workerは音声dataを中継せず, Workers AI, Durable Objects, R2も音声処理には使用しません. Azure Speech F0の無料枠を超過した場合は読み上げを停止し, 別の音声へ切り替えません.
 
@@ -160,4 +156,4 @@ APIは`/v12`だけを提供し, 学習状態はLearningState Durable Object, コ
 
 ## 互換性方針
 
-v1からv11のAPIは提供しません. legacy v4 schemaとschema v2からv11のcard, attempt, catalog, 解答履歴はschema v12へ明示的に移行します. schema v11以前には勉強時間dataがないため, 過去日のstudy timeは推測せず0から開始します. 新規問題の日別件数は, siteと問題IDごとの最初のattempt日時から再集計します. 旧KPIの祝福履歴は破棄し, `dailyKpiCompleted`の祝福履歴を新しく開始します. 旧APIへのfallbackや互換routeは追加しません. API契約を破壊的に変更する場合はversionを上げ, clientとserverを同時に更新します.
+Only API v12 is supported. Stored legacy data migrates explicitly; historical study time is not inferred, and the old KPI celebration history is reset. Breaking API changes require a new version and coordinated client/server updates.

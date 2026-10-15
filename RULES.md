@@ -1,7 +1,7 @@
-- 本番成果物を変更する作業は, pushだけで完了とせず, 変更対象componentのreleaseまたはdeploymentとproduction検証まで完了すること. Testの完了条件は[`docs/guide.md`](docs/guide.md#テスト), releaseとdeploymentの手順および順序は[`docs/guide.md`](docs/guide.md#release-and-deployment)を正本とし, `RULES.md`へ複製しないこと.
-- 学習指標とKPIの契約は[`kakomonn-sync/README.md`](kakomonn-sync/README.md#learningmetrics-contract)を正本とし, consumer側へ定義を複製しないこと.
-- Cloudflare Workers Static Assetsで配信できる静的fileはWorkerを起動せず, 動的APIだけをWorkerへ通すこと.
-- 本番のobservability, 永続log, traceは無効にし, 障害調査時だけreal-time tailを使うこと.
-- 1回のuser操作を原則1回のWorker requestと1回のDurable Object RPCで処理し, pollingと不要なCronを使わないこと.
-- Durable ObjectのSQLはindexを使うpoint queryまたは範囲queryと日次集計rowを使い, requestごとのcatalogとattemptsの全scanを行わないこと.
-- index自体もwrite数と保存容量を消費するため, 実際のqueryに必要な最小限だけを作ること.
+- Changes to production artifacts require release or deployment and production verification, not just a push. Follow the [test requirements](docs/guide.md#tests) and [release and deployment procedure](docs/guide.md#release-and-deployment); do not duplicate them here.
+- Keep learning metric and KPI definitions in [`learning-store.js`](kakomonn-sync/src/learning-store.js) and shared validation in [`contracts/kakomonn.mjs`](contracts/kakomonn.mjs). Consumers must not duplicate these definitions. Breaking API changes require a new API version and coordinated client/server updates.
+- Serve static files through Cloudflare Workers Static Assets without invoking the Worker. Route only dynamic API requests through the Worker.
+- Disable production observability, persistent logs, and tracing. Use real-time tail only for incident investigation.
+- Normally use one Worker request and one Durable Object RPC per user action. Avoid polling and unnecessary Cron jobs.
+- Use indexed point or range queries and daily aggregate rows for Durable Object SQL. Do not scan the entire catalog or attempts on each request.
+- Add only indexes required by actual queries; indexes also consume writes and storage.

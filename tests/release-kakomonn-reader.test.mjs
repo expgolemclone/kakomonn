@@ -184,7 +184,7 @@ test("publishes the synchronized main only after the complete test suite", async
     "release",
     "create",
     "kakomonn-reader-v1.0.0",
-    "kakomonn-reader/kakomonn-reader.user.js",
+    "kakomonn-reader/dist/kakomonn-reader.user.js",
     "--repo",
     REPOSITORY,
     "--target",

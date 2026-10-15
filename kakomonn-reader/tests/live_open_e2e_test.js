@@ -20,7 +20,7 @@ const {
   waitUntil,
 } = require("./live_sync_e2e_test");
 
-const userscriptPath = path.resolve(__dirname, "..", "kakomonn-reader.user.js");
+const userscriptPath = path.resolve(__dirname, "..", "dist", "kakomonn-reader.user.js");
 const repositoryEnvPath = path.resolve(__dirname, "..", "..", ".env");
 const openURL = `${DEFAULT_SYNC_API_ORIGIN}/open`;
 const site = "chushoks.kakomonn.com";

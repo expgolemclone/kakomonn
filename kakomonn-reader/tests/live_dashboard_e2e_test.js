@@ -11,7 +11,7 @@ const {
   resolveSyncToken,
 } = require("./support/chrome_tampermonkey");
 const { configureSyncToken, extractBuildFingerprint } = require("./live_sync_e2e_test");
-const userscriptPath = path.resolve(__dirname, "..", "kakomonn-reader.user.js");
+const userscriptPath = path.resolve(__dirname, "..", "dist", "kakomonn-reader.user.js");
 const repositoryEnvPath = path.resolve(__dirname, "..", "..", ".env");
 
 async function main() {

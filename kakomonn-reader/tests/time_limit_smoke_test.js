@@ -12,7 +12,7 @@ const {
 const { installReaderInChildFrames } = require("./support/frame_reader.js");
 
 const projectRoot = resolve(__dirname, "..", "..");
-const scriptPath = resolve(projectRoot, "kakomonn-reader", "kakomonn-reader.user.js");
+const scriptPath = resolve(projectRoot, "kakomonn-reader", "dist", "kakomonn-reader.user.js");
 const currentURL = "https://chushoks.kakomonn.com/questions/100";
 const nextURL = "https://chushoks.kakomonn.com/questions/101";
 

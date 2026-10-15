@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const scriptPath = new URL("../kakomonn-reader.user.js", import.meta.url);
+const scriptPath = new URL("../dist/kakomonn-reader.user.js", import.meta.url);
 const metadataPath = new URL("../src/userscript.meta.txt", import.meta.url);
 const expectedMatches = new Set([
   "https://*.kakomonn.com/*",

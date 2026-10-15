@@ -9,7 +9,7 @@ const {
 } = require("./support/chrome_tampermonkey");
 const { configureSyncToken, extractBuildFingerprint, readReaderState, waitUntil } = require("./live_sync_e2e_test");
 
-const userscriptPath = path.resolve(__dirname, "..", "kakomonn-reader.user.js");
+const userscriptPath = path.resolve(__dirname, "..", "dist", "kakomonn-reader.user.js");
 const envFilePath = path.resolve(__dirname, "..", "..", ".env");
 const questionId = new URL(CURRENT_QUESTION_URL).pathname.split("/").at(-1);
 const marker = `<!-- copy-failure:chushoks.kakomonn.com:${questionId}:markdown -->`;

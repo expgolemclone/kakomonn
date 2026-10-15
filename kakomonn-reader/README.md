@@ -1,76 +1,23 @@
 # kakomonn-reader
 
-kakomonn.comの各資格サイトの過去問ページ向けユーザースクリプトです.
+A userscript for reading and answering [kakomonn.com](https://kakomonn.com/) questions.
 
-## 機能
+## Installation
 
-- 選択肢を除く問題文と解説の自動連続読み上げ. 回答前は解説を隠し, 読み上げません.
-- `n`で現在の問題を誤答として記録して次問へ進み, `Space`で読み上げの一時停止と再開を切り替え, `Shift+H`でBrowser backを実行します.
-- `q,w,e,r,t`で解答用の選択肢1から5を選びます.
-- `a,s,d,f,g`で表示選択肢1から5の取り消し線を切り替えます.
-- 問題pageを開くたびに, `問題`見出しがpage topへ来る位置まで自動でscrollします. `z`で100px下へ,`x`で100px上へscrollし,`gg`でpage topへ戻ります. 検索欄や計算欄などへ入力中はkeyboard shortcutを無効にします.
-- Correct answers play feedback from the shared [congratulations package](https://github.com/expgolemclone/congratulations), then speak the remaining question count.
-- WindowsとiPhoneの起動経路は, [`kakomonn-sync`の次の問題を開く手順](../kakomonn-sync/README.md#次の問題を開く)を使用します. bridgeからreaderと問題iframeまでは同じuserscript session内で切り替えます.
-- 解答操作と解答後の処理は[学習記録の同期設定](#学習記録の同期設定)を参照してください.
-- 問題ページと操作画面を常時dark表示にします.問題文,選択肢,解説,入力欄,link,問題画像,選択肢画像,解説画像を固定selectorで配色し,正誤などの意味色を維持します.
-- 問題画面は元サイトのheader, 右側固定操作button, `TOP` button, topのstatus, KPI, 同期設定, copy button, 次問buttonを表示せず, 問題iframeを画面全体へ広げます. 5分の残り時間は問題iframe上端の4px barへ重ねて表示します.
-- 通常進行のstatusは表示せず, 処理に失敗した場合だけerror内容, context, code, HTTP statusをdialogへ表示します. tokenとresponse bodyは表示しません.
-- The question catalog refreshes daily from the site's year lists, including new years that retain the supported page structure.
+See the root [getting-started guide and controls](../README.md#get-started) for supported devices and everyday use.
 
-## ビルド
+Install the [latest release](https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js) in Tampermonkey. On Windows, use Tampermonkey Beta 5.6 or later in `UserScripts API Dynamic` mode with `Allow User Scripts` enabled. Use the production Worker's `SYNC_TOKEN` on each device. Never put the token in a URL.
 
-```bash
-npm run build:kakomonn-reader
-```
-
-For normal installation, register the [Latest Release asset](https://github.com/expgolemclone/kakomonn/releases/latest/download/kakomonn-reader.user.js) with Tampermonkey.
+See [Windows setup](../docs/guide.md#windows-setup) and [opening the next question](../kakomonn-sync/README.md#open-the-next-question). To host your own service, first [deploy Sync](../kakomonn-sync/README.md#deployment), then update `SYNC_API_URL` in [`src/reader-controller.js`](src/reader-controller.js) and `@connect` in [`src/userscript.meta.txt`](src/userscript.meta.txt) before building.
 
 ## Release
 
-Windowsローカルから,同期済みの`main`先端をGitHub Releaseへ公開します. [repositoryのtest要件](../docs/guide.md#テスト)に加えてjjとGitHub CLIを用意し, `gh auth login`を完了してください.
+See the shared [test requirements](../docs/guide.md#tests) and [`package.json`](../package.json) for build and test commands.
 
-変更をjjで`main`へ統合してoriginへpushした後,repository rootで次の1commandを実行します.
+Bump `@version` in the userscript metadata using SemVer. Do not commit generated files. Prepare the Windows test environment, jj, and an authenticated GitHub CLI (`gh auth login`). After integrating and pushing `main`, run from the repository root:
 
 ```powershell
 npm run release:kakomonn-reader
 ```
 
-このcommandは共通runtimeのlockと配置, Chrome provisioningのtestを検証し, [repositoryの完全test](../docs/guide.md#テスト)をWindowsで実行します. Release中のinstallやrepo内のnode_modules作成は行いません. すべての検証後にmainが変わっていないことを再確認し, 生成した`kakomonn-reader.user.js`を公開します.
-
-release用のChrome profile, Tampermonkey, `.env`は, [完全testと同じ手順](../docs/guide.md#テスト)で準備します.
-
-Manually update metadata `@version` using SemVer. Publish only the synchronized `main` tip; do not track generated files. If validation or publication fails, resolve the cause and rerun the command without bypasses.
-
-## 動作環境
-
-Windows 11 Chrome + Tampermonkey Beta 5.6以上の`UserScripts API Dynamic` modeとiPhone Safari + Tampermonkeyだけに対応します. Windows launcherはcold Chromeを`about:blank`で起動してから別processで固定`/open`を開き, 起動直後の一時的なruntimeまたは通信失敗時だけ同じtabを再読み込みします. 両端末とも問題文と解説にはAzure Speechの`ja-JP-NanamiNeural`を使用し, 短期tokenの取得後はAzureから音声を直接受信します. 長文では現在のchunk再生開始時に次の1chunkを先読みします. 同期と問題pageの準備が完了すると, 問題文の自動読み上げを試みます. iPhone Safariが初回の自動再生を拒否した場合は, 最初の画面tapで読み上げを再試行し, 以降の問題は自動で読み上げます. 問題文と解説の読み上げにはインターネット接続が必要です.
-
-## 学習記録の同期設定
-
-読み上げに必要なWorkerとAzure Speechは, [`kakomonn-sync`のデプロイ手順](../kakomonn-sync/README.md#デプロイ)で準備します. 生成されたAPI URLを`src/reader-controller.js`の`SYNC_API_URL`と`src/userscript.meta.txt`の`@connect`へ設定してビルドします.
-
-同期tokenが未保存または認証失敗の場合だけ, 入力dialogが開きます. Win11とiPhoneへ, Worker Secretの`SYNC_TOKEN`と同じ値を入力してください. tokenはbrowser profileごとのUserscript専用storageを唯一の保存先とし, 問題siteとsync dashboardの`localStorage`には保存されません. 同じprofileのsync dashboardはこのtokenで自動接続します. 接続済みのreaderには設定buttonを表示しません.
-
-Changes from another device appear after reloading Reader or starting a new session, not merely switching back to the tab.
-
-未解答時の`Enter`は解答を実行します. 正解と不正解のどちらでも, 正誤表示時に解答記録を同期し, 問題番号, 問題文, 選択肢, 自分の回答, 画像, 解説をMarkdown形式でclipboardへ自動copyします. `n`または問題時間切れによるskipではcopyしません. 同期に失敗した場合は同じ解説pageへ留まり, error dialogの`同期を再試行`から再開します. 同じ操作の再送は二重加算されません. Windowsでは同期成功とcopyの成功または失敗確定後, iPhone Safariでは同期成功後にMarkdownをClipboard APIへ渡した時点で, 正解時は保存responseで取得済みの次問へ自動で移動します. iPhone Safariのclipboard完了通知が失敗またはtimeoutしても次問遷移は取り消さず, 画面通知せず失敗した問題URLと定型codeだけをIssue #29へ非同期報告します. Markdown生成失敗とWindowsのclipboard失敗でも次問遷移を妨げません. clipboard書き込みと解説表示待ちは各5秒でtimeoutし, コピー失敗のdialogと再試行UIは表示しません. 不正解時の`Enter`は次問への移動を予約し, 同期またはcopyの準備中に押した場合も準備完了後に移動します. iPhone Safariでは画面中央から左へのswipeでも次問へ進めます. swipeのedge除外領域と必要移動量はviewport幅に対する比率で判定し, Safariのedge gestureと競合しないようにします. WindowsではBrowser forwardでも移動できます. どの遷移も追加のWorker通信は行いません. 解説時間切れでは移動しません. Browser backまたは`Shift+H`では解答済みのReader履歴を飛ばしてdashboardへ戻り, dashboardからBrowser forwardすると最新の問題へ復帰します.
-
-同期Workerが解答responseで`celebration`を返した場合は, readerがそのeventをUserscript専用storageへ保存します. 前段の端末別遷移条件を満たした後, 正解時は正解feedbackの完了後に祝福pageへ自動で移動します. 不正解時はiPhone Safariで`Enter`または中央から左swipe, Windowsで`Enter`またはBrowser forwardにより移動します. 移動前にpageを閉じても, 次回起動時に同じeventから再開します.
-
-## バージョン管理
-
-userscript metadataの`@version`をSemVerで管理します. TampermonkeyはLatest Release assetの`@version`を比較し, 新しいversionを自動更新します. 変更履歴はjjで管理します.
-
-## 動作確認
-
-[repository共通のテスト手順](../docs/guide.md#テスト)を正本とします. Actual Mobile Safari E2Eの環境と実行方法は, [iOS Safari CI](../docs/guide.md#ios-safari-ci)に記載しています.
-
-## Acknowledgements
-
-`kakomonn-reader`のbuild検証とMobile Safari E2Eに次のopen-source projectを使用しています.
-
-| Purpose | Source repository |
-| --- | --- |
-| Appium automation server | [appium/appium](https://github.com/appium/appium) |
-| Appium XCUITest driver | [appium/appium-xcuitest-driver](https://github.com/appium/appium-xcuitest-driver) |
-| Generated userscript syntax validation | [acornjs/acorn](https://github.com/acornjs/acorn), ECMAScript 2020 parser |
+Publish only the synchronized `main` tip. If validation or publication fails, fix the cause and rerun without bypasses. Coordinate service changes using the [release and deployment order](../docs/guide.md#release-and-deployment).

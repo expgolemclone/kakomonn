@@ -42,8 +42,8 @@ export default defineConfig({
     },
   }],
   build: {
-    outDir: readerRoot,
-    emptyOutDir: false,
+    outDir: resolve(readerRoot, 'dist'),
+    emptyOutDir: true,
     target: 'es2020',
     assetsInlineLimit: Infinity,
     minify: false,

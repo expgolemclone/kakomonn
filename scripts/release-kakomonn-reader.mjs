@@ -11,7 +11,7 @@ const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const PROJECT_ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
-const RELEASE_ASSET = "kakomonn-reader/kakomonn-reader.user.js";
+const RELEASE_ASSET = "kakomonn-reader/dist/kakomonn-reader.user.js";
 const WINDOWS_CMD_SAFE_PATTERN = /^[A-Za-z0-9_./:@=-]+$/;
 const WINDOWS_WRAPPER_COMMANDS = new Set(["jj", "npm"]);
 

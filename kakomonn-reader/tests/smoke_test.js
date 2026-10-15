@@ -16,7 +16,7 @@ const {
 const { dispatchNextQuestionSwipe, installReaderInChildFrames } = require("./support/frame_reader");
 
 const projectRoot = path.resolve(__dirname, "..");
-const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
+const scriptPath = path.join(projectRoot, "dist", "kakomonn-reader.user.js");
 const windowsEdgeUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) " +

@@ -12,7 +12,7 @@ const { installSyncMock, SYNC_API_ORIGIN, SYNC_TOKEN_KEY } = require("./sync_moc
 const { dispatchNextQuestionSwipe, installReaderInChildFrames } = require("./support/frame_reader");
 
 const projectRoot = path.resolve(__dirname, "..");
-const defaultScriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
+const defaultScriptPath = path.join(projectRoot, "dist", "kakomonn-reader.user.js");
 const currentQuestionURL = "https://chushoks.kakomonn.com/questions/86956";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
 const secondNextQuestionURL = "https://chushoks.kakomonn.com/questions/86958";

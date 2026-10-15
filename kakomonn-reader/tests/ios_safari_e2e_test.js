@@ -26,7 +26,7 @@ const {
 
 const projectRoot = path.resolve(__dirname, "..");
 const repositoryRoot = path.resolve(projectRoot, "..");
-const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
+const scriptPath = path.join(projectRoot, "dist", "kakomonn-reader.user.js");
 const resultDirectory = path.join(projectRoot, "test-results", "ios-safari");
 const appiumLogPath = path.join(resultDirectory, "appium.log");
 const simulatorLogPath = path.join(resultDirectory, "simulator.log");

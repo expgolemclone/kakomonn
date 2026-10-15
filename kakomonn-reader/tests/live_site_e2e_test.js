@@ -25,7 +25,7 @@ const {
 } = require("./support/markdown_copy_fixture");
 
 const projectRoot = path.resolve(__dirname, "..");
-const scriptPath = path.join(projectRoot, "kakomonn-reader.user.js");
+const scriptPath = path.join(projectRoot, "dist", "kakomonn-reader.user.js");
 const chromeUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) " +

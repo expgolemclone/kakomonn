@@ -7,6 +7,5 @@ node_modules/
 .dev.vars.*
 .wrangler/
 kakomonn-sync/dist/
-kakomonn-reader/kakomonn-reader.user.js
 kakomonn-reader/release-under-test/
 kakomonn-reader/test-results/

@@ -13,7 +13,7 @@ const {
   resolveSyncToken,
 } = require("./support/chrome_tampermonkey");
 
-const userscriptPath = path.resolve(__dirname, "..", "kakomonn-reader.user.js");
+const userscriptPath = path.resolve(__dirname, "..", "dist", "kakomonn-reader.user.js");
 const repositoryEnvPath = path.resolve(__dirname, "..", "..", ".env");
 const correctAnswerText = "輸入の減少は、GDPを増加させる。";
 const chromeViewport = { height: 900, width: 1440 };

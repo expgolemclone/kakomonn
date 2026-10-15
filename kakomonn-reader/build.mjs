@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runToolWorkspace } from '@expgolemclone/envx-runtime';
 
 const readerRoot = dirname(fileURLToPath(import.meta.url));
-const outputPath = resolve(readerRoot, 'kakomonn-reader.user.js');
+const outputPath = resolve(readerRoot, 'dist/kakomonn-reader.user.js');
 
 export async function buildReader() {
   const status = runToolWorkspace('vite', ['build', '--config', 'kakomonn-reader/vite.config.mjs'], resolve(readerRoot, '..'));

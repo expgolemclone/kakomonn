@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#090b12">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description" content="FSRSのdue card完了状態と定着指標を確認する過去問学習dashboard">
+    <title>過去問 定着dashboard</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <div>
+          <p class="eyebrow">KAKOMONN / LEARNING SYNC</p>
+          <h1>過去問 <span>定着dashboard</span></h1>
+        </div>
+        <div class="header-actions">
+          <span>Asia/Tokyo</span>
+        </div>
+      </header>
+
+      <main>
+        <section id="auth-panel" class="panel auth-panel" aria-labelledby="auth-title">
+          <p class="eyebrow">DEVICE LINK</p>
+          <h2 id="auth-title">Readerと接続しています</h2>
+          <p id="auth-description">同じbrowser profileの過去問readerから学習記録を読み込みます.</p>
+          <div id="auth-actions" class="auth-actions" hidden>
+            <a class="primary-button" href="https://chushoks.kakomonn.com/createques#kakomonn-next">Readerで設定する</a>
+            <button id="auth-retry" class="text-button" type="button">再読み込み</button>
+          </div>
+          <p id="auth-message" class="message" role="status" aria-live="polite">接続を確認中です.</p>
+        </section>
+
+        <section id="dashboard" hidden>
+          <div class="toolbar">
+            <label for="site-select">サイト</label>
+            <select id="site-select"></select>
+            <button id="refresh-button" class="text-button" type="button">再読み込み</button>
+          </div>
+
+          <section class="primary-kpi-card" aria-labelledby="primary-kpi-title">
+            <div>
+              <p class="eyebrow">PRIMARY KPI</p>
+              <h2 id="primary-kpi-title">dailyKpiCompleted</h2>
+            </div>
+            <div class="primary-kpi-values" aria-live="polite">
+              <div class="primary-kpi-status"><strong id="daily-kpi-completed">--</strong></div>
+              <div class="primary-kpi-progress">
+                <div class="primary-kpi-remaining">
+                  <span>dueCardsRemaining</span>
+                  <strong><small>あと</small><span id="due-cards-remaining">--</span><small>問</small></strong>
+                </div>
+                <div class="primary-kpi-remaining">
+                  <span>newQuestionsRemaining</span>
+                  <strong><small>あと</small><span id="new-questions-remaining">--</span><small>問</small></strong>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="metrics-card" aria-label="DISPLAY ONLY">
+            <p class="eyebrow">DISPLAY ONLY</p>
+            <dl class="metric-list">
+              <div class="metric-item">
+                <dt>todayStabilityDaysDelta</dt>
+                <dd><strong id="today-stability-days-delta">--</strong><span>日</span></dd>
+              </div>
+              <div class="metric-item">
+                <dt>stabilityDays</dt>
+                <dd><strong id="stability-days">--</strong><span>日</span></dd>
+              </div>
+              <div class="metric-item">
+                <dt>attemptedQuestionCount</dt>
+                <dd><strong id="attempted-question-count">--</strong><span>問</span></dd>
+              </div>
+              <div class="metric-item">
+                <dt>todayAttemptedQuestionCount</dt>
+                <dd><strong id="today-attempted-question-count">--</strong><span>問</span></dd>
+              </div>
+              <div class="metric-item">
+                <dt>todayCorrectRatePercent</dt>
+                <dd><strong id="today-correct-rate-percent">--</strong><span id="today-correct-rate-percent-unit" hidden>%</span></dd>
+              </div>
+              <div class="metric-item">
+                <dt>todayStudyTimeMs</dt>
+                <dd><strong id="today-study-time">--</strong></dd>
+              </div>
+            </dl>
+          </section>
+
+          <figure class="history-card" aria-labelledby="history-title">
+            <figcaption class="chart-heading">
+              <div>
+                <p class="eyebrow">31 DAY LEARNING</p>
+                <h2 id="history-title">stabilityDaysDelta, dailyCorrectRatePercent, 勉強時間の31日推移</h2>
+              </div>
+              <div class="chart-legend" aria-label="graph series">
+                <span class="stability-series">stabilityDaysDelta</span>
+                <span class="correct-rate-series">dailyCorrectRatePercent</span>
+                <span class="study-time-series">勉強時間</span>
+              </div>
+            </figcaption>
+            <div class="chart-layout">
+              <svg id="stability-chart-axis" class="chart-axis" viewBox="0 0 62 594" aria-hidden="true"></svg>
+              <div id="history-scroll" class="chart-scroll" tabindex="0" aria-label="stabilityDaysDelta, dailyCorrectRatePercent, 勉強時間の31日履歴. 左右にスワイプまたはスクロールして過去の日付を表示できます.">
+                <svg id="stability-chart" role="group" aria-labelledby="history-chart-title history-chart-description"></svg>
+              </div>
+            </div>
+            <p class="chart-hint">横にスワイプ/スクロールして過去31日を表示できます.</p>
+            <p id="history-empty" class="muted" hidden>stabilityDaysDeltaの変化はありません.</p>
+            <section id="daily-details" class="daily-details" aria-labelledby="daily-details-title">
+              <div class="daily-details-heading">
+                <div>
+                  <p class="eyebrow">RAW DAILY DATA</p>
+                  <h3 id="daily-details-title">日別詳細 <code id="daily-details-date"></code></h3>
+                </div>
+              </div>
+              <p id="daily-details-instruction" class="muted">graphの日付を選択すると, DBのraw dataを表示します.</p>
+              <p id="daily-details-status" class="message" role="status" aria-live="polite"></p>
+              <div id="daily-details-tables" hidden>
+                <section class="raw-table-section" aria-labelledby="study-time-daily-table-title">
+                  <h4 id="study-time-daily-table-title"><code>study_time_daily</code></h4>
+                  <div id="study-time-daily-table" class="table-scroll"></div>
+                </section>
+                <section class="raw-table-section" aria-labelledby="stability-history-table-title">
+                  <h4 id="stability-history-table-title"><code>stability_history</code></h4>
+                  <div id="stability-history-table" class="table-scroll"></div>
+                </section>
+                <section class="raw-table-section" aria-labelledby="attempts-table-title">
+                  <h4 id="attempts-table-title"><code>attempts</code></h4>
+                  <div id="attempts-table" class="table-scroll"></div>
+                </section>
+              </div>
+            </section>
+          </figure>
+
+          <p id="dashboard-status" class="message" role="status" aria-live="polite"></p>
+        </section>
+
+        <section id="site-empty" class="panel" hidden>
+          <p class="eyebrow">NO STUDY SITES</p>
+          <h2>学習記録はまだありません</h2>
+          <p>過去問readerで問題catalogを同期すると, ここにサイトが表示されます.</p>
+        </section>
+
+        <section id="load-error" class="panel" hidden>
+          <p class="eyebrow">LOAD ERROR</p>
+          <h2>学習記録を表示できません</h2>
+          <p id="error-message"></p>
+          <button id="retry-button" class="primary-button" type="button">再読み込み</button>
+        </section>
+      </main>
+
+      <footer>
+        <p>stabilityDays = 現在の問題catalogに含まれる全問題のFSRS stability合計を切り捨てた日数.</p>
+        <p>stabilityDaysDelta = closing_stability_days - opening_stability_days.</p>
+      </footer>
+    </div>
+
+  </body>
+</html>

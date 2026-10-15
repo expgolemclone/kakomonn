@@ -1,0 +1,863 @@
+import {
+  RAW_TABLE_COLUMNS,
+  isDailyDetailsResponse as validDailyDetails,
+  isDashboardResponse as validDashboard,
+  isSite as validSite,
+} from "../../contracts/kakomonn.mjs";
+import {
+  DASHBOARD_BRIDGE_REQUEST_EVENT,
+  DASHBOARD_BRIDGE_RESPONSE_EVENT,
+  DASHBOARD_BRIDGE_STATE_ATTRIBUTE,
+  DASHBOARD_BRIDGE_TIMEOUT_MS,
+  isDashboardBridgeResponse,
+} from "../../contracts/dashboard-bridge.mjs";
+
+const LEGACY_TOKEN_KEY = "kakomonn-dashboard.sync-token";
+const SITE_KEY = "kakomonn-dashboard.site";
+const SVG_NS = "http://www.w3.org/2000/svg";
+const DASHBOARD_HISTORY_DAYS = 31;
+const CHART_DAY_WIDTH = 88;
+const CHART_RIGHT_PADDING = 24;
+const STABILITY_CHART_TOP = 26;
+const STABILITY_CHART_BOTTOM = 218;
+const CORRECT_RATE_CHART_TOP = 276;
+const CORRECT_RATE_CHART_BOTTOM = 400;
+const STUDY_TIME_CHART_TOP = 440;
+const STUDY_TIME_CHART_BOTTOM = 544;
+const CHART_DATE_Y = 578;
+const CHART_HEIGHT = 594;
+
+const byId = (id) => {
+  const element = document.getElementById(id);
+  if (element === null) throw new Error(`missing element: ${id}`);
+  return element;
+};
+
+const el = {
+  authPanel: byId("auth-panel"),
+  authTitle: byId("auth-title"),
+  authDescription: byId("auth-description"),
+  authActions: byId("auth-actions"),
+  authMessage: byId("auth-message"),
+  authRetry: byId("auth-retry"),
+  dashboard: byId("dashboard"),
+  siteEmpty: byId("site-empty"),
+  loadError: byId("load-error"),
+  errorMessage: byId("error-message"),
+  retryButton: byId("retry-button"),
+  siteSelect: byId("site-select"),
+  refreshButton: byId("refresh-button"),
+  dailyKpiCompletedElement: byId("daily-kpi-completed"),
+  dueCardsRemainingElement: byId("due-cards-remaining"),
+  newQuestionsRemainingElement: byId("new-questions-remaining"),
+  todayStabilityDaysDeltaElement: byId("today-stability-days-delta"),
+  stabilityDaysElement: byId("stability-days"),
+  attemptedQuestionCountElement: byId("attempted-question-count"),
+  todayAttemptedQuestionCountElement: byId("today-attempted-question-count"),
+  todayCorrectRatePercentElement: byId("today-correct-rate-percent"),
+  todayCorrectRatePercentUnit: byId("today-correct-rate-percent-unit"),
+  todayStudyTimeElement: byId("today-study-time"),
+  stabilityChartAxis: byId("stability-chart-axis"),
+  historyScroll: byId("history-scroll"),
+  stabilityChart: byId("stability-chart"),
+  historyEmpty: byId("history-empty"),
+  dashboardStatus: byId("dashboard-status"),
+  dailyDetails: byId("daily-details"),
+  dailyDetailsDate: byId("daily-details-date"),
+  dailyDetailsInstruction: byId("daily-details-instruction"),
+  dailyDetailsStatus: byId("daily-details-status"),
+  dailyDetailsTables: byId("daily-details-tables"),
+  studyTimeDailyTable: byId("study-time-daily-table"),
+  stabilityHistoryTable: byId("stability-history-table"),
+  attemptsTable: byId("attempts-table"),
+};
+
+const state = {
+  site: "",
+  sites: [],
+  learning: null,
+  history: null,
+  selectedDate: "",
+  dailyDetails: null,
+};
+let loadGeneration = 0;
+let detailGeneration = 0;
+let bridgeRequestId = 0;
+let bridgeReadyPromise = null;
+
+class DashboardError extends Error {
+  constructor(code, status = 0) {
+    super(code);
+    this.code = code;
+    this.status = status;
+  }
+}
+
+function storageGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    throw new DashboardError("storage_unavailable");
+  }
+}
+function storageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    throw new DashboardError("storage_unavailable");
+  }
+}
+function storageRemove(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    throw new DashboardError("storage_unavailable");
+  }
+}
+
+function waitForDashboardBridge() {
+  const currentState = document.documentElement.getAttribute(DASHBOARD_BRIDGE_STATE_ATTRIBUTE);
+  if (currentState === "ready") return Promise.resolve();
+  if (currentState === "error") {
+    return Promise.reject(new DashboardError("reader_unavailable"));
+  }
+  if (bridgeReadyPromise !== null) return bridgeReadyPromise;
+  bridgeReadyPromise = new Promise((resolve, reject) => {
+    let timer = null;
+    const observer = new MutationObserver(() => {
+      const bridgeState = document.documentElement.getAttribute(DASHBOARD_BRIDGE_STATE_ATTRIBUTE);
+      if (bridgeState !== "ready" && bridgeState !== "error") return;
+      observer.disconnect();
+      if (timer !== null) clearTimeout(timer);
+      if (bridgeState === "ready") resolve();
+      else reject(new DashboardError("reader_unavailable"));
+    });
+    observer.observe(document.documentElement, {
+      attributeFilter: [DASHBOARD_BRIDGE_STATE_ATTRIBUTE],
+      attributes: true,
+    });
+    timer = setTimeout(() => {
+      observer.disconnect();
+      reject(new DashboardError("reader_ready_timeout"));
+    }, DASHBOARD_BRIDGE_TIMEOUT_MS);
+  }).finally(() => {
+    bridgeReadyPromise = null;
+  });
+  return bridgeReadyPromise;
+}
+
+async function requestJSON(request) {
+  await waitForDashboardBridge();
+  const id = ++bridgeRequestId;
+  return new Promise((resolve, reject) => {
+    let timer = null;
+    const cleanup = () => {
+      if (timer !== null) clearTimeout(timer);
+      document.removeEventListener(DASHBOARD_BRIDGE_RESPONSE_EVENT, handleResponse);
+    };
+    const handleResponse = (event) => {
+      let response;
+      try {
+        response = JSON.parse(event.detail);
+      } catch {
+        return;
+      }
+      if (response?.id !== id) return;
+      if (!isDashboardBridgeResponse(response, id)) {
+        cleanup();
+        reject(new DashboardError("invalid_response"));
+        return;
+      }
+      cleanup();
+      if (response.ok) resolve(response.data);
+      else reject(new DashboardError(response.code, response.status));
+    };
+    timer = setTimeout(() => {
+      cleanup();
+      reject(new DashboardError("timeout"));
+    }, DASHBOARD_BRIDGE_TIMEOUT_MS);
+    document.addEventListener(DASHBOARD_BRIDGE_RESPONSE_EVENT, handleResponse);
+    document.dispatchEvent(
+      new CustomEvent(DASHBOARD_BRIDGE_REQUEST_EVENT, {
+        detail: JSON.stringify({ id, ...request }),
+      }),
+    );
+  });
+}
+
+function formatted(value) {
+  return value.toLocaleString("ja-JP");
+}
+function signed(value) {
+  return `${value >= 0 ? "+" : ""}${formatted(value)}`;
+}
+function studyTimeText(ms) {
+  const totalMinutes = Math.floor(ms / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}分`;
+  return minutes === 0 ? `${hours}時間` : `${hours}時間 ${minutes}分`;
+}
+function compactStudyTime(ms) {
+  const totalMinutes = Math.floor(ms / 60_000);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes === 0 ? `${hours}h` : `${hours}h${String(minutes).padStart(2, "0")}`;
+}
+function svgNode(name, attrs = {}, text = "") {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+  if (text) node.textContent = text;
+  return node;
+}
+
+function niceStep(range) {
+  const targetStep = Math.max(1, range / 4);
+  const power = 10 ** Math.floor(Math.log10(targetStep));
+  const fraction = targetStep / power;
+  return (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * power;
+}
+
+function signedAxis(values) {
+  const rawMinimum = Math.min(0, ...values);
+  const rawMaximum = Math.max(0, ...values);
+  const step = niceStep(rawMaximum - rawMinimum);
+  const minimum = Math.floor(rawMinimum / step) * step;
+  let maximum = Math.ceil(rawMaximum / step) * step;
+  if (minimum === maximum) maximum += step;
+  return { minimum, maximum, step };
+}
+
+function chartY(axis, value, top, bottom) {
+  return bottom - ((value - axis.minimum) / (axis.maximum - axis.minimum)) * (bottom - top);
+}
+
+function renderAxis(axis, top, bottom) {
+  el.stabilityChartAxis.replaceChildren();
+  const divisions = Math.round((axis.maximum - axis.minimum) / axis.step);
+  for (let index = 0; index <= divisions; index += 1) {
+    const value = axis.minimum + axis.step * index;
+    const yy = chartY(axis, value, top, bottom);
+    el.stabilityChartAxis.append(
+      svgNode("line", {
+        x1: 52,
+        y1: yy,
+        x2: 62,
+        y2: yy,
+        class: value === 0 ? "zero-line" : "grid-line",
+      }),
+      svgNode(
+        "text",
+        { x: 48, y: yy + 4, class: "axis-label delta-axis-label", "text-anchor": "end" },
+        signed(value),
+      ),
+    );
+  }
+}
+
+function correctRateY(value) {
+  return (
+    CORRECT_RATE_CHART_BOTTOM - (value / 100) * (CORRECT_RATE_CHART_BOTTOM - CORRECT_RATE_CHART_TOP)
+  );
+}
+
+function renderCorrectRateAxis() {
+  for (const value of [0, 25, 50, 75, 100]) {
+    const yy = correctRateY(value);
+    el.stabilityChartAxis.append(
+      svgNode("line", { x1: 52, y1: yy, x2: 62, y2: yy, class: "correct-rate-grid-line" }),
+      svgNode(
+        "text",
+        { x: 48, y: yy + 4, class: "axis-label correct-rate-axis-label", "text-anchor": "end" },
+        `${value}%`,
+      ),
+    );
+  }
+}
+
+function studyTimeAxis(days) {
+  const maximumMinutes = Math.max(0, ...days.map((day) => day.dailyStudyTimeMs / 60_000));
+  const step = niceStep(Math.max(30, maximumMinutes) / 3);
+  const maximum = Math.max(step, Math.ceil(maximumMinutes / step) * step);
+  return { minimum: 0, maximum, step };
+}
+
+function studyTimeY(axis, studyTimeMs) {
+  return chartY(axis, studyTimeMs / 60_000, STUDY_TIME_CHART_TOP, STUDY_TIME_CHART_BOTTOM);
+}
+
+function renderStudyTimeAxis(axis) {
+  const divisions = Math.round((axis.maximum - axis.minimum) / axis.step);
+  for (let index = 0; index <= divisions; index += 1) {
+    const value = axis.minimum + axis.step * index;
+    const yy = chartY(axis, value, STUDY_TIME_CHART_TOP, STUDY_TIME_CHART_BOTTOM);
+    el.stabilityChartAxis.append(
+      svgNode("line", {
+        x1: 52,
+        y1: yy,
+        x2: 62,
+        y2: yy,
+        class: "study-time-grid-line",
+      }),
+      svgNode(
+        "text",
+        { x: 48, y: yy + 4, class: "axis-label study-time-axis-label", "text-anchor": "end" },
+        compactStudyTime(value * 60_000),
+      ),
+    );
+  }
+}
+
+function renderStudyTimeGrid(axis, right) {
+  const divisions = Math.round((axis.maximum - axis.minimum) / axis.step);
+  for (let index = 0; index <= divisions; index += 1) {
+    const value = axis.minimum + axis.step * index;
+    const yy = chartY(axis, value, STUDY_TIME_CHART_TOP, STUDY_TIME_CHART_BOTTOM);
+    el.stabilityChart.append(
+      svgNode("line", {
+        x1: 0,
+        y1: yy,
+        x2: right,
+        y2: yy,
+        class: "study-time-grid-line",
+      }),
+    );
+  }
+}
+
+function renderGrid(axis, right, top, bottom) {
+  const divisions = Math.round((axis.maximum - axis.minimum) / axis.step);
+  for (let index = 0; index <= divisions; index += 1) {
+    const value = axis.minimum + axis.step * index;
+    const yy = chartY(axis, value, top, bottom);
+    el.stabilityChart.append(
+      svgNode("line", {
+        x1: 0,
+        y1: yy,
+        x2: right,
+        y2: yy,
+        class: value === 0 ? "zero-line" : "grid-line",
+      }),
+    );
+  }
+}
+
+function renderCorrectRateGrid(right) {
+  for (const value of [0, 25, 50, 75, 100]) {
+    el.stabilityChart.append(
+      svgNode("line", {
+        x1: 0,
+        y1: correctRateY(value),
+        x2: right,
+        y2: correctRateY(value),
+        class: "correct-rate-grid-line",
+      }),
+    );
+  }
+}
+
+function correctRateLinePath(days, left, bandWidth) {
+  let segmentOpen = false;
+  return days
+    .map((day, index) => {
+      if (day.dailyCorrectRatePercent === null) {
+        segmentOpen = false;
+        return "";
+      }
+      const xx = left + bandWidth * (index + 0.5);
+      const command = segmentOpen ? "L" : "M";
+      segmentOpen = true;
+      return `${command}${xx} ${correctRateY(day.dailyCorrectRatePercent)}`;
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
+function renderChart(days) {
+  el.stabilityChart.replaceChildren();
+  const values = days.map((day) => day.stabilityDaysDelta).filter((value) => value !== null);
+  const axis = signedAxis(values);
+  const studyAxis = studyTimeAxis(days);
+  const left = 0,
+    right = CHART_DAY_WIDTH * days.length;
+  const chartWidth = right + CHART_RIGHT_PADDING;
+  const bandWidth = CHART_DAY_WIDTH;
+  const zeroY = chartY(axis, 0, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
+  el.stabilityChart.setAttribute("viewBox", `0 0 ${chartWidth} ${CHART_HEIGHT}`);
+  el.stabilityChart.style.width = `${chartWidth}px`;
+  el.stabilityChart.append(
+    svgNode(
+      "title",
+      { id: "history-chart-title" },
+      `stabilityDaysDelta, dailyCorrectRatePercent, 勉強時間の${DASHBOARD_HISTORY_DAYS}日推移`,
+    ),
+    svgNode(
+      "desc",
+      { id: "history-chart-description" },
+      days
+        .map(
+          (day) =>
+            `${day.date}, stabilityDaysDelta ${day.stabilityDaysDelta === null ? "記録なし" : `${signed(day.stabilityDaysDelta)}日`}, dailyCorrectRatePercent ${day.dailyCorrectRatePercent === null ? "記録なし" : `${formatted(day.dailyCorrectRatePercent)}%`}, 勉強時間 ${studyTimeText(day.dailyStudyTimeMs)}`,
+        )
+        .join(". "),
+    ),
+  );
+  renderAxis(axis, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
+  renderCorrectRateAxis();
+  renderStudyTimeAxis(studyAxis);
+  renderGrid(axis, right, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
+  renderCorrectRateGrid(right);
+  renderStudyTimeGrid(studyAxis, right);
+  const correctRatePath = correctRateLinePath(days, left, bandWidth);
+  if (correctRatePath !== "") {
+    el.stabilityChart.append(svgNode("path", { d: correctRatePath, class: "correct-rate-line" }));
+  }
+  const barWidth = Math.min(50, bandWidth * 0.56);
+  days.forEach((day, index) => {
+    const xx = left + bandWidth * (index + 0.5);
+    const value = day.stabilityDaysDelta;
+    const correctRate = day.dailyCorrectRatePercent;
+    const studyTimeMs = day.dailyStudyTimeMs;
+    const selected = day.date === state.selectedDate;
+    const group = svgNode("g", {
+      class: "chart-day",
+      role: "button",
+      tabindex: "0",
+      focusable: "true",
+      "aria-controls": "daily-details",
+      "aria-pressed": selected ? "true" : "false",
+      "aria-label": `${day.date}, stabilityDaysDelta ${value === null ? "記録なし" : `${signed(value)}日`}, dailyCorrectRatePercent ${correctRate === null ? "記録なし" : `${formatted(correctRate)}%`}, 勉強時間 ${studyTimeText(studyTimeMs)}. 日別詳細を表示`,
+      "data-chart-date": day.date,
+    });
+    group.append(
+      svgNode("rect", {
+        x: left + bandWidth * index,
+        y: STABILITY_CHART_TOP - 8,
+        width: bandWidth,
+        height: CHART_DATE_Y - STABILITY_CHART_TOP + 18,
+        class: "chart-hit-area",
+      }),
+    );
+    if (value !== null) {
+      const valueY = chartY(axis, value, STABILITY_CHART_TOP, STABILITY_CHART_BOTTOM);
+      let barY = Math.min(valueY, zeroY);
+      let barHeight = Math.abs(valueY - zeroY);
+      if (barHeight < 2) {
+        barY = zeroY - 1;
+        barHeight = 2;
+      }
+      group.append(
+        svgNode("rect", {
+          x: xx - barWidth / 2,
+          y: barY,
+          width: barWidth,
+          height: barHeight,
+          rx: 5,
+          class: `delta-bar ${value < 0 ? "negative" : value === 0 ? "zero" : "positive"}`,
+        }),
+      );
+      group.append(
+        svgNode(
+          "text",
+          {
+            x: xx,
+            y:
+              value >= 0
+                ? Math.max(STABILITY_CHART_TOP + 12, barY - 8)
+                : Math.min(STABILITY_CHART_BOTTOM + 16, barY + barHeight + 16),
+            class: "delta-value-label",
+            "text-anchor": "middle",
+          },
+          signed(value),
+        ),
+      );
+    }
+    if (correctRate === null) {
+      group.append(
+        svgNode(
+          "text",
+          {
+            x: xx,
+            y: (CORRECT_RATE_CHART_TOP + CORRECT_RATE_CHART_BOTTOM) / 2 + 4,
+            class: "correct-rate-value-label missing",
+            "text-anchor": "middle",
+          },
+          "--",
+        ),
+      );
+    } else {
+      const pointY = correctRateY(correctRate);
+      const labelY = correctRate >= 90 ? pointY + 18 : pointY - 10;
+      group.append(
+        svgNode("circle", { cx: xx, cy: pointY, r: 5, class: "correct-rate-point" }),
+        svgNode(
+          "text",
+          { x: xx, y: labelY, class: "correct-rate-value-label", "text-anchor": "middle" },
+          `${formatted(correctRate)}%`,
+        ),
+      );
+    }
+    const studyBarY = studyTimeY(studyAxis, studyTimeMs);
+    const studyBarHeight = Math.max(2, STUDY_TIME_CHART_BOTTOM - studyBarY);
+    group.append(
+      svgNode("rect", {
+        x: xx - barWidth / 2,
+        y: STUDY_TIME_CHART_BOTTOM - studyBarHeight,
+        width: barWidth,
+        height: studyBarHeight,
+        rx: 5,
+        class: "study-time-bar",
+      }),
+      svgNode(
+        "text",
+        {
+          x: xx,
+          y: Math.max(STUDY_TIME_CHART_TOP + 12, STUDY_TIME_CHART_BOTTOM - studyBarHeight - 8),
+          class: "study-time-value-label",
+          "text-anchor": "middle",
+        },
+        compactStudyTime(studyTimeMs),
+      ),
+    );
+    const [, month, date] = day.date.split("-");
+    group.append(
+      svgNode(
+        "text",
+        { x: xx, y: CHART_DATE_Y, class: "date-label", "text-anchor": "middle" },
+        `${Number(month)}/${Number(date)}`,
+      ),
+    );
+    el.stabilityChart.append(group);
+  });
+  el.historyEmpty.hidden = values.some((value) => value !== 0);
+}
+
+function scrollHistoryToLatest() {
+  requestAnimationFrame(() => {
+    el.historyScroll.scrollLeft = el.historyScroll.scrollWidth - el.historyScroll.clientWidth;
+  });
+}
+
+function renderRawTable(container, columns, rows) {
+  const table = document.createElement("table");
+  table.className = "raw-table";
+  const headerRow = document.createElement("tr");
+  for (const column of columns) {
+    const header = document.createElement("th");
+    header.scope = "col";
+    header.textContent = column;
+    headerRow.append(header);
+  }
+  const head = document.createElement("thead");
+  head.append(headerRow);
+  const body = document.createElement("tbody");
+  if (rows.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = columns.length;
+    cell.className = "raw-table-empty";
+    cell.textContent = "0 rows";
+    row.append(cell);
+    body.append(row);
+  } else {
+    for (const rawRow of rows) {
+      const row = document.createElement("tr");
+      for (const column of columns) {
+        const cell = document.createElement("td");
+        cell.textContent = String(rawRow[column]);
+        row.append(cell);
+      }
+      body.append(row);
+    }
+  }
+  table.append(head, body);
+  container.replaceChildren(table);
+}
+
+function renderDailyDetailsInitial() {
+  el.dailyDetails.removeAttribute("aria-busy");
+  el.dailyDetailsDate.textContent = "";
+  el.dailyDetailsInstruction.hidden = false;
+  el.dailyDetailsStatus.textContent = "";
+  el.dailyDetailsTables.hidden = true;
+  el.studyTimeDailyTable.replaceChildren();
+  el.stabilityHistoryTable.replaceChildren();
+  el.attemptsTable.replaceChildren();
+}
+
+function resetDailyDetails() {
+  detailGeneration += 1;
+  state.selectedDate = "";
+  state.dailyDetails = null;
+  renderDailyDetailsInitial();
+}
+
+function renderDailyDetailsLoading(date) {
+  el.dailyDetails.setAttribute("aria-busy", "true");
+  el.dailyDetailsDate.textContent = date;
+  el.dailyDetailsInstruction.hidden = true;
+  el.dailyDetailsStatus.textContent = "raw dataを読み込み中";
+  el.dailyDetailsTables.hidden = true;
+}
+
+function renderDailyDetailsResult(details) {
+  el.dailyDetails.removeAttribute("aria-busy");
+  el.dailyDetailsStatus.textContent = `${details.tables.study_time_daily.length + details.tables.stability_history.length + details.tables.attempts.length} rows`;
+  renderRawTable(
+    el.studyTimeDailyTable,
+    RAW_TABLE_COLUMNS.study_time_daily,
+    details.tables.study_time_daily,
+  );
+  renderRawTable(
+    el.stabilityHistoryTable,
+    RAW_TABLE_COLUMNS.stability_history,
+    details.tables.stability_history,
+  );
+  renderRawTable(el.attemptsTable, RAW_TABLE_COLUMNS.attempts, details.tables.attempts);
+  el.dailyDetailsTables.hidden = false;
+}
+
+function renderDailyDetailsError(error) {
+  const messages = {
+    unauthorized: "同期tokenを確認してください.",
+    timeout: "日別詳細の読み込みがタイムアウトしました.",
+    network_error: "日別詳細を読み込めませんでした.",
+    invalid_response: "日別詳細のAPI応答が不正です.",
+  };
+  el.dailyDetails.removeAttribute("aria-busy");
+  el.dailyDetailsStatus.textContent = messages[error?.code] ?? "日別詳細を読み込めませんでした.";
+  el.dailyDetailsTables.hidden = true;
+}
+
+async function loadDailyDetails(date, { focusChart = false } = {}) {
+  const generation = ++detailGeneration;
+  const site = state.site;
+  state.selectedDate = date;
+  state.dailyDetails = null;
+  renderChart(state.history.days);
+  renderDailyDetailsLoading(date);
+  if (focusChart) el.stabilityChart.querySelector(`[data-chart-date="${date}"]`)?.focus();
+  let details;
+  try {
+    details = await requestJSON({ date, operation: "daily-details", site });
+    if (!validDailyDetails(details, site, date)) throw new DashboardError("invalid_response");
+  } catch (error) {
+    if (generation !== detailGeneration || site !== state.site || date !== state.selectedDate)
+      return false;
+    if (error?.code === "token_missing" || error?.code === "unauthorized") {
+      showReaderSetup(error);
+      return false;
+    }
+    renderDailyDetailsError(error);
+    return false;
+  }
+  if (generation !== detailGeneration || site !== state.site || date !== state.selectedDate)
+    return false;
+  state.dailyDetails = details;
+  renderDailyDetailsResult(details);
+  return true;
+}
+
+function renderDashboard() {
+  const learning = state.learning;
+  const metrics = learning.learningMetrics;
+  el.dailyKpiCompletedElement.textContent = metrics.dailyKpiCompleted ? "達成" : "未達成";
+  el.dailyKpiCompletedElement.dataset.completed = String(metrics.dailyKpiCompleted);
+  el.dueCardsRemainingElement.textContent = formatted(metrics.dueCardsRemaining);
+  el.newQuestionsRemainingElement.textContent = formatted(metrics.newQuestionsRemaining);
+  el.todayStabilityDaysDeltaElement.textContent = signed(metrics.todayStabilityDaysDelta);
+  el.stabilityDaysElement.textContent = formatted(metrics.stabilityDays);
+  el.attemptedQuestionCountElement.textContent = formatted(metrics.attemptedQuestionCount);
+  el.todayAttemptedQuestionCountElement.textContent = formatted(
+    metrics.todayAttemptedQuestionCount,
+  );
+  el.todayCorrectRatePercentElement.textContent =
+    metrics.todayCorrectRatePercent === null ? "--" : formatted(metrics.todayCorrectRatePercent);
+  el.todayCorrectRatePercentUnit.hidden = metrics.todayCorrectRatePercent === null;
+  el.todayStudyTimeElement.textContent = studyTimeText(metrics.todayStudyTimeMs);
+  renderChart(state.history.days);
+  el.dashboard.hidden = false;
+  el.authPanel.hidden = true;
+  el.siteEmpty.hidden = true;
+  el.loadError.hidden = true;
+  el.dashboardStatus.textContent = `更新日 ${learning.today}`;
+  scrollHistoryToLatest();
+}
+
+function showError(error) {
+  const messages = {
+    reader_unavailable:
+      "対応する過去問readerを利用できません. Tampermonkeyで最新のreaderを有効にしてください.",
+    reader_ready_timeout:
+      "過去問readerを確認できませんでした. Tampermonkeyで最新のreaderを有効にして再読み込みしてください.",
+    timeout: "読み込みがタイムアウトしました.",
+    network_error: "networkへ接続できません.",
+    storage_unavailable: "browser storageを利用できません.",
+    invalid_response: "API応答が不正です.",
+    server_misconfigured: "同期APIが設定されていません.",
+  };
+  el.errorMessage.textContent = messages[error?.code] ?? "学習記録を読み込めませんでした.";
+  el.loadError.hidden = false;
+  el.authPanel.hidden = true;
+  el.dashboard.hidden = true;
+  el.siteEmpty.hidden = true;
+}
+
+function showReaderSetup(error) {
+  loadGeneration += 1;
+  detailGeneration += 1;
+  el.authTitle.textContent = "Readerの同期設定が必要です";
+  el.authDescription.textContent =
+    "同じbrowser profileの問題画面で同期tokenを設定してから, このdashboardを再読み込みしてください.";
+  el.authMessage.textContent =
+    error?.code === "unauthorized"
+      ? "保存済みの同期tokenが認証されませんでした."
+      : "同期tokenがまだ保存されていません.";
+  el.authActions.hidden = false;
+  el.authPanel.hidden = false;
+  el.dashboard.hidden = true;
+  el.siteEmpty.hidden = true;
+  el.loadError.hidden = true;
+}
+
+async function fetchDashboardData(site) {
+  const data = await requestJSON({ operation: "dashboard", site });
+  if (!validDashboard(data)) throw new DashboardError("invalid_response");
+  return data;
+}
+
+function applySiteData(data) {
+  state.sites = data.sites;
+  state.site = data.selectedSite ?? "";
+  state.learning = data.state;
+  state.history = data.history;
+  if (
+    state.selectedDate !== "" &&
+    !data.history.days.some((day) => day.date === state.selectedDate)
+  )
+    resetDailyDetails();
+  renderDashboard();
+}
+
+async function loadSelectedSite() {
+  const generation = ++loadGeneration;
+  const site = state.site;
+  let data;
+  try {
+    data = await fetchDashboardData(site);
+  } catch (error) {
+    if (generation !== loadGeneration || site !== state.site) return false;
+    throw error;
+  }
+  if (generation !== loadGeneration || site !== state.site || data.selectedSite !== site)
+    return false;
+  applySiteData(data);
+  return true;
+}
+
+function renderSiteOptions() {
+  el.siteSelect.replaceChildren(
+    ...state.sites.map((site) => {
+      const option = document.createElement("option");
+      option.value = site;
+      option.textContent = site;
+      return option;
+    }),
+  );
+  el.siteSelect.value = state.site;
+}
+
+async function connect() {
+  const generation = ++loadGeneration;
+  const saved = storageGet(SITE_KEY);
+  let data;
+  try {
+    data = await fetchDashboardData(validSite(saved) ? saved : null);
+  } catch (error) {
+    if (generation !== loadGeneration) return false;
+    throw error;
+  }
+  if (generation !== loadGeneration) return false;
+  const site = data.selectedSite ?? "";
+  if (site === "") storageRemove(SITE_KEY);
+  else storageSet(SITE_KEY, site);
+  state.sites = data.sites;
+  state.site = site;
+  state.learning = null;
+  state.history = null;
+  resetDailyDetails();
+  if (data.sites.length === 0) {
+    el.authPanel.hidden = true;
+    el.dashboard.hidden = true;
+    el.loadError.hidden = true;
+    el.siteEmpty.hidden = false;
+    return true;
+  }
+  renderSiteOptions();
+  applySiteData(data);
+  return true;
+}
+
+el.siteSelect.addEventListener("change", async () => {
+  if (!state.sites.includes(el.siteSelect.value)) return;
+  resetDailyDetails();
+  state.site = el.siteSelect.value;
+  storageSet(SITE_KEY, state.site);
+  try {
+    await loadSelectedSite();
+  } catch (error) {
+    if (error?.code === "token_missing" || error?.code === "unauthorized") showReaderSetup(error);
+    else showError(error);
+  }
+});
+el.refreshButton.addEventListener("click", async () => {
+  const selectedDate = state.selectedDate;
+  try {
+    if ((await loadSelectedSite()) && selectedDate !== "" && state.selectedDate === selectedDate)
+      await loadDailyDetails(selectedDate);
+  } catch (error) {
+    if (error?.code === "token_missing" || error?.code === "unauthorized") showReaderSetup(error);
+    else showError(error);
+  }
+});
+el.retryButton.addEventListener("click", () => {
+  void initializeDashboard();
+});
+el.authRetry.addEventListener("click", () => {
+  void initializeDashboard();
+});
+el.stabilityChart.addEventListener("click", (event) => {
+  const target = event.target.closest?.("[data-chart-date]");
+  if (target) void loadDailyDetails(target.getAttribute("data-chart-date"), { focusChart: true });
+});
+el.stabilityChart.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const target = event.target.closest?.("[data-chart-date]");
+  if (!target) return;
+  event.preventDefault();
+  void loadDailyDetails(target.getAttribute("data-chart-date"), { focusChart: true });
+});
+async function initializeDashboard() {
+  try {
+    storageRemove(LEGACY_TOKEN_KEY);
+    el.authTitle.textContent = "Readerと接続しています";
+    el.authDescription.textContent = "同じbrowser profileの過去問readerから学習記録を読み込みます.";
+    el.authMessage.textContent = "接続を確認中です.";
+    el.authActions.hidden = true;
+    el.authPanel.hidden = false;
+    el.dashboard.hidden = true;
+    el.siteEmpty.hidden = true;
+    el.loadError.hidden = true;
+    await connect();
+  } catch (error) {
+    if (error?.code === "token_missing" || error?.code === "unauthorized") showReaderSetup(error);
+    else showError(error);
+  }
+}
+
+renderDailyDetailsInitial();
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) void initializeDashboard();
+});
+void initializeDashboard();

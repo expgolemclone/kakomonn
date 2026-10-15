@@ -1,0 +1,32 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const projectRoot = new URL("../", import.meta.url);
+
+async function headersSource(relativePath) {
+  return (await readFile(new URL(relativePath, projectRoot), "utf8"))
+    .replaceAll("\r\n", "\n")
+    .trim();
+}
+
+async function jsonFile(relativePath) {
+  return JSON.parse(await readFile(new URL(relativePath, projectRoot), "utf8"));
+}
+
+test("sync static assets are stored for revalidation", async () => {
+  const source = await headersSource("kakomonn-sync/public/_headers");
+  assert.match(source, /^\/\*\n  Cache-Control: no-cache\n/);
+  assert.equal(source.includes("Cache-Control: no-store"), false);
+  assert.match(
+    source,
+    /\/assets\/\*\n  ! Cache-Control\n  Cache-Control: public, max-age=31536000, immutable/,
+  );
+});
+
+test("sync invokes the Worker only for APIs and disables persistent telemetry", async () => {
+  const config = await jsonFile("kakomonn-sync/wrangler.jsonc");
+  assert.deepEqual(config.assets.run_worker_first, ["/v12/*"]);
+  assert.deepEqual(config.observability, { enabled: false });
+});
+

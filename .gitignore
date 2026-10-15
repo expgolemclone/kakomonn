@@ -1,0 +1,12 @@
+__pycache__/
+node_modules/
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+.wrangler/
+kakomonn-sync/dist/
+kakomonn-reader/kakomonn-reader.user.js
+kakomonn-reader/release-under-test/
+kakomonn-reader/test-results/

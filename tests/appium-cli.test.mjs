@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -145,7 +145,7 @@ test('launches the installed Appium CLI contract, not its programmatic main expo
   assert.equal(version, manifest.version);
 });
 
-test('discovers the XCUITest driver from the shared npm project without a consumer cache', () => {
+test('discovers the XCUITest driver and owns its cache in the native project', () => {
   const cwd = resolveAppiumRuntimeDirectory();
   const manifest = JSON.parse(readFileSync(resolve(cwd, 'package.json'), 'utf8'));
   const declared = manifest.dependencies?.['appium-xcuitest-driver'] ?? manifest.devDependencies?.['appium-xcuitest-driver'];
@@ -156,6 +156,9 @@ test('discovers the XCUITest driver from the shared npm project without a consum
   const driver = JSON.parse(readFileSync(require.resolve('appium-xcuitest-driver/package.json'), 'utf8'));
   assert.equal(installed.xcuitest.version, driver.version);
   assert.equal(installed.xcuitest.installed, true);
-  const consumerModules = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'node_modules');
-  assert.equal(existsSync(consumerModules), false, 'Appium must not recreate a repository-local cache');
+  const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  assert.equal(cwd, projectRoot);
+  assert.equal(driver.version, declared);
+  assert.equal(existsSync(resolve(projectRoot, 'node_modules/.cache/appium')), true);
+  assert.equal(resolveAppiumCli().startsWith(resolve(projectRoot, 'node_modules') + sep), true);
 });

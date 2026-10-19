@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
+const { REPOSITORY_ENV_PATH: repositoryEnvPath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
 const { inspectDedicatedChrome } = require("../../scripts/windows-chrome-profile.cjs");
 const {
   CURRENT_QUESTION_URL,
@@ -21,7 +21,6 @@ const {
 } = require("./live_sync_e2e_test");
 
 const userscriptPath = path.resolve(__dirname, "..", "dist", "kakomonn-reader.user.js");
-const repositoryEnvPath = path.resolve(__dirname, "..", "..", ".env");
 const openURL = `${DEFAULT_SYNC_API_ORIGIN}/open`;
 const site = "chushoks.kakomonn.com";
 

@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { request } = require('playwright');
-const { readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
+const { REPOSITORY_ENV_PATH: repositoryEnvPath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
 const { blockAdRequests } = require('./support/third_party_ads');
 
 const {
@@ -14,7 +14,6 @@ const {
 } = require("./support/chrome_tampermonkey");
 
 const userscriptPath = path.resolve(__dirname, "..", "dist", "kakomonn-reader.user.js");
-const repositoryEnvPath = path.resolve(__dirname, "..", "..", ".env");
 const correctAnswerText = "輸入の減少は、GDPを増加させる。";
 const chromeViewport = { height: 900, width: 1440 };
 const chromeViewportTolerancePx = 1;

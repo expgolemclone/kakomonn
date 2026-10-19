@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { installedDependency } from "@expgolemclone/envx-runtime";
 import { celebrationURL, parseCelebration } from "@expgolemclone/congratulations/celebration";
 
 import {
@@ -60,9 +59,10 @@ test("Reader uses the released congratulations public entry", async () => {
   assert.deepEqual(parseCelebration(new URL(celebrationURL(value)).search), value);
   const dependency = "@expgolemclone/congratulations";
   const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
-  const installed = installedDependency(dependency);
+  const lock = JSON.parse(await readFile(new URL('../package-lock.json', import.meta.url), 'utf8'));
+  const installed = lock.packages[`node_modules/${dependency}`];
   assert.equal(installed.resolved, manifest.dependencies[dependency]);
-  assert(installed.integrity, 'The shared lock must verify the release archive integrity');
+  assert(installed.integrity, 'The project lock must verify the release archive integrity');
   const navigation = await readFile(new URL("../kakomonn-reader/src/navigation-controller.js", import.meta.url), "utf8");
   assert(navigation.includes(`from "${dependency}/celebration"`));
 });

@@ -442,7 +442,7 @@ function resolveAppiumCli() {
 
 function resolveAppiumRuntimeDirectory() {
   // Appium discovers npm-managed drivers and writes its cache relative to cwd.
-  // Use the shared npm project, never the consumer repository.
+  // The repository's native npm project owns the driver graph and local cache.
   return path.resolve(path.dirname(require.resolve('appium/package.json')), '..', '..');
 }
 

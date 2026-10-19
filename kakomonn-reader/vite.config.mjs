@@ -3,14 +3,12 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
-import { nodeCacheDirectory } from '@expgolemclone/envx-runtime';
 
 const readerRoot = dirname(fileURLToPath(import.meta.url));
 const fingerprintPlaceholder = '__KAKOMONN_READER_BUILD_FINGERPRINT__';
 
 export default defineConfig({
   root: readerRoot,
-  cacheDir: nodeCacheDirectory('kakomonn-reader-vite'),
   logLevel: 'silent',
   plugins: [{
     name: 'reader-userscript',

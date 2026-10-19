@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
+const { REPOSITORY_ENV_PATH: envFilePath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
 const {
   CURRENT_QUESTION_URL, DEFAULT_SYNC_API_ORIGIN, launchChromeWithCurrentUserscript,
   readChromeUserDataDir, resolveSyncToken,
@@ -10,7 +10,6 @@ const {
 const { configureSyncToken, extractBuildFingerprint, readReaderState, waitUntil } = require("./live_sync_e2e_test");
 
 const userscriptPath = path.resolve(__dirname, "..", "dist", "kakomonn-reader.user.js");
-const envFilePath = path.resolve(__dirname, "..", "..", ".env");
 const questionId = new URL(CURRENT_QUESTION_URL).pathname.split("/").at(-1);
 const marker = `<!-- copy-failure:chushoks.kakomonn.com:${questionId}:markdown -->`;
 const explanation = "本番検証: 解説番号のDOMを欠落させた制御下のMarkdown生成失敗です. 元の問題page自体の不具合を示す記録ではありません.";

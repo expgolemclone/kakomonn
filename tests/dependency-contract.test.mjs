@@ -21,5 +21,5 @@ test("the native lock uses only the supported Vitest 5 Worker integration", () =
   }
   const config = readFileSync(new URL("../kakomonn-sync/vitest.config.mjs", import.meta.url), "utf8");
   assert.match(config, /from "@cloudflare\/vitest-plugin"/);
-  assert.match(config, /fsModuleCachePath:\s*nodeCacheDirectory\(/);
+  assert.doesNotMatch(config, /envx-runtime|nodeCacheDirectory|fsModuleCachePath/);
 });

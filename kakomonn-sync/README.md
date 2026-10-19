@@ -34,15 +34,15 @@ $speechKey = az cognitiveservices account keys list --name <unique-name> --resou
 Authenticate with Cloudflare and register the secrets. Use a cryptographically random value of at least 256 bits for `SYNC_TOKEN`. Never commit tokens or keys.
 
 ```powershell
-envx-node wrangler login
-envx-node wrangler secret put SYNC_TOKEN --config kakomonn-sync/wrangler.jsonc
-$speechKey | envx-node wrangler secret put AZURE_SPEECH_KEY --config kakomonn-sync/wrangler.jsonc
+npx --no-install wrangler login
+npx --no-install wrangler secret put SYNC_TOKEN --config kakomonn-sync/wrangler.jsonc
+$speechKey | npx --no-install wrangler secret put AZURE_SPEECH_KEY --config kakomonn-sync/wrangler.jsonc
 ```
 
 For copy-failure reports to [Issue #29](https://github.com/expgolemclone/kakomonn/issues/29), create a fine-grained GitHub PAT restricted to `expgolemclone/kakomonn` with `Issues: Read and write`. Store it only as a Worker secret, never in `.env`, a browser, or a URL:
 
 ```powershell
-envx-node wrangler secret put GITHUB_COPY_FAILURE_TOKEN --config kakomonn-sync/wrangler.jsonc
+npx --no-install wrangler secret put GITHUB_COPY_FAILURE_TOKEN --config kakomonn-sync/wrangler.jsonc
 ```
 
 After passing the complete tests and pushing `main`, deploy and verify production:

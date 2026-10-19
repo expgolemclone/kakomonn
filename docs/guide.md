@@ -16,10 +16,11 @@ For iPhone setup, see [opening the next question](../kakomonn-sync/README.md#ope
 
 ## Tests
 
-Run the complete suite before pushing or deploying repository changes. Targeted tests do not replace this requirement. Run commands from the repository root on Windows with the shared [envx environment](https://github.com/expgolemclone/envx), not repository-local `node_modules`.
+Run the complete suite before pushing or deploying repository changes. Targeted tests do not replace this requirement. Run from the repository root on Windows using the project's npm lock and ignored local installation.
 
 ```powershell
-pwsh -NoProfile -File C:/dev/settings/envx/runtimes/manage.ps1 -Operation Install
+npm ci
+npm ls --all
 npm run build
 ```
 

@@ -145,7 +145,7 @@ test("uses Windows command wrappers without a shell", () => {
   );
 });
 
-test("native npm keeps its dependency graph when release runs inside envx", () => {
+test("release resolves the native npm command", () => {
   const runner = createCommandRunner();
   assert.match(runner("npm", ["--version"], { capture: true }), /^\d+\.\d+\.\d+$/);
 });
@@ -160,11 +160,11 @@ test("makes live Chrome and production sync the final npm test gates", () => {
   ]);
   assert.match(
     packageJson.scripts["test:kakomonn-live-open"],
-    /envx-node run --use-system-ca kakomonn-reader\/tests\/live_open_e2e_test\.js$/,
+    /^npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader\/tests\/live_open_e2e_test\.js$/,
   );
   assert.match(
     packageJson.scripts["test:kakomonn-live-sync"],
-    /envx-node run --use-system-ca kakomonn-reader\/tests\/live_sync_e2e_test\.js$/,
+    /^npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader\/tests\/live_sync_e2e_test\.js$/,
   );
 });
 
@@ -199,14 +199,11 @@ test("publishes the synchronized main only after the complete test suite", async
   const npmCalls = fake.calls
     .filter((call) => call.command === "npm")
     .map((call) => call.args.join(" "));
-  assert.deepEqual(npmCalls, ['run test:chrome-policy', 'test', 'run build:kakomonn-reader']);
-  const runtimeVerification = findCall(fake.calls, 'pwsh', '-NoProfile', '-File');
-  assert.match(runtimeVerification.args[2], /[\\/]runtimes[\\/]manage\.ps1$/);
-  assert.deepEqual(runtimeVerification.args.slice(3), ['-Operation', 'Verify']);
-  assert.equal(fake.calls.indexOf(runtimeVerification) < fake.calls.findIndex(call => call.command === 'npm'), true);
-  const verifications = fake.calls.filter(call => call.command === 'pwsh');
+  assert.deepEqual(npmCalls, ['ls --all', 'run test:chrome-policy', 'test', 'run build:kakomonn-reader', 'ls --all']);
+  assert.equal(fake.calls.some(call => call.command === 'pwsh'), false);
+  const verifications = fake.calls.filter(call => call.command === 'npm' && call.args[0] === 'ls');
   assert.equal(verifications.length, 2);
-  assert.deepEqual(verifications[1].args, runtimeVerification.args);
+  assert.equal(fake.calls.indexOf(verifications[0]) < fake.calls.findIndex(call => call.command === 'npm' && call.args[0] === 'test'), true);
   assert.equal(fake.calls.indexOf(verifications[1]) > fake.calls.findIndex(call => call.command === 'npm' && call.args[0] === 'run' && call.args[1] === 'build:kakomonn-reader'), true);
   assert.equal(fake.calls.indexOf(verifications[1]) < fake.calls.indexOf(releaseCall), true);
   assert.equal(

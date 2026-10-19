@@ -159,11 +159,11 @@ test("runs browser and URL phases in separate sequential processes", () => {
   );
   assert.equal(
     packageJSON.scripts["open:kakomonn:browser"],
-    "envx-node run --use-system-ca scripts/open-kakomonn.mjs browser",
+    "node --use-system-ca scripts/open-kakomonn.mjs browser",
   );
   assert.equal(
     packageJSON.scripts["open:kakomonn:url"],
-    "envx-node run --use-system-ca scripts/open-kakomonn.mjs url",
+    "node --use-system-ca scripts/open-kakomonn.mjs url",
   );
 });
 

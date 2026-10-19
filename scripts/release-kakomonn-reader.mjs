@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import kakomonnConfig from "./kakomonn-config.cjs";
-import { runtimeManagementScript } from '@expgolemclone/envx-runtime';
 
 const { kakomonnFreeEnvironment } = kakomonnConfig;
 
@@ -58,9 +57,7 @@ export function createCommandRunner({
 } = {}) {
   const childEnvironment = {
     ...kakomonnFreeEnvironment(environment),
-    // npm and the runtime manager own native dependency graphs. Application
-    // preloads must not redirect their dependencies into the shared graph.
-    // Each application command in package.json enters envx explicitly.
+    // Use Node's native CA support without a custom module resolver.
     NODE_OPTIONS: "--use-system-ca",
   };
   return (command, args = [], { capture = false } = {}) => {
@@ -207,8 +204,8 @@ export async function runRelease({
   const commitSha = initialState.mainSha;
   const repository = initialState.repository;
 
-  logger("Verifying shared locked dependencies without modifying active consumers");
-  runCommand('pwsh', ['-NoProfile', '-File', runtimeManagementScript(), '-Operation', 'Verify']);
+  logger("Verifying project-owned locked dependencies");
+  runCommand('npm', ['ls', '--all']);
   runCommand('npm', ['run', 'test:chrome-policy']);
 
   logger("Running the complete Windows test suite and live E2E");
@@ -218,9 +215,8 @@ export async function runRelease({
   runCommand("npm", ["run", "build:kakomonn-reader"]);
   const version = readUserscriptVersion(readFile(path.join(PROJECT_ROOT, RELEASE_ASSET), "utf8"));
 
-  logger('Verifying that build and tests did not recreate private environments');
-  runCommand('pwsh', ['-NoProfile', '-File', runtimeManagementScript(), '-Operation', 'Verify']);
-  logger("Rechecking main immediately before publishing");
+  logger("Rechecking project dependencies and main immediately before publishing");
+  runCommand('npm', ['ls', '--all']);
   const finalState = assertReleaseState(runCommand, commitSha);
   if (finalState.repository.nameWithOwner !== repository.nameWithOwner) {
     throw new ReleaseError("The GitHub repository changed during release validation");

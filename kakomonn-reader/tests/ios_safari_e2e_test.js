@@ -4,11 +4,6 @@ const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
-const {
-  kakomonnFreeEnvironment,
-  readKakomonnConfiguration,
-} = require("../../scripts/kakomonn-config.cjs");
-
 const { createSyncMockConfiguration, installSyncMockInWindow } = require("./sync_mock");
 const {
   assertMarkdownCopy,
@@ -37,10 +32,9 @@ const failureDiagnosticsPath = path.join(resultDirectory, "failure-diagnostics.j
 const readerSourceURL = "kakomonn-reader.user.js";
 const nextQuestionOpenURL = "https://kakomonn-sync.kakomonn.workers.dev/open";
 const nextQuestionLauncherURL = "https://chushoks.kakomonn.com/createques#kakomonn-next";
-const kakomonnConfiguration = readKakomonnConfiguration();
-const expectedXcodeVersion = kakomonnConfiguration.KAKOMONN_XCODE_VERSION ?? "26.6";
-const simulatorPlatformVersion = kakomonnConfiguration.KAKOMONN_IOS_VERSION ?? "26.5";
-const simulatorDeviceName = kakomonnConfiguration.KAKOMONN_IOS_DEVICE ?? "iPhone 17";
+const expectedXcodeVersion = "26.6";
+const simulatorPlatformVersion = "26.5";
+const simulatorDeviceName = "iPhone 17";
 const correctQuestionURL = "https://chushoks.kakomonn.com/questions/86956";
 const correctAnswerText = "輸入の減少は、GDPを増加させる。";
 const nextQuestionURL = "https://chushoks.kakomonn.com/questions/86957";
@@ -371,7 +365,6 @@ function verifyHostEnvironment() {
 
   const xcodeVersion = execFileSync("xcodebuild", ["-version"], {
     encoding: "utf8",
-    env: kakomonnFreeEnvironment(),
   });
   assert.match(
     xcodeVersion,
@@ -382,7 +375,6 @@ function verifyHostEnvironment() {
   const simulatorList = JSON.parse(
     execFileSync("xcrun", ["simctl", "list", "devices", "available", "--json"], {
       encoding: "utf8",
-      env: kakomonnFreeEnvironment(),
     }),
   );
   const runtimeKey = `com.apple.CoreSimulator.SimRuntime.iOS-${simulatorPlatformVersion.replace(/\./g, "-")}`;
@@ -474,7 +466,6 @@ async function startAppium() {
     ],
     {
       cwd: resolveAppiumRuntimeDirectory(),
-      env: kakomonnFreeEnvironment(),
       stdio: ['ignore', output, output],
       windowsHide: true,
     },
@@ -994,7 +985,6 @@ async function captureFailureArtifacts(driver, error) {
       ],
       {
         encoding: "utf8",
-        env: kakomonnFreeEnvironment(),
         maxBuffer: 10 * 1024 * 1024,
       },
     );
@@ -1013,7 +1003,6 @@ async function runTest() {
   fs.mkdirSync(resultDirectory, { recursive: true });
   execFileSync(process.execPath, ["build.mjs"], {
     cwd: projectRoot,
-    env: kakomonnFreeEnvironment(),
     stdio: "inherit",
   });
   const script = fs.readFileSync(scriptPath, "utf8");

@@ -40,7 +40,7 @@ test("reads only supported non-empty Kakomonn settings from .env", () => {
         "# Kakomonn configuration",
         'KAKOMONN_SYNC_TOKEN="token-from-file"',
         "KAKOMONN_CHROME_USER_DATA_DIR='C:\\\\profiles\\\\kakomonn'",
-        "KAKOMONN_IOS_VERSION=",
+        "KAKOMONN_READER_SCRIPT_PATH=",
         "OTHER=value",
       ].join("\n"),
     ),
@@ -102,5 +102,5 @@ test("removes every Kakomonn setting from child environments", () => {
     }),
     { PATH: "system-path" },
   );
-  assert.equal(KAKOMONN_CONFIGURATION_KEYS.length, 8);
+  assert.equal(KAKOMONN_CONFIGURATION_KEYS.length, 5);
 });

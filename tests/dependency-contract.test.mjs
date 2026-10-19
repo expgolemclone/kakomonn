@@ -4,6 +4,12 @@ import test from "node:test";
 
 const readJson = (file) => JSON.parse(readFileSync(new URL(file, import.meta.url), "utf8"));
 
+test("iOS CI installs the project's native lock without recreating aggregate runtimes", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/ios-safari.yml", import.meta.url), "utf8");
+  assert.match(workflow, /- name: Install project dependencies\s+run: npm ci\s+- name: Run iOS Safari E2E/);
+  assert.doesNotMatch(workflow, /envx|install-ci\.mjs|GITHUB_PATH/);
+});
+
 test("the native lock uses only the supported Vitest 5 Worker integration", () => {
   const manifest = readJson("../package.json");
   const { packages } = readJson("../package-lock.json");

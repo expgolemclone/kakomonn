@@ -1,13 +1,33 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { dirname, resolve, sep } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve, sep } from 'node:path';
 import test from 'node:test';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { IOSWebDriver, resolveAppiumCli, resolveAppiumRuntimeDirectory, safariCapabilities, clickWebElementNatively } = require('../kakomonn-reader/tests/ios_safari_e2e_test.js');
+
+test('iOS runner loads in a clean CI home without machine-local configuration', () => {
+  const home = mkdtempSync(join(tmpdir(), 'kakomonn-ios-ci-home-'));
+  try {
+    const runner = fileURLToPath(new URL('../kakomonn-reader/tests/ios_safari_e2e_test.js', import.meta.url));
+    const result = spawnSync(process.execPath, ['-e', `
+      require('node:assert/strict').equal(require('node:os').homedir(), process.argv[2]);
+      require(process.argv[1]);
+    `, runner, home], {
+      env: { ...process.env, HOME: home, USERPROFILE: home },
+      encoding: 'utf8',
+      timeout: 30_000,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    rmSync(home, { recursive: true });
+  }
+});
 
 test('Safari session enables native accessibility taps without forcing coordinate-only interaction', async () => {
   const original = IOSWebDriver.prototype.request;

@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import os from "node:os";
-import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const {
@@ -13,9 +12,8 @@ const {
   requireKakomonnConfiguration,
 } = require("../scripts/kakomonn-config.cjs");
 
-test("native workspaces read the registered repository's durable configuration without copying it", () => {
-  const { repositoryPath } = require(path.join(os.homedir(), "local-repository-map", "repository-map.mjs"));
-  const expected = path.join(repositoryPath("expgolemclone/kakomonn"), ".env");
+test("configuration is relative to its source, not the working directory", () => {
+  const expected = fileURLToPath(new URL("../.env", import.meta.url));
   assert.equal(REPOSITORY_ENV_PATH, expected);
   let observed;
   readKakomonnConfiguration({

@@ -1,11 +1,8 @@
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { parseEnv } = require("node:util");
-const { repositoryPath } = require(path.join(os.homedir(), "local-repository-map", "repository-map.mjs"));
-
 const REPOSITORY_ROOT = path.resolve(__dirname, "..");
-const REPOSITORY_ENV_PATH = path.join(repositoryPath("expgolemclone/kakomonn"), ".env");
+const REPOSITORY_ENV_PATH = path.join(REPOSITORY_ROOT, ".env");
 const KAKOMONN_CONFIGURATION_KEYS = Object.freeze([
   "KAKOMONN_SYNC_TOKEN",
   "KAKOMONN_CHROME_USER_DATA_DIR",

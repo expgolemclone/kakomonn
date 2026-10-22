@@ -12,14 +12,6 @@ function isSameOrDescendantPath(parentPath, candidatePath, pathApi = path) {
   );
 }
 
-function windowsPowerShellExecutable(environment = process.env) {
-  const systemRoot = environment.SystemRoot;
-  if (!systemRoot) {
-    throw new Error("SystemRoot is not set");
-  }
-  return path.win32.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-}
-
 function subprocessEnvironment(environment = process.env) {
   return Object.fromEntries(
     Object.entries(environment).filter(([key]) => !key.startsWith("KAKOMONN_")),
@@ -140,8 +132,8 @@ function runPowerShell(
   { spawnSyncImpl = spawnSync, systemEnvironment = process.env } = {},
 ) {
   const result = spawnSyncImpl(
-    windowsPowerShellExecutable(systemEnvironment),
-    ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", `& {${source}\n}`, ...arguments_],
+    "mise.exe",
+    ["exec", "--", "pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", `& {${source}\n}`, ...arguments_],
     {
       encoding: "utf8",
       env: subprocessEnvironment(systemEnvironment),

@@ -518,10 +518,8 @@ test("passes the dedicated Chrome profile as a PowerShell argument", () => {
     },
   });
   assert.equal(calls.length, 1);
-  assert.equal(
-    calls[0].executable,
-    "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-  );
+  assert.equal(calls[0].executable, "mise.exe");
+  assert.deepEqual(calls[0].args.slice(0, 3), ["exec", "--", "pwsh"]);
   assert.match(calls[0].args[calls[0].args.indexOf("-Command") + 1], /^& \{/);
   assert.deepEqual(calls[0].args.slice(-2), ["-UserDataDir", userDataDir]);
   assert.deepEqual(calls[0].options.env, { SystemRoot: "C:\\Windows" });

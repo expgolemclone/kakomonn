@@ -15,7 +15,7 @@
     "test:local": "npm run test:dependencies && npm run test:contracts && npm run test:repository-naming && npm run test:static-cache-policy && npm run test:kakomonn-config && npm run test:kakomonn-sync-launcher && npm run test:open-kakomonn && npm run test:appium-cli && npm run test:release-script && npm run test:live-sync-script && npm run test:kakomonn-reader && npm run test:kakomonn-sync",
     "test:dependencies": "node --test tests/dependency-contract.test.mjs",
     "test:contracts": "node --test tests/kakomonn-contract.test.mjs",
-    "test:chrome-policy": "pwsh -NoProfile -File scripts/test-chrome-policy.ps1",
+    "test:chrome-policy": "mise exec -- pwsh -NoProfile -File scripts/test-chrome-policy.ps1",
     "test:repository-naming": "node --test tests/repository_naming_test.mjs",
     "test:static-cache-policy": "node --test tests/static-cache-policy.test.mjs",
     "test:kakomonn-config": "node --test tests/kakomonn-config.test.mjs",

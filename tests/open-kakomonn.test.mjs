@@ -598,10 +598,8 @@ test("inspects the exact Chrome profile through a sanitized PowerShell call", ()
     rootProcessCount: 1,
   });
   assert.equal(calls.length, 1);
-  assert.equal(
-    calls[0].executable,
-    "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-  );
+  assert.equal(calls[0].executable, "mise.exe");
+  assert.deepEqual(calls[0].args.slice(0, 3), ["exec", "--", "pwsh"]);
   assert.deepEqual(calls[0].args.slice(-6), [
     "-UserDataDir",
     PROFILE_PATH,

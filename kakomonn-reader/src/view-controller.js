@@ -302,63 +302,21 @@ export function installViewController(app) {
     });
   }
 
-  Object.defineProperties(app, {
-    shell: { enumerable: false, get: () => shell },
-    frame: { enumerable: false, get: () => frame },
-    enforceReaderFrameDimensions: { enumerable: false, get: () => enforceReaderFrameDimensions },
-    readerFrameDimensionObserver: { enumerable: false, get: () => readerFrameDimensionObserver },
-    timeLimitProgress: { enumerable: false, get: () => timeLimitProgress },
-    studyTimeBadge: { enumerable: false, get: () => studyTimeBadge },
-    carriedCorrectFeedback: { enumerable: false, get: () => carriedCorrectFeedback },
-    activeCorrectFeedbackElement: {
-      enumerable: false,
-      get: () => activeCorrectFeedbackElement,
-      set: (value) => {
-        activeCorrectFeedbackElement = value;
-      },
-    },
-    syncSettings: { enumerable: false, get: () => syncSettings },
-    syncSettingsPanel: { enumerable: false, get: () => syncSettingsPanel },
-    syncSettingsTitle: { enumerable: false, get: () => syncSettingsTitle },
-    syncSettingsDescription: { enumerable: false, get: () => syncSettingsDescription },
-    syncTokenLabel: { enumerable: false, get: () => syncTokenLabel },
-    syncTokenInput: { enumerable: false, get: () => syncTokenInput },
-    syncSettingsError: { enumerable: false, get: () => syncSettingsError },
-    syncSettingsSaveButton: { enumerable: false, get: () => syncSettingsSaveButton },
-    errorDialog: { enumerable: false, get: () => errorDialog },
-    errorDialogPanel: { enumerable: false, get: () => errorDialogPanel },
-    errorDialogEyebrow: { enumerable: false, get: () => errorDialogEyebrow },
-    errorDialogTitle: { enumerable: false, get: () => errorDialogTitle },
-    errorDialogMessage: { enumerable: false, get: () => errorDialogMessage },
-    errorDialogDetail: { enumerable: false, get: () => errorDialogDetail },
-    errorDialogCloseButton: { enumerable: false, get: () => errorDialogCloseButton },
-    errorDialogRetryButton: { enumerable: false, get: () => errorDialogRetryButton },
-    visibleReaderErrorSignature: {
-      enumerable: false,
-      get: () => visibleReaderErrorSignature,
-      set: (value) => {
-        visibleReaderErrorSignature = value;
-      },
-    },
-    readerErrorRetryAction: {
-      enumerable: false,
-      get: () => readerErrorRetryAction,
-      set: (value) => {
-        readerErrorRetryAction = value;
-      },
-    },
-    readerErrorDetail: { enumerable: false, get: () => readerErrorDetail },
-    showReaderError: { enumerable: false, get: () => showReaderError },
-    mountReaderUI: { enumerable: false, get: () => mountReaderUI },
-    clearCorrectFeedbackRemovalTimer: {
-      enumerable: false,
-      get: () => clearCorrectFeedbackRemovalTimer,
-    },
-    showCarriedCorrectFeedbackVisual: {
-      enumerable: false,
-      get: () => showCarriedCorrectFeedbackVisual,
-    },
-    showCorrectFeedbackVisual: { enumerable: false, get: () => showCorrectFeedbackVisual },
-    completeCorrectFeedbackVisual: { enumerable: false, get: () => completeCorrectFeedbackVisual },
+  Object.assign(app, {
+    shell,
+    frame,
+    timeLimitProgress,
+    studyTimeBadge,
+    syncSettings,
+    syncSettingsPanel,
+    syncTokenInput,
+    syncSettingsError,
+    syncSettingsSaveButton,
+    errorDialog,
+    readerErrorDetail,
+    showReaderError,
+    mountReaderUI,
+    showCorrectFeedbackVisual,
+    completeCorrectFeedbackVisual,
   });
 }

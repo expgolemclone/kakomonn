@@ -196,10 +196,9 @@ export function installCopyController(app) {
     return dispatchPromise.catch(() => false);
   }
 
-  Object.defineProperties(app, {
-    selectedAnswerIsReady: { enumerable: false, get: () => selectedAnswerIsReady },
-    beginAutomaticCopyFromGesture: { enumerable: false, get: () => beginAutomaticCopyFromGesture },
-    discardAnswerCopyOperation: { enumerable: false, get: () => discardAnswerCopyOperation },
-    processPendingAutomaticCopy: { enumerable: false, get: () => processPendingAutomaticCopy },
+  Object.assign(app, {
+    beginAutomaticCopyFromGesture,
+    discardAnswerCopyOperation,
+    processPendingAutomaticCopy,
   });
 }

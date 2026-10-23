@@ -213,72 +213,10 @@ export function installLauncherController(app) {
     }
   }
 
-  Object.defineProperties(app, {
-    nextQuestionLauncherRequestInProgress: {
-      enumerable: false,
-      get: () => nextQuestionLauncherRequestInProgress,
-      set: (value) => {
-        nextQuestionLauncherRequestInProgress = value;
-      },
-    },
-    readerInitializationStarted: {
-      enumerable: false,
-      get: () => readerInitializationStarted,
-      set: (value) => {
-        readerInitializationStarted = value;
-      },
-    },
-    launcher: {
-      enumerable: false,
-      get: () => launcher,
-      set: (value) => {
-        launcher = value;
-      },
-    },
-    launcherPanel: {
-      enumerable: false,
-      get: () => launcherPanel,
-      set: (value) => {
-        launcherPanel = value;
-      },
-    },
-    launcherTitle: {
-      enumerable: false,
-      get: () => launcherTitle,
-      set: (value) => {
-        launcherTitle = value;
-      },
-    },
-    launcherStatus: {
-      enumerable: false,
-      get: () => launcherStatus,
-      set: (value) => {
-        launcherStatus = value;
-      },
-    },
-    launcherActions: {
-      enumerable: false,
-      get: () => launcherActions,
-      set: (value) => {
-        launcherActions = value;
-      },
-    },
-    launcherRetry: {
-      enumerable: false,
-      get: () => launcherRetry,
-      set: (value) => {
-        launcherRetry = value;
-      },
-    },
-    ensureNextQuestionLauncher: { enumerable: false, get: () => ensureNextQuestionLauncher },
-    mountNextQuestionLauncher: { enumerable: false, get: () => mountNextQuestionLauncher },
-    showLauncherLoading: { enumerable: false, get: () => showLauncherLoading },
-    showLauncherState: { enumerable: false, get: () => showLauncherState },
-    showLauncherRequestFailure: { enumerable: false, get: () => showLauncherRequestFailure },
-    enterReaderUI: { enumerable: false, get: () => enterReaderUI },
-    requireSyncSettings: { enumerable: false, get: () => requireSyncSettings },
-    openScheduledQuestionInReader: { enumerable: false, get: () => openScheduledQuestionInReader },
-    showNoNextQuestionLauncher: { enumerable: false, get: () => showNoNextQuestionLauncher },
-    startNextQuestionLauncher: { enumerable: false, get: () => startNextQuestionLauncher },
+  Object.assign(app, {
+    enterReaderUI,
+    openScheduledQuestionInReader,
+    showNoNextQuestionLauncher,
+    startNextQuestionLauncher,
   });
 }

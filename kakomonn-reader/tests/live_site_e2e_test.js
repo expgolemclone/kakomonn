@@ -7,7 +7,7 @@ const {
   kakomonnFreeEnvironment,
   readKakomonnConfiguration,
 } = require("../../scripts/kakomonn-config.cjs");
-const { installSyncMock } = require("./sync_mock");
+const { installSyncFixture } = require("./support/sync-fixture.cjs");
 const { installReaderInChildFrames } = require("./support/frame_reader");
 const { blockAdRequests } = require('./support/third_party_ads');
 const {
@@ -132,7 +132,7 @@ async function darkModeImageFilters(locator) {
 async function waitForSyncReady(page) {
   await page.waitForFunction(
     () =>
-      window.__syncMock?.calls.some((call) => new URL(call.url).pathname === "/v12/state") === true,
+      window.__syncFixture?.calls.some((call) => new URL(call.url).pathname === "/v12/state") === true,
     null,
     { timeout: readerReadyTimeout },
   );
@@ -230,7 +230,7 @@ async function advanceToNextQuestion(
   if (navigationMode === "enter") {
     await page.waitForFunction(
       (previousLength) =>
-        window.__syncMock.attemptCount === 1 &&
+        window.__syncFixture.attemptCount === 1 &&
         history.length > previousLength &&
         history.state?.entryType === "current",
       historyLengthBefore,
@@ -259,11 +259,11 @@ async function advanceToNextQuestion(
 }
 
 async function readStoredStabilityDays(page) {
-  return page.evaluate(() => window.__syncMock?.stabilityDays ?? null);
+  return page.evaluate(() => window.__syncFixture?.state.learningMetrics.stabilityDays ?? null);
 }
 
 async function readStoredAttemptCount(page) {
-  return page.evaluate(() => window.__syncMock?.attemptCount ?? null);
+  return page.evaluate(() => window.__syncFixture?.attemptCount ?? null);
 }
 
 async function blockThirdPartyAds(context) {
@@ -354,16 +354,16 @@ async function runLiveCatalogCrawlCase(browser, script) {
       timeout: readerReadyTimeout,
     });
     await page.evaluate(() => localStorage.clear());
-    await installSyncMock(page, { catalogQuestionCount: null });
+    await installSyncFixture(page, { catalogQuestionCount: null });
     await injectReader(page, script);
 
     await page.waitForFunction(
-      () => window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
+      () => window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
       null,
       { timeout: 180_000 },
     );
     const catalogCall = await page.evaluate(() =>
-      window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v12/questions"),
+      window.__syncFixture.calls.find((call) => new URL(call.url).pathname === "/v12/questions"),
     );
     assert.equal(Array.isArray(catalogCall.body.questionIds), true);
     assert.equal(catalogCall.body.expectedGeneration, 0);
@@ -446,7 +446,7 @@ async function runCase(
     await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
-    await installSyncMock(page, { nextQuestionId: "86957" });
+    await installSyncFixture(page, { nextQuestionId: "86957" });
     await injectReader(page, script);
 
     console.log(JSON.stringify({ phase: "script-injected", answerText }));
@@ -520,7 +520,7 @@ async function runCase(
     assert.equal(initialPresentation.scrollY > 0, true);
 
     await page.evaluate((delta) => {
-      window.__syncMock.nextAttemptStabilityDaysDelta = delta;
+      Object.assign(window.__syncFixture.attemptResponses[0].learningMetrics, { stabilityDays: delta, todayStabilityDaysDelta: delta });
     }, attemptStabilityDaysDelta);
     const historyLengthBefore = await submitAnswer(page, frame, answerText, inputMethod);
     console.log(JSON.stringify({ phase: "answer-submitted", answerText }));
@@ -571,14 +571,14 @@ async function runCase(
     assert.equal(
       await page.evaluate(
         () =>
-          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/attempts")
+          window.__syncFixture.calls.filter((call) => new URL(call.url).pathname === "/v12/attempts")
             .length,
       ),
       1,
     );
     assert.equal(
       await page.evaluate(() =>
-        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/next"),
+        window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/next"),
       ),
       false,
     );
@@ -619,7 +619,7 @@ async function runCase(
           ])
           .catch(() => null),
         storedStabilityDays: await readStoredStabilityDays(page).catch(() => null),
-        syncCalls: await page.evaluate(() => window.__syncMock?.calls ?? []).catch(() => []),
+        syncCalls: await page.evaluate(() => window.__syncFixture?.calls ?? []).catch(() => []),
         pageErrorLocations,
         pageErrors,
       }),
@@ -674,7 +674,7 @@ async function runRandomNavigationCase(browser, script) {
     await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
-    await installSyncMock(page, { nextQuestionId: "45125" });
+    await installSyncFixture(page, { nextQuestionId: "45125" });
     await injectReader(page, script);
 
     const frame = await getQuestionFrame(page);
@@ -741,7 +741,7 @@ async function runRandomNavigationCase(browser, script) {
       .trim();
     assert.notEqual(nextQuestion, initialQuestion);
 
-    await page.waitForFunction(() => window.__syncMock?.attemptCount === 1, null, {
+    await page.waitForFunction(() => window.__syncFixture?.attemptCount === 1, null, {
       timeout: 10_000,
     });
     assert.equal(await readStoredAttemptCount(page), 1);
@@ -786,7 +786,7 @@ async function runRandomNavigationCase(browser, script) {
         storedStabilityDays: await readStoredStabilityDays(page).catch(() => null),
         storedAttemptCount: await readStoredAttemptCount(page).catch(() => null),
         syncCallPaths: await page
-          .evaluate(() => window.__syncMock?.calls.map((call) => new URL(call.url).pathname) ?? [])
+          .evaluate(() => window.__syncFixture?.calls.map((call) => new URL(call.url).pathname) ?? [])
           .catch(() => null),
         pageErrorLocations,
         pageErrors,
@@ -818,7 +818,7 @@ async function runMarkdownCopyCase(browser, script) {
     await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
-    await installSyncMock(page, { systemClipboard: true });
+    await installSyncFixture(page, { systemClipboard: true });
     await injectReader(page, script);
 
     const frame = await getQuestionFrame(page);
@@ -886,7 +886,7 @@ async function runMarkdownCopyCase(browser, script) {
       markdownExplanationImageURLs.map(() => darkModeImageFilter),
     );
 
-    await page.waitForFunction(() => window.__syncMock.clipboardWrites.length === 1, null, {
+    await page.waitForFunction(() => window.__syncFixture.clipboardWrites.length === 1, null, {
       timeout: 15_000,
     });
     const copiedMarkdown = (await page.evaluate(() => navigator.clipboard.readText())).replace(
@@ -956,7 +956,7 @@ async function runReportedCopyCase(browser, script) {
     await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
-    await installSyncMock(page, { systemClipboard: true });
+    await installSyncFixture(page, { systemClipboard: true });
     await injectReader(page, script);
 
     const frame = await getQuestionFrame(page);
@@ -979,7 +979,7 @@ async function runReportedCopyCase(browser, script) {
     });
     assert.equal(await explanationTexts.count(), 2);
 
-    await page.waitForFunction(() => window.__syncMock.clipboardWrites.length === 1, null, {
+    await page.waitForFunction(() => window.__syncFixture.clipboardWrites.length === 1, null, {
       timeout: 15_000,
     });
     const copiedMarkdown = await page.evaluate(() => navigator.clipboard.readText());
@@ -1013,7 +1013,7 @@ async function runImageChoiceInversionCase(browser, script) {
     await page.getByText("解答する", { exact: true }).waitFor({ state: "visible" });
 
     await page.evaluate(() => localStorage.clear());
-    await installSyncMock(page);
+    await installSyncFixture(page);
     await injectReader(page, script);
 
     const frame = await getQuestionFrame(page);
@@ -1048,7 +1048,7 @@ async function runCrossDomainActivationCase(browser, script) {
       });
       await page.evaluate(() => localStorage.clear());
       const site = new URL(questionURL).hostname;
-      await installSyncMock(page, { site });
+      await installSyncFixture(page, { site });
       await injectReader(page, script);
 
       const frame = await getQuestionFrame(page);
@@ -1066,7 +1066,7 @@ async function runCrossDomainActivationCase(browser, script) {
         `question metadata must be unique on ${site}`,
       );
       const stateSites = await page.evaluate(() =>
-        window.__syncMock.calls
+        window.__syncFixture.calls
           .filter((call) => new URL(call.url).pathname === "/v12/state")
           .map((call) => new URL(call.url).searchParams.get("site")),
       );

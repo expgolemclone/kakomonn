@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { REPOSITORY_ENV_PATH: repositoryEnvPath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
+const { REPOSITORY_CONFIGURATION_PATH: repositoryConfigurationPath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
 const { inspectDedicatedChrome } = require("../../scripts/windows-chrome-profile.cjs");
 const {
   CURRENT_QUESTION_URL,
@@ -32,8 +32,8 @@ async function readLearningState(token) {
   });
   assert.equal(response.status, 200);
   const body = await response.json();
-  assert.equal(body.site, site);
-  assert.match(body.today, /^\d{4}-\d{2}-\d{2}$/);
+  const { isLearningState } = await import("../../contracts/kakomonn.mjs");
+  assert.equal(isLearningState(body, site), true);
   return body;
 }
 
@@ -51,8 +51,8 @@ async function readLearningActivity(token, date) {
   });
   assert.equal(response.status, 200);
   const body = await response.json();
-  assert.equal(body.site, site);
-  assert.equal(body.date, date);
+  const { isDailyDetailsResponse } = await import("../../contracts/kakomonn.mjs");
+  assert.equal(isDailyDetailsResponse(body, site, date), true);
   return body.tables;
 }
 
@@ -68,15 +68,15 @@ async function readLearningActivities(token, dates) {
 async function main() {
   const { ensureKakomonnBrowser, openKakomonnURL } = await import("../../scripts/open-kakomonn.mjs");
   const configuration = readKakomonnConfiguration({
-    envFilePath: repositoryEnvPath,
+    configurationFilePath: repositoryConfigurationPath,
   });
   const token = await resolveSyncToken({
     configuration,
-    envFilePath: repositoryEnvPath,
+    configurationFilePath: repositoryConfigurationPath,
   });
   const userDataDir = readChromeUserDataDir({
     configuration,
-    envFilePath: repositoryEnvPath,
+    configurationFilePath: repositoryConfigurationPath,
   });
   const userscript = fs.readFileSync(userscriptPath, "utf8");
   const expectedBuildFingerprint = extractBuildFingerprint(userscript);

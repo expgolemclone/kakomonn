@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { REPOSITORY_ENV_PATH: repositoryEnvPath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
+const { REPOSITORY_CONFIGURATION_PATH: repositoryConfigurationPath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
 const {
   CURRENT_QUESTION_URL,
   DEFAULT_SYNC_API_ORIGIN,
@@ -15,15 +15,15 @@ const userscriptPath = path.resolve(__dirname, "..", "dist", "kakomonn-reader.us
 
 async function main() {
   const configuration = readKakomonnConfiguration({
-    envFilePath: repositoryEnvPath,
+    configurationFilePath: repositoryConfigurationPath,
   });
   const token = await resolveSyncToken({
     configuration,
-    envFilePath: repositoryEnvPath,
+    configurationFilePath: repositoryConfigurationPath,
   });
   const userDataDir = readChromeUserDataDir({
     configuration,
-    envFilePath: repositoryEnvPath,
+    configurationFilePath: repositoryConfigurationPath,
   });
   const userscript = fs.readFileSync(userscriptPath, "utf8");
   const expectedBuildFingerprint = extractBuildFingerprint(userscript);

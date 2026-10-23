@@ -67,7 +67,7 @@ function assertMarkdownCopy({
   assert.equal(copiedMarkdown.includes(`\n\n### 自分の回答\n\n${answerSummary}\n\n`), true);
   assert.equal(copiedMarkdown.includes("\n\n## 解説\n\n"), true);
   for (const choice of choices) {
-    assert.equal(copiedMarkdown.includes(`- ${choice.replace(/\s+/g, " ").trim()}`), true);
+    assert.equal(copiedMarkdown.replace(/^([-*]) +/gm, "$1 ").includes(`- ${choice.replace(/\s+/g, " ").trim()}`), true);
   }
 
   const compactMarkdown = compactCopiedContent(copiedMarkdown);

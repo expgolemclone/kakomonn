@@ -5,10 +5,10 @@ const { resolve } = require("node:path");
 const { chromium } = require("playwright");
 const { kakomonnFreeEnvironment } = require("../../scripts/kakomonn-config.cjs");
 const {
-  createSyncMockConfiguration,
-  installSyncMockInWindow,
+  createSyncFixtureConfiguration,
+  installSyncFixtureInWindow,
   PENDING_ATTEMPT_KEY,
-} = require("./sync_mock.js");
+} = require("./support/sync-fixture.cjs");
 const { installReaderInChildFrames } = require("./support/frame_reader.js");
 
 const projectRoot = resolve(__dirname, "..", "..");
@@ -56,8 +56,8 @@ async function preparePage(browser, script) {
   });
   await page.goto(currentURL, { waitUntil: "domcontentloaded" });
   await page.evaluate(
-    installSyncMockInWindow,
-    createSyncMockConfiguration({ configured: true, nextQuestionId: "101" }),
+    installSyncFixtureInWindow,
+    createSyncFixtureConfiguration({ configured: true, nextQuestionId: "101" }),
   );
   await installReaderInChildFrames(page, script);
   await page.addScriptTag({ content: script });
@@ -85,7 +85,7 @@ async function waitForNextQuestion(page) {
   } catch (error) {
     error.readerState = await page.evaluate(
       (pendingAttemptKey) => ({
-        calls: window.__syncMock.calls,
+        calls: window.__syncFixture.calls,
         frameURL: document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href,
         pendingAttempt: window.__getGMValue(pendingAttemptKey),
         timeLimit: {
@@ -116,15 +116,15 @@ async function questionExpiryRecordsIncorrectAndSkips(browser, script) {
     await page.clock.runFor(300_100);
     await waitForNextQuestion(page);
     const answerCalls = await page.evaluate(() =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/attempts"),
+      window.__syncFixture.calls.filter((call) => new URL(call.url).pathname === "/v12/attempts"),
     );
     assert.equal(answerCalls.length, 1);
     assert.equal(answerCalls[0].body.answerResult, "incorrect");
     assert.equal(answerCalls[0].body.questionId, "100");
-    assert.equal(await page.evaluate(() => window.__syncMock.attemptCount), 1);
+    assert.equal(await page.evaluate(() => window.__syncFixture.attemptCount), 1);
     assert.equal(
       await page.evaluate(() =>
-        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/next"),
+        window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/next"),
       ),
       false,
     );
@@ -150,12 +150,12 @@ async function explanationExpiryRecordsAndStays(browser, script) {
     );
     await page.waitForFunction(
       () =>
-        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/attempts")
+        window.__syncFixture.calls.filter((call) => new URL(call.url).pathname === "/v12/attempts")
           .length === 1,
     );
     const recorded = await page.evaluate(() => ({
-      answered: window.__syncMock.attemptCount,
-      body: window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v12/attempts")
+      answered: window.__syncFixture.attemptCount,
+      body: window.__syncFixture.calls.find((call) => new URL(call.url).pathname === "/v12/attempts")
         .body,
     }));
     assert.equal(recorded.answered, 1);

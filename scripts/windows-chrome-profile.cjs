@@ -1,5 +1,6 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
+const { kakomonnFreeEnvironment } = require("./kakomonn-config.cjs");
 
 const CHROME_AUTOPLAY_ARGUMENT = "--autoplay-policy=no-user-gesture-required";
 const CHROME_REMOTE_DEBUGGING_ARGUMENT = "--remote-debugging-port=0";
@@ -9,12 +10,6 @@ function isSameOrDescendantPath(parentPath, candidatePath, pathApi = path) {
   return (
     relative === "" ||
     (!relative.startsWith(`..${pathApi.sep}`) && relative !== ".." && !pathApi.isAbsolute(relative))
-  );
-}
-
-function subprocessEnvironment(environment = process.env) {
-  return Object.fromEntries(
-    Object.entries(environment).filter(([key]) => !key.startsWith("KAKOMONN_")),
   );
 }
 
@@ -136,7 +131,7 @@ function runPowerShell(
     ["exec", "--", "pwsh", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", `& {${source}\n}`, ...arguments_],
     {
       encoding: "utf8",
-      env: subprocessEnvironment(systemEnvironment),
+      env: kakomonnFreeEnvironment(systemEnvironment),
       windowsHide: true,
     },
   );

@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { request } = require('playwright');
-const { REPOSITORY_ENV_PATH: repositoryEnvPath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
+const { REPOSITORY_CONFIGURATION_PATH: repositoryConfigurationPath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
 const { blockAdRequests } = require('./support/third_party_ads');
 
 const {
@@ -65,51 +65,6 @@ function assertRuntimeIdentity(state, expectedBuildFingerprint) {
   );
 }
 
-function assertSyncState(state) {
-  assert.equal(state.site, "chushoks.kakomonn.com");
-  assert.match(state.today, /^\d{4}-\d{2}-\d{2}$/);
-  const metrics = state.learningMetrics;
-  assert.equal(metrics !== null && typeof metrics === "object", true);
-  assert.equal(Number.isSafeInteger(metrics.stabilityDays), true);
-  assert.equal(metrics.stabilityDays >= 0, true);
-  assert.equal(typeof metrics.dailyKpiCompleted, "boolean");
-  assert.equal(typeof metrics.dueCardsCompleted, "boolean");
-  assert.equal(Number.isSafeInteger(metrics.dueCardsRemaining), true);
-  assert.equal(metrics.dueCardsRemaining >= 0, true);
-  assert.equal(metrics.dueCardsCompleted, metrics.dueCardsRemaining === 0);
-  assert.equal(Number.isSafeInteger(metrics.todayNewQuestionCount), true);
-  assert.equal(metrics.todayNewQuestionCount >= 0, true);
-  assert.equal(metrics.newQuestionGoal, 10);
-  assert.equal(Number.isSafeInteger(metrics.newQuestionsRemaining), true);
-  assert.equal(
-    metrics.newQuestionsRemaining,
-    Math.max(0, metrics.newQuestionGoal - metrics.todayNewQuestionCount),
-  );
-  assert.equal(Number.isSafeInteger(metrics.todayStabilityDaysDelta), true);
-  assert.equal(Number.isSafeInteger(metrics.todayStudyTimeMs), true);
-  assert.equal(metrics.todayStudyTimeMs >= 0, true);
-  assert.equal(Number.isSafeInteger(metrics.attemptedQuestionCount), true);
-  assert.equal(metrics.attemptedQuestionCount >= 0, true);
-  assert.equal(Number.isSafeInteger(metrics.todayAttemptedQuestionCount), true);
-  assert.equal(metrics.todayAttemptedQuestionCount >= 0, true);
-  assert.equal(
-    metrics.todayCorrectRatePercent === null ||
-      (Number.isSafeInteger(metrics.todayCorrectRatePercent) &&
-        metrics.todayCorrectRatePercent >= 0 &&
-        metrics.todayCorrectRatePercent <= 100),
-    true,
-  );
-  assert.equal(
-    state.catalog === null ||
-      (Number.isSafeInteger(state.catalog?.questionCount) &&
-        state.catalog.questionCount > 0 &&
-        Number.isSafeInteger(state.catalog.updatedAtMs) &&
-        state.catalog.updatedAtMs > 0),
-    true,
-  );
-  return state;
-}
-
 async function requestSyncState(api, token) {
   const query = new URLSearchParams({ site: 'chushoks.kakomonn.com' });
   const response = await api.get(`${DEFAULT_SYNC_API_ORIGIN}/v12/state?${query}`, {
@@ -120,7 +75,10 @@ async function requestSyncState(api, token) {
   });
   try {
     assert.equal(response.status(), 200);
-    return assertSyncState(await response.json());
+    const state = await response.json();
+    const { isLearningState } = await import("../../contracts/kakomonn.mjs");
+    assert.equal(isLearningState(state, "chushoks.kakomonn.com"), true);
+    return state;
   } finally {
     await response.dispose();
   }
@@ -520,15 +478,15 @@ async function main() {
 
 async function runLiveSync(api) {
   const configuration = readKakomonnConfiguration({
-    envFilePath: repositoryEnvPath,
+    configurationFilePath: repositoryConfigurationPath,
   });
   const token = await resolveSyncToken({
     configuration,
-    envFilePath: repositoryEnvPath,
+    configurationFilePath: repositoryConfigurationPath,
   });
   const userDataDir = readChromeUserDataDir({
     configuration,
-    envFilePath: repositoryEnvPath,
+    configurationFilePath: repositoryConfigurationPath,
   });
   const expectedBuildFingerprint = readExpectedBuildFingerprint();
   const baseline = await requestSyncState(api, token);

@@ -86,25 +86,27 @@ function storedLearningMetricsFromRow(row) {
   };
 }
 
-function findStoredLearningMetrics(storage, site) {
-  const row = storage.sql
-    .exec(
-      `SELECT stability_days, attempted_question_count, daily_metrics_date,
-              today_attempted_question_count, today_attempt_count,
-              today_correct_attempt_count, today_new_question_count,
-              today_study_time_ms
-       FROM learning_metrics WHERE site = ?`,
-      site,
-    )
-    .toArray()[0];
+function findStoredLearningMetrics(storage, site, today) {
+  const row = storage.sql.exec(
+    `SELECT metrics.stability_days, metrics.attempted_question_count,
+            ? AS daily_metrics_date,
+            COALESCE(history.attempted_question_count, 0) AS today_attempted_question_count,
+            COALESCE(history.attempt_count, 0) AS today_attempt_count,
+            COALESCE(history.correct_attempt_count, 0) AS today_correct_attempt_count,
+            COALESCE(history.new_question_count, 0) AS today_new_question_count,
+            COALESCE(study.study_time_ms, 0) AS today_study_time_ms
+     FROM learning_metrics metrics
+     LEFT JOIN stability_history history ON history.site = metrics.site AND history.date = ?
+     LEFT JOIN study_time_daily study ON study.site = metrics.site AND study.date = ?
+     WHERE metrics.site = ?`,
+    today, today, today, site,
+  ).toArray()[0];
   return row === undefined ? null : storedLearningMetricsFromRow(row);
 }
 
-function readStoredLearningMetrics(storage, site) {
-  const metrics = findStoredLearningMetrics(storage, site);
-  if (metrics === null) {
-    throw new Error("missing LearningState learning metrics");
-  }
+function readStoredLearningMetrics(storage, site, today) {
+  const metrics = findStoredLearningMetrics(storage, site, today);
+  if (metrics === null) throw new Error("missing LearningState learning metrics");
   return metrics;
 }
 
@@ -123,93 +125,15 @@ function calculateCurrentCatalogStabilityDays(storage, site) {
 }
 
 function replaceStoredLearningMetrics(storage, site, metrics, today) {
-  return storedLearningMetricsFromRow(
-    storage.sql
-      .exec(
-        `INSERT INTO learning_metrics (
-           site, stability_days, attempted_question_count,
-           daily_metrics_date, today_attempted_question_count,
-           today_attempt_count, today_correct_attempt_count,
-           today_new_question_count, today_study_time_ms
-         ) VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0)
-         ON CONFLICT(site) DO UPDATE SET
-           stability_days = excluded.stability_days,
-           attempted_question_count = excluded.attempted_question_count
-         RETURNING stability_days, attempted_question_count, daily_metrics_date,
-                   today_attempted_question_count, today_attempt_count,
-                   today_correct_attempt_count, today_new_question_count,
-                   today_study_time_ms`,
-        site,
-        metrics.stabilityDays,
-        metrics.attemptedQuestionCount,
-        today,
-      )
-      .toArray()[0],
+  storage.sql.exec(
+    `INSERT INTO learning_metrics (site, stability_days, attempted_question_count)
+     VALUES (?, ?, ?)
+     ON CONFLICT(site) DO UPDATE SET
+       stability_days = excluded.stability_days,
+       attempted_question_count = excluded.attempted_question_count`,
+    site, metrics.stabilityDays, metrics.attemptedQuestionCount,
   );
-}
-
-function updateStoredLearningMetrics(
-  storage,
-  site,
-  previousCardStabilityDays,
-  resultingCardStabilityDays,
-  attemptedQuestionCountDelta,
-  today,
-  todayAttemptedQuestionCountDelta,
-  todayCorrectAttemptCountDelta,
-  todayNewQuestionCountDelta,
-) {
-  return storedLearningMetricsFromRow(
-    storage.sql
-      .exec(
-        `UPDATE learning_metrics
-         SET stability_days = stability_days - ? + ?,
-             attempted_question_count = attempted_question_count + ?,
-             daily_metrics_date = ?,
-             today_attempted_question_count =
-               CASE WHEN daily_metrics_date = ?
-                    THEN today_attempted_question_count + ?
-                    ELSE ? END,
-             today_attempt_count =
-               CASE WHEN daily_metrics_date = ?
-                    THEN today_attempt_count + 1
-                    ELSE 1 END,
-             today_correct_attempt_count =
-               CASE WHEN daily_metrics_date = ?
-                    THEN today_correct_attempt_count + ?
-                    ELSE ? END,
-             today_new_question_count =
-               CASE WHEN daily_metrics_date = ?
-                    THEN today_new_question_count + ?
-                    ELSE ? END,
-             today_study_time_ms =
-               CASE WHEN daily_metrics_date = ?
-                    THEN today_study_time_ms
-                    ELSE 0 END
-         WHERE site = ?
-         RETURNING stability_days, attempted_question_count, daily_metrics_date,
-                   today_attempted_question_count, today_attempt_count,
-                   today_correct_attempt_count, today_new_question_count,
-                   today_study_time_ms`,
-        previousCardStabilityDays,
-        resultingCardStabilityDays,
-        attemptedQuestionCountDelta,
-        today,
-        today,
-        todayAttemptedQuestionCountDelta,
-        todayAttemptedQuestionCountDelta,
-        today,
-        today,
-        todayCorrectAttemptCountDelta,
-        todayCorrectAttemptCountDelta,
-        today,
-        todayNewQuestionCountDelta,
-        todayNewQuestionCountDelta,
-        today,
-        site,
-      )
-      .toArray()[0],
-  );
+  return readStoredLearningMetrics(storage, site, today);
 }
 
 function integerStabilityDays(metrics) {
@@ -509,7 +433,7 @@ function emptyStoredLearningMetrics(today) {
 
 function learningStateFromCatalog(storage, site, nowMs, catalog) {
   const today = getTokyoDate(new Date(nowMs));
-  const storedMetrics = findStoredLearningMetrics(storage, site) ?? emptyStoredLearningMetrics(today);
+  const storedMetrics = findStoredLearningMetrics(storage, site, today) ?? emptyStoredLearningMetrics(today);
   return {
     site,
     today,
@@ -542,17 +466,10 @@ function applyStudyTimeSnapshots(storage, site, snapshots, nowMs) {
   if (snapshots.length === 0) {
     return;
   }
-  const today = getTokyoDate(new Date(nowMs));
   storage.sql.exec(
-    `INSERT INTO learning_metrics (
-       site, stability_days, attempted_question_count,
-       daily_metrics_date, today_attempted_question_count,
-       today_attempt_count, today_correct_attempt_count,
-       today_new_question_count, today_study_time_ms
-     ) VALUES (?, 0, 0, ?, 0, 0, 0, 0, 0)
-     ON CONFLICT(site) DO NOTHING`,
+    `INSERT INTO learning_metrics (site, stability_days, attempted_question_count)
+     VALUES (?, 0, 0) ON CONFLICT(site) DO NOTHING`,
     site,
-    today,
   );
   for (const snapshot of snapshots) {
     const existing = storage.sql
@@ -588,32 +505,7 @@ function applyStudyTimeSnapshots(storage, site, snapshots, nowMs) {
       snapshot.date,
       delta,
     );
-    if (snapshot.date === today) {
-      storage.sql.exec(
-        `UPDATE learning_metrics
-         SET daily_metrics_date = ?,
-             today_attempted_question_count =
-               CASE WHEN daily_metrics_date = ? THEN today_attempted_question_count ELSE 0 END,
-             today_attempt_count =
-               CASE WHEN daily_metrics_date = ? THEN today_attempt_count ELSE 0 END,
-             today_correct_attempt_count =
-               CASE WHEN daily_metrics_date = ? THEN today_correct_attempt_count ELSE 0 END,
-             today_new_question_count =
-               CASE WHEN daily_metrics_date = ? THEN today_new_question_count ELSE 0 END,
-             today_study_time_ms =
-               CASE WHEN daily_metrics_date = ? THEN today_study_time_ms + ? ELSE ? END
-         WHERE site = ?`,
-        today,
-        today,
-        today,
-        today,
-        today,
-        today,
-        delta,
-        delta,
-        site,
-      );
-    }
+
   }
 }
 
@@ -665,7 +557,7 @@ export class LearningState extends DurableObject {
         ) {
           return { error: "operation_conflict" };
         }
-        const storedMetrics = readStoredLearningMetrics(this.ctx.storage, site);
+        const storedMetrics = readStoredLearningMetrics(this.ctx.storage, site, getTokyoDate(new Date(nowMs)));
         const stabilityDays = integerStabilityDays(storedMetrics);
         return attemptResponse(
           existing,
@@ -704,7 +596,7 @@ export class LearningState extends DurableObject {
       const nextCard = schedulingApplied ? scheduleAnswer(card, answerResult, nowMs) : card;
       const today = getTokyoDate(new Date(nowMs));
       const todayAttemptedQuestionCountDelta = stored?.last_attempt_date === today ? 0 : 1;
-      const storedMetricsBefore = readStoredLearningMetrics(this.ctx.storage, site);
+      const storedMetricsBefore = readStoredLearningMetrics(this.ctx.storage, site, getTokyoDate(new Date(nowMs)));
       const stabilityDaysBefore = integerStabilityDays(storedMetricsBefore);
       const remainingBefore = dueCardsRemaining(this.ctx.storage, site, nowMs);
       const previousTodayStabilityDaysDelta = readTodayStabilityDaysDelta(
@@ -741,18 +633,16 @@ export class LearningState extends DurableObject {
           questionId,
         );
       }
-      const storedMetricsAfter = updateStoredLearningMetrics(
-        this.ctx.storage,
-        site,
-        previousCardStabilityDays,
-        nextCard.stability,
-        attemptedQuestionCountDelta,
-        today,
-        todayAttemptedQuestionCountDelta,
-        answerResult === "correct" ? 1 : 0,
-        attemptedQuestionCountDelta,
+      this.ctx.storage.sql.exec(
+        `UPDATE learning_metrics
+         SET stability_days = stability_days - ? + ?,
+             attempted_question_count = attempted_question_count + ?
+         WHERE site = ?`,
+        previousCardStabilityDays, nextCard.stability, attemptedQuestionCountDelta, site,
       );
-      const stabilityDaysAfter = integerStabilityDays(storedMetricsAfter);
+      const stabilityDaysAfter = Math.trunc(
+        storedMetricsBefore.stabilityDays - previousCardStabilityDays + nextCard.stability,
+      );
       recordDailyMetrics(
         this.ctx.storage,
         site,
@@ -764,6 +654,7 @@ export class LearningState extends DurableObject {
         1,
         answerResult === "correct" ? 1 : 0,
       );
+      const storedMetricsAfter = readStoredLearningMetrics(this.ctx.storage, site, today);
       this.ctx.storage.sql.exec(
         `INSERT INTO attempts (
            site, operation_id, question_id, attempted_at_ms, answer_result,
@@ -1072,7 +963,7 @@ export class LearningState extends DurableObject {
               todayNewQuestionCount: 0,
               todayStudyTimeMs: 0,
             }
-          : readStoredLearningMetrics(this.ctx.storage, site);
+          : readStoredLearningMetrics(this.ctx.storage, site, getTokyoDate(new Date(nowMs)));
       const stabilityDaysBefore = integerStabilityDays(storedMetricsBefore);
       const deleteCursor = this.ctx.storage.sql.exec(
         `DELETE FROM questions

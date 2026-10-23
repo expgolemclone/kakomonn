@@ -2,7 +2,7 @@
   "name": "kakomonn",
   "private": true,
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "build": "npm run build:kakomonn-reader && npm run build:kakomonn-sync",
@@ -24,7 +24,7 @@
     "test:appium-cli": "node --test tests/appium-cli.test.mjs",
     "test:release-script": "node --test tests/release-kakomonn-reader.test.mjs",
     "test:live-sync-script": "node --test kakomonn-reader/tests/live_sync_e2e_unit_test.js",
-    "test:kakomonn-reader": "npm run build:kakomonn-reader && node --test kakomonn-reader/tests/study_time_controller_test.mjs kakomonn-reader/tests/copy_controller_test.mjs kakomonn-reader/tests/build_test.mjs kakomonn-reader/tests/feedback_kpi_test.mjs kakomonn-reader/tests/runtime_recycle_test.mjs kakomonn-reader/tests/swipe_navigation_test.mjs kakomonn-reader/tests/userscript_metadata_test.mjs && acorn --ecma2020 --silent kakomonn-reader/dist/kakomonn-reader.user.js",
+    "test:kakomonn-reader": "npm run build:kakomonn-reader && node --test kakomonn-reader/tests/markdown.test.mjs kakomonn-reader/tests/study_time_controller_test.mjs kakomonn-reader/tests/copy_controller_test.mjs kakomonn-reader/tests/build_test.mjs kakomonn-reader/tests/feedback_kpi_test.mjs kakomonn-reader/tests/runtime_recycle_test.mjs kakomonn-reader/tests/swipe_navigation_test.mjs kakomonn-reader/tests/userscript_metadata_test.mjs && acorn --ecma2020 --silent kakomonn-reader/dist/kakomonn-reader.user.js",
     "test:kakomonn-sync": "vitest run --config kakomonn-sync/vitest.config.mjs",
     "test:kakomonn-sync-production": "npm run build:kakomonn-sync && node --use-system-ca --test kakomonn-sync/tests/production_deployment_test.js",
     "test:kakomonn-dashboard": "npm run build:kakomonn-sync && node kakomonn-sync/tests/dashboard_e2e_test.js",
@@ -40,6 +40,8 @@
     "test:kakomonn-copy-failure-production": "npm run build:kakomonn-reader && node --use-system-ca kakomonn-reader/tests/live_copy_failure_e2e_test.js"
   },
   "allowScripts": {
+    "edgedriver@8.0.0": false,
+    "geckodriver@8.0.0": false,
     "@appium/coresim@1.9.0": true,
     "appium-ios-tuntap@2.1.0": true,
     "appium@3.8.0": true,
@@ -51,16 +53,20 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.4.3",
+    "acorn": "8.18.0",
     "appium": "3.8.0",
     "appium-xcuitest-driver": "12.13.3",
-    "acorn": "8.18.0",
     "playwright": "1.64.1",
-    "vite": "8.3.2",
+    "smol-toml": "1.9.1",
+    "vite": "8.3.5",
     "vitest": "5.0.4",
+    "webdriverio": "10.1.0",
     "wrangler": "4.147.0"
   },
   "dependencies": {
     "@expgolemclone/congratulations": "https://github.com/expgolemclone/congratulations/releases/download/v2.1.0/expgolemclone-congratulations-2.1.0.tgz",
-    "ts-fsrs": "5.4.2"
+    "ts-fsrs": "5.4.2",
+    "turndown": "7.2.4",
+    "turndown-plugin-gfm": "1.0.2"
   }
 }

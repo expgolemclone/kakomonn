@@ -21,7 +21,6 @@ const SCAN_EXTENSIONS = new Set([
 
 const SKIP_DIRECTORIES = new Set([
   ".claude",
-  ".env.cloudflare-migration",
   ".git",
   ".jj",
   ".qoder",
@@ -86,7 +85,7 @@ const CONFIGURATION_RUNTIME_EXEMPT_FILES = new Set([
 ]);
 
 const RETIRED_CONFIGURATION_PATTERNS = [
-  /(?:process\.env|environment|systemEnvironment)\.KAKOMONN_/,
+  /(?:process\kakomonn.toml|environment|systemEnvironment)\.KAKOMONN_/,
   /\$env:KAKOMONN_/,
   /--env-file(?:-if-exists)?(?:=|\s)/,
   /KAKOMONN_E2E_/,
@@ -148,7 +147,7 @@ test("retired runtime names stay out of production code and support files", asyn
   assert.deepEqual(violations, [], `retired runtime names were found:\n${violations.join("\n")}`);
 });
 
-test("Kakomonn settings are read only through the repository env loader", async () => {
+test("Kakomonn settings are read only through the repository configuration loader", async () => {
   const violations = [];
   for await (const filePath of listFiles(repositoryRoot)) {
     const relativePath = relative(repositoryRoot, filePath).replaceAll("\\", "/");

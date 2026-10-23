@@ -559,31 +559,13 @@ export function installSpeechController(app) {
     speakText(`問題文。${questionText}`, "問題文", app.QUESTION_SPEECH_RATE);
   }
 
-  Object.defineProperties(app, {
-    showSpeechGestureError: { enumerable: false, get: () => showSpeechGestureError },
-    initializeSpeechPlayback: { enumerable: false, get: () => initializeSpeechPlayback },
-    finishSpeechInitialization: { enumerable: false, get: () => finishSpeechInitialization },
-    escapeSpeechText: { enumerable: false, get: () => escapeSpeechText },
-    buildSpeechSSML: { enumerable: false, get: () => buildSpeechSSML },
-    requestAzureSpeechAudio: { enumerable: false, get: () => requestAzureSpeechAudio },
-    speechErrorMessage: { enumerable: false, get: () => speechErrorMessage },
-    clearActiveSpeechAudio: { enumerable: false, get: () => clearActiveSpeechAudio },
-    cancelActiveSpeech: { enumerable: false, get: () => cancelActiveSpeech },
-    playActiveSpeechAudio: { enumerable: false, get: () => playActiveSpeechAudio },
-    toggleSpeechPause: { enumerable: false, get: () => toggleSpeechPause },
-    prepareSpeechChunk: { enumerable: false, get: () => prepareSpeechChunk },
-    playSpeechChunk: { enumerable: false, get: () => playSpeechChunk },
-    speakText: { enumerable: false, get: () => speakText },
-    writeWaveText: { enumerable: false, get: () => writeWaveText },
-    createCorrectChimeWave: { enumerable: false, get: () => createCorrectChimeWave },
-    playFeedbackAudio: { enumerable: false, get: () => playFeedbackAudio },
-    prepareCorrectFeedbackKpiAudio: {
-      enumerable: false,
-      get: () => prepareCorrectFeedbackKpiAudio,
-    },
-    playCorrectFeedbackSequence: { enumerable: false, get: () => playCorrectFeedbackSequence },
-    beginCorrectAnswerFeedback: { enumerable: false, get: () => beginCorrectAnswerFeedback },
-    speakAnswerResult: { enumerable: false, get: () => speakAnswerResult },
-    readCurrentPage: { enumerable: false, get: () => readCurrentPage },
+  Object.assign(app, {
+    initializeSpeechPlayback,
+    finishSpeechInitialization,
+    cancelActiveSpeech,
+    toggleSpeechPause,
+    beginCorrectAnswerFeedback,
+    speakAnswerResult,
+    readCurrentPage,
   });
 }

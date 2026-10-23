@@ -971,109 +971,23 @@ export function installNavigationController(app) {
     }
   }
 
-  Object.defineProperties(app, {
-    currentQuestionId: { enumerable: false, get: () => currentQuestionId },
-    canSkipCurrentQuestion: { enumerable: false, get: () => canSkipCurrentQuestion },
-    getCurrentAnswerResult: { enumerable: false, get: () => getCurrentAnswerResult },
-    synchronizeAnswerPresentation: { enumerable: false, get: () => synchronizeAnswerPresentation },
-    createOperationId: { enumerable: false, get: () => createOperationId },
-    READER_HISTORY_OWNER: { enumerable: false, get: () => READER_HISTORY_OWNER },
-    READER_HISTORY_VERSION: { enumerable: false, get: () => READER_HISTORY_VERSION },
-    READER_HISTORY_SESSION_KEY: { enumerable: false, get: () => READER_HISTORY_SESSION_KEY },
-    READER_HISTORY_TIMEOUT_MS: { enumerable: false, get: () => READER_HISTORY_TIMEOUT_MS },
-    readerHistorySession: {
-      enumerable: false,
-      get: () => readerHistorySession,
-      set: (value) => {
-        readerHistorySession = value;
-      },
-    },
-    historyPreparation: {
-      enumerable: false,
-      get: () => historyPreparation,
-      set: (value) => {
-        historyPreparation = value;
-      },
-    },
-    activatingFutureHistoryState: {
-      enumerable: false,
-      get: () => activatingFutureHistoryState,
-      set: (value) => {
-        activatingFutureHistoryState = value;
-      },
-    },
-    preparedDestinationOperationId: {
-      enumerable: false,
-      get: () => preparedDestinationOperationId,
-      set: (value) => {
-        preparedDestinationOperationId = value;
-      },
-    },
-    incorrectAdvanceRequested: {
-      enumerable: false,
-      get: () => incorrectAdvanceRequested,
-      set: (value) => {
-        incorrectAdvanceRequested = value;
-      },
-    },
-    noNextQuestionOperationId: {
-      enumerable: false,
-      get: () => noNextQuestionOperationId,
-      set: (value) => {
-        noNextQuestionOperationId = value;
-      },
-    },
-    isReaderHistoryState: { enumerable: false, get: () => isReaderHistoryState },
-    isReaderHistorySession: { enumerable: false, get: () => isReaderHistorySession },
-    saveReaderHistorySession: { enumerable: false, get: () => saveReaderHistorySession },
-    loadReaderHistorySession: { enumerable: false, get: () => loadReaderHistorySession },
-    readerHistoryState: { enumerable: false, get: () => readerHistoryState },
-    ensureCurrentReaderHistory: { enumerable: false, get: () => ensureCurrentReaderHistory },
-    synchronizeCurrentHistoryURL: { enumerable: false, get: () => synchronizeCurrentHistoryURL },
-    resolveHistoryPreparation: { enumerable: false, get: () => resolveHistoryPreparation },
-    prepareFutureHistoryEntry: { enumerable: false, get: () => prepareFutureHistoryEntry },
-    navigateToScheduledQuestion: { enumerable: false, get: () => navigateToScheduledQuestion },
-    completePendingAttemptNavigation: {
-      enumerable: false,
-      get: () => completePendingAttemptNavigation,
-    },
-    resumePendingLearningFlow: { enumerable: false, get: () => resumePendingLearningFlow },
-    congratulationsURL: { enumerable: false, get: () => congratulationsURL },
-    transitionToPendingCelebration: {
-      enumerable: false,
-      get: () => transitionToPendingCelebration,
-    },
-    activateFutureCelebration: { enumerable: false, get: () => activateFutureCelebration },
-    activateFutureQuestion: { enumerable: false, get: () => activateFutureQuestion },
-    handleReaderPopState: { enumerable: false, get: () => handleReaderPopState },
-    handleReaderPageShow: { enumerable: false, get: () => handleReaderPageShow },
-    handleReaderPageHide: { enumerable: false, get: () => handleReaderPageHide },
-    clearIncorrectAdvanceRequest: { enumerable: false, get: () => clearIncorrectAdvanceRequest },
-    activateRequestedIncorrectDestination: {
-      enumerable: false,
-      get: () => activateRequestedIncorrectDestination,
-    },
-    requestIncorrectAnswerAdvance: { enumerable: false, get: () => requestIncorrectAnswerAdvance },
-    preparePendingFutureEntry: { enumerable: false, get: () => preparePendingFutureEntry },
-    maybePreparePendingDestination: {
-      enumerable: false,
-      get: () => maybePreparePendingDestination,
-    },
-    createPendingAttempt: { enumerable: false, get: () => createPendingAttempt },
-    submitPendingAttempt: { enumerable: false, get: () => submitPendingAttempt },
-    recordCurrentAnswer: { enumerable: false, get: () => recordCurrentAnswer },
-    recordCurrentAnswerIfAvailable: {
-      enumerable: false,
-      get: () => recordCurrentAnswerIfAvailable,
-    },
-    recordCurrentQuestionAndAdvance: {
-      enumerable: false,
-      get: () => recordCurrentQuestionAndAdvance,
-    },
-    handleSkipQuestion: { enumerable: false, get: () => handleSkipQuestion },
-    readPendingCurrentPage: { enumerable: false, get: () => readPendingCurrentPage },
-    startSpeechForCurrentPage: { enumerable: false, get: () => startSpeechForCurrentPage },
-    processCurrentPageSpeech: { enumerable: false, get: () => processCurrentPageSpeech },
-    activateSpeechFromGesture: { enumerable: false, get: () => activateSpeechFromGesture },
+  Object.assign(app, {
+    currentQuestionId,
+    canSkipCurrentQuestion,
+    getCurrentAnswerResult,
+    synchronizeAnswerPresentation,
+    createOperationId,
+    synchronizeCurrentHistoryURL,
+    navigateToScheduledQuestion,
+    resumePendingLearningFlow,
+    handleReaderPopState,
+    handleReaderPageShow,
+    handleReaderPageHide,
+    requestIncorrectAnswerAdvance,
+    maybePreparePendingDestination,
+    recordCurrentAnswerIfAvailable,
+    handleSkipQuestion,
+    processCurrentPageSpeech,
+    activateSpeechFromGesture,
   });
 }

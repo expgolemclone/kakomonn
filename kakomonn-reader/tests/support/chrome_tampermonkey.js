@@ -4,6 +4,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const {
+  REPOSITORY_CONFIGURATION_PATH,
+  requireKakomonnConfiguration,
   kakomonnFreeEnvironment,
   readKakomonnConfiguration,
 } = require("../../../scripts/kakomonn-config.cjs");
@@ -12,6 +14,7 @@ const {
   waitForDevToolsActivePort,
 } = require("../../../scripts/chrome-devtools.cjs");
 const {
+  isSameOrDescendantPath,
   CHROME_AUTOPLAY_ARGUMENT,
   CHROME_REMOTE_DEBUGGING_ARGUMENT,
   stopDedicatedChrome,
@@ -21,7 +24,6 @@ const {
 const { chromium } = require("playwright");
 
 const TAMPERMONKEY_EXTENSION_ID = TAMPERMONKEY_BETA_EXTENSION_ID;
-const LEGACY_TAMPERMONKEY_EXTENSION_ID = "dhdgffkkebhmkfjojejmpbldmpobfkfo";
 const SYNC_TOKEN_KEY = "kakomonn-reader.sync-token";
 const SYNC_TOKEN_PATTERN = /^[0-9a-f]{64}$/i;
 const DEFAULT_SYNC_API_ORIGIN = "https://kakomonn-sync.kakomonn.workers.dev";
@@ -63,25 +65,17 @@ function defaultChromeE2EUserDataDir(environment = process.env, platform = proce
   return pathApi.join(os.tmpdir(), DEFAULT_CHROME_E2E_DIRECTORY_NAME);
 }
 
-function isSameOrDescendantPath(parentPath, candidatePath, pathApi = path) {
-  const relative = pathApi.relative(parentPath, candidatePath);
-  return (
-    relative === "" ||
-    (!relative.startsWith(`..${pathApi.sep}`) && relative !== ".." && !pathApi.isAbsolute(relative))
-  );
-}
-
 function readChromeUserDataDir({
   configuration,
   systemEnvironment = process.env,
-  envFilePath,
+  configurationFilePath,
   existsSync = fs.existsSync,
   readFileSync = fs.readFileSync,
   platform = process.platform,
 } = {}) {
   const pathApi = platformPath(platform);
   const kakomonnConfiguration =
-    configuration ?? readKakomonnConfiguration({ envFilePath, existsSync, readFileSync });
+    configuration ?? readKakomonnConfiguration({ configurationFilePath, existsSync, readFileSync });
   const configuredPath =
     kakomonnConfiguration.KAKOMONN_CHROME_USER_DATA_DIR ??
     defaultChromeE2EUserDataDir(systemEnvironment, platform);
@@ -97,210 +91,27 @@ function readChromeUserDataDir({
   return userDataDir;
 }
 
-function readConfiguredToken({
-  configuration,
-  envFilePath,
-  existsSync = fs.existsSync,
-  readFileSync = fs.readFileSync,
-} = {}) {
-  const kakomonnConfiguration =
-    configuration ?? readKakomonnConfiguration({ envFilePath, existsSync, readFileSync });
-  const token = kakomonnConfiguration.KAKOMONN_SYNC_TOKEN;
-  if (token === undefined) {
-    return null;
-  }
-  return { source: envFilePath, token };
-}
-
 function assertTokenShape(token, source) {
   if (!SYNC_TOKEN_PATTERN.test(token)) {
     throw new Error(`KAKOMONN_SYNC_TOKEN from ${source} must be a 64-character hexadecimal token`);
   }
 }
 
-function extractSyncTokenCandidates(buffers) {
-  const keyBytes = Buffer.from(SYNC_TOKEN_KEY);
-  if (!buffers.some((buffer) => buffer.includes(keyBytes))) {
-    return new Set();
-  }
-  const candidates = new Set();
-  for (const buffer of buffers) {
-    const text = buffer.toString("latin1");
-    for (const match of text.matchAll(/[0-9a-f]{64}/gi)) {
-      candidates.add(match[0]);
-    }
-  }
-  return candidates;
-}
-
-function listProfileDirectories(
-  userDataRoot,
-  { existsSync = fs.existsSync, readdirSync = fs.readdirSync } = {},
-) {
-  if (!existsSync(userDataRoot)) {
-    return [];
-  }
-  return readdirSync(userDataRoot, { withFileTypes: true })
-    .filter(
-      (entry) =>
-        entry.isDirectory() && (entry.name === "Default" || /^Profile \d+$/.test(entry.name)),
-    )
-    .map((entry) => path.join(userDataRoot, entry.name));
-}
-
-function discoverTampermonkeyStorageDirectories({
-  environment = process.env,
-  platform = process.platform,
-  dedicatedUserDataDir = defaultChromeE2EUserDataDir(environment, platform),
-  existsSync = fs.existsSync,
-  readdirSync = fs.readdirSync,
+async function resolveSyncToken({
+  configuration = readKakomonnConfiguration(),
+  fetchImpl = fetch,
 } = {}) {
-  const roots = [dedicatedUserDataDir, defaultChromeUserDataDir(environment, platform)];
-  const directories = new Set();
-  for (const root of roots) {
-    for (const profileDirectory of listProfileDirectories(root, {
-      existsSync,
-      readdirSync,
-    })) {
-      for (const extensionId of [TAMPERMONKEY_EXTENSION_ID, LEGACY_TAMPERMONKEY_EXTENSION_ID]) {
-        const storageDirectory = path.join(
-          profileDirectory,
-          "Local Extension Settings",
-          extensionId,
-        );
-        if (existsSync(storageDirectory)) {
-          directories.add(storageDirectory);
-        }
-      }
-    }
-  }
-  return [...directories];
-}
-
-function readDirectoryBuffers(
-  directory,
-  { readdirSync = fs.readdirSync, readFileSync = fs.readFileSync } = {},
-) {
-  const buffers = [];
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (!entry.isFile()) {
-      continue;
-    }
-    try {
-      buffers.push(readFileSync(path.join(directory, entry.name)));
-    } catch (error) {
-      if (error?.code !== "EBUSY" && error?.code !== "EACCES") {
-        throw error;
-      }
-    }
-  }
-  return buffers;
-}
-
-function scanStoredSyncTokenCandidates({
-  storageDirectories,
-  readBuffers = readDirectoryBuffers,
-} = {}) {
-  const candidates = new Set();
-  for (const storageDirectory of storageDirectories) {
-    const buffers = readBuffers(storageDirectory);
-    for (const candidate of extractSyncTokenCandidates(buffers)) {
-      candidates.add(candidate);
-    }
-  }
-  return candidates;
-}
-
-async function validateSyncToken(
-  token,
-  { fetchImpl = fetch, syncApiOrigin = DEFAULT_SYNC_API_ORIGIN } = {},
-) {
-  const response = await fetchImpl(`${syncApiOrigin}/v12/sites`, {
+  const token = requireKakomonnConfiguration(configuration, "KAKOMONN_SYNC_TOKEN");
+  assertTokenShape(token, REPOSITORY_CONFIGURATION_PATH);
+  const response = await fetchImpl(`${DEFAULT_SYNC_API_ORIGIN}/v12/sites`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000),
   });
-  await response.arrayBuffer().catch(() => null);
-  return response.status === 200;
-}
-
-function writeEnvToken(
-  envFilePath,
-  token,
-  {
-    existsSync = fs.existsSync,
-    readFileSync = fs.readFileSync,
-    writeFileSync = fs.writeFileSync,
-    renameSync = fs.renameSync,
-  } = {},
-) {
-  const current = existsSync(envFilePath) ? readFileSync(envFilePath, "utf8") : "";
-  const newline = current.includes("\r\n") ? "\r\n" : "\n";
-  const assignment = `KAKOMONN_SYNC_TOKEN=${token}`;
-  let next;
-  if (/^KAKOMONN_SYNC_TOKEN\s*=.*$/m.test(current)) {
-    next = current.replace(/^KAKOMONN_SYNC_TOKEN\s*=.*$/m, assignment);
-  } else if (current === "") {
-    next = `${assignment}${newline}`;
-  } else {
-    next = `${current}${current.endsWith("\n") ? "" : newline}${assignment}${newline}`;
+  await response.arrayBuffer();
+  if (response.status !== 200) {
+    throw new Error("KAKOMONN_SYNC_TOKEN was rejected by production");
   }
-  const temporaryPath = `${envFilePath}.tmp-${process.pid}`;
-  writeFileSync(temporaryPath, next, { encoding: "utf8", mode: 0o600 });
-  renameSync(temporaryPath, envFilePath);
-}
-
-async function resolveSyncToken({
-  configuration,
-  systemEnvironment = process.env,
-  envFilePath,
-  readConfigured = readConfiguredToken,
-  readDedicatedUserDataDir = readChromeUserDataDir,
-  discoverStorageDirectories = discoverTampermonkeyStorageDirectories,
-  scanCandidates = scanStoredSyncTokenCandidates,
-  validateToken = validateSyncToken,
-  saveToken = writeEnvToken,
-} = {}) {
-  assert.ok(envFilePath, "envFilePath is required");
-  const kakomonnConfiguration = configuration ?? readKakomonnConfiguration({ envFilePath });
-  const configured = readConfigured({
-    configuration: kakomonnConfiguration,
-    envFilePath,
-  });
-  if (configured !== null) {
-    assertTokenShape(configured.token, configured.source);
-    if (!(await validateToken(configured.token))) {
-      throw new Error(
-        `KAKOMONN_SYNC_TOKEN from ${configured.source} was rejected by production. The secret was not rotated`,
-      );
-    }
-    return configured.token;
-  }
-
-  const dedicatedUserDataDir = readDedicatedUserDataDir({
-    configuration: kakomonnConfiguration,
-    systemEnvironment,
-    envFilePath,
-  });
-  const storageDirectories = discoverStorageDirectories({
-    environment: systemEnvironment,
-    dedicatedUserDataDir,
-  });
-  const candidates = scanCandidates({ storageDirectories });
-  const validTokens = [];
-  for (const candidate of candidates) {
-    if (await validateToken(candidate)) {
-      validTokens.push(candidate);
-    }
-  }
-  const distinctValidTokens = [...new Set(validTokens)];
-  if (distinctValidTokens.length === 0) {
-    throw new Error("No production sync token was found in Chrome Tampermonkey storage");
-  }
-  if (distinctValidTokens.length > 1) {
-    throw new Error("Multiple production sync tokens were found in Chrome Tampermonkey storage");
-  }
-  saveToken(envFilePath, distinctValidTokens[0]);
-  return distinctValidTokens[0];
+  return token;
 }
 
 function chromeExecutablePath(
@@ -681,33 +492,24 @@ async function launchChromeWithCurrentUserscript({
 module.exports = {
   CURRENT_QUESTION_URL,
   DEFAULT_SYNC_API_ORIGIN,
-  LEGACY_TAMPERMONKEY_EXTENSION_ID,
   SYNC_TOKEN_KEY,
   TAMPERMONKEY_EXTENSION_ID,
   assertTokenShape,
   approveTampermonkeyChange,
   defaultChromeUserDataDir,
   defaultChromeE2EUserDataDir,
-  discoverTampermonkeyStorageDirectories,
   chromeLaunchArguments,
   connectDedicatedChrome,
-  extractSyncTokenCandidates,
   updateInstalledUserscript,
   readStoredUserscriptState,
   waitForTampermonkeyRuntime,
   isSameOrDescendantPath,
   launchChromeWithCurrentUserscript,
   launchDedicatedChrome,
-  listProfileDirectories,
   locateTampermonkeyExtension,
-  readConfiguredToken,
-  readDirectoryBuffers,
   readChromeUserDataDir,
   resolveSyncToken,
-  scanStoredSyncTokenCandidates,
   kakomonnFreeEnvironment,
   stopDedicatedChrome,
   stopDedicatedChromePowerShell,
-  validateSyncToken,
-  writeEnvToken,
 };

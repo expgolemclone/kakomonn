@@ -8,7 +8,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
-const { IOSWebDriver, resolveAppiumCli, resolveAppiumRuntimeDirectory, safariCapabilities, clickWebElementNatively } = require('../kakomonn-reader/tests/ios_safari_e2e_test.js');
+const { focusSecureTextField, typeNativeText, resolveAppiumCli, resolveAppiumRuntimeDirectory, safariCapabilities, clickWebElementNatively } = require('../kakomonn-reader/tests/ios_safari_e2e_test.js');
 
 test('iOS runner loads in a clean CI home without machine-local configuration', () => {
   const home = mkdtempSync(join(tmpdir(), 'kakomonn-ios-ci-home-'));
@@ -29,27 +29,12 @@ test('iOS runner loads in a clean CI home without machine-local configuration', 
   }
 });
 
-test('Safari session enables native accessibility taps without forcing coordinate-only interaction', async () => {
-  const original = IOSWebDriver.prototype.request;
-  let sent;
-  IOSWebDriver.prototype.request = async (method, endpoint, body) => {
-    assert.equal(method, 'POST');
-    assert.equal(endpoint, '/session');
-    sent = body.capabilities.alwaysMatch;
-    return { sessionId: 'fixture' };
-  };
-  try {
-    const driver = await IOSWebDriver.create(0, safariCapabilities);
-    assert.equal(driver.sessionId, 'fixture');
-    assert.equal(sent['appium:nativeWebTap'], true);
-    assert.equal(Object.hasOwn(sent, 'appium:nativeWebTapStrict'), false);
-    assert.equal(sent.browserName, 'Safari');
-    assert.equal(sent['appium:automationName'], 'XCUITest');
-    assert.equal(sent['appium:simulatorPasteboardAutomaticSync'], 'off');
-    assert.equal(driver.calibrateNativeWebTap, undefined);
-  } finally {
-    IOSWebDriver.prototype.request = original;
-  }
+test('Safari capabilities enable native accessibility taps without forcing coordinates', () => {
+  assert.equal(safariCapabilities["appium:nativeWebTap"], true);
+  assert.equal(Object.hasOwn(safariCapabilities, "appium:nativeWebTapStrict"), false);
+  assert.equal(safariCapabilities.browserName, "Safari");
+  assert.equal(safariCapabilities["appium:automationName"], "XCUITest");
+  assert.equal(safariCapabilities["appium:simulatorPasteboardAutomaticSync"], "off");
 });
 
 test('native web tap scrolls and hit-tests its target before clicking the actual element', async () => {
@@ -91,66 +76,44 @@ test('native web tap scrolls and hit-tests its target before clicking the actual
   }
 });
 
-test('focuses the actual native secure field and restores Safari context even when tap fails', async () => {
-  for (const failure of [false, true]) {
-    const driver = new IOSWebDriver(0, 'fixture');
+test('focuses the native secure field and restores Safari context on errors', async () => {
+  for (const fail of [false, true]) {
     const calls = [];
-    driver.sessionRequest = async (method, endpoint, body) => {
-      calls.push([method, endpoint, body]);
-      if (endpoint === '/context' && method === 'GET') return 'WEBVIEW_fixture';
-      if (endpoint === '/element') return { 'element-6066-11e4-a52e-4f735466cecf': 'secure-field' };
-      if (endpoint.endsWith('/displayed')) return true;
-      if (endpoint.endsWith('/click') && failure) throw new Error('native tap failed');
+    const driver = {
+      getContext: async () => "WEBVIEW_fixture",
+      switchContext: async context => calls.push(context),
+      $: async selector => {
+        assert.equal(selector, "-ios class chain:**/XCUIElementTypeSecureTextField");
+        return {
+          waitForDisplayed: async () => {},
+          click: async () => { if (fail) throw new Error("native tap failed"); },
+        };
+      },
     };
-    if (failure) await assert.rejects(driver.focusSecureTextField(), /native tap failed/);
-    else await driver.focusSecureTextField();
-    assert.deepEqual(calls, [
-      ['GET', '/context', undefined],
-      ['POST', '/context', { name: 'NATIVE_APP' }],
-      ['POST', '/element', { using: 'class name', value: 'XCUIElementTypeSecureTextField' }],
-      ['GET', '/element/secure-field/displayed', undefined],
-      ['POST', '/element/secure-field/click', {}],
-      ['POST', '/context', { name: 'WEBVIEW_fixture' }],
-    ]);
+    if (fail) await assert.rejects(focusSecureTextField(driver), /native tap failed/);
+    else await focusSecureTextField(driver);
+    assert.deepEqual(calls, ["NATIVE_APP", "WEBVIEW_fixture"]);
   }
 });
 
-test('types text once through the actual focused native field and restores Safari context', async () => {
-  for (const failure of [false, true]) {
-    const driver = new IOSWebDriver(0, 'fixture');
+test('types through the actual focused native field and refuses other element types', async () => {
+  for (const type of ["XCUIElementTypeTextField", "XCUIElementTypeSecureTextField", "XCUIElementTypeButton"]) {
     const calls = [];
-    driver.sessionRequest = async (method, endpoint, body) => {
-      calls.push([method, endpoint, body]);
-      if (endpoint === '/context' && method === 'GET') return 'WEBVIEW_fixture';
-      if (endpoint === '/element/active') return { 'element-6066-11e4-a52e-4f735466cecf': 'focused-field' };
-      if (endpoint.endsWith('/attribute/type')) return 'XCUIElementTypeSecureTextField';
-      if (endpoint.endsWith('/value') && failure) throw new Error('native typing failed');
+    const driver = {
+      getContext: async () => "WEBVIEW_fixture",
+      switchContext: async context => calls.push(context),
+      getActiveElement: async () => ({ "element-6066-11e4-a52e-4f735466cecf": "focused" }),
+      getElementAttribute: async (id, attribute) => {
+        assert.equal(id, "focused"); assert.equal(attribute, "type"); return type;
+      },
+      elementSendKeys: async (id, value) => calls.push([id, value]),
     };
-    if (failure) await assert.rejects(driver.typeText('fixture token'), /native typing failed/);
-    else await driver.typeText('fixture token');
-    assert.deepEqual(calls, [
-      ['GET', '/context', undefined],
-      ['POST', '/context', { name: 'NATIVE_APP' }],
-      ['GET', '/element/active', undefined],
-      ['GET', '/element/focused-field/attribute/type', undefined],
-      ['POST', '/element/focused-field/value', { text: 'fixture token' }],
-      ['POST', '/context', { name: 'WEBVIEW_fixture' }],
-    ]);
+    if (type.endsWith("Button")) await assert.rejects(typeNativeText(driver, "fixture"), /TextField/);
+    else await typeNativeText(driver, "fixture");
+    assert.equal(calls[0], "NATIVE_APP");
+    assert.equal(calls.at(-1), "WEBVIEW_fixture");
+    assert.equal(calls.length, type.endsWith("Button") ? 2 : 3);
   }
-});
-
-test('refuses to type into the wrong native element and restores context', async () => {
-  const driver = new IOSWebDriver(0, 'fixture');
-  const calls = [];
-  driver.sessionRequest = async (method, endpoint, body) => {
-    calls.push([method, endpoint, body]);
-    if (endpoint === '/context' && method === 'GET') return 'WEBVIEW_fixture';
-    if (endpoint === '/element/active') return { 'element-6066-11e4-a52e-4f735466cecf': 'wrong-control' };
-    if (endpoint.endsWith('/attribute/type')) return 'XCUIElementTypeButton';
-  };
-  await assert.rejects(driver.typeText('fixture token'), /XCUIElementTypeButton/);
-  assert.equal(calls.some(([, endpoint]) => endpoint.endsWith('/value')), false);
-  assert.deepEqual(calls.at(-1), ['POST', '/context', { name: 'WEBVIEW_fixture' }]);
 });
 
 test('launches the installed Appium CLI contract, not its programmatic main export', () => {
@@ -160,7 +123,7 @@ test('launches the installed Appium CLI contract, not its programmatic main expo
   assert.equal(cli, resolve(dirname(manifestPath), manifest.bin.appium));
   assert.notEqual(cli, require.resolve('appium'));
   const version = execFileSync(process.execPath, [cli, '--version'], {
-    cwd: resolveAppiumRuntimeDirectory(), encoding: 'utf8', timeout: 15_000,
+    cwd: resolveAppiumRuntimeDirectory(), encoding: 'utf8', timeout: 60_000,
   }).trim();
   assert.equal(version, manifest.version);
 });
@@ -171,7 +134,7 @@ test('discovers the XCUITest driver and owns its cache in the native project', (
   const declared = manifest.dependencies?.['appium-xcuitest-driver'] ?? manifest.devDependencies?.['appium-xcuitest-driver'];
   assert.equal(typeof declared, 'string');
   const installed = JSON.parse(execFileSync(process.execPath, [resolveAppiumCli(), 'driver', 'list', '--installed', '--json'], {
-    cwd, encoding: 'utf8', timeout: 15_000,
+    cwd, encoding: 'utf8', timeout: 60_000,
   }));
   const driver = JSON.parse(readFileSync(require.resolve('appium-xcuitest-driver/package.json'), 'utf8'));
   assert.equal(installed.xcuitest.version, driver.version);

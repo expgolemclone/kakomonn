@@ -353,29 +353,14 @@ export function installLifecycleController(app) {
     }
   }
 
-  Object.defineProperties(app, {
-    checkForNewAnswerResult: { enumerable: false, get: () => checkForNewAnswerResult },
-    processAnswerStateChange: { enumerable: false, get: () => processAnswerStateChange },
-    attachAnswerStateObserver: { enumerable: false, get: () => attachAnswerStateObserver },
-    observeFrameChanges: { enumerable: false, get: () => observeFrameChanges },
-    normalizeControlLabel: { enumerable: false, get: () => normalizeControlLabel },
-    isNextQuestionLabel: { enumerable: false, get: () => isNextQuestionLabel },
-    getNextQuestionURL: { enumerable: false, get: () => getNextQuestionURL },
-    suppressNextQuestionControl: { enumerable: false, get: () => suppressNextQuestionControl },
-    suppressNextQuestionControlsIn: {
-      enumerable: false,
-      get: () => suppressNextQuestionControlsIn,
-    },
-    suppressNextQuestionControls: { enumerable: false, get: () => suppressNextQuestionControls },
-    clearTimeLimit: { enumerable: false, get: () => clearTimeLimit },
-    renderTimeLimit: { enumerable: false, get: () => renderTimeLimit },
-    startTimeLimit: { enumerable: false, get: () => startTimeLimit },
-    synchronizeTimeLimitPhase: { enumerable: false, get: () => synchronizeTimeLimitPhase },
-    expireTimeLimit: { enumerable: false, get: () => expireTimeLimit },
-    clearFrameProblemScrollTimers: { enumerable: false, get: () => clearFrameProblemScrollTimers },
-    resetFrameScrollToTop: { enumerable: false, get: () => resetFrameScrollToTop },
-    findProblemHeading: { enumerable: false, get: () => findProblemHeading },
-    scrollFrameToProblemHeading: { enumerable: false, get: () => scrollFrameToProblemHeading },
-    scheduleFrameProblemScroll: { enumerable: false, get: () => scheduleFrameProblemScroll },
+  Object.assign(app, {
+    observeFrameChanges,
+    getNextQuestionURL,
+    suppressNextQuestionControls,
+    clearTimeLimit,
+    synchronizeTimeLimitPhase,
+    clearFrameProblemScrollTimers,
+    resetFrameScrollToTop,
+    scheduleFrameProblemScroll,
   });
 }

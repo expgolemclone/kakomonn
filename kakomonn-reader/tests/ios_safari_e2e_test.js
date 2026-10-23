@@ -1,10 +1,11 @@
 const assert = require("node:assert/strict");
+const { remote } = require("webdriverio");
 const { spawn, execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
-const { createSyncMockConfiguration, installSyncMockInWindow } = require("./sync_mock");
+const { createSyncFixtureConfiguration, installSyncFixtureInWindow } = require("./support/sync-fixture.cjs");
 const {
   assertMarkdownCopy,
   assertMarkdownExplanationContents,
@@ -61,302 +62,28 @@ const safariCapabilities = Object.freeze({
   "appium:webviewConnectTimeout": 60_000,
 });
 
-class IOSWebElement {
-  constructor(driver, reference) {
-    this.driver = driver;
-    this.reference = reference;
-  }
-
-  async click() {
-    await this.driver.sessionRequest("POST", `/element/${encodeURIComponent(this.id)}/click`, {});
-  }
-
-  async getText() {
-    return this.driver.sessionRequest("GET", `/element/${encodeURIComponent(this.id)}/text`);
-  }
-
-  async isDisplayed() {
-    return this.driver.sessionRequest("GET", `/element/${encodeURIComponent(this.id)}/displayed`);
-  }
-
-  async isSelected() {
-    return this.driver.sessionRequest("GET", `/element/${encodeURIComponent(this.id)}/selected`);
-  }
-
-  async waitForDisplayed({ timeout = testTimeout } = {}) {
-    await this.driver.waitUntil(() => this.isDisplayed(), {
-      interval: 250,
-      timeout,
-      timeoutMsg: `Element was not displayed: ${this.id}`,
-    });
-  }
-
-  get id() {
-    const id = this.reference?.[webDriverElementKey];
-    assert.equal(typeof id, "string", "Invalid WebDriver element reference");
-    return id;
+async function focusSecureTextField(driver) {
+  const context = await driver.getContext();
+  await driver.switchContext("NATIVE_APP");
+  try {
+    const field = await driver.$("-ios class chain:**/XCUIElementTypeSecureTextField");
+    await field.waitForDisplayed();
+    await field.click();
+  } finally {
+    await driver.switchContext(context);
   }
 }
 
-class IOSWebDriver {
-  constructor(port, sessionId = null) {
-    this.port = port;
-    this.sessionId = sessionId;
-  }
-
-  static async create(port, capabilities) {
-    const client = new IOSWebDriver(port);
-    const session = await client.request(
-      "POST",
-      "/session",
-      {
-        capabilities: {
-          alwaysMatch: capabilities,
-          firstMatch: [{}],
-        },
-      },
-      1_200_000,
-    );
-    assert.equal(typeof session?.sessionId, "string");
-    client.sessionId = session.sessionId;
-    return client;
-  }
-
-  async $(selector) {
-    return this.findElement("css selector", selector);
-  }
-
-  async $$(selector) {
-    const references = await this.sessionRequest("POST", "/elements", {
-      using: "css selector",
-      value: selector,
-    });
-    return references.map((reference) => new IOSWebElement(this, reference));
-  }
-
-  async deleteSession() {
-    if (this.sessionId === null) {
-      return;
-    }
-    const sessionId = this.sessionId;
-    this.sessionId = null;
-    await this.request("DELETE", `/session/${encodeURIComponent(sessionId)}`);
-  }
-
-  async findElement(using, value) {
-    const reference = await this.sessionRequest("POST", "/element", {
-      using,
-      value,
-    });
-    return new IOSWebElement(this, reference);
-  }
-
-  async getContext() {
-    return this.sessionRequest("GET", "/context");
-  }
-
-  async getContexts() {
-    return this.sessionRequest("GET", "/contexts");
-  }
-
-  async execute(script, ...args) {
-    const source =
-      typeof script === "function"
-        ? `return (${script.toString()}).apply(null, arguments)`
-        : script;
-    return this.sessionRequest("POST", "/execute/sync", {
-      args,
-      script: source,
-    });
-  }
-
-  async executeScript(script, args) {
-    return this.sessionRequest("POST", "/execute/sync", { args, script });
-  }
-
-  async focusSecureTextField() {
-    const webContext = await this.getContext();
-    await this.switchToContext("NATIVE_APP");
-    try {
-      const field = await this.findElement("class name", "XCUIElementTypeSecureTextField");
-      await field.waitForDisplayed();
-      await field.click();
-    } finally {
-      await this.switchToContext(webContext);
-    }
-  }
-
-  async getLogs(type) {
-    return this.sessionRequest("POST", "/log", { type });
-  }
-
-  async getPageSource() {
-    return this.sessionRequest("GET", "/source");
-  }
-
-  async getUrl() {
-    return this.sessionRequest("GET", "/url");
-  }
-
-  async navigateTo(url) {
-    await this.sessionRequest("POST", "/url", { url });
-  }
-
-  async navigateForward() {
-    await this.sessionRequest("POST", "/forward", {});
-  }
-
-  async request(method, endpoint, body, timeout = 180_000) {
-    const requestBody = body === undefined ? null : JSON.stringify(body);
-    const response = await new Promise((resolve, reject) => {
-      const request = http.request(
-        {
-          host: "127.0.0.1",
-          port: this.port,
-          path: endpoint,
-          method,
-          headers:
-            requestBody === null
-              ? undefined
-              : {
-                  "content-length": Buffer.byteLength(requestBody),
-                  "content-type": "application/json",
-                },
-        },
-        (incoming) => {
-          const chunks = [];
-          incoming.on("data", (chunk) => chunks.push(chunk));
-          incoming.once("error", reject);
-          incoming.once("end", () => {
-            resolve({
-              body: Buffer.concat(chunks).toString("utf8"),
-              statusCode: incoming.statusCode,
-              statusMessage: incoming.statusMessage,
-            });
-          });
-        },
-      );
-      request.once("error", reject);
-      request.setTimeout(timeout, () => {
-        request.destroy(
-          new Error(`WebDriver command timed out after ${timeout}ms for ${method} ${endpoint}`),
-        );
-      });
-      if (requestBody !== null) {
-        request.write(requestBody);
-      }
-      request.end();
-    });
-    const responseText = response.body;
-    let payload;
-    try {
-      payload = JSON.parse(responseText);
-    } catch {
-      throw new Error(`WebDriver returned invalid JSON for ${method} ${endpoint}: ${responseText}`);
-    }
-    if (
-      response.statusCode === undefined ||
-      response.statusCode < 200 ||
-      response.statusCode >= 300 ||
-      payload.value?.error
-    ) {
-      const message =
-        payload.value?.message ??
-        payload.value?.error ??
-        `${response.statusCode ?? "unknown"} ${response.statusMessage ?? ""}`.trim();
-      const error = new Error(`WebDriver command failed for ${method} ${endpoint}: ${message}`);
-      if (typeof payload.value?.stacktrace === "string") {
-        error.stack += `\n${payload.value.stacktrace}`;
-      }
-      throw error;
-    }
-    return payload.value;
-  }
-
-  async saveScreenshot(filePath) {
-    const screenshot = await this.sessionRequest("GET", "/screenshot");
-    fs.writeFileSync(filePath, Buffer.from(screenshot, "base64"));
-  }
-
-  async getClipboardText() {
-    const content = await this.executeScript("mobile: getClipboard", [
-      { contentType: "plaintext" },
-    ]);
-    assert.equal(typeof content, "string");
-    return Buffer.from(content, "base64").toString("utf8");
-  }
-
-  async setClipboardText(content) {
-    await this.executeScript("mobile: setClipboard", [
-      {
-        content: Buffer.from(content, "utf8").toString("base64"),
-        contentType: "plaintext",
-      },
-    ]);
-  }
-
-  async sessionRequest(method, endpoint, body, timeout) {
-    assert.notEqual(this.sessionId, null, "WebDriver session is not active");
-    return this.request(
-      method,
-      `/session/${encodeURIComponent(this.sessionId)}${endpoint}`,
-      body,
-      timeout,
-    );
-  }
-
-  async typeText(value) {
-    assert.equal(typeof value, 'string');
-    const context = await this.getContext();
-    await this.switchToContext('NATIVE_APP');
-    try {
-      // mobile: keys models individual hardware keys, each with XCTest idle
-      // waits. Text belongs to the focused native input's W3C value command.
-      const element = await this.sessionRequest('GET', '/element/active');
-      const id = element[webDriverElementKey];
-      assert.equal(typeof id, 'string');
-      const endpoint = `/element/${encodeURIComponent(id)}`;
-      const type = await this.sessionRequest('GET', `${endpoint}/attribute/type`);
-      assert.match(type, /^XCUIElementType(?:Secure)?TextField$/);
-      await this.sessionRequest('POST', `${endpoint}/value`, { text: value });
-    } finally {
-      await this.switchToContext(context);
-    }
-  }
-
-  async switchToFrame(element) {
-    await this.sessionRequest("POST", "/frame", { id: element.reference });
-  }
-
-  async switchToTopFrame() {
-    await this.sessionRequest("POST", "/frame", { id: null });
-  }
-
-  async switchToContext(name) {
-    await this.sessionRequest("POST", "/context", { name });
-  }
-
-  async waitUntil(
-    condition,
-    { interval = 250, timeout = testTimeout, timeoutMsg = "Condition timed out" },
-  ) {
-    const deadline = Date.now() + timeout;
-    let lastError = null;
-    while (Date.now() < deadline) {
-      try {
-        if (await condition()) {
-          return;
-        }
-      } catch (error) {
-        lastError = error;
-      }
-      await new Promise((resolve) => setTimeout(resolve, interval));
-    }
-    const error = new Error(timeoutMsg);
-    if (lastError !== null) {
-      error.cause = lastError;
-    }
-    throw error;
+async function typeNativeText(driver, value) {
+  const context = await driver.getContext();
+  await driver.switchContext("NATIVE_APP");
+  try {
+    const reference = await driver.getActiveElement();
+    const type = await driver.getElementAttribute(reference[webDriverElementKey], "type");
+    assert.match(type, /^XCUIElementType(?:Secure)?TextField$/);
+    await driver.elementSendKeys(reference[webDriverElementKey], value);
+  } finally {
+    await driver.switchContext(context);
   }
 }
 
@@ -605,12 +332,12 @@ async function prepareSafariInitialPage(driver) {
     if (!showsToolbarTip) {
       return;
     }
-    const closeButton = await driver.findElement("accessibility id", "xmark.circle.fill");
+    const closeButton = await driver.$("~xmark.circle.fill");
     await closeButton.waitForDisplayed();
     await closeButton.click();
   };
 
-  await driver.switchToContext("NATIVE_APP");
+  await driver.switchContext("NATIVE_APP");
   try {
     const nativeSource = await driver.getPageSource();
     assert.match(nativeSource, /width="402" height="874"/);
@@ -625,7 +352,7 @@ async function prepareSafariInitialPage(driver) {
     // The loaded tab is authoritative and does not need onboarding dismissal.
     if (!showsLoadedPage && showsStartPageOnboarding) {
       assert.equal(showsStartPage, true);
-      const closeButton = await driver.findElement("accessibility id", "close");
+      const closeButton = await driver.$("~close");
       await closeButton.waitForDisplayed();
       await closeButton.click();
     } else {
@@ -636,7 +363,7 @@ async function prepareSafariInitialPage(driver) {
       );
     }
   } finally {
-    await driver.switchToContext(webContext);
+    await driver.switchContext(webContext);
   }
   await driver.waitUntil(() => driver.getUrl().then((url) => url === MARKDOWN_QUESTION_URL), {
     interval: 250,
@@ -644,7 +371,7 @@ async function prepareSafariInitialPage(driver) {
     timeoutMsg: "Safari did not load the configured initial URL",
   });
 
-  await driver.switchToContext("NATIVE_APP");
+  await driver.switchContext("NATIVE_APP");
   try {
     const loadedNativeSource = await driver.getPageSource();
     fs.writeFileSync(safariNativeSourcePath, loadedNativeSource, "utf8");
@@ -652,7 +379,7 @@ async function prepareSafariInitialPage(driver) {
     assert.match(loadedNativeSource, /name="TabDocument[^"]*IsPageLoaded=true/);
     await closeSafariToolbarTip(loadedNativeSource);
   } finally {
-    await driver.switchToContext(webContext);
+    await driver.switchContext(webContext);
   }
 }
 
@@ -681,12 +408,12 @@ async function installReaderInCurrentDocument(driver, script, syncOptions) {
     });
   });
 
-  const syncConfiguration = createSyncMockConfiguration({
+  const syncConfiguration = createSyncFixtureConfiguration({
     nextQuestionId: new URL(nextQuestionURL).pathname.split("/").at(-1),
     ...syncOptions,
   });
   await driver.execute(
-    `(${installSyncMockInWindow.toString()})(${JSON.stringify(syncConfiguration)});`,
+    `(${installSyncFixtureInWindow.toString()})(${JSON.stringify(syncConfiguration)});`,
   );
   await driver.execute(
     (source, sourceURL) => {
@@ -799,7 +526,7 @@ async function readQuestionContent(driver) {
 }
 
 async function switchToReaderFrame(driver) {
-  await driver.switchToTopFrame();
+  await driver.switchToFrame(null);
   const readerFrame = await driver.$("#kakomonn-reader-frame");
   await driver.switchToFrame(readerFrame);
 }
@@ -882,7 +609,7 @@ async function dispatchNextQuestionSwipe(driver) {
   assert.equal(result.touchEventConstructor, "function");
   assert.equal(result.dispatchResult, false);
   assert.equal(result.endDefaultPrevented, true);
-  await driver.switchToTopFrame();
+  await driver.switchToFrame(null);
 }
 
 async function readExplanationContents(driver) {
@@ -1012,7 +739,12 @@ async function runTest() {
   try {
     const appium = await startAppium();
     appiumProcess = appium.appiumProcess;
-    driver = await IOSWebDriver.create(appium.port, safariCapabilities);
+    driver = await remote({
+      hostname: "127.0.0.1", port: appium.port, path: "/",
+      capabilities: safariCapabilities, logLevel: "error",
+      connectionRetryTimeout: 1_200_000, connectionRetryCount: 0,
+      waitforTimeout: testTimeout, waitforInterval: 250,
+    });
 
     await prepareSafariInitialPage(driver);
     await waitForElement(driver, "#send_exam_btn");
@@ -1078,8 +810,8 @@ async function runTest() {
 
     const historyLengthBefore = await driver.execute(() => history.length);
     const clipboardNonce = `kakomonn-ios-copy-before-${Date.now()}`;
-    await driver.setClipboardText(clipboardNonce);
-    assert.equal(await driver.getClipboardText(), clipboardNonce);
+    await driver.execute("mobile: setClipboard", { content: Buffer.from(clipboardNonce, "utf8").toString("base64"), contentType: "plaintext" });
+    assert.equal(await driver.execute("mobile: getClipboard", { contentType: "plaintext" }).then(value => Buffer.from(value, "base64").toString("utf8")), clipboardNonce);
     await switchToReaderFrame(driver);
     await waitForElement(driver, "#send_exam_btn");
     await waitForElementPresent(driver, "#kakomonn-reader-dark-mode");
@@ -1106,13 +838,13 @@ async function runTest() {
     assertMarkdownExplanationContents(explanationContents);
     assert.deepEqual(explanationImageURLs, MARKDOWN_EXPLANATION_IMAGE_URLS);
 
-    await driver.switchToTopFrame();
-    await driver.waitUntil(async () => (await driver.getClipboardText()) !== clipboardNonce, {
+    await driver.switchToFrame(null);
+    await driver.waitUntil(async () => (await driver.execute("mobile: getClipboard", { contentType: "plaintext" }).then(value => Buffer.from(value, "base64").toString("utf8"))) !== clipboardNonce, {
       interval: 250,
       timeout: 30_000,
       timeoutMsg: "The answer was not copied automatically",
     });
-    const copiedMarkdown = (await driver.getClipboardText()).replace(/\r\n/g, "\n");
+    const copiedMarkdown = (await driver.execute("mobile: getClipboard", { contentType: "plaintext" }).then(value => Buffer.from(value, "base64").toString("utf8"))).replace(/\r\n/g, "\n");
     assert.notEqual(copiedMarkdown, clipboardNonce);
     assertMarkdownCopy({
       answerSummary: MARKDOWN_INCORRECT_ANSWER_SUMMARY,
@@ -1122,13 +854,13 @@ async function runTest() {
       explanationSegments,
       questionText,
     });
-    assert.deepEqual(await driver.execute(() => window.__syncMock.clipboardWrites), []);
+    assert.deepEqual(await driver.execute(() => window.__syncFixture.clipboardWrites), []);
 
     await driver.waitUntil(
       () =>
         driver.execute(
           (previousLength) =>
-            window.__syncMock.attemptCount === 1 &&
+            window.__syncFixture.attemptCount === 1 &&
             history.length === previousLength &&
             history.state?.entryType === "current",
           historyLengthBefore,
@@ -1158,7 +890,7 @@ async function runTest() {
     assert.equal(
       await driver.execute(
         () =>
-          window.__syncMock.calls.filter(
+          window.__syncFixture.calls.filter(
             (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
           ).length,
       ),
@@ -1175,7 +907,7 @@ async function runTest() {
     }));
     assert.deepEqual(readerDiagnostics, { errors: [], rejections: [] });
 
-    await driver.navigateTo(correctQuestionURL);
+    await driver.url(correctQuestionURL);
     await waitForElement(driver, "#send_exam_btn");
     await installReader(driver, script);
     await driver.waitUntil(
@@ -1191,10 +923,10 @@ async function runTest() {
     );
     await clickWebElementNatively(driver, "#kakomonn-reader-error-close");
     const correctClipboardNonce = `kakomonn-ios-correct-copy-before-${Date.now()}`;
-    await driver.setClipboardText(correctClipboardNonce);
+    await driver.execute("mobile: setClipboard", { content: Buffer.from(correctClipboardNonce, "utf8").toString("base64"), contentType: "plaintext" });
     await switchToReaderFrame(driver);
     await submitAnswer(driver, correctAnswerText);
-    await driver.switchToTopFrame();
+    await driver.switchToFrame(null);
     await driver.waitUntil(
       () =>
         driver.execute(
@@ -1209,14 +941,14 @@ async function runTest() {
         timeoutMsg: "The correct answer did not advance automatically",
       },
     );
-    await driver.waitUntil(async () => (await driver.getClipboardText()) !== correctClipboardNonce, {
+    await driver.waitUntil(async () => (await driver.execute("mobile: getClipboard", { contentType: "plaintext" }).then(value => Buffer.from(value, "base64").toString("utf8"))) !== correctClipboardNonce, {
       interval: 250,
       timeout: 30_000,
       timeoutMsg: "The correct answer was not copied automatically",
     });
-    assert.equal(await driver.execute(() => window.__syncMock.attemptCount), 1);
+    assert.equal(await driver.execute(() => window.__syncFixture.attemptCount), 1);
 
-    await driver.navigateTo(nextQuestionOpenURL);
+    await driver.url(nextQuestionOpenURL);
     await waitForElement(driver, "#open-bridge");
     await installReader(driver, script);
     await driver.waitUntil(() => driver.getUrl().then((url) => url === nextQuestionURL), {
@@ -1225,7 +957,7 @@ async function runTest() {
       timeoutMsg: "The production /open bridge did not open the next question",
     });
 
-    await driver.navigateTo(nextQuestionLauncherURL);
+    await driver.url(nextQuestionLauncherURL);
     const launcherViewport = await readNativeWebTapViewport(driver);
     await driver.execute(() => {
       window.__launcherDocumentSentinel = "same-document";
@@ -1276,12 +1008,12 @@ async function runTest() {
     const syncSettingsViewport = await readNativeWebTapViewport(driver);
     // WebKit exposes a password input as a native SecureTextField; the
     // Appium DOM marker is not reflected in that field's accessibility label.
-    await driver.focusSecureTextField();
+    await focusSecureTextField(driver);
     await driver.waitUntil(
       () => driver.execute(() => document.activeElement?.id === "kakomonn-reader-sync-token"),
       { interval: 100, timeout: 10_000, timeoutMsg: "Native tap did not focus the sync token input" },
     );
-    await driver.typeText("test-sync-token");
+    await typeNativeText(driver, "test-sync-token");
     assert.equal(
       await driver.execute(() => document.querySelector("#kakomonn-reader-sync-token").value),
       "test-sync-token",
@@ -1344,7 +1076,7 @@ async function runTest() {
   }
 }
 
-module.exports = { IOSWebDriver, resolveAppiumCli, resolveAppiumRuntimeDirectory, safariCapabilities, clickWebElementNatively };
+module.exports = { focusSecureTextField, typeNativeText, resolveAppiumCli, resolveAppiumRuntimeDirectory, safariCapabilities, clickWebElementNatively };
 
 if (require.main === module) {
   runTest().then(

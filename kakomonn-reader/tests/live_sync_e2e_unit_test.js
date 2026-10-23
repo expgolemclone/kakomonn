@@ -56,20 +56,14 @@ test('propagates production bootstrap failures without opening a direct question
   await assert.rejects(openLaunchedQuestion(context, async () => { throw new Error('bootstrap failed'); }), /bootstrap failed/);
 });
 const {
-  SYNC_TOKEN_KEY,
-  LEGACY_TAMPERMONKEY_EXTENSION_ID,
   TAMPERMONKEY_EXTENSION_ID,
   chromeLaunchArguments,
-  discoverTampermonkeyStorageDirectories,
-  extractSyncTokenCandidates,
   kakomonnFreeEnvironment,
   locateTampermonkeyExtension,
-  readConfiguredToken,
   readChromeUserDataDir,
   resolveSyncToken,
   stopDedicatedChrome,
   stopDedicatedChromePowerShell,
-  writeEnvToken,
 } = require("./support/chrome_tampermonkey");
 
 test('owns and disposes the live API fixture on success and scenario failure', async () => {
@@ -200,66 +194,26 @@ test("extracts exactly one generated build fingerprint", () => {
   );
 });
 
-test("reads only the token supplied by the repository env configuration", () => {
-  const envToken = "b".repeat(64);
-  assert.deepEqual(
-    readConfiguredToken({
-      configuration: { KAKOMONN_SYNC_TOKEN: envToken },
-      envFilePath: "C:\\workspace\\kakomonn\\.env",
-    }),
-    { source: "C:\\workspace\\kakomonn\\.env", token: envToken },
-  );
-});
-
-test("reads quoted and unquoted tokens from the ignored env file", () => {
-  const token = "c".repeat(64);
-  for (const value of [token, `"${token}"`, `'${token}'`]) {
-    assert.deepEqual(
-      readConfiguredToken({
-        configuration: undefined,
-        envFilePath: "C:\\workspace\\kakomonn\\.env",
-        existsSync: () => true,
-        readFileSync: () => `OTHER=value\nKAKOMONN_SYNC_TOKEN=${value}\n`,
+test("live state verification rejects the same malformed states as Reader", async () => {
+  const { createSyncFixtureConfiguration } = require("./support/sync-fixture.cjs");
+  const baseline = createSyncFixtureConfiguration().state;
+  for (const change of [
+    state => { delete state.catalog.generation; },
+    state => { state.today = "2026-02-30"; },
+    state => { state.learningMetrics.todayAttemptedQuestionCount = 1; },
+    state => { state.unexpected = true; },
+  ]) {
+    const state = structuredClone(baseline);
+    change(state);
+    let disposed = false;
+    await assert.rejects(requestSyncState({
+      get: async () => ({
+        status: () => 200, json: async () => state,
+        dispose: async () => { disposed = true; },
       }),
-      { source: "C:\\workspace\\kakomonn\\.env", token },
-    );
+    }, "fixture-token"), assert.AssertionError);
+    assert.equal(disposed, true);
   }
-});
-
-test("extracts only 64-character hexadecimal candidates from relevant storage", () => {
-  const token = "d".repeat(64);
-  const unrelatedHash = "e".repeat(64);
-  assert.deepEqual(
-    extractSyncTokenCandidates([Buffer.from(`${SYNC_TOKEN_KEY}\0${token}\0${unrelatedHash}`)]),
-    new Set([token, unrelatedHash]),
-  );
-  assert.deepEqual(extractSyncTokenCandidates([Buffer.from(token)]), new Set());
-});
-
-test("discovers token storage only in dedicated and standard Chrome profiles", () => {
-  const localAppData = "C:\\Users\\tester\\AppData\\Local";
-  const dedicated = path.win32.join(localAppData, "kakomonn-chrome-e2e");
-  const standard = path.win32.join(localAppData, "Google", "Chrome", "User Data");
-  const roots = [];
-  const directories = discoverTampermonkeyStorageDirectories({
-    dedicatedUserDataDir: dedicated,
-    environment: { LOCALAPPDATA: localAppData },
-    existsSync: () => true,
-    platform: "win32",
-    readdirSync: (directory) => {
-      roots.push(directory);
-      return [{ isDirectory: () => true, name: "Default" }];
-    },
-  });
-  assert.deepEqual(roots, [dedicated, standard]);
-  assert.deepEqual(
-    directories,
-    [dedicated, standard].flatMap((root) =>
-      [TAMPERMONKEY_EXTENSION_ID, LEGACY_TAMPERMONKEY_EXTENSION_ID].map((extensionId) =>
-        path.win32.join(root, "Default", "Local Extension Settings", extensionId),
-      ),
-    ),
-  );
 });
 
 test("locates Tampermonkey Beta when the dedicated profile has other extensions", () => {
@@ -286,130 +240,26 @@ test("locates Tampermonkey Beta when the dedicated profile has other extensions"
   );
 });
 
-test("validates a configured token without scanning browser storage", async () => {
+test("requires an explicit token and never scans or writes browser storage", async () => {
+  let calls = 0;
+  await assert.rejects(resolveSyncToken({
+    configuration: {}, fetchImpl: async () => { calls += 1; },
+  }), /is not set/);
+  assert.equal(calls, 0);
   const token = "f".repeat(64);
-  let scanned = false;
-  assert.equal(
-    await resolveSyncToken({
-      envFilePath: "C:\\workspace\\kakomonn\\.env",
-      readConfigured: () => ({ source: "test", token }),
-      discoverStorageDirectories: () => {
-        scanned = true;
-        return [];
-      },
-      validateToken: async (candidate) => candidate === token,
-    }),
-    token,
-  );
-  assert.equal(scanned, false);
-});
-
-test("does not replace a configured token rejected by production", async () => {
-  const token = "1".repeat(64);
-  let scanned = false;
-  await assert.rejects(
-    resolveSyncToken({
-      envFilePath: "C:\\workspace\\kakomonn\\.env",
-      readConfigured: () => ({ source: "test", token }),
-      discoverStorageDirectories: () => {
-        scanned = true;
-        return [];
-      },
-      validateToken: async () => false,
-    }),
-    (error) => {
-      assert.match(error.message, /was rejected by production/);
-      assert.equal(error.message.includes(token), false);
-      return true;
+  assert.equal(await resolveSyncToken({
+    configuration: { KAKOMONN_SYNC_TOKEN: token },
+    fetchImpl: async (url, options) => {
+      assert.equal(url, "https://kakomonn-sync.kakomonn.workers.dev/v12/sites");
+      assert.equal(options.headers.Authorization, `Bearer ${token}`);
+      calls += 1;
+      return { status: 200, arrayBuffer: async () => new ArrayBuffer(0) };
     },
-  );
-  assert.equal(scanned, false);
-});
-
-test("saves the one production-valid browser token", async () => {
-  const validToken = "2".repeat(64);
-  const invalidToken = "3".repeat(64);
-  let saved = null;
-  const systemEnvironment = {
-    KAKOMONN_SYNC_TOKEN: "stale-process-token",
-  };
-  assert.equal(
-    await resolveSyncToken({
-      systemEnvironment,
-      envFilePath: "C:\\workspace\\kakomonn\\.env",
-      readConfigured: () => null,
-      readDedicatedUserDataDir: () => "dedicated-profile",
-      discoverStorageDirectories: ({ dedicatedUserDataDir }) => {
-        assert.equal(dedicatedUserDataDir, "dedicated-profile");
-        return ["dedicated-chrome-storage", "standard-chrome-storage"];
-      },
-      scanCandidates: ({ storageDirectories }) => {
-        assert.deepEqual(storageDirectories, [
-          "dedicated-chrome-storage",
-          "standard-chrome-storage",
-        ]);
-        return new Set([invalidToken, validToken]);
-      },
-      validateToken: async (candidate) => candidate === validToken,
-      saveToken: (filePath, token) => {
-        saved = { filePath, token };
-      },
-    }),
-    validToken,
-  );
-  assert.deepEqual(saved, {
-    filePath: "C:\\workspace\\kakomonn\\.env",
-    token: validToken,
-  });
-  assert.equal(systemEnvironment.KAKOMONN_SYNC_TOKEN, "stale-process-token");
-});
-
-test("rejects missing or conflicting production-valid browser tokens", async () => {
-  const firstToken = "4".repeat(64);
-  const secondToken = "5".repeat(64);
-  const baseOptions = {
-    envFilePath: "C:\\workspace\\kakomonn\\.env",
-    readConfigured: () => null,
-    readDedicatedUserDataDir: () => "dedicated-profile",
-    discoverStorageDirectories: () => ["storage"],
-  };
-  await assert.rejects(
-    resolveSyncToken({
-      ...baseOptions,
-      scanCandidates: () => new Set([firstToken]),
-      validateToken: async () => false,
-    }),
-    /No production sync token/,
-  );
-  await assert.rejects(
-    resolveSyncToken({
-      ...baseOptions,
-      scanCandidates: () => new Set([firstToken, secondToken]),
-      validateToken: async () => true,
-    }),
-    /Multiple production sync tokens/,
-  );
-});
-
-test("updates only the token assignment in the ignored env file", () => {
-  const oldToken = "6".repeat(64);
-  const newToken = "7".repeat(64);
-  const files = new Map([
-    ["C:\\workspace\\kakomonn\\.env", `OTHER=value\r\nKAKOMONN_SYNC_TOKEN=${oldToken}\r\n`],
-  ]);
-  writeEnvToken("C:\\workspace\\kakomonn\\.env", newToken, {
-    existsSync: (filePath) => files.has(filePath),
-    readFileSync: (filePath) => files.get(filePath),
-    writeFileSync: (filePath, contents) => files.set(filePath, contents),
-    renameSync: (source, destination) => {
-      files.set(destination, files.get(source));
-      files.delete(source);
-    },
-  });
-  assert.equal(
-    files.get("C:\\workspace\\kakomonn\\.env"),
-    `OTHER=value\r\nKAKOMONN_SYNC_TOKEN=${newToken}\r\n`,
-  );
+  }), token);
+  await assert.rejects(resolveSyncToken({
+    configuration: { KAKOMONN_SYNC_TOKEN: token },
+    fetchImpl: async () => ({ status: 401, arrayBuffer: async () => new ArrayBuffer(0) }),
+  }), /rejected by production/);
 });
 
 test("defaults to the dedicated Chrome E2E profile", () => {
@@ -425,16 +275,16 @@ test("defaults to the dedicated Chrome E2E profile", () => {
   );
 });
 
-test("reads the Chrome E2E profile from the ignored env file", () => {
+test("reads the Chrome E2E profile from the ignored TOML configuration", () => {
   const localAppData = "C:\\Users\\tester\\AppData\\Local";
-  const envFilePath = "C:\\workspace\\kakomonn\\.env";
+  const configurationFilePath = "C:\\workspace\\kakomonn\\kakomonn.toml";
   const envProfile = "C:\\profiles\\from-env-file";
   const processProfile = "C:\\profiles\\from-process";
   const readOptions = {
-    envFilePath,
+    configurationFilePath,
     existsSync: () => true,
     platform: "win32",
-    readFileSync: () => `OTHER=value\nKAKOMONN_CHROME_USER_DATA_DIR="${envProfile}"\n`,
+    readFileSync: () => `KAKOMONN_CHROME_USER_DATA_DIR = ${JSON.stringify(envProfile)}\n`,
   };
   assert.equal(
     readChromeUserDataDir({

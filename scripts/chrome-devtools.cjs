@@ -1,3 +1,4 @@
+const { chromium } = require("playwright");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -96,275 +97,6 @@ async function readJsonResponse(response, label) {
   }
 }
 
-async function createPageTarget(port, url = "about:blank", { fetchImpl = fetch } = {}) {
-  const response = await fetchImpl(devToolsURL(port, `/json/new?${encodeURIComponent(url)}`), {
-    method: "PUT",
-    signal: AbortSignal.timeout(DEVTOOLS_TIMEOUT_MS),
-  });
-  const target = await readJsonResponse(response, "Chrome page creation");
-  if (
-    target?.type !== "page" ||
-    typeof target.id !== "string" ||
-    typeof target.webSocketDebuggerUrl !== "string"
-  ) {
-    throw new Error("Chrome page creation returned an invalid target");
-  }
-  return target;
-}
-
-async function closePageTarget(port, targetId, { fetchImpl = fetch } = {}) {
-  const response = await fetchImpl(
-    devToolsURL(port, `/json/close/${encodeURIComponent(targetId)}`),
-    { signal: AbortSignal.timeout(DEVTOOLS_TIMEOUT_MS) },
-  );
-  if (!response.ok) {
-    await response.arrayBuffer().catch(() => null);
-    throw new Error(`Chrome page close failed with HTTP ${response.status}`);
-  }
-}
-
-class DevToolsSession {
-  constructor(webSocket, timeoutMs) {
-    this.webSocket = webSocket;
-    this.timeoutMs = timeoutMs;
-    this.nextId = 1;
-    this.pending = new Map();
-    this.listeners = new Map();
-    webSocket.addEventListener("message", (event) => this.onMessage(event));
-  }
-
-  onMessage(event) {
-    let message;
-    try {
-      message = JSON.parse(String(event.data));
-    } catch {
-      return;
-    }
-    if (Number.isSafeInteger(message.id)) {
-      const pending = this.pending.get(message.id);
-      if (!pending) {
-        return;
-      }
-      this.pending.delete(message.id);
-      clearTimeout(pending.timeout);
-      if (message.error) {
-        pending.reject(
-          new Error(
-            `Chrome DevTools ${pending.method} failed: ${message.error.message ?? "unknown error"}`,
-          ),
-        );
-      } else {
-        pending.resolve(message.result ?? {});
-      }
-      return;
-    }
-    const listeners = this.listeners.get(message.method);
-    if (!listeners) {
-      return;
-    }
-    this.listeners.delete(message.method);
-    for (const listener of listeners) {
-      clearTimeout(listener.timeout);
-      listener.resolve(message.params ?? {});
-    }
-  }
-
-  command(method, params = {}) {
-    const id = this.nextId;
-    this.nextId += 1;
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pending.delete(id);
-        reject(new Error(`Chrome DevTools ${method} timed out`));
-      }, this.timeoutMs);
-      this.pending.set(id, { method, reject, resolve, timeout });
-      this.webSocket.send(JSON.stringify({ id, method, params }));
-    });
-  }
-
-  waitForEvent(method) {
-    return new Promise((resolve, reject) => {
-      const listener = {
-        reject,
-        resolve,
-        timeout: setTimeout(() => {
-          const listeners = this.listeners.get(method) ?? [];
-          this.listeners.set(
-            method,
-            listeners.filter((candidate) => candidate !== listener),
-          );
-          reject(new Error(`Chrome DevTools ${method} timed out`));
-        }, this.timeoutMs),
-      };
-      const listeners = this.listeners.get(method) ?? [];
-      listeners.push(listener);
-      this.listeners.set(method, listeners);
-    });
-  }
-
-  close() {
-    this.webSocket.close();
-  }
-}
-
-async function connectDevToolsSession(
-  webSocketDebuggerUrl,
-  { timeoutMs = DEVTOOLS_TIMEOUT_MS, WebSocketImpl = globalThis.WebSocket } = {},
-) {
-  if (typeof WebSocketImpl !== "function") {
-    throw new Error("The Node.js WebSocket API is unavailable");
-  }
-  const webSocket = new WebSocketImpl(webSocketDebuggerUrl);
-  await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      webSocket.close();
-      reject(new Error("Chrome DevTools connection timed out"));
-    }, timeoutMs);
-    webSocket.addEventListener(
-      "open",
-      () => {
-        clearTimeout(timeout);
-        resolve();
-      },
-      { once: true },
-    );
-    webSocket.addEventListener(
-      "error",
-      () => {
-        clearTimeout(timeout);
-        reject(new Error("Chrome DevTools connection failed"));
-      },
-      { once: true },
-    );
-  });
-  return new DevToolsSession(webSocket, timeoutMs);
-}
-
-async function readPageState(session) {
-  const evaluated = await session.command("Runtime.evaluate", {
-    expression: "({ href: location.href, readyState: document.readyState })",
-    returnByValue: true,
-  });
-  if (evaluated.exceptionDetails) {
-    throw new Error("Chrome page state evaluation failed");
-  }
-  const state = evaluated.result?.value;
-  if (typeof state?.href !== "string" || typeof state?.readyState !== "string") {
-    throw new Error("Chrome page state evaluation returned invalid data");
-  }
-  return state;
-}
-
-async function readApplicationState(session) {
-  const evaluated = await session.command("Runtime.evaluate", {
-    expression: `({
-      href: location.href,
-      bridgeState: document.documentElement.dataset.kakomonnReaderBridgeState ?? null,
-      bridgeError: document.documentElement.dataset.kakomonnReaderBridgeError ?? null,
-      openError: document.querySelector("#open-error-detail")?.textContent ?? null
-    })`,
-    returnByValue: true,
-  });
-  if (evaluated.exceptionDetails || typeof evaluated.result?.value?.href !== "string") {
-    throw new Error("Chrome application state evaluation failed");
-  }
-  return evaluated.result.value;
-}
-
-async function waitForKakomonnLaunch(
-  target,
-  {
-    connectSession = connectDevToolsSession,
-    delayImpl = delay,
-    now = Date.now,
-    timeoutMs = DEVTOOLS_TIMEOUT_MS,
-  } = {},
-) {
-  const session = await connectSession(target.webSocketDebuggerUrl);
-  let lastError = null;
-  try {
-    await session.command("Page.enable");
-    const deadline = now() + timeoutMs;
-    while (now() < deadline) {
-      let state;
-      try {
-        state = await readApplicationState(session);
-      } catch (error) {
-        lastError = error;
-        await delayImpl(100);
-        continue;
-      }
-      if (/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(state.href)) {
-        return "ready";
-      }
-      if (state.bridgeState === "ready") {
-        return "ready";
-      }
-      if (state.bridgeState === "empty" || state.bridgeState === "unauthorized") {
-        return state.bridgeState;
-      }
-      const timedOut = state.openError?.includes("code=reader_ready_timeout") === true;
-      if (state.bridgeState === "error" || timedOut) {
-        const code = state.bridgeError ?? (timedOut ? "reader_ready_timeout" : "unknown");
-        if (!TRANSIENT_BRIDGE_ERRORS.has(code) && code !== "reader_ready_timeout") {
-          throw new Error(`Kakomonn reader bridge failed: ${code}`);
-        }
-        lastError = new Error(`Kakomonn reader bridge is not ready: ${code}`);
-        if (now() + LAUNCH_RETRY_DELAY_MS >= deadline) {
-          break;
-        }
-        await delayImpl(LAUNCH_RETRY_DELAY_MS);
-        await Promise.all([
-          session.waitForEvent("Page.frameNavigated"),
-          session.command("Page.reload"),
-        ]);
-        continue;
-      }
-      await delayImpl(100);
-    }
-    throw new Error(
-      `Kakomonn reader bridge did not become ready: ${lastError?.message ?? "no userscript response"}`,
-    );
-  } finally {
-    session.close();
-  }
-}
-
-async function navigateAndWait(
-  session,
-  url,
-  { delayImpl = delay, timeoutMs = DEVTOOLS_TIMEOUT_MS } = {},
-) {
-  const previousURL = (await readPageState(session)).href;
-  await navigate(session, url);
-  const deadline = Date.now() + timeoutMs;
-  let lastError = null;
-  while (Date.now() < deadline) {
-    try {
-      const state = await readPageState(session);
-      if (
-        state.href !== previousURL &&
-        state.readyState !== "loading" &&
-        !state.href.startsWith("chrome-error://")
-      ) {
-        return state;
-      }
-    } catch (error) {
-      lastError = error;
-    }
-    await delayImpl(50);
-  }
-  throw new Error(`Chrome navigation did not become ready: ${lastError?.message ?? url}`);
-}
-
-async function navigate(session, url) {
-  const result = await session.command("Page.navigate", { url });
-  if (result.errorText) {
-    throw new Error(`Chrome navigation failed: ${result.errorText}`);
-  }
-  return result;
-}
-
 function tampermonkeyReadyExpression(userscriptIdentity) {
   const expectedName = JSON.stringify(userscriptIdentity.name);
   const expectedNamespace = JSON.stringify(userscriptIdentity.namespace);
@@ -403,56 +135,70 @@ function tampermonkeyReadyExpression(userscriptIdentity) {
 })()`;
 }
 
-async function prepareKakomonnPage(
-  port,
-  {
-    connectSession = connectDevToolsSession,
-    createTarget = createPageTarget,
-    closeTarget = closePageTarget,
-    openURL,
-    target: suppliedTarget = null,
-    tampermonkeyExtensionId,
-    userscriptIdentity,
-    waitForLaunch = waitForKakomonnLaunch,
-  },
-) {
-  const target = suppliedTarget ?? (await createTarget(port));
-  let session = null;
-  let applicationTarget = null;
-  let bootstrapClosed = false;
+async function waitForKakomonnLaunch(page, { timeoutMs = DEVTOOLS_TIMEOUT_MS } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const handle = await page.waitForFunction(() => {
+      const bridgeState = document.documentElement.dataset.kakomonnReaderBridgeState;
+      const bridgeError = document.documentElement.dataset.kakomonnReaderBridgeError;
+      const openError = document.querySelector("#open-error-detail")?.textContent;
+      if (/^https:\/\/chushoks\.kakomonn\.com\/questions\/\d+$/.test(location.href)) {
+        return JSON.stringify({ state: "ready" });
+      }
+      if (["ready", "empty", "unauthorized", "error"].includes(bridgeState)) {
+        return JSON.stringify({ state: bridgeState, code: bridgeError });
+      }
+      if (openError?.includes("code=reader_ready_timeout")) {
+        return JSON.stringify({ state: "error", code: "reader_ready_timeout" });
+      }
+      return false;
+    }, null, { timeout: Math.max(1, deadline - Date.now()) });
+    const result = JSON.parse(await handle.jsonValue());
+    await handle.dispose();
+    if (result.state !== "error") return result.state;
+    if (!TRANSIENT_BRIDGE_ERRORS.has(result.code) && result.code !== "reader_ready_timeout") {
+      throw new Error(`Kakomonn reader bridge failed: ${result.code}`);
+    }
+    if (Date.now() + LAUNCH_RETRY_DELAY_MS >= deadline) break;
+    await page.waitForTimeout(LAUNCH_RETRY_DELAY_MS);
+    await page.reload({ waitUntil: "domcontentloaded", timeout: Math.max(1, deadline - Date.now()) });
+  }
+  throw new Error("Kakomonn reader bridge did not become ready");
+}
+
+async function prepareKakomonnPage(port, {
+  connect = chromium.connectOverCDP.bind(chromium),
+  openURL,
+  tampermonkeyExtensionId,
+  userscriptIdentity,
+}) {
+  const browser = await connect(devToolsURL(port, ""), { timeout: DEVTOOLS_TIMEOUT_MS });
+  const context = browser.contexts()[0];
+  let bootstrap;
   try {
-    session = await connectSession(target.webSocketDebuggerUrl);
-    await session.command("Page.enable");
-    await navigateAndWait(
-      session,
+    if (!context) throw new Error("Dedicated Chrome has no browser context");
+    bootstrap = await context.newPage();
+    await bootstrap.goto(
       `chrome-extension://${tampermonkeyExtensionId}/options.html#nav=settings`,
+      { waitUntil: "domcontentloaded", timeout: DEVTOOLS_TIMEOUT_MS },
     );
-    const evaluated = await session.command("Runtime.evaluate", {
-      awaitPromise: true,
-      expression: tampermonkeyReadyExpression(userscriptIdentity),
-      returnByValue: true,
-    });
-    if (evaluated.exceptionDetails) {
-      throw new Error("Tampermonkey readiness evaluation failed");
-    }
-    const readiness = evaluated.result?.value;
+    const readiness = await bootstrap.evaluate(tampermonkeyReadyExpression(userscriptIdentity));
     if (readiness?.error !== null || readiness?.scriptCount !== 1) {
-      throw new Error(
-        `Tampermonkey transport is not ready: ${readiness?.error ?? "invalid readiness response"}`,
-      );
+      throw new Error(`Tampermonkey transport is not ready: ${readiness?.error ?? 'invalid readiness response'}`);
     }
-    applicationTarget = await createTarget(port, openURL);
-    await closeTarget(port, target.id);
-    bootstrapClosed = true;
-    await waitForLaunch(applicationTarget);
-    return Object.freeze({ port, targetId: applicationTarget.id });
-  } catch (error) {
-    if (!bootstrapClosed) {
-      await closeTarget(port, target.id).catch(() => null);
-    }
-    throw error;
+    const application = await context.newPage();
+    await application.goto(openURL, { waitUntil: "domcontentloaded", timeout: DEVTOOLS_TIMEOUT_MS });
+    await bootstrap.close();
+    bootstrap = null;
+    await waitForKakomonnLaunch(application);
+    const session = await context.newCDPSession(application);
+    const { targetInfo } = await session.send("Target.getTargetInfo");
+    await session.detach();
+    return Object.freeze({ port, targetId: targetInfo.targetId });
   } finally {
-    session?.close();
+    await bootstrap?.close();
+    // Closing a connectOverCDP client disconnects without terminating Chrome.
+    await browser.close();
   }
 }
 
@@ -461,12 +207,6 @@ module.exports = {
   DEVTOOLS_TIMEOUT_MS,
   TAMPERMONKEY_BETA_EXTENSION_ID,
   activePortPath,
-  closePageTarget,
-  connectDevToolsSession,
-  createPageTarget,
-  navigate,
-  navigateAndWait,
-  readPageState,
   tampermonkeyReadyExpression,
   waitForKakomonnLaunch,
   prepareKakomonnPage,

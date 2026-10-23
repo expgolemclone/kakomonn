@@ -10,7 +10,7 @@ Install Reader using the [installation instructions](../kakomonn-reader/README.m
 npm run open:kakomonn
 ```
 
-Use a dedicated Chrome profile, never your everyday profile. Save work in the dedicated profile before running the launcher or tests, which may close it. See [`.env.example`](../.env.example) for path overrides.
+Use a dedicated Chrome profile, never your everyday profile. Save work in the dedicated profile before running the launcher or tests, which may close it. See [`kakomonn.example.toml`](../kakomonn.example.toml) for path overrides.
 
 For iPhone setup, see [opening the next question](../kakomonn-sync/README.md#open-the-next-question).
 
@@ -33,7 +33,7 @@ pwsh -NoProfile -File scripts/provision-chrome.ps1 -Operation Install
 pwsh -NoProfile -File scripts/provision-chrome.ps1 -Operation Verify
 ```
 
-Copy [`.env.example`](../.env.example) to `.env` and set `KAKOMONN_SYNC_TOKEN` to the production Worker token. Keep secrets out of source control. Let the live tests manage userscript installation and browser restarts; do not edit browser storage or Secure Preferences manually.
+Copy [`kakomonn.example.toml`](../kakomonn.example.toml) to `kakomonn.toml` and set `KAKOMONN_SYNC_TOKEN` to the production Worker token. Keep secrets out of source control. Let the live tests manage userscript installation and browser restarts; do not edit browser storage or Secure Preferences manually.
 
 ```powershell
 npm test

@@ -8,7 +8,7 @@ const {
   kakomonnFreeEnvironment,
   readKakomonnConfiguration,
 } = require("../../scripts/kakomonn-config.cjs");
-const { installSyncMock, SYNC_API_ORIGIN, SYNC_TOKEN_KEY } = require("./sync_mock");
+const { installSyncFixture, SYNC_API_ORIGIN, SYNC_TOKEN_KEY } = require("./support/sync-fixture.cjs");
 const { dispatchNextQuestionSwipe, installReaderInChildFrames } = require("./support/frame_reader");
 
 const projectRoot = path.resolve(__dirname, "..");
@@ -164,7 +164,7 @@ Markdown記号 \\* と \\[ \\] を含みます.
 \\===
 \\~\\~取消\\~\\~`;
 
-async function prepareLauncherPage(context, script, { syncOptions = {}, mutateMock = null } = {}) {
+async function prepareLauncherPage(context, script, { syncOptions = {}, mutateFixture = null } = {}) {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
@@ -172,9 +172,9 @@ async function prepareLauncherPage(context, script, { syncOptions = {}, mutateMo
   await page.evaluate(() => {
     window.__launcherDocumentSentinel = "same-document";
   });
-  await installSyncMock(page, syncOptions);
-  if (mutateMock !== null) {
-    await page.evaluate(mutateMock);
+  await installSyncFixture(page, syncOptions);
+  if (mutateFixture !== null) {
+    await page.evaluate(mutateFixture);
   }
   await page.addScriptTag({ content: script });
   return { errors, page };
@@ -220,11 +220,11 @@ async function waitForLauncherState(page, errors, expectedState) {
 async function assertLauncherFailure(
   context,
   script,
-  { expectedState, expectedStatus, expectedTitle, syncOptions = {}, mutateMock = null },
+  { expectedState, expectedStatus, expectedTitle, syncOptions = {}, mutateFixture = null },
 ) {
   const { errors, page } = await prepareLauncherPage(context, script, {
     syncOptions,
-    mutateMock,
+    mutateFixture,
   });
   try {
     await waitForLauncherState(page, errors, expectedState);
@@ -264,11 +264,11 @@ async function assertLauncherFailure(
 async function assertLauncherRequiresSettings(
   context,
   script,
-  { syncOptions = {}, mutateMock = null } = {},
+  { syncOptions = {}, mutateFixture = null } = {},
 ) {
   const { errors, page } = await prepareLauncherPage(context, script, {
     syncOptions,
-    mutateMock,
+    mutateFixture,
   });
   try {
     await page.locator("#kakomonn-reader-sync-settings").waitFor({ state: "visible" });
@@ -349,7 +349,7 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
             },
           });
         });
-        await installSyncMock(page, { nextQuestionId: "86957" });
+        await installSyncFixture(page, { nextQuestionId: "86957" });
         await page.addScriptTag({ content: script });
         await page.locator("#kakomonn-reader-frame").waitFor({
           state: "attached",
@@ -402,7 +402,7 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
         });
         assert.equal(await questionFrame.evaluate(() => document.readyState), "interactive");
         await page.waitForFunction(() =>
-          window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/state"),
+          window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/state"),
         );
         await page.waitForFunction(
           () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
@@ -441,7 +441,7 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
           );
         } catch (error) {
           error.readerDiagnostics = await page.evaluate(() => ({
-            calls: window.__syncMock.calls.map((call) => ({
+            calls: window.__syncFixture.calls.map((call) => ({
               body: call.body,
               method: call.method,
               path: new URL(call.url).pathname,
@@ -461,7 +461,7 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
           throw error;
         }
         const attemptCalls = await page.evaluate(() =>
-          window.__syncMock.calls.filter(
+          window.__syncFixture.calls.filter(
             (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
           ),
         );
@@ -543,7 +543,7 @@ async function main() {
       );
       assert.deepEqual(
         await noNextLauncher.page.evaluate(() =>
-          window.__syncMock.calls.map((call) => ({
+          window.__syncFixture.calls.map((call) => ({
             authorization: call.authorization,
             method: call.method,
             url: call.url,
@@ -566,15 +566,15 @@ async function main() {
       syncOptions: { configured: false },
     });
     await assertLauncherRequiresSettings(context, script, {
-      mutateMock: () => {
-        window.__syncMock.token = "server-token";
+      mutateFixture: () => {
+        window.__syncFixture.token = "server-token";
       },
     });
 
     const retryLauncher = await prepareLauncherPage(context, script, {
       syncOptions: { nextQuestionId: "86957" },
-      mutateMock: () => {
-        window.__syncMock.failNextRequest = true;
+      mutateFixture: () => {
+        window.__syncFixture.failNextRequest = true;
       },
     });
     await waitForLauncherState(retryLauncher.page, retryLauncher.errors, "service-error");
@@ -587,7 +587,7 @@ async function main() {
     assert.equal(await retryLauncher.page.locator("#kakomonn-reader-shell").count(), 1);
     assert.deepEqual(
       await retryLauncher.page.evaluate(() =>
-        window.__syncMock.calls.map((call) => new URL(call.url).pathname),
+        window.__syncFixture.calls.map((call) => new URL(call.url).pathname),
       ),
       ["/v12/next", "/v12/next"],
     );
@@ -599,11 +599,11 @@ async function main() {
     stalledLauncher.on("pageerror", (error) => stalledLauncherErrors.push(String(error)));
     await stalledLauncher.goto(nextQuestionLauncherURL);
     await stalledLauncher.clock.install();
-    await installSyncMock(stalledLauncher, {
+    await installSyncFixture(stalledLauncher, {
       nextQuestionId: "86957",
     });
     await stalledLauncher.evaluate(() => {
-      window.__syncMock.holdNextRequest = true;
+      window.__syncFixture.holdNextRequest = true;
     });
     await stalledLauncher.addScriptTag({ content: script });
     await stalledLauncher.locator("#kakomonn-next-question-panel[data-state='loading']").waitFor();
@@ -621,9 +621,9 @@ async function main() {
     );
     assert.deepEqual(
       await stalledLauncher.evaluate(() => ({
-        abortedRequestCount: window.__syncMock.abortedRequestCount,
-        callCount: window.__syncMock.calls.length,
-        heldRequestPending: window.__syncMock.releaseHeldRequest !== null,
+        abortedRequestCount: window.__syncFixture.abortedRequestCount,
+        callCount: window.__syncFixture.calls.length,
+        heldRequestPending: window.__syncFixture.releaseHeldRequest !== null,
       })),
       {
         abortedRequestCount: 1,
@@ -654,7 +654,7 @@ async function main() {
     const settingsEntryErrors = [];
     settingsEntryPage.on("pageerror", (error) => settingsEntryErrors.push(String(error)));
     await settingsEntryPage.goto(currentQuestionURL);
-    await installSyncMock(settingsEntryPage, {
+    await installSyncFixture(settingsEntryPage, {
       configured: false,
       nextQuestionId: "86957",
     });
@@ -687,13 +687,13 @@ async function main() {
     assert.equal(settingsLayout.inputHeight >= 44, true, JSON.stringify(settingsLayout));
     assert.equal(settingsLayout.saveHeight >= 44, true, JSON.stringify(settingsLayout));
     await settingsEntryPage.evaluate((syncTokenKey) => {
-      window.__syncMock.holdSetValueKey = syncTokenKey;
+      window.__syncFixture.holdSetValueKey = syncTokenKey;
     }, SYNC_TOKEN_KEY);
     await settingsEntryPage.locator("#kakomonn-reader-sync-token").fill("test-sync-token");
     await settingsEntryPage.locator("#kakomonn-reader-sync-settings-save").click();
-    await settingsEntryPage.waitForFunction(() => window.__syncMock.releaseHeldSetValue !== null);
+    await settingsEntryPage.waitForFunction(() => window.__syncFixture.releaseHeldSetValue !== null);
     assert.equal(settingsEntryPage.url(), currentQuestionURL);
-    await settingsEntryPage.evaluate(() => window.__syncMock.releaseHeldSetValue());
+    await settingsEntryPage.evaluate(() => window.__syncFixture.releaseHeldSetValue());
     await settingsEntryPage.waitForSelector("#kakomonn-reader-sync-settings", {
       state: "hidden",
     });
@@ -754,7 +754,7 @@ async function main() {
         },
       });
     });
-    await installSyncMock(page, {
+    await installSyncFixture(page, {
       nextQuestionId: "86957",
     });
     await page.addScriptTag({ content: script });
@@ -770,7 +770,7 @@ async function main() {
       });
     }, fixtureBody);
     await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/state"),
+      window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/state"),
     );
     await page.waitForTimeout(1_000);
     await page.evaluate(() => {
@@ -889,10 +889,10 @@ async function main() {
         explanation.hidden = false;
       }
     });
-    await page.waitForFunction(() => window.__syncMock.calls.some(
+    await page.waitForFunction(() => window.__syncFixture.calls.some(
       (call) => new URL(call.url).pathname === "/v12/copy-failures"));
     assert.equal(await page.locator("#kakomonn-reader-error-dialog").getAttribute("open"), null);
-    assert.deepEqual(await page.evaluate(() => window.__syncMock.calls.filter(
+    assert.deepEqual(await page.evaluate(() => window.__syncFixture.calls.filter(
       (call) => new URL(call.url).pathname === "/v12/copy-failures").map((call) => call.body)), [
       { site: "chushoks.kakomonn.com", questionId: "86956", reason: "clipboard_write_failed" },
     ]);
@@ -908,7 +908,7 @@ async function main() {
     assert.equal(
       await page.evaluate(
         () =>
-          window.__syncMock.calls.filter(
+          window.__syncFixture.calls.filter(
             (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
           ).length,
       ),
@@ -939,7 +939,7 @@ async function main() {
         },
       });
     });
-    await installSyncMock(correctPage, { nextQuestionId: "86957" });
+    await installSyncFixture(correctPage, { nextQuestionId: "86957" });
     await installCorrectFeedbackRandom(correctPage, [111, 111]);
     await correctPage.addScriptTag({ content: script });
     await correctPage.waitForFunction(
@@ -959,7 +959,7 @@ async function main() {
       document.body.innerHTML = html;
     }, fixtureBody);
     await correctPage.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/state"),
+      window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/state"),
     );
     await correctPage.waitForTimeout(1_000);
     await correctPage.evaluate(() => {
@@ -974,7 +974,7 @@ async function main() {
       await correctPage.locator("#kakomonn-reader-error-close").click();
     }
     await correctPage.evaluate(() => {
-      window.__syncMock.holdNextRequest = true;
+      window.__syncFixture.holdNextRequest = true;
     });
     await correctFrame.locator("input[name='answer']").first().tap();
     await correctFrame.getByRole("button", { name: "解答する" }).tap();
@@ -1008,8 +1008,8 @@ async function main() {
         withinViewport: true,
       },
     );
-    await correctPage.waitForFunction(() => window.__syncMock.releaseHeldRequest !== null);
-    await correctPage.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await correctPage.waitForFunction(() => window.__syncFixture.releaseHeldRequest !== null);
+    await correctPage.evaluate(() => window.__syncFixture.releaseHeldRequest());
     await correctPage.waitForFunction(
       (expectedURL) =>
         document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href ===
@@ -1024,7 +1024,7 @@ async function main() {
       document.body.innerHTML = html;
     }, fixtureBody);
     await correctPage.evaluate(() => {
-      window.__syncMock.nextQuestionId = "86958";
+      window.__syncFixture.nextQuestionId = "86958";
     });
     await correctFrame.locator("input[name='answer']").first().tap();
     await correctFrame.getByRole("button", { name: "解答する" }).tap();
@@ -1040,7 +1040,7 @@ async function main() {
     await correctFrame.waitForURL(secondNextQuestionURL);
     assert.deepEqual(
       await correctPage.evaluate(() => ({
-        attempts: window.__syncMock.attemptCount,
+        attempts: window.__syncFixture.attemptCount,
         copiesDispatched: window.__copiedTexts.length,
       })),
       { attempts: 2, copiesDispatched: 2 },
@@ -1050,7 +1050,7 @@ async function main() {
       (await correctPage.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null,
       false,
     );
-    assert.deepEqual(await correctPage.evaluate(() => window.__syncMock.calls.filter(
+    assert.deepEqual(await correctPage.evaluate(() => window.__syncFixture.calls.filter(
       (call) => new URL(call.url).pathname === "/v12/copy-failures").map((call) => call.body)), [
       { site: "chushoks.kakomonn.com", questionId: "86956", reason: "clipboard_write_timeout" },
     ]);

@@ -519,60 +519,8 @@ export function installShortcutsController(app) {
     app.enterReaderUI();
   }
 
-  Object.defineProperties(app, {
-    ANSWER_CHOICE_SHORTCUT_KEYS: { enumerable: false, get: () => ANSWER_CHOICE_SHORTCUT_KEYS },
-    DISPLAY_CHOICE_SHORTCUT_KEYS: { enumerable: false, get: () => DISPLAY_CHOICE_SHORTCUT_KEYS },
-    SHORTCUT_SCROLL_DISTANCE: { enumerable: false, get: () => SHORTCUT_SCROLL_DISTANCE },
-    shortcutSequenceTimer: {
-      enumerable: false,
-      get: () => shortcutSequenceTimer,
-      set: (value) => {
-        shortcutSequenceTimer = value;
-      },
-    },
-    shortcutSequenceDocument: {
-      enumerable: false,
-      get: () => shortcutSequenceDocument,
-      set: (value) => {
-        shortcutSequenceDocument = value;
-      },
-    },
-    shortcutSequenceKey: {
-      enumerable: false,
-      get: () => shortcutSequenceKey,
-      set: (value) => {
-        shortcutSequenceKey = value;
-      },
-    },
-    frameSwipeStart: {
-      enumerable: false,
-      get: () => frameSwipeStart,
-      set: (value) => {
-        frameSwipeStart = value;
-      },
-    },
-    shortcutTargetElement: { enumerable: false, get: () => shortcutTargetElement },
-    isEditableShortcutTarget: { enumerable: false, get: () => isEditableShortcutTarget },
-    currentQuestionControls: { enumerable: false, get: () => currentQuestionControls },
-    isDisabledControl: { enumerable: false, get: () => isDisabledControl },
-    activateAnswerChoice: { enumerable: false, get: () => activateAnswerChoice },
-    activateAnswerButton: { enumerable: false, get: () => activateAnswerButton },
-    activateDisplayChoice: { enumerable: false, get: () => activateDisplayChoice },
-    scrollQuestionFrame: { enumerable: false, get: () => scrollQuestionFrame },
-    clearShortcutSequence: { enumerable: false, get: () => clearShortcutSequence },
-    commitPendingShortcut: { enumerable: false, get: () => commitPendingShortcut },
-    startShortcutSequence: { enumerable: false, get: () => startShortcutSequence },
-    completeShortcutSequence: { enumerable: false, get: () => completeShortcutSequence },
-    handleEnterShortcut: { enumerable: false, get: () => handleEnterShortcut },
-    onReaderKeyDown: { enumerable: false, get: () => onReaderKeyDown },
-    onFrameClick: { enumerable: false, get: () => onFrameClick },
-    onFrameTouchStart: { enumerable: false, get: () => onFrameTouchStart },
-    onFrameTouchMove: { enumerable: false, get: () => onFrameTouchMove },
-    onFrameTouchCancel: { enumerable: false, get: () => onFrameTouchCancel },
-    onFrameTouchEnd: { enumerable: false, get: () => onFrameTouchEnd },
-    clearFrameState: { enumerable: false, get: () => clearFrameState },
-    applyFrameDarkMode: { enumerable: false, get: () => applyFrameDarkMode },
-    bindFrameDocument: { enumerable: false, get: () => bindFrameDocument },
-    onReaderFrameReady: { enumerable: false, get: () => onReaderFrameReady },
+  Object.assign(app, {
+    currentQuestionControls,
+    clearShortcutSequence,
   });
 }

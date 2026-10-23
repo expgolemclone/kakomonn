@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
-const { REPOSITORY_ENV_PATH: envFilePath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
+const { REPOSITORY_CONFIGURATION_PATH: configurationFilePath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
 const {
   CURRENT_QUESTION_URL, DEFAULT_SYNC_API_ORIGIN, launchChromeWithCurrentUserscript,
   readChromeUserDataDir, resolveSyncToken,
@@ -28,11 +28,11 @@ async function postReport(token) {
   assert.deepEqual(await response.json(), { accepted: true });
 }
 async function main() {
-  const configuration = readKakomonnConfiguration({ envFilePath });
-  const token = await resolveSyncToken({ configuration, envFilePath });
+  const configuration = readKakomonnConfiguration({ configurationFilePath });
+  const token = await resolveSyncToken({ configuration, configurationFilePath });
   const fingerprint = extractBuildFingerprint(fs.readFileSync(userscriptPath, "utf8"));
   const chrome = await launchChromeWithCurrentUserscript({
-    configuration, userDataDir: readChromeUserDataDir({ configuration, envFilePath }), userscriptPath,
+    configuration, userDataDir: readChromeUserDataDir({ configuration, configurationFilePath }), userscriptPath,
   });
   try {
     const setup = await chrome.context.newPage();

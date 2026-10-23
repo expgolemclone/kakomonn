@@ -516,23 +516,14 @@ export function installStudyTimeController(app) {
   window.addEventListener("pagehide", handleStudyPageHide);
   document.addEventListener("visibilitychange", handleStudyVisibilityChange);
 
-  Object.defineProperties(app, {
-    initializeStudyTime: { enumerable: false, get: () => initializeStudyTime },
-    prepareStudyTimeSnapshots: { enumerable: false, get: () => prepareStudyTimeSnapshots },
-    acknowledgeStudyTimeSnapshots: {
-      enumerable: false,
-      get: () => acknowledgeStudyTimeSnapshots,
-    },
-    applyStudyServerState: { enumerable: false, get: () => applyStudyServerState },
-    reconcileStudyLearningMetrics: {
-      enumerable: false,
-      get: () => reconcileStudyLearningMetrics,
-    },
-    flushStudyTime: { enumerable: false, get: () => flushStudyTime },
-    bindStudyFrame: { enumerable: false, get: () => bindStudyFrame },
-    refreshStudyTracking: { enumerable: false, get: () => refreshStudyTracking },
-    renderStudyTime: { enumerable: false, get: () => renderStudyTime },
-    STUDY_IDLE_MS: { enumerable: false, get: () => STUDY_IDLE_MS },
-    STUDY_CHECKPOINT_MS: { enumerable: false, get: () => STUDY_CHECKPOINT_MS },
+  Object.assign(app, {
+    initializeStudyTime,
+    prepareStudyTimeSnapshots,
+    acknowledgeStudyTimeSnapshots,
+    applyStudyServerState,
+    reconcileStudyLearningMetrics,
+    flushStudyTime,
+    bindStudyFrame,
+    refreshStudyTracking,
   });
 }

@@ -12,7 +12,6 @@ import {
   splitText,
 } from "./content.js";
 import {
-  CORRECT_CHIME_SAMPLE_RATE,
   CORRECT_FEEDBACK_CSS,
   CORRECT_FEEDBACK_LEAVE_DURATION_MS,
   CORRECT_FEEDBACK_MINIMUM_DURATION_MS,
@@ -38,6 +37,7 @@ import { installDashboardBridge } from "./dashboard-bridge.js";
 import { DASHBOARD_BRIDGE_STATE_ATTRIBUTE } from "../../contracts/dashboard-bridge.mjs";
 
 export async function startReader() {
+  const app = {};
   "use strict";
 
   const READER_FRAME_READY_MESSAGE_TYPE = "kakomonn-reader:frame-ready";
@@ -92,7 +92,7 @@ export async function startReader() {
     location.pathname === "/createques" &&
     location.search === "" &&
     location.hash === "#kakomonn-next";
-  let shouldLaunchNextQuestionAfterSync = isNextQuestionLauncher;
+  app.shouldLaunchNextQuestionAfterSync = isNextQuestionLauncher;
 
   class SyncRequestError extends Error {
     constructor(code, status = 0, responseBody = null) {
@@ -256,7 +256,6 @@ export async function startReader() {
   const FRAME_PROBLEM_SCROLL_DELAYS_MS = [0, 120, 600];
   const SHORTCUT_SEQUENCE_TIMEOUT_MS = 400;
   const TIME_LIMIT_MS = 5 * 60 * 1000;
-  const MAX_CHUNK_LENGTH = 1500;
   const FRAME_DARK_MODE_STYLE_ID = "kakomonn-reader-dark-mode";
   const FRAME_DARK_MODE_CSS = `
     :root {
@@ -413,58 +412,58 @@ export async function startReader() {
     typeof speechAudio?.canPlayType === "function" &&
     speechAudio.canPlayType("audio/mpeg") !== "" &&
     (isIPhoneSafari || isWindowsChrome);
-  let speechEnabled = false;
-  let speechPaused = false;
-  let speechInitializationInProgress = false;
-  let speechInitializationPromise = null;
-  let speechInitializationResolve = null;
-  let speechRunId = 0;
+  app.speechEnabled = false;
+  app.speechPaused = false;
+  app.speechInitializationInProgress = false;
+  app.speechInitializationPromise = null;
+  app.speechInitializationResolve = null;
+  app.speechRunId = 0;
   const activeSpeechRequests = new Set();
-  let speechChunkSession = null;
-  let activeSpeechAudioURL = "";
-  let activeSpeechPlaybackCancel = null;
-  let azureSpeechToken = "";
-  let azureSpeechTokenExpiresAt = 0;
-  let azureSpeechTokenPromise = null;
-  let frameDocument = null;
-  let boundFrameDocument = null;
-  let currentPageReadPending = false;
-  let currentFrameURL = shouldLaunchNextQuestionAfterSync ? "about:blank" : location.href;
-  let timeLimitPhase = null;
-  let timeLimitDeadline = 0;
-  let timeLimitTimeout = null;
-  let timeLimitInterval = null;
-  let timeLimitSourceDocument = null;
-  let frameProblemScrollTimers = [];
-  let frameMutationObserver = null;
-  let frameControlObserver = null;
-  let observedAnswerResult = null;
-  let observedCommentary = null;
-  let awaitingAnswerResultSpeech = false;
-  let navigationInProgress = false;
-  let nextQuestionOperationInProgress = false;
-  let syncToken = "";
-  let syncReady = false;
-  let syncInProgress = false;
-  let syncPromise = null;
-  let catalogReady = false;
-  let catalogInProgress = false;
-  let catalogPromise = null;
-  let currentSyncState = null;
-  let launcherSyncState = null;
-  let pendingAttempt = null;
-  let pendingAttemptTransitionPromise = null;
-  let pendingCelebration = null;
-  let answerCopyOperation = null;
+  app.speechChunkSession = null;
+  app.activeSpeechAudioURL = "";
+  app.activeSpeechPlaybackCancel = null;
+  app.azureSpeechToken = "";
+  app.azureSpeechTokenExpiresAt = 0;
+  app.azureSpeechTokenPromise = null;
+  app.frameDocument = null;
+  app.boundFrameDocument = null;
+  app.currentPageReadPending = false;
+  app.currentFrameURL = app.shouldLaunchNextQuestionAfterSync ? "about:blank" : location.href;
+  app.timeLimitPhase = null;
+  app.timeLimitDeadline = 0;
+  app.timeLimitTimeout = null;
+  app.timeLimitInterval = null;
+  app.timeLimitSourceDocument = null;
+  app.frameProblemScrollTimers = [];
+  app.frameMutationObserver = null;
+  app.frameControlObserver = null;
+  app.observedAnswerResult = null;
+  app.observedCommentary = null;
+  app.awaitingAnswerResultSpeech = false;
+  app.navigationInProgress = false;
+  app.nextQuestionOperationInProgress = false;
+  app.syncToken = "";
+  app.syncReady = false;
+  app.syncInProgress = false;
+  app.syncPromise = null;
+  app.catalogReady = false;
+  app.catalogInProgress = false;
+  app.catalogPromise = null;
+  app.currentSyncState = null;
+  app.launcherSyncState = null;
+  app.pendingAttempt = null;
+  app.pendingAttemptTransitionPromise = null;
+  app.pendingCelebration = null;
+  app.answerCopyOperation = null;
 
   const correctFeedbackDocuments = new WeakSet();
-  let correctFeedbackPromise = null;
-  let correctFeedbackRemovalTimer = null;
+  app.correctFeedbackPromise = null;
+  app.correctFeedbackRemovalTimer = null;
   function waitForCorrectFeedbackKpi(questionId) {
-    return waitForCorrectFeedbackKpiResult(questionId, pendingAttempt);
+    return waitForCorrectFeedbackKpiResult(questionId, app.pendingAttempt);
   }
   function extractQuestionText() {
-    return extractQuestionTextFromDocument(frameDocument);
+    return extractQuestionTextFromDocument(app.frameDocument);
   }
   const { loadCompleteQuestionCatalog } = createCatalogLoader({
     fetchConcurrency: CATALOG_FETCH_CONCURRENCY,
@@ -474,393 +473,61 @@ export async function startReader() {
   });
   installReaderStyles(CORRECT_FEEDBACK_CSS);
 
-  const app = {};
-  Object.defineProperties(app, {
-    READER_FRAME_READY_MESSAGE_TYPE: {
-      enumerable: false,
-      get: () => READER_FRAME_READY_MESSAGE_TYPE,
-    },
-    BUILD_FINGERPRINT: { enumerable: false, get: () => BUILD_FINGERPRINT },
-    SCRIPT_HANDLER: { enumerable: false, get: () => SCRIPT_HANDLER },
-    isIPhoneSafari: { enumerable: false, get: () => isIPhoneSafari },
-    SYNC_TOKEN_KEY: { enumerable: false, get: () => SYNC_TOKEN_KEY },
-    LAUNCH_HANDOFF_KEY: { enumerable: false, get: () => LAUNCH_HANDOFF_KEY },
-    LAUNCH_HANDOFF_MAX_AGE_MS: { enumerable: false, get: () => LAUNCH_HANDOFF_MAX_AGE_MS },
-    isNextQuestionLauncher: { enumerable: false, get: () => isNextQuestionLauncher },
-    shouldLaunchNextQuestionAfterSync: {
-      enumerable: false,
-      get: () => shouldLaunchNextQuestionAfterSync,
-      set: (value) => {
-        shouldLaunchNextQuestionAfterSync = value;
-      },
-    },
-    SyncRequestError: { enumerable: false, get: () => SyncRequestError },
-    gmXMLHttpRequest: { enumerable: false, get: () => gmXMLHttpRequest },
-    requestSyncResponse: { enumerable: false, get: () => requestSyncResponse },
-    SITE_ID: { enumerable: false, get: () => SITE_ID },
-    PENDING_ATTEMPT_KEY: { enumerable: false, get: () => PENDING_ATTEMPT_KEY },
-    PENDING_CELEBRATION_KEY: { enumerable: false, get: () => PENDING_CELEBRATION_KEY },
-    SPEECH_TIMEOUT_MS: { enumerable: false, get: () => SPEECH_TIMEOUT_MS },
-    FRAME_PROBLEM_SCROLL_DELAYS_MS: {
-      enumerable: false,
-      get: () => FRAME_PROBLEM_SCROLL_DELAYS_MS,
-    },
-    SHORTCUT_SEQUENCE_TIMEOUT_MS: { enumerable: false, get: () => SHORTCUT_SEQUENCE_TIMEOUT_MS },
-    TIME_LIMIT_MS: { enumerable: false, get: () => TIME_LIMIT_MS },
-    FRAME_DARK_MODE_STYLE_ID: { enumerable: false, get: () => FRAME_DARK_MODE_STYLE_ID },
-    FRAME_DARK_MODE_CSS: { enumerable: false, get: () => FRAME_DARK_MODE_CSS },
-    QUESTION_SPEECH_RATE: { enumerable: false, get: () => QUESTION_SPEECH_RATE },
-    ANSWER_RESULT_SPEECH_RATE: { enumerable: false, get: () => ANSWER_RESULT_SPEECH_RATE },
-    SPEECH_TOKEN_RENEWAL_SKEW_MS: { enumerable: false, get: () => SPEECH_TOKEN_RENEWAL_SKEW_MS },
-    AZURE_SPEECH_URL: { enumerable: false, get: () => AZURE_SPEECH_URL },
-    JAPANESE_SPEECH_LOCALE: { enumerable: false, get: () => JAPANESE_SPEECH_LOCALE },
-    JAPANESE_SPEECH_VOICE_NAME: { enumerable: false, get: () => JAPANESE_SPEECH_VOICE_NAME },
-    AZURE_SPEECH_OUTPUT_FORMAT: { enumerable: false, get: () => AZURE_SPEECH_OUTPUT_FORMAT },
-    FEEDBACK_AUDIO_DATA_URLS: { enumerable: false, get: () => FEEDBACK_AUDIO_DATA_URLS },
-    SILENT_AUDIO_DATA_URL: { enumerable: false, get: () => SILENT_AUDIO_DATA_URL },
-    SPEECH_GESTURE_STATUS: { enumerable: false, get: () => SPEECH_GESTURE_STATUS },
-    speechAudio: { enumerable: false, get: () => speechAudio },
-    speechSupported: { enumerable: false, get: () => speechSupported },
-    speechEnabled: {
-      enumerable: false,
-      get: () => speechEnabled,
-      set: (value) => {
-        speechEnabled = value;
-      },
-    },
-    speechPaused: {
-      enumerable: false,
-      get: () => speechPaused,
-      set: (value) => {
-        speechPaused = value;
-      },
-    },
-    speechInitializationInProgress: {
-      enumerable: false,
-      get: () => speechInitializationInProgress,
-      set: (value) => {
-        speechInitializationInProgress = value;
-      },
-    },
-    speechInitializationPromise: {
-      enumerable: false,
-      get: () => speechInitializationPromise,
-      set: (value) => {
-        speechInitializationPromise = value;
-      },
-    },
-    speechInitializationResolve: {
-      enumerable: false,
-      get: () => speechInitializationResolve,
-      set: (value) => {
-        speechInitializationResolve = value;
-      },
-    },
-    speechRunId: {
-      enumerable: false,
-      get: () => speechRunId,
-      set: (value) => {
-        speechRunId = value;
-      },
-    },
-    activeSpeechRequests: { enumerable: false, get: () => activeSpeechRequests },
-    speechChunkSession: {
-      enumerable: false,
-      get: () => speechChunkSession,
-      set: (value) => {
-        speechChunkSession = value;
-      },
-    },
-    activeSpeechAudioURL: {
-      enumerable: false,
-      get: () => activeSpeechAudioURL,
-      set: (value) => {
-        activeSpeechAudioURL = value;
-      },
-    },
-    activeSpeechPlaybackCancel: {
-      enumerable: false,
-      get: () => activeSpeechPlaybackCancel,
-      set: (value) => {
-        activeSpeechPlaybackCancel = value;
-      },
-    },
-    azureSpeechToken: {
-      enumerable: false,
-      get: () => azureSpeechToken,
-      set: (value) => {
-        azureSpeechToken = value;
-      },
-    },
-    azureSpeechTokenExpiresAt: {
-      enumerable: false,
-      get: () => azureSpeechTokenExpiresAt,
-      set: (value) => {
-        azureSpeechTokenExpiresAt = value;
-      },
-    },
-    azureSpeechTokenPromise: {
-      enumerable: false,
-      get: () => azureSpeechTokenPromise,
-      set: (value) => {
-        azureSpeechTokenPromise = value;
-      },
-    },
-    frameDocument: {
-      enumerable: false,
-      get: () => frameDocument,
-      set: (value) => {
-        frameDocument = value;
-      },
-    },
-    boundFrameDocument: {
-      enumerable: false,
-      get: () => boundFrameDocument,
-      set: (value) => {
-        boundFrameDocument = value;
-      },
-    },
-    currentPageReadPending: {
-      enumerable: false,
-      get: () => currentPageReadPending,
-      set: (value) => {
-        currentPageReadPending = value;
-      },
-    },
-    currentFrameURL: {
-      enumerable: false,
-      get: () => currentFrameURL,
-      set: (value) => {
-        currentFrameURL = value;
-      },
-    },
-    timeLimitPhase: {
-      enumerable: false,
-      get: () => timeLimitPhase,
-      set: (value) => {
-        timeLimitPhase = value;
-      },
-    },
-    timeLimitDeadline: {
-      enumerable: false,
-      get: () => timeLimitDeadline,
-      set: (value) => {
-        timeLimitDeadline = value;
-      },
-    },
-    timeLimitTimeout: {
-      enumerable: false,
-      get: () => timeLimitTimeout,
-      set: (value) => {
-        timeLimitTimeout = value;
-      },
-    },
-    timeLimitInterval: {
-      enumerable: false,
-      get: () => timeLimitInterval,
-      set: (value) => {
-        timeLimitInterval = value;
-      },
-    },
-    timeLimitSourceDocument: {
-      enumerable: false,
-      get: () => timeLimitSourceDocument,
-      set: (value) => {
-        timeLimitSourceDocument = value;
-      },
-    },
-    frameProblemScrollTimers: {
-      enumerable: false,
-      get: () => frameProblemScrollTimers,
-      set: (value) => {
-        frameProblemScrollTimers = value;
-      },
-    },
-    frameMutationObserver: {
-      enumerable: false,
-      get: () => frameMutationObserver,
-      set: (value) => {
-        frameMutationObserver = value;
-      },
-    },
-    frameControlObserver: {
-      enumerable: false,
-      get: () => frameControlObserver,
-      set: (value) => {
-        frameControlObserver = value;
-      },
-    },
-    observedAnswerResult: {
-      enumerable: false,
-      get: () => observedAnswerResult,
-      set: (value) => {
-        observedAnswerResult = value;
-      },
-    },
-    observedCommentary: {
-      enumerable: false,
-      get: () => observedCommentary,
-      set: (value) => {
-        observedCommentary = value;
-      },
-    },
-    awaitingAnswerResultSpeech: {
-      enumerable: false,
-      get: () => awaitingAnswerResultSpeech,
-      set: (value) => {
-        awaitingAnswerResultSpeech = value;
-      },
-    },
-    navigationInProgress: {
-      enumerable: false,
-      get: () => navigationInProgress,
-      set: (value) => {
-        navigationInProgress = value;
-      },
-    },
-    nextQuestionOperationInProgress: {
-      enumerable: false,
-      get: () => nextQuestionOperationInProgress,
-      set: (value) => {
-        nextQuestionOperationInProgress = value;
-      },
-    },
-    syncToken: {
-      enumerable: false,
-      get: () => syncToken,
-      set: (value) => {
-        syncToken = value;
-      },
-    },
-    syncReady: {
-      enumerable: false,
-      get: () => syncReady,
-      set: (value) => {
-        syncReady = value;
-      },
-    },
-    syncInProgress: {
-      enumerable: false,
-      get: () => syncInProgress,
-      set: (value) => {
-        syncInProgress = value;
-      },
-    },
-    syncPromise: {
-      enumerable: false,
-      get: () => syncPromise,
-      set: (value) => {
-        syncPromise = value;
-      },
-    },
-    catalogReady: {
-      enumerable: false,
-      get: () => catalogReady,
-      set: (value) => {
-        catalogReady = value;
-      },
-    },
-    catalogInProgress: {
-      enumerable: false,
-      get: () => catalogInProgress,
-      set: (value) => {
-        catalogInProgress = value;
-      },
-    },
-    catalogPromise: {
-      enumerable: false,
-      get: () => catalogPromise,
-      set: (value) => {
-        catalogPromise = value;
-      },
-    },
-    currentSyncState: {
-      enumerable: false,
-      get: () => currentSyncState,
-      set: (value) => {
-        currentSyncState = value;
-      },
-    },
-    launcherSyncState: {
-      enumerable: false,
-      get: () => launcherSyncState,
-      set: (value) => {
-        launcherSyncState = value;
-      },
-    },
-    pendingAttempt: {
-      enumerable: false,
-      get: () => pendingAttempt,
-      set: (value) => {
-        pendingAttempt = value;
-      },
-    },
-    pendingAttemptTransitionPromise: {
-      enumerable: false,
-      get: () => pendingAttemptTransitionPromise,
-      set: (value) => {
-        pendingAttemptTransitionPromise = value;
-      },
-    },
-    pendingCelebration: {
-      enumerable: false,
-      get: () => pendingCelebration,
-      set: (value) => {
-        pendingCelebration = value;
-      },
-    },
-    answerCopyOperation: {
-      enumerable: false,
-      get: () => answerCopyOperation,
-      set: (value) => {
-        answerCopyOperation = value;
-      },
-    },
-    correctFeedbackDocuments: { enumerable: false, get: () => correctFeedbackDocuments },
-    correctFeedbackPromise: {
-      enumerable: false,
-      get: () => correctFeedbackPromise,
-      set: (value) => {
-        correctFeedbackPromise = value;
-      },
-    },
-    correctFeedbackRemovalTimer: {
-      enumerable: false,
-      get: () => correctFeedbackRemovalTimer,
-      set: (value) => {
-        correctFeedbackRemovalTimer = value;
-      },
-    },
-    waitForCorrectFeedbackKpi: { enumerable: false, get: () => waitForCorrectFeedbackKpi },
-    extractQuestionText: { enumerable: false, get: () => extractQuestionText },
-    loadCompleteQuestionCatalog: { enumerable: false, get: () => loadCompleteQuestionCatalog },
-    answerResultFromDocument: { enumerable: false, get: () => answerResultFromDocument },
-    findAnswerButtonAfter: { enumerable: false, get: () => findAnswerButtonAfter },
-    findAnswerChoiceControls: { enumerable: false, get: () => findAnswerChoiceControls },
-    findQuestionMetadataElement: { enumerable: false, get: () => findQuestionMetadataElement },
-    isVisibleElement: { enumerable: false, get: () => isVisibleElement },
-    normalizeInlineText: { enumerable: false, get: () => normalizeInlineText },
-    splitText: { enumerable: false, get: () => splitText },
-    CORRECT_CHIME_SAMPLE_RATE: { enumerable: false, get: () => CORRECT_CHIME_SAMPLE_RATE },
-    CORRECT_FEEDBACK_CSS: { enumerable: false, get: () => CORRECT_FEEDBACK_CSS },
-    CORRECT_FEEDBACK_LEAVE_DURATION_MS: {
-      enumerable: false,
-      get: () => CORRECT_FEEDBACK_LEAVE_DURATION_MS,
-    },
-    CORRECT_FEEDBACK_MINIMUM_DURATION_MS: {
-      enumerable: false,
-      get: () => CORRECT_FEEDBACK_MINIMUM_DURATION_MS,
-    },
-    calculateKpiQuestionsRemaining: {
-      enumerable: false,
-      get: () => calculateKpiQuestionsRemaining,
-    },
-    chooseCorrectFeedbackVariant: { enumerable: false, get: () => chooseCorrectFeedbackVariant },
-    renderCorrectFeedbackElement: { enumerable: false, get: () => renderCorrectFeedbackElement },
-    resolveCorrectFeedbackKpi: { enumerable: false, get: () => resolveCorrectFeedbackKpi },
-    buildCopyMarkdown: { enumerable: false, get: () => buildCopyMarkdown },
-    directChild: { enumerable: false, get: () => directChild },
-    isSelectedAnswerChoice: { enumerable: false, get: () => isSelectedAnswerChoice },
+  Object.assign(app, {
+    loadCompleteQuestionCatalog,
+    READER_FRAME_READY_MESSAGE_TYPE,
+    BUILD_FINGERPRINT,
+    SCRIPT_HANDLER,
+    isIPhoneSafari,
+    SYNC_TOKEN_KEY,
+    LAUNCH_HANDOFF_KEY,
+    LAUNCH_HANDOFF_MAX_AGE_MS,
+    isNextQuestionLauncher,
+    SyncRequestError,
+    gmXMLHttpRequest,
+    requestSyncResponse,
+    SITE_ID,
+    PENDING_ATTEMPT_KEY,
+    PENDING_CELEBRATION_KEY,
+    SPEECH_TIMEOUT_MS,
+    FRAME_PROBLEM_SCROLL_DELAYS_MS,
+    SHORTCUT_SEQUENCE_TIMEOUT_MS,
+    TIME_LIMIT_MS,
+    FRAME_DARK_MODE_STYLE_ID,
+    FRAME_DARK_MODE_CSS,
+    CORRECT_FEEDBACK_CSS,
+    QUESTION_SPEECH_RATE,
+    ANSWER_RESULT_SPEECH_RATE,
+    SPEECH_TOKEN_RENEWAL_SKEW_MS,
+    AZURE_SPEECH_URL,
+    JAPANESE_SPEECH_LOCALE,
+    JAPANESE_SPEECH_VOICE_NAME,
+    AZURE_SPEECH_OUTPUT_FORMAT,
+    FEEDBACK_AUDIO_DATA_URLS,
+    SILENT_AUDIO_DATA_URL,
+    SPEECH_GESTURE_STATUS,
+    speechAudio,
+    speechSupported,
+    activeSpeechRequests,
+    correctFeedbackDocuments,
+    waitForCorrectFeedbackKpi,
+    extractQuestionText,
+    answerResultFromDocument,
+    findAnswerButtonAfter,
+    findAnswerChoiceControls,
+    findQuestionMetadataElement,
+    isVisibleElement,
+    normalizeInlineText,
+    splitText,
+    CORRECT_FEEDBACK_LEAVE_DURATION_MS,
+    CORRECT_FEEDBACK_MINIMUM_DURATION_MS,
+    calculateKpiQuestionsRemaining,
+    chooseCorrectFeedbackVariant,
+    renderCorrectFeedbackElement,
+    resolveCorrectFeedbackKpi,
+    buildCopyMarkdown,
+    directChild,
+    isSelectedAnswerChoice,
   });
   installSyncController(app);
   installLauncherController(app);

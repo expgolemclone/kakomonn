@@ -733,263 +733,83 @@ test("does not continue when cold Chrome exits before DevTools is ready", async 
   );
 });
 
-test("prewarms Tampermonkey before creating the fixed application target", async () => {
-  const operations = [];
-  let currentURL = "about:blank";
-  const session = {
-    close() {
-      operations.push("disconnect");
+test("uses Playwright to prewarm Tampermonkey and leaves the application page open", async () => {
+  const events = [];
+  const bootstrap = {
+    goto: async url => events.push(url),
+    evaluate: async expression => {
+      assert.equal(expression, TAMPERMONKEY_READY_EXPRESSION);
+      return { error: null, scriptCount: 1 };
     },
-    async command(method, params) {
-      operations.push({ method, params });
-      if (method === "Runtime.evaluate") {
-        if (params.expression !== TAMPERMONKEY_READY_EXPRESSION) {
-          return {
-            result: {
-              value: { href: currentURL, readyState: "complete" },
-            },
-          };
-        }
-        return {
-          result: { value: { error: null, scriptCount: 1 } },
-        };
-      }
-      if (method === "Page.navigate") {
-        currentURL = params.url;
-      }
-      return {};
-    },
-    async waitForEvent(method) {
-      operations.push({ event: method });
-    },
+    close: async () => events.push("close-bootstrap"),
   };
+  const application = {
+    goto: async url => events.push(url),
+    waitForFunction: async () => ({ jsonValue: async () => JSON.stringify({ state: "ready" }), dispose: async () => {} }),
+  };
+  let pages = 0;
   const result = await prepareKakomonnPage(9222, {
-    async closeTarget(port, targetId) {
-      operations.push({ closeTarget: targetId, port });
-    },
-    async connectSession(webSocketDebuggerUrl) {
-      assert.equal(webSocketDebuggerUrl, "ws://prepared-target");
-      return session;
-    },
-    async createTarget(port, url) {
-      operations.push({ createTarget: url, port });
+    connect: async endpoint => {
+      assert.equal(endpoint, "http://127.0.0.1:9222");
       return {
-        id: "application-target",
-        type: "page",
-        url,
-        webSocketDebuggerUrl: "ws://application-target",
+        contexts: () => [{
+          newPage: async () => ++pages === 1 ? bootstrap : application,
+          newCDPSession: async () => ({
+            send: async method => {
+              assert.equal(method, "Target.getTargetInfo");
+              return { targetInfo: { targetId: "application" } };
+            }, detach: async () => {},
+          }),
+        }],
+        close: async () => events.push("disconnect"),
       };
     },
     openURL: KAKOMONN_OPEN_URL,
-    target: {
-      id: "prepared-target",
-      type: "page",
-      url: CHROME_BOOTSTRAP_URL,
-      webSocketDebuggerUrl: "ws://prepared-target",
-    },
     tampermonkeyExtensionId: "tampermonkey-beta",
     userscriptIdentity: USERSCRIPT_IDENTITY,
-    async waitForLaunch(applicationTarget) {
-      operations.push({ waitForLaunch: applicationTarget.id });
-    },
   });
-  assert.deepEqual(result, { port: 9222, targetId: "application-target" });
-  const navigations = operations.filter((operation) => operation?.method === "Page.navigate");
-  assert.deepEqual(
-    navigations.map((operation) => operation.params.url),
-    ["chrome-extension://tampermonkey-beta/options.html#nav=settings"],
-  );
-  const evaluationIndex = operations.findIndex(
-    (operation) =>
-      operation?.method === "Runtime.evaluate" &&
-      operation.params.expression === TAMPERMONKEY_READY_EXPRESSION,
-  );
-  assert.equal(evaluationIndex > operations.indexOf(navigations[0]), true);
-  const applicationTargetIndex = operations.findIndex(
-    (operation) => operation?.createTarget === KAKOMONN_OPEN_URL,
-  );
-  assert.equal(evaluationIndex < applicationTargetIndex, true);
-  assert.deepEqual(operations[applicationTargetIndex + 1], {
-    closeTarget: "prepared-target",
-    port: 9222,
-  });
-  assert.deepEqual(operations[applicationTargetIndex + 2], {
-    waitForLaunch: "application-target",
-  });
-  assert.match(TAMPERMONKEY_READY_EXPRESSION, /chrome\.storage\.local\.get/);
-  assert.equal(operations.at(-1), "disconnect");
+  assert.deepEqual(result, { port: 9222, targetId: "application" });
+  assert.deepEqual(events, [
+    "chrome-extension://tampermonkey-beta/options.html#nav=settings",
+    KAKOMONN_OPEN_URL, "close-bootstrap", "disconnect",
+  ]);
 });
 
-test("closes the bootstrap target without opening the app when Tampermonkey is not ready", async () => {
-  const navigations = [];
-  const closedTargets = [];
-  let currentURL = "about:blank";
-  await assert.rejects(
-    prepareKakomonnPage(9222, {
-      async closeTarget(port, targetId) {
-        closedTargets.push({ port, targetId });
-      },
-      async connectSession() {
-        return {
-          close() {},
-          async command(method, params) {
-            if (method === "Page.navigate") {
-              navigations.push(params.url);
-              currentURL = params.url;
-              return {};
-            }
-            if (method === "Runtime.evaluate") {
-              if (params.expression !== TAMPERMONKEY_READY_EXPRESSION) {
-                return {
-                  result: {
-                    value: { href: currentURL, readyState: "complete" },
-                  },
-                };
-              }
-              return {
-                result: {
-                  value: {
-                    error: "The userscript is not ready",
-                    scriptCount: 0,
-                  },
-                },
-              };
-            }
-            return {};
-          },
-          async waitForEvent() {},
-        };
-      },
-      async createTarget() {
-        return {
-          id: "failed-target",
-          type: "page",
-          webSocketDebuggerUrl: "ws://failed-target",
-        };
-      },
-      openURL: KAKOMONN_OPEN_URL,
-      tampermonkeyExtensionId: "tampermonkey-beta",
-      userscriptIdentity: USERSCRIPT_IDENTITY,
+test("closes the bootstrap and disconnects without opening the app if Tampermonkey is unavailable", async () => {
+  const events = [];
+  await assert.rejects(prepareKakomonnPage(9222, {
+    connect: async () => ({
+      contexts: () => [{ newPage: async () => ({
+        goto: async () => {},
+        evaluate: async () => ({ error: "not enabled", scriptCount: 1 }),
+        close: async () => events.push("close"),
+      }) }],
+      close: async () => events.push("disconnect"),
     }),
-    /transport is not ready/,
-  );
-  assert.deepEqual(navigations, ["chrome-extension://tampermonkey-beta/options.html#nav=settings"]);
-  assert.deepEqual(closedTargets, [{ port: 9222, targetId: "failed-target" }]);
+    openURL: KAKOMONN_OPEN_URL,
+    tampermonkeyExtensionId: "tampermonkey-beta",
+    userscriptIdentity: USERSCRIPT_IDENTITY,
+  }), /transport is not ready/);
+  assert.deepEqual(events, ["close", "disconnect"]);
 });
 
-function applicationSession(states) {
-  const operations = [];
-  let stateIndex = 0;
-  const session = {
-    close() {
-      operations.push("close");
-    },
-    async command(method) {
-      operations.push(method);
-      if (method === "Runtime.evaluate") {
-        return { result: { value: states[stateIndex] } };
-      }
-      if (method === "Page.reload") {
-        stateIndex += 1;
-      }
-      return {};
-    },
-    async waitForEvent(method) {
-      operations.push(`wait:${method}`);
-    },
-  };
-  return { operations, session };
-}
-
-test("reloads an early runtime failure and observes the question in the same target", async () => {
-  const { operations, session } = applicationSession([
-    {
-      href: KAKOMONN_OPEN_URL,
-      bridgeState: "error",
-      bridgeError: "runtime_unavailable",
-      openError: "context=open-bridge | code=reader_unavailable",
-    },
-    {
-      href: "https://chushoks.kakomonn.com/questions/45124",
-      bridgeState: null,
-      bridgeError: null,
-      openError: null,
-    },
-  ]);
-  let elapsedMs = 0;
-  const result = await waitForKakomonnLaunch(
-    { webSocketDebuggerUrl: "ws://application-target" },
-    {
-      async connectSession(url) {
-        assert.equal(url, "ws://application-target");
-        return session;
-      },
-      async delayImpl(ms) {
-        elapsedMs += ms;
-      },
-      now: () => elapsedMs,
-    },
-  );
-  assert.equal(result, "ready");
-  assert.deepEqual(operations, [
-    "Page.enable",
-    "Runtime.evaluate",
-    "wait:Page.frameNavigated",
-    "Page.reload",
-    "Runtime.evaluate",
-    "close",
-  ]);
-});
-
-test("keeps terminal bridge results visible without retrying", async () => {
-  for (const [bridgeState, bridgeError, expected] of [
-    ["empty", null, "empty"],
-    ["unauthorized", null, "unauthorized"],
-    ["error", "invalid_response", null],
-  ]) {
-    const { operations, session } = applicationSession([
-      { href: KAKOMONN_OPEN_URL, bridgeState, bridgeError, openError: null },
-    ]);
-    const options = {
-      connectSession: async () => session,
-      delayImpl: async () => {},
+test("retries only transient bridge failures and preserves terminal states", async () => {
+  for (const terminal of ["ready", "empty", "unauthorized"]) {
+    let step = 0;
+    const page = {
+      waitForFunction: async () => ({
+        jsonValue: async () => JSON.stringify(step === 0 ? { state: "error", code: "network_error" } : { state: terminal }),
+        dispose: async () => {},
+      }),
+      waitForTimeout: async () => {},
+      reload: async () => { step += 1; },
     };
-    if (expected === null) {
-      await assert.rejects(
-        waitForKakomonnLaunch({ webSocketDebuggerUrl: "ws://target" }, options),
-        /Kakomonn reader bridge failed: invalid_response/,
-      );
-    } else {
-      assert.equal(
-        await waitForKakomonnLaunch({ webSocketDebuggerUrl: "ws://target" }, options),
-        expected,
-      );
-    }
-    assert.equal(operations.includes("Page.reload"), false);
-    assert.equal(operations.at(-1), "close");
+    assert.equal(await waitForKakomonnLaunch(page), terminal);
+    assert.equal(step, 1);
   }
-});
-
-test("stops transient bridge retries at the startup deadline", async () => {
-  const { operations, session } = applicationSession([
-    { href: KAKOMONN_OPEN_URL, bridgeState: "error", bridgeError: "network_error" },
-    { href: KAKOMONN_OPEN_URL, bridgeState: "error", bridgeError: "network_error" },
-  ]);
-  let elapsedMs = 0;
-  await assert.rejects(
-    waitForKakomonnLaunch(
-      { webSocketDebuggerUrl: "ws://target" },
-      {
-        connectSession: async () => session,
-        async delayImpl(ms) {
-          elapsedMs += ms;
-        },
-        now: () => elapsedMs,
-        timeoutMs: 500,
-      },
-    ),
-    /did not become ready: Kakomonn reader bridge is not ready: network_error/,
-  );
-  assert.equal(operations.filter((operation) => operation === "Page.reload").length, 1);
-  assert.equal(operations.at(-1), "close");
+  await assert.rejects(waitForKakomonnLaunch({
+    waitForFunction: async () => ({
+      jsonValue: async () => JSON.stringify({ state: "error", code: "invalid_response" }), dispose: async () => {},
+    }),
+  }), /invalid_response/);
 });

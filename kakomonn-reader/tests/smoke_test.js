@@ -6,13 +6,13 @@ const path = require("node:path");
 const { chromium } = require("playwright");
 const { kakomonnFreeEnvironment } = require("../../scripts/kakomonn-config.cjs");
 const {
-  installSyncMock,
+  installSyncFixture,
   PENDING_ATTEMPT_KEY,
   PENDING_CELEBRATION_KEY,
   SPEECH_AUDIO_BYTES,
   SYNC_API_ORIGIN,
   SYNC_TOKEN_KEY,
-} = require("./sync_mock");
+} = require("./support/sync-fixture.cjs");
 const { dispatchNextQuestionSwipe, installReaderInChildFrames } = require("./support/frame_reader");
 
 const projectRoot = path.resolve(__dirname, "..");
@@ -31,13 +31,7 @@ const iosUserAgent =
   "Mobile/15E148 Safari/604.1";
 const windowsFirefoxUserAgent =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) " + "Gecko/20100101 Firefox/141.0";
-const KPI_COMPLETION_SYNC_OPTIONS = Object.freeze({
-  attemptCount: 49,
-  attemptedQuestionCount: 49,
-  todayAttemptCount: 49,
-  todayAttemptedQuestionCount: 49,
-  todayNewQuestionCount: 49,
-});
+const KPI_COMPLETION_SYNC_OPTIONS = Object.freeze({ completionScenario: true });
 const iosChromeUserAgent =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/150.0.0.0 " +
@@ -212,16 +206,16 @@ const expectedCopiedMarkdown = `# 中小企業診断士試験 令和2年度（20
 
 ## 問題文
 
-これは動作確認用の問題文です.
-
+これは動作確認用の問題文です.  
 これは改行後の問題文です.
 
 ![問題文の画像](https://cdn.example.test/question.png)
 
 ### 選択肢
 
-- 選択肢1
-- 選択肢2
+-   選択肢1
+    
+-   選択肢2
 
 ### 自分の回答
 
@@ -242,7 +236,7 @@ const expectedCopiedMarkdown = `# 中小企業診断士試験 令和2年度（20
 ![解説画像 1](https://cdn.example.test/explanation-2.png)`;
 
 async function preparePage(page, speechMode, syncOptions = {}) {
-  const { catalogFixture = null, historyDashboard = false, ...syncMockOptions } = syncOptions;
+  const { catalogFixture = null, historyDashboard = false, ...syncFixtureOptions } = syncOptions;
   const errors = [];
   const catalogRequests = [];
   catalogRequestsByErrors.set(errors, catalogRequests);
@@ -422,7 +416,7 @@ async function preparePage(page, speechMode, syncOptions = {}) {
     });
   }, speechMode);
 
-  await installSyncMock(page, syncMockOptions);
+  await installSyncFixture(page, syncFixtureOptions);
 
   return errors;
 }
@@ -516,8 +510,8 @@ async function assertRuntimeRejected(
   assert.equal(await page.locator("style").count(), 0);
   assert.deepEqual(
     await page.evaluate(() => ({
-      calls: window.__syncMock.calls.length,
-      clipboardWrites: window.__syncMock.clipboardWrites.length,
+      calls: window.__syncFixture.calls.length,
+      clipboardWrites: window.__syncFixture.clipboardWrites.length,
     })),
     { calls: 0, clipboardWrites: 0 },
   );
@@ -882,7 +876,7 @@ async function markAnswerResult(childFrame, answerResult) {
 
 async function azureSpeechCalls(page) {
   return page.evaluate(
-    (url) => window.__syncMock.calls.filter((call) => call.url === url),
+    (url) => window.__syncFixture.calls.filter((call) => call.url === url),
     azureSpeechUrl,
   );
 }
@@ -890,7 +884,7 @@ async function azureSpeechCalls(page) {
 async function speechTokenCallCount(page) {
   return page.evaluate(
     () =>
-      window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/speech-token")
+      window.__syncFixture.calls.filter((call) => new URL(call.url).pathname === "/v12/speech-token")
         .length,
   );
 }
@@ -953,7 +947,7 @@ async function runCorrectFeedbackCase(context, script) {
       element.dataset.duplicateMutationProbe = "true";
     });
     await page.waitForFunction(
-      () => window.__syncMock.attemptCount === 1 && window.__copiedTexts.length === 1,
+      () => window.__syncFixture.attemptCount === 1 && window.__copiedTexts.length === 1,
     );
     assert.equal(
       await childFrame.evaluate(() => location.href),
@@ -968,7 +962,7 @@ async function runCorrectFeedbackCase(context, script) {
     );
     const speechCalls = await azureSpeechCalls(page);
     assert.equal(speechCalls.length, 2);
-    assert.equal(speechCalls[1].body, expectedSpeechSSML("61", "+70%"));
+    assert.equal(speechCalls[1].body, expectedSpeechSSML("21", "+70%"));
     await finishManualAudio(page);
     await page.waitForFunction(
       () =>
@@ -1045,7 +1039,7 @@ async function runRestoredCorrectFeedbackKpiCase(context, script) {
     const speechCalls = await azureSpeechCalls(page);
     assert.equal(speechCalls.length, 2);
     assert.equal(speechCalls[1].body, expectedSpeechSSML("42", "+70%"));
-    assert.equal(await page.evaluate(() => window.__syncMock.attemptCount), 0);
+    assert.equal(await page.evaluate(() => window.__syncFixture.attemptCount), 0);
     await finishManualAudio(page);
     assert.deepEqual(errors, []);
   } finally {
@@ -1067,7 +1061,7 @@ async function runCorrectFeedbackSyncRetryCase(context, script) {
     await finishManualAudio(page);
     await page.waitForFunction(() => window.__audioInstance?.src === "");
     await page.evaluate(() => {
-      window.__syncMock.commitThenFailNextAttempt = true;
+      window.__syncFixture.commitThenFailNextAttempt = true;
     });
 
     await markAnswerResult(childFrame, "correct");
@@ -1094,8 +1088,8 @@ async function runCorrectFeedbackSyncRetryCase(context, script) {
     );
     const speechCalls = await azureSpeechCalls(page);
     assert.equal(speechCalls.length, 2);
-    assert.equal(speechCalls[1].body, expectedSpeechSSML("61", "+70%"));
-    assert.equal(await page.evaluate(() => window.__syncMock.attemptCount), 1);
+    assert.equal(speechCalls[1].body, expectedSpeechSSML("21", "+70%"));
+    assert.equal(await page.evaluate(() => window.__syncFixture.attemptCount), 1);
     await finishManualAudio(page);
     assert.deepEqual(errors, []);
   } finally {
@@ -1107,15 +1101,15 @@ async function runSpeechLookaheadCase(context, script) {
   const page = await context.newPage();
   const errors = await preparePage(page, "audio-manual");
   await page.evaluate(() => {
-    window.__syncMock.holdSpeechRequestNumber = 2;
+    window.__syncFixture.holdSpeechRequestNumber = 2;
   });
   const longBody = mockBody.replace("これは動作確認用の問題文です.", `${"あ".repeat(1_600)}.`);
   const childFrame = await loadMockQuestion(page, script, longBody);
   try {
     await page.waitForFunction(
       (url) =>
-        window.__syncMock.calls.filter((call) => call.url === url).length === 2 &&
-        window.__syncMock.releaseHeldSpeechRequest !== null &&
+        window.__syncFixture.calls.filter((call) => call.url === url).length === 2 &&
+        window.__syncFixture.releaseHeldSpeechRequest !== null &&
         window.__audioInstance?.paused === false &&
         typeof window.__audioInstance?.onended === "function",
       azureSpeechUrl,
@@ -1128,21 +1122,21 @@ async function runSpeechLookaheadCase(context, script) {
       );
     } catch (error) {
       const state = await page.evaluate(() => ({
-        attemptCount: window.__syncMock.attemptCount,
+        attemptCount: window.__syncFixture.attemptCount,
         audioBlobs: window.__audioBlobs,
         audioSource: window.__audioInstance?.src,
         audioPlayCalls: window.__audioPlayCalls,
-        abortedRequestCount: window.__syncMock.abortedRequestCount,
+        abortedRequestCount: window.__syncFixture.abortedRequestCount,
         feedback: document.querySelector(".congratulations-feedback")?.outerHTML,
-        heldSpeechRequest: window.__syncMock.releaseHeldSpeechRequest !== null,
+        heldSpeechRequest: window.__syncFixture.releaseHeldSpeechRequest !== null,
         readerError: document.querySelector("#kakomonn-reader-error-detail")?.textContent,
       }));
       throw new Error(`speech lookahead timed out: ${JSON.stringify(state)}`, { cause: error });
     }
     assert.deepEqual(
       await page.evaluate(() => ({
-        abortedRequestCount: window.__syncMock.abortedRequestCount,
-        releaseHeldSpeechRequest: window.__syncMock.releaseHeldSpeechRequest !== null,
+        abortedRequestCount: window.__syncFixture.abortedRequestCount,
+        releaseHeldSpeechRequest: window.__syncFixture.releaseHeldSpeechRequest !== null,
       })),
       { abortedRequestCount: 1, releaseHeldSpeechRequest: false },
     );
@@ -1173,16 +1167,21 @@ async function runCatalogSinglePassValidationCase(context, script, mismatch) {
       );
       assert.equal(
         await page.evaluate(() =>
-          window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
+          window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
         ),
         false,
       );
     } else {
       await page.waitForFunction(() =>
-        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
-      );
+        window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
+      ).catch(async error => {
+        console.error(await page.evaluate(() => ({ calls: window.__syncFixture.calls,
+          detail: document.querySelector("#kakomonn-reader-error-detail")?.textContent })));
+        console.error(errors, catalogRequestsByErrors.get(errors));
+        throw error;
+      });
       const update = await page.evaluate(() =>
-        window.__syncMock.calls.find((call) => new URL(call.url).pathname === "/v12/questions"),
+        window.__syncFixture.calls.find((call) => new URL(call.url).pathname === "/v12/questions"),
       );
       assert.deepEqual(update.body.questionIds, ["1", "2", "3", "4", "5"]);
     }
@@ -1231,18 +1230,18 @@ async function runCatalogDoesNotBlockSpeechCase(context, script) {
     } finally {
       clearTimeout(lastPageTimeout);
     }
-    await page.waitForFunction(() => window.__syncMock.speechRequestCount === 1);
+    await page.waitForFunction(() => window.__syncFixture.speechRequestCount === 1);
     assert.equal(typeof catalogFixture.releaseLastPage, "function");
     assert.equal(
       await page.evaluate(() =>
-        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
+        window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
       ),
       false,
     );
     catalogFixture.releaseLastPage();
     catalogFixture.releaseLastPage = null;
     await page.waitForFunction(() =>
-      window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
+      window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
     );
     assert.deepEqual([...errors], []);
   } finally {
@@ -1277,7 +1276,7 @@ async function runContinuousMutationCase(context, script) {
     });
     await markAnswerResult(childFrame, "incorrect");
     await page.waitForFunction(
-      () => window.__syncMock.attemptCount === 1 && window.__copiedTexts.length === 1,
+      () => window.__syncFixture.attemptCount === 1 && window.__copiedTexts.length === 1,
       null,
       { timeout: 500 },
     );
@@ -1343,7 +1342,7 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
     await feedback.waitFor({ state: "hidden" });
     const speechCalls = await azureSpeechCalls(page);
     assert.equal(speechCalls.length, 2);
-    assert.equal(speechCalls[1].body, expectedSpeechSSML("61", "+70%"));
+    assert.equal(speechCalls[1].body, expectedSpeechSSML("21", "+70%"));
     assert.equal(
       speechCalls.some((call) => call.body.includes("en-US-JennyNeural")),
       false,
@@ -1379,7 +1378,7 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
     await markAnswerResult(childFrame, "correct");
     await page.waitForFunction(
       () =>
-        window.__syncMock.attemptCount === 1 &&
+        window.__syncFixture.attemptCount === 1 &&
         window.__copiedTexts.length === 1 &&
         document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href ===
           "https://chushoks.kakomonn.com/questions/45125",
@@ -1390,7 +1389,7 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
     }, mockBody);
     await page.waitForTimeout(1_000);
     await page.evaluate(() => {
-      window.__syncMock.nextQuestionId = null;
+      window.__syncFixture.nextQuestionId = null;
     });
     await markAnswerResult(childFrame, "correct");
     await page.waitForFunction(() => window.__correctFeedbackRandomCalls.length === 2);
@@ -1445,8 +1444,8 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
     await page.waitForFunction(() => window.__audioInstance?.src === "");
     const speechCalls = await azureSpeechCalls(page);
     assert.equal(speechCalls.length, 3);
-    assert.equal(speechCalls[1].body, expectedSpeechSSML("61", "+70%"));
-    assert.equal(speechCalls[2].body, expectedSpeechSSML("60", "+70%"));
+    assert.equal(speechCalls[1].body, expectedSpeechSSML("21", "+70%"));
+    assert.equal(speechCalls[2].body, expectedSpeechSSML("20", "+70%"));
     assert.deepEqual(await page.evaluate(() => window.__correctFeedbackRandomCalls), [11, 0]);
     assert.deepEqual(errors, []);
   } finally {
@@ -1471,7 +1470,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
     );
     await finishManualAudio(page);
     await page.evaluate(() => {
-      window.__syncMock.nextCelebration = {
+      window.__syncFixture.nextCelebration = {
         site: "chushoks.kakomonn.com",
         date: "2026-08-10",
         dailyKpiCompleted: true,
@@ -1480,7 +1479,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
     await markAnswerResult(childFrame, "correct");
     await page.waitForFunction(
       () =>
-        window.__syncMock.attemptCount === 50 &&
+        window.__syncFixture.attemptCount === 10 &&
         window.__copiedTexts.length === 1 &&
         history.state?.entryType === "current" &&
         document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href ===
@@ -1531,11 +1530,11 @@ async function runIncorrectEnterReservationCase(context, script) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate(() => {
-      window.__syncMock.holdNextRequest = true;
+      window.__syncFixture.holdNextRequest = true;
     });
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
-    await page.waitForFunction(() => window.__syncMock.releaseHeldRequest !== null);
+    await page.waitForFunction(() => window.__syncFixture.releaseHeldRequest !== null);
 
     await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
@@ -1543,7 +1542,7 @@ async function runIncorrectEnterReservationCase(context, script) {
     await page.waitForTimeout(100);
     assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
 
-    await page.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await page.evaluate(() => window.__syncFixture.releaseHeldRequest());
     await page.waitForFunction(
       ({ pendingAttemptKey, nextURL }) =>
         window.__getGMValue(pendingAttemptKey) === null &&
@@ -1556,7 +1555,7 @@ async function runIncorrectEnterReservationCase(context, script) {
     );
     assert.deepEqual(
       await page.evaluate(() => ({
-        attempts: window.__syncMock.calls.filter(
+        attempts: window.__syncFixture.calls.filter(
           (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
         ).length,
         copies: window.__copiedTexts.length,
@@ -1576,13 +1575,13 @@ async function runIncorrectEnterCopyFailureCase(context, script) {
   try {
     await page.evaluate((pendingAttemptKey) => {
       window.__clipboardWriteFails = true;
-      window.__syncMock.holdSetValueKey = pendingAttemptKey;
+      window.__syncFixture.holdSetValueKey = pendingAttemptKey;
     }, PENDING_ATTEMPT_KEY);
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
-    await page.waitForFunction(() => window.__syncMock.releaseHeldSetValue !== null);
+    await page.waitForFunction(() => window.__syncFixture.releaseHeldSetValue !== null);
     await page.keyboard.press("Enter");
-    await page.evaluate(() => window.__syncMock.releaseHeldSetValue());
+    await page.evaluate(() => window.__syncFixture.releaseHeldSetValue());
 
     await page.waitForFunction(
       ({ pendingAttemptKey, nextURL }) =>
@@ -1596,7 +1595,7 @@ async function runIncorrectEnterCopyFailureCase(context, script) {
     );
     assert.deepEqual(
       await page.evaluate(() => ({
-        attempts: window.__syncMock.calls.filter(
+        attempts: window.__syncFixture.calls.filter(
           (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
         ).length,
         copies: window.__copiedTexts.length,
@@ -1604,7 +1603,7 @@ async function runIncorrectEnterCopyFailureCase(context, script) {
       { attempts: 1, copies: 0 },
     );
     assert.equal(await page.locator("#kakomonn-reader-error-dialog").getAttribute("open"), null);
-    assert.deepEqual(await page.evaluate(() => window.__syncMock.calls.filter(
+    assert.deepEqual(await page.evaluate(() => window.__syncFixture.calls.filter(
       (call) => new URL(call.url).pathname === "/v12/copy-failures").map((call) => call.body)), [
       { site: "chushoks.kakomonn.com", questionId: "45124", reason: "clipboard_write_failed" },
     ]);
@@ -1623,15 +1622,15 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate((pendingAttemptKey) => {
-      window.__syncMock.holdSetValueKey = pendingAttemptKey;
+      window.__syncFixture.holdSetValueKey = pendingAttemptKey;
     }, PENDING_ATTEMPT_KEY);
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
-    await page.waitForFunction(() => window.__syncMock.releaseHeldSetValue !== null);
+    await page.waitForFunction(() => window.__syncFixture.releaseHeldSetValue !== null);
     await page.keyboard.press("Enter");
     await page.evaluate(() => {
-      window.__syncMock.failNextRequest = true;
-      window.__syncMock.releaseHeldSetValue();
+      window.__syncFixture.failNextRequest = true;
+      window.__syncFixture.releaseHeldSetValue();
     });
 
     await page.waitForFunction(
@@ -1656,10 +1655,10 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
     );
     assert.deepEqual(
       await page.evaluate(() => ({
-        attemptCalls: window.__syncMock.calls.filter(
+        attemptCalls: window.__syncFixture.calls.filter(
           (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
         ).length,
-        attempts: window.__syncMock.attemptCount,
+        attempts: window.__syncFixture.attemptCount,
         copies: window.__copiedTexts.length,
       })),
       { attemptCalls: 2, attempts: 1, copies: 1 },
@@ -1679,7 +1678,7 @@ async function runMismatchedCelebrationRejectedCase(context, script) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate(() => {
-      window.__syncMock.nextCelebration = {
+      window.__syncFixture.nextCelebration = {
         site: "shindans.kakomonn.com",
         date: "2026-08-10",
         dailyKpiCompleted: true,
@@ -1725,7 +1724,7 @@ async function runIncorrectCelebrationEnterCase(context, script) {
   const childFrame = await loadMockQuestion(page, script);
   try {
     await page.evaluate(() => {
-      window.__syncMock.nextCelebration = {
+      window.__syncFixture.nextCelebration = {
         site: "chushoks.kakomonn.com",
         date: "2026-08-10",
         dailyKpiCompleted: true,
@@ -1782,13 +1781,13 @@ async function runIncorrectEnterNoNextCase(context, script) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate(() => {
-      window.__syncMock.holdNextRequest = true;
+      window.__syncFixture.holdNextRequest = true;
     });
     await childFrame.locator("input[name='answer']").first().focus();
     await markAnswerResult(childFrame, "incorrect");
-    await page.waitForFunction(() => window.__syncMock.releaseHeldRequest !== null);
+    await page.waitForFunction(() => window.__syncFixture.releaseHeldRequest !== null);
     await page.keyboard.press("Enter");
-    await page.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await page.evaluate(() => window.__syncFixture.releaseHeldRequest());
 
     await page.waitForFunction(
       () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
@@ -1811,7 +1810,7 @@ async function assertIncorrectSkip(context, script) {
   try {
     await page.waitForFunction(
       () =>
-        window.__syncMock.calls.some((call) => new URL(call.url).pathname === "/v12/state") &&
+        window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/state") &&
         document.querySelector("#kakomonn-reader-sync-settings")?.open === false,
     );
     if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
@@ -1823,12 +1822,12 @@ async function assertIncorrectSkip(context, script) {
     });
     await frame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("n");
-    await page.waitForFunction(() => window.__syncMock.attemptCount === 1);
+    await page.waitForFunction(() => window.__syncFixture.attemptCount === 1);
     const calls = await page.evaluate(() => ({
-      attempts: window.__syncMock.calls.filter(
+      attempts: window.__syncFixture.calls.filter(
         (call) => new URL(call.url).pathname === "/v12/attempts",
       ),
-      next: window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/next"),
+      next: window.__syncFixture.calls.filter((call) => new URL(call.url).pathname === "/v12/next"),
     }));
     assert.equal(calls.attempts.length, 1);
     assert.equal(calls.attempts[0].body.questionId, "45124");
@@ -2300,7 +2299,7 @@ async function main() {
     );
     assert.equal(await childFrame.evaluate(() => window.__answerButtonClicks), 1);
     await page.evaluate(() => {
-      window.__syncMock.nextAttemptStabilityDaysDelta = 31;
+      Object.assign(window.__syncFixture.attemptResponses[0].learningMetrics, { stabilityDays: 31, todayStabilityDaysDelta: 31 });
     });
     await childFrame.locator("input[name='answer']").first().focus();
     await page.keyboard.press("Enter");
@@ -2308,7 +2307,7 @@ async function main() {
     assert.equal(
       await page.evaluate(
         () =>
-          window.__syncMock.calls.filter(
+          window.__syncFixture.calls.filter(
             (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
           ).length,
       ),
@@ -2353,14 +2352,14 @@ async function main() {
     try {
       await page.waitForFunction(
         () =>
-          window.__syncMock.attemptCount === 1 &&
+          window.__syncFixture.attemptCount === 1 &&
           window.__copiedTexts.length === 1 &&
           window.__readerPopstateCount >= 1 &&
           history.state?.entryType === "current",
       );
     } catch (error) {
       const state = await page.evaluate(() => ({
-        attemptCount: window.__syncMock.attemptCount,
+        attemptCount: window.__syncFixture.attemptCount,
         copiedTexts: window.__copiedTexts.length,
         popstateCount: window.__readerPopstateCount,
         historyState: history.state,
@@ -2382,7 +2381,7 @@ async function main() {
 
     const stateCallsAfterAnswer = await page.evaluate(
       () =>
-        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
+        window.__syncFixture.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
           .length,
     );
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -2390,7 +2389,7 @@ async function main() {
     assert.equal(
       await page.evaluate(
         () =>
-          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
+          window.__syncFixture.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
             .length,
       ),
       stateCallsAfterAnswer,
@@ -2451,23 +2450,21 @@ async function main() {
 
     const stateCallsBeforeResume = await page.evaluate(
       () =>
-        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
+        window.__syncFixture.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
           .length,
     );
     await page.evaluate(() => {
-      window.__syncMock.stabilityDays = 7;
-      window.__syncMock.attemptCount = 7;
-      window.__syncMock.attemptedQuestionCount = 7;
-      window.__syncMock.todayAttemptedQuestionCount = 7;
-      window.__syncMock.dueCardsCompleted = true;
-      window.__syncMock.dueCardsRemaining = 0;
+      Object.assign(window.__syncFixture.state.learningMetrics, {
+        stabilityDays: 7, attemptedQuestionCount: 7, todayAttemptedQuestionCount: 7,
+        dueCardsCompleted: true, dueCardsRemaining: 0,
+      });
       window.dispatchEvent(new Event("focus"));
     });
     await page.waitForTimeout(100);
     assert.equal(
       await page.evaluate(
         () =>
-          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
+          window.__syncFixture.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
             .length,
       ),
       stateCallsBeforeResume,
@@ -2591,7 +2588,7 @@ async function main() {
     assert.equal(await gestureRetryAnswer.isChecked(), true);
     await gestureRetryPage.waitForFunction(
       (url) =>
-        window.__syncMock.calls.filter((call) => call.url === url).length === 1 &&
+        window.__syncFixture.calls.filter((call) => call.url === url).length === 1 &&
         window.__audioInstance?.src === "",
       azureSpeechUrl,
     );
@@ -2618,7 +2615,7 @@ async function main() {
     await markAnswerResult(autoplayBlockedFrame, "correct");
     await autoplayBlockedPage.waitForFunction(
       (pendingAttemptKey) =>
-        window.__syncMock.attemptCount === 1 &&
+        window.__syncFixture.attemptCount === 1 &&
         window.__copiedTexts.length === 1 &&
         location.href === "https://chushoks.kakomonn.com/questions/45125" &&
         document.querySelector("#kakomonn-reader-frame")?.contentWindow?.location.href ===
@@ -2641,15 +2638,15 @@ async function main() {
     const delayedSyncPage = await context.newPage();
     const delayedSyncErrors = await preparePage(delayedSyncPage, "audio");
     await delayedSyncPage.evaluate(() => {
-      window.__syncMock.holdNextRequest = true;
+      window.__syncFixture.holdNextRequest = true;
     });
     await loadMockQuestion(delayedSyncPage, script);
-    await delayedSyncPage.waitForFunction(() => window.__syncMock.releaseHeldRequest !== null);
+    await delayedSyncPage.waitForFunction(() => window.__syncFixture.releaseHeldRequest !== null);
     assert.equal((await azureSpeechCalls(delayedSyncPage)).length, 0);
     assert.equal(await speechTokenCallCount(delayedSyncPage), 0);
-    await delayedSyncPage.evaluate(() => window.__syncMock.releaseHeldRequest());
+    await delayedSyncPage.evaluate(() => window.__syncFixture.releaseHeldRequest());
     await delayedSyncPage.waitForFunction(
-      (url) => window.__syncMock.calls.filter((call) => call.url === url).length === 1,
+      (url) => window.__syncFixture.calls.filter((call) => call.url === url).length === 1,
       azureSpeechUrl,
     );
     await delayedSyncPage.waitForFunction(() => window.__audioInstance?.src === "");
@@ -2696,7 +2693,7 @@ async function main() {
       state: "visible",
     });
     await failedSetupPage.evaluate((syncTokenKey) => {
-      window.__syncMock.failSetValueKey = syncTokenKey;
+      window.__syncFixture.failSetValueKey = syncTokenKey;
     }, SYNC_TOKEN_KEY);
     await failedSetupPage.locator("#kakomonn-reader-sync-token").fill("test-sync-token");
     await failedSetupPage.locator("#kakomonn-reader-sync-settings-save").click();
@@ -2763,7 +2760,7 @@ async function main() {
     const firstAnswer = iosFrame.locator("input[name='answer']").first();
     assert.equal(await firstAnswer.isChecked(), false);
     await iosPage.waitForFunction(
-      (url) => window.__syncMock.calls.filter((call) => call.url === url).length === 1,
+      (url) => window.__syncFixture.calls.filter((call) => call.url === url).length === 1,
       azureSpeechUrl,
     );
     await iosPage.waitForFunction(() => window.__audioInstance?.src === "");
@@ -2789,7 +2786,7 @@ async function main() {
     await markAnswerResult(iosFrame, "incorrect");
     await iosPage.waitForFunction(
       () =>
-        window.__syncMock.attemptCount === 1 &&
+        window.__syncFixture.attemptCount === 1 &&
         window.__copiedTexts.length === 1 &&
         history.state?.entryType === "current",
     );
@@ -2799,7 +2796,7 @@ async function main() {
     assert.equal((await azureSpeechCalls(iosPage)).length, 1);
     assert.equal(await speechTokenCallCount(iosPage), 1);
     await iosPage.evaluate(() => {
-      window.__syncMock.nextAttemptStabilityDaysDelta = 31;
+      Object.assign(window.__syncFixture.attemptResponses[0].learningMetrics, { stabilityDays: 31, todayStabilityDaysDelta: 31 });
     });
     assert.equal(await iosPage.evaluate(() => window.__copiedTexts[0]), expectedCopiedMarkdown);
     assert.deepEqual(await dispatchNextQuestionSwipe(iosFrame), {
@@ -2810,23 +2807,21 @@ async function main() {
     assert.equal(await iosPage.evaluate(() => history.length), iosHistoryLength);
     const iosStateCallsBeforeResume = await iosPage.evaluate(
       () =>
-        window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
+        window.__syncFixture.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
           .length,
     );
     await iosPage.evaluate(() => {
-      window.__syncMock.stabilityDays = 6;
-      window.__syncMock.attemptCount = 6;
-      window.__syncMock.attemptedQuestionCount = 6;
-      window.__syncMock.todayAttemptedQuestionCount = 6;
-      window.__syncMock.dueCardsCompleted = true;
-      window.__syncMock.dueCardsRemaining = 0;
+      Object.assign(window.__syncFixture.state.learningMetrics, {
+        stabilityDays: 6, attemptedQuestionCount: 6, todayAttemptedQuestionCount: 6,
+        dueCardsCompleted: true, dueCardsRemaining: 0,
+      });
       window.dispatchEvent(new Event("focus"));
     });
     await iosPage.waitForTimeout(100);
     assert.equal(
       await iosPage.evaluate(
         () =>
-          window.__syncMock.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
+          window.__syncFixture.calls.filter((call) => new URL(call.url).pathname === "/v12/state")
             .length,
       ),
       iosStateCallsBeforeResume,
@@ -2835,7 +2830,7 @@ async function main() {
     assert.equal(
       await iosPage.evaluate(
         () =>
-          window.__syncMock.calls.filter(
+          window.__syncFixture.calls.filter(
             (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
           ).length,
       ),
@@ -2859,7 +2854,7 @@ async function main() {
     await iosGestureRetryAnswer.tap();
     assert.equal(await iosGestureRetryAnswer.isChecked(), true);
     await iosGestureRetryPage.waitForFunction(
-      (url) => window.__syncMock.calls.filter((call) => call.url === url).length === 1,
+      (url) => window.__syncFixture.calls.filter((call) => call.url === url).length === 1,
       azureSpeechUrl,
     );
     await iosGestureRetryPage.waitForFunction(() => window.__audioInstance?.src === "");

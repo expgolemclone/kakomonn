@@ -32,6 +32,7 @@ beforeEach(async () => {
     await state.storage.deleteAlarm();
     await state.storage.delete("retryAfterMs");
     await state.storage.delete("githubCredentialFingerprint");
+    await state.storage.delete("githubDestination");
   });
 });
 afterEach(() => vi.restoreAllMocks());
@@ -62,6 +63,66 @@ describe("copy failure acceptance", () => {
       } finally {
         instance.env = originalEnvironment;
       }
+    });
+  });
+  describe("delivery destination changes", () => {
+    let originalEnvironment;
+    beforeEach(() => runInDurableObject(stub(), (instance) => {
+      originalEnvironment = instance.env;
+      instance.env = { ...originalEnvironment, GITHUB_COPY_FAILURE_TOKEN: "test-github-secret" };
+    }));
+    afterEach(() => runInDurableObject(stub(), (instance) => {
+      instance.env = originalEnvironment;
+    }));
+    it("reconciles receipts and resumes the queue when the destination changes", async () => {
+      await stub().accept(report());
+      const github = vi.fn(async () => ({ id: 101 }));
+      await runInDurableObject(stub(), (instance) => vi.spyOn(instance, "github").mockImplementation(github));
+      await deliver();
+      const deferredUntil = Date.now() + 60 * 60 * 1000;
+      await runInDurableObject(stub(), async (_, state) => {
+        await state.storage.put("githubDestination", "https://api.github.com/repos/expgolemclone/kakomonn/issues/29/comments");
+        await state.storage.put("retryAfterMs", deferredUntil);
+      });
+      github.mockReset().mockResolvedValueOnce([]).mockResolvedValueOnce({ id: 202 });
+      await stub().accept(report());
+      expect(await rows()).toMatchObject([{ comment_id: null, posting: 1, retry_count: 0 }]);
+      await runInDurableObject(stub(), async (_, state) => {
+        expect(await state.storage.get("retryAfterMs")).toBeUndefined();
+        expect(await state.storage.getAlarm()).toBeLessThan(Date.now() + 5000);
+        expect(await state.storage.get("githubDestination")).toBe(COPY_FAILURE_COMMENTS_URL);
+      });
+      await deliver();
+      expect(github.mock.calls).toEqual([
+        [`${COPY_FAILURE_COMMENTS_URL}?per_page=100&page=1`],
+        [COPY_FAILURE_COMMENTS_URL, "POST", { body: copyFailureComment(report()) }],
+      ]);
+      expect(await rows()).toMatchObject([{ comment_id: 202, posting: 0 }]);
+    });
+    it("reconciles legacy receipts without duplicating an existing destination comment", async () => {
+      await stub().accept(report());
+      const github = vi.fn(async () => ({ id: 303 }));
+      await runInDurableObject(stub(), (instance) => vi.spyOn(instance, "github").mockImplementation(github));
+      await deliver();
+      await runInDurableObject(stub(), (_, state) => state.storage.delete("githubDestination"));
+      github.mockReset().mockResolvedValueOnce([{ id: 303, body: copyFailureComment(report()) }]);
+      await stub().accept(report());
+      expect(await rows()).toMatchObject([{ comment_id: null, posting: 1 }]);
+      await deliver();
+      expect(github.mock.calls).toEqual([[`${COPY_FAILURE_COMMENTS_URL}?per_page=100&page=1`]]);
+      expect(await rows()).toMatchObject([{ comment_id: 303, posting: 0 }]);
+    });
+    it("preserves confirmed receipts when only the credential changes", async () => {
+      await stub().accept(report());
+      const github = vi.fn(async () => ({ id: 404 }));
+      await runInDurableObject(stub(), (instance) => vi.spyOn(instance, "github").mockImplementation(github));
+      await deliver();
+      await runInDurableObject(stub(), (_, state) => state.storage.put("githubCredentialFingerprint", "previous-credential"));
+      github.mockClear();
+      await stub().accept(report());
+      await deliver();
+      expect(github).not.toHaveBeenCalled();
+      expect(await rows()).toMatchObject([{ comment_id: 404, posting: 0 }]);
     });
   });
   it("acknowledges durable acceptance even when GitHub has no configured secret", async () => {

@@ -63,7 +63,7 @@ export class CopyFailureReports extends DurableObject {
 
   async accept(report) {
     if (!isCopyFailure(report)) throw new TypeError("invalid copy failure");
-    await this.resumeAfterCredentialChange();
+    await this.resumeAfterDeliveryChange();
     this.ctx.storage.sql.exec(
       `INSERT INTO copy_failures (site, question_id, stage, reason, next_attempt_ms)
        VALUES (?, ?, ?, ?, ?) ON CONFLICT(site, question_id, stage) DO NOTHING`,
@@ -74,7 +74,7 @@ export class CopyFailureReports extends DurableObject {
     return { accepted: true };
   }
 
-  async resumeAfterCredentialChange() {
+  async resumeAfterDeliveryChange() {
     const token = this.env.GITHUB_COPY_FAILURE_TOKEN;
     if (typeof token !== "string" || token.length === 0) return;
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(
@@ -82,14 +82,21 @@ export class CopyFailureReports extends DurableObject {
     ));
     const fingerprint = Array.from(new Uint8Array(digest), (byte) =>
       byte.toString(16).padStart(2, "0")).join("");
-    if (await this.ctx.storage.get("githubCredentialFingerprint") === fingerprint) return;
-    // A new credential has an independent GitHub limit and can retry earlier failures now.
+    const destinationChanged = await this.ctx.storage.get("githubDestination") !== COPY_FAILURE_COMMENTS_URL;
+    if (!destinationChanged && await this.ctx.storage.get("githubCredentialFingerprint") === fingerprint) return;
+    if (destinationChanged) {
+      // Receipts without the current destination must be reconciled before any new post.
+      this.ctx.storage.sql.exec("UPDATE copy_failures SET comment_id = NULL, posting = 1");
+    }
     await this.ctx.storage.delete("retryAfterMs");
     this.ctx.storage.sql.exec(
       `UPDATE copy_failures SET retry_count = 0, next_attempt_ms = ?
        WHERE comment_id IS NULL`, Date.now() + 1000,
     );
-    await this.ctx.storage.put("githubCredentialFingerprint", fingerprint);
+    await this.ctx.storage.put({
+      githubCredentialFingerprint: fingerprint,
+      githubDestination: COPY_FAILURE_COMMENTS_URL,
+    });
   }
 
   async scheduleNextAlarm() {

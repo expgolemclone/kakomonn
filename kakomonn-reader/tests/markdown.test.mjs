@@ -15,7 +15,8 @@ const fixture = `<div id="js-answer-result-box" class="is-correct"></div>
       <ol start="3"><li>Third<ol><li>Nested ordered</li></ol></li></ol>
       <p><a href="javascript:alert(1)">Unsafe link text</a></p>
       <p><a href="/reference">Reference</a></p>
-      <img src="/diagram.png"><a href="/diagram.png"><img src="/diagram.png"></a>
+      <img src="/diagram.png"><p>Between diagrams</p><img src="/second.png">
+      <a href="/diagram.png"><img src="/diagram.png"></a>
       <span style="display:none">hidden explanation</span>
     </div></div></div>`;
 
@@ -45,6 +46,7 @@ test("Markdown preserves nested lists and excludes hidden content and duplicate 
     assert.doesNotMatch(markdown, /javascript:|hidden question|hidden explanation/);
     assert.match(markdown, /\[Reference\]\(https:\/\/chushoks.kakomonn.com\/reference\)/);
     assert.equal(markdown.split("https://chushoks.kakomonn.com/diagram.png").length - 1, 1);
+    assert.match(markdown, /!\[解説画像 1\]\(https:\/\/chushoks\.kakomonn\.com\/diagram\.png\)\s+Between diagrams\s+!\[解説画像 2\]\(https:\/\/chushoks\.kakomonn\.com\/second\.png\)/);
   } finally {
     await browser.close();
   }

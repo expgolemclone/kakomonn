@@ -29,8 +29,9 @@ function renderContent(element, state, childrenOnly = false) {
       copy.remove();
       return;
     }
-    for (let index = original.childNodes.length - 1; index >= 0; index -= 1) {
-      prepare(original.childNodes[index], copy.childNodes[index]);
+    const copiedChildren = Array.from(copy.childNodes);
+    for (let index = 0; index < original.childNodes.length; index += 1) {
+      prepare(original.childNodes[index], copiedChildren[index]);
     }
     for (const attribute of ["href", "src"]) {
       const raw = original.getAttribute(attribute);
@@ -53,10 +54,9 @@ function renderContent(element, state, childrenOnly = false) {
       }
     }
     if (copy.tagName === "A") {
-      const images = copy.querySelectorAll("img");
+      const images = original.querySelectorAll("img");
       if (!copy.hasAttribute("href") ||
-          (images.length === 1 && !copy.textContent.trim() &&
-           copy.getAttribute("href") === images[0].getAttribute("src"))) {
+          (images.length === 1 && !copy.textContent.trim() && original.href === images[0].src)) {
         copy.replaceWith(...copy.childNodes);
       }
     }

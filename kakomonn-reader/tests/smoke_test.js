@@ -1174,12 +1174,7 @@ async function runCatalogSinglePassValidationCase(context, script, mismatch) {
     } else {
       await page.waitForFunction(() =>
         window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/questions"),
-      ).catch(async error => {
-        console.error(await page.evaluate(() => ({ calls: window.__syncFixture.calls,
-          detail: document.querySelector("#kakomonn-reader-error-detail")?.textContent })));
-        console.error(errors, catalogRequestsByErrors.get(errors));
-        throw error;
-      });
+      );
       const update = await page.evaluate(() =>
         window.__syncFixture.calls.find((call) => new URL(call.url).pathname === "/v12/questions"),
       );

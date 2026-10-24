@@ -223,55 +223,6 @@ async function stopAppium(appiumProcess) {
   }
 }
 
-async function waitForElement(driver, selector, timeout = testTimeout) {
-  await driver.waitUntil(
-    async () => {
-      try {
-        const element = await driver.$(selector);
-        return await element.isDisplayed();
-      } catch {
-        return false;
-      }
-    },
-    { interval: 250, timeout, timeoutMsg: `Element was not visible: ${selector}` },
-  );
-  return driver.$(selector);
-}
-
-async function waitForElementPresent(driver, selector, timeout = testTimeout) {
-  await driver.waitUntil(
-    async () => {
-      try {
-        await driver.$(selector);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    { interval: 250, timeout, timeoutMsg: `Element was not present: ${selector}` },
-  );
-  return driver.$(selector);
-}
-
-async function waitForElementText(driver, selector, expectedText, timeout = testTimeout) {
-  await driver.waitUntil(
-    async () => {
-      try {
-        const element = await driver.$(selector);
-        return (await element.getText()) === expectedText;
-      } catch {
-        return false;
-      }
-    },
-    {
-      interval: 250,
-      timeout,
-      timeoutMsg: `Element did not contain expected text: ${selector}`,
-    },
-  );
-  return driver.$(selector);
-}
-
 async function clickWebElementNatively(driver, selector, index = 0) {
   // Appium's native accessibility tap does not scroll DOM targets. Unlike a
   // JavaScript click, a real tap must land on an unobstructed visible target.
@@ -613,7 +564,7 @@ async function dispatchNextQuestionSwipe(driver) {
 }
 
 async function readExplanationContents(driver) {
-  await waitForElement(driver, "#js-answer-result-box.is-wrong", 30_000);
+  await driver.$("#js-answer-result-box.is-wrong").waitForDisplayed({ timeout: 30_000 });
   const explanationElements = await driver.$$("#js-commentary-wrap > .item > .text");
   assert.equal(explanationElements.length, 3);
   for (const explanation of explanationElements) {
@@ -747,7 +698,7 @@ async function runTest() {
     });
 
     await prepareSafariInitialPage(driver);
-    await waitForElement(driver, "#send_exam_btn");
+    await driver.$("#send_exam_btn").waitForDisplayed();
     const browserIdentity = await driver.execute(() => ({
       clipboardWrite: typeof navigator.clipboard?.write,
       secureContext: window.isSecureContext,
@@ -760,7 +711,7 @@ async function runTest() {
     assert.match(browserIdentity.userAgent, /Mobile\/\S+ Safari\//);
 
     await installReader(driver, script);
-    await waitForElement(driver, "#kakomonn-reader-frame");
+    await driver.$("#kakomonn-reader-frame").waitForDisplayed();
     await driver.waitUntil(
       () =>
         driver.execute(
@@ -813,8 +764,8 @@ async function runTest() {
     await driver.execute("mobile: setClipboard", { content: Buffer.from(clipboardNonce, "utf8").toString("base64"), contentType: "plaintext" });
     assert.equal(await driver.execute("mobile: getClipboard", { contentType: "plaintext" }).then(value => Buffer.from(value, "base64").toString("utf8")), clipboardNonce);
     await switchToReaderFrame(driver);
-    await waitForElement(driver, "#send_exam_btn");
-    await waitForElementPresent(driver, "#kakomonn-reader-dark-mode");
+    await driver.$("#send_exam_btn").waitForDisplayed();
+    await driver.$("#kakomonn-reader-dark-mode").waitForExist();
     assert.deepEqual(
       await driver.execute(() =>
         Array.from(
@@ -908,7 +859,7 @@ async function runTest() {
     assert.deepEqual(readerDiagnostics, { errors: [], rejections: [] });
 
     await driver.url(correctQuestionURL);
-    await waitForElement(driver, "#send_exam_btn");
+    await driver.$("#send_exam_btn").waitForDisplayed();
     await installReader(driver, script);
     await driver.waitUntil(
       () =>
@@ -949,7 +900,7 @@ async function runTest() {
     assert.equal(await driver.execute(() => window.__syncFixture.attemptCount), 1);
 
     await driver.url(nextQuestionOpenURL);
-    await waitForElement(driver, "#open-bridge");
+    await driver.$("#open-bridge").waitForDisplayed();
     await installReader(driver, script);
     await driver.waitUntil(() => driver.getUrl().then((url) => url === nextQuestionURL), {
       interval: 250,
@@ -963,8 +914,8 @@ async function runTest() {
       window.__launcherDocumentSentinel = "same-document";
     });
     await installReader(driver, script, { configured: false });
-    await waitForElement(driver, "#kakomonn-reader-sync-settings");
-    await waitForElement(driver, "#kakomonn-reader-sync-token");
+    await driver.$("#kakomonn-reader-sync-settings").waitForDisplayed();
+    await driver.$("#kakomonn-reader-sync-token").waitForDisplayed();
     // The dialog intentionally focuses the input. Restore the pre-keyboard
     // viewport before validating a real tap on that input.
     await driver.waitUntil(
@@ -1030,7 +981,7 @@ async function runTest() {
         timeoutMsg: "Safari did not restore the pre-keyboard viewport",
       },
     );
-    await waitForElement(driver, "#kakomonn-reader-sync-settings-save");
+    await driver.$("#kakomonn-reader-sync-settings-save").waitForDisplayed();
     await clickWebElementNatively(driver, "#kakomonn-reader-sync-settings-save");
     await driver.waitUntil(() => driver.getUrl().then((url) => url === nextQuestionURL), {
       interval: 250,

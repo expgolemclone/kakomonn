@@ -1,7 +1,8 @@
 import { env, runInDurableObject, evictDurableObject } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleRequest } from "../src/index.js";
-import { copyFailureComment, copyFailureMarker, COPY_FAILURE_COMMENTS_URL } from "../src/copy-failure-reports.js";
+import { copyFailureComment, copyFailureMarker } from "../src/copy-failure-reports.js";
+import { COPY_FAILURE_COMMENTS_URL } from "../../contracts/kakomonn.mjs";
 
 const SITE = "chushoks.kakomonn.com";
 const report = (reason = "markdown_unavailable") => ({ site: SITE, questionId: "45124", reason });

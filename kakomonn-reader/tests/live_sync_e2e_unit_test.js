@@ -194,6 +194,11 @@ test("extracts exactly one generated build fingerprint", () => {
   );
 });
 
+test("sync fixtures reject obsolete calculator options", () => {
+  const { createSyncFixtureConfiguration } = require("./support/sync-fixture.cjs");
+  assert.throws(() => createSyncFixtureConfiguration({ newQuestionGoal: 50 }), /Unknown sync fixture options: newQuestionGoal/);
+});
+
 test("live state verification rejects the same malformed states as Reader", async () => {
   const { createSyncFixtureConfiguration } = require("./support/sync-fixture.cjs");
   const baseline = createSyncFixtureConfiguration().state;

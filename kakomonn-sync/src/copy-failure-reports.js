@@ -1,8 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { COPY_FAILURE_STAGES, isCopyFailure } from "../../contracts/kakomonn.mjs";
-
-export const COPY_FAILURE_COMMENTS_URL =
-  "https://api.github.com/repos/expgolemclone/kakomonn/issues/29/comments";
+import { COPY_FAILURE_COMMENTS_URL, COPY_FAILURE_STAGES, isCopyFailure } from "../../contracts/kakomonn.mjs";
 const GITHUB_API_VERSION = "2026-03-10";
 const GITHUB_REDIRECT_MODE = "manual";
 const REQUEST_TIMEOUT_MS = 10000;

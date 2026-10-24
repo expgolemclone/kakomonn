@@ -7,6 +7,9 @@ const QUESTION_ID_MAX = "9223372036854775807";
 const DAY_MS = 86_400_000;
 const TOKYO_OFFSET_MS = 9 * 60 * 60 * 1000;
 
+export const COPY_FAILURE_COMMENTS_URL =
+  "https://api.github.com/repos/expgolemclone/kakomonn/issues/1/comments";
+
 export const COPY_FAILURE_STAGES = Object.freeze({
   markdown_unavailable: "markdown",
   clipboard_write_failed: "clipboard",

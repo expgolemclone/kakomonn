@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { COPY_FAILURE_COMMENTS_URL } = require("../../contracts/kakomonn.mjs");
 const { REPOSITORY_CONFIGURATION_PATH: configurationFilePath, readKakomonnConfiguration } = require("../../scripts/kakomonn-config.cjs");
 const {
   CURRENT_QUESTION_URL, DEFAULT_SYNC_API_ORIGIN, launchChromeWithCurrentUserscript,
@@ -16,7 +17,7 @@ const explanation = "本番検証: 解説番号のDOMを欠落させた制御下
 
 function comments() {
   const pages = JSON.parse(execFileSync("gh", ["api", "--paginate", "--slurp",
-    "repos/expgolemclone/kakomonn/issues/29/comments?per_page=100"], { encoding: "utf8", windowsHide: true }));
+    `${COPY_FAILURE_COMMENTS_URL}?per_page=100`], { encoding: "utf8", windowsHide: true }));
   return pages.flat().filter((comment) => comment.body.includes(marker));
 }
 async function postReport(token) {
@@ -62,7 +63,7 @@ async function main() {
       if (found.length > 0) break;
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
-    assert.equal(found.length, 1, "confirmed failure must arrive exactly once in Issue #29");
+    assert.equal(found.length, 1, "confirmed failure must arrive exactly once in the report issue");
     assert.ok(found[0].body.includes(`https://chushoks.kakomonn.com/questions/${questionId}`));
     assert.ok(found[0].body.includes("stage=markdown, code=markdown_unavailable"));
     assert.equal(found[0].body.includes(token), false);

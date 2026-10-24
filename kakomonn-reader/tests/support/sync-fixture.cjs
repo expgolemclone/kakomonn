@@ -234,8 +234,11 @@ function createSyncFixtureConfiguration({
   systemClipboard = false, speechAudioBase64 = speechAudioFixture, site = SITE,
   token = "test-sync-token", nextQuestionId = "45125", nextError = null,
   catalogQuestionCount = 999, catalogGeneration = catalogQuestionCount === null ? 0 : 1,
-  completionScenario = false,
+  completionScenario = false, ...unknownOptions
 } = {}) {
+  if (Object.keys(unknownOptions).length > 0) {
+    throw new TypeError(`Unknown sync fixture options: ${Object.keys(unknownOptions).join(", ")}`);
+  }
   const fixtures = require("./sync-fixtures.cjs");
   const metrics = completionScenario ? fixtures.beforeCompletionMetrics : fixtures.emptyMetrics;
   const state = {

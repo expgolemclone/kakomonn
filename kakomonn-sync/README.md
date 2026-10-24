@@ -39,7 +39,7 @@ npx --no-install wrangler secret put SYNC_TOKEN --config kakomonn-sync/wrangler.
 $speechKey | npx --no-install wrangler secret put AZURE_SPEECH_KEY --config kakomonn-sync/wrangler.jsonc
 ```
 
-For copy-failure reports to [Issue #29](https://github.com/expgolemclone/kakomonn/issues/29), create a fine-grained GitHub PAT restricted to `expgolemclone/kakomonn` with `Issues: Read and write`. Store it only as a Worker secret, never in `kakomonn.toml`, a browser, or a URL:
+For copy-failure reports, create a fine-grained GitHub PAT restricted to `expgolemclone/kakomonn` with `Issues: Read and write`. Store it only as a Worker secret, never in `kakomonn.toml`, a browser, or a URL:
 
 ```powershell
 npx --no-install wrangler secret put GITHUB_COPY_FAILURE_TOKEN --config kakomonn-sync/wrangler.jsonc

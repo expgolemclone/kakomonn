@@ -169,6 +169,8 @@ async function prepareLauncherPage(context, script, { syncOptions = {}, mutateFi
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
   await page.goto(nextQuestionLauncherURL);
+  await page.addStyleTag({ content: "html { font-size: 62.5%; }" });
+  assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize), "10px");
   await page.evaluate(() => {
     window.__launcherDocumentSentinel = "same-document";
   });
@@ -272,6 +274,10 @@ async function assertLauncherRequiresSettings(
   });
   try {
     await page.locator("#kakomonn-reader-sync-settings").waitFor({ state: "visible" });
+    for (const selector of ["#kakomonn-reader-sync-token", "#kakomonn-reader-sync-settings-save"]) {
+      const height = await page.locator(selector).evaluate((element) => element.getBoundingClientRect().height);
+      assert.equal(height >= 44, true, `${selector} height: ${height}`);
+    }
     assert.equal(page.url(), nextQuestionLauncherURL);
     assert.equal(await page.locator("#kakomonn-reader-shell").count(), 1);
     assert.equal(await page.locator("#kakomonn-reader-sync-settings-button").count(), 0);
@@ -333,6 +339,7 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
 
       try {
         await page.goto(questionURL, { waitUntil: "domcontentloaded" });
+        await page.addStyleTag({ content: "html { font-size: 62.5%; }" });
         await page.evaluate(() => {
           Object.defineProperty(window, "Audio", {
             configurable: true,
@@ -411,6 +418,10 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
           await page.locator("#kakomonn-reader-error-title").innerText(),
           "読み上げを利用できません",
         );
+        const closeHeight = await page.locator("#kakomonn-reader-error-close").evaluate(
+          (element) => element.getBoundingClientRect().height,
+        );
+        assert.equal(closeHeight >= 44, true, `error close height: ${closeHeight}`);
         await page.locator("#kakomonn-reader-error-close").tap();
         await page.locator("#kakomonn-reader-error-dialog").waitFor({ state: "hidden" });
         await questionFrame.locator("label").first().tap();
@@ -650,6 +661,8 @@ async function main() {
     const settingsEntryErrors = [];
     settingsEntryPage.on("pageerror", (error) => settingsEntryErrors.push(String(error)));
     await settingsEntryPage.goto(currentQuestionURL);
+    await settingsEntryPage.addStyleTag({ content: "html { font-size: 62.5%; }" });
+    assert.equal(await settingsEntryPage.evaluate(() => getComputedStyle(document.documentElement).fontSize), "10px");
     await installSyncFixture(settingsEntryPage, {
       configured: false,
       nextQuestionId: "86957",

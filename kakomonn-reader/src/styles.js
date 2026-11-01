@@ -3,6 +3,7 @@ import mantineStyles from "@mantine/core/styles.css?inline";
 export function installReaderStyles() {
   const style = document.createElement("style");
   style.textContent = mantineStyles + `
+    html { font-size: 100% !important; }
     html, body { width: 100% !important; height: 100svh !important; margin: 0 !important;
       padding: 0 !important; overflow: hidden !important; background: #0b0d10 !important; }
     body[data-kakomonn-reader-ui="true"] { display: block !important; }

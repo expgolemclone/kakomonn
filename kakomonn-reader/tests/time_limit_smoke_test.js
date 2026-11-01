@@ -90,7 +90,7 @@ async function waitForNextQuestion(page) {
         pendingAttempt: window.__getGMValue(pendingAttemptKey),
         timeLimit: {
           phase: document.querySelector("#kakomonn-reader-time-limit")?.dataset.phase,
-          value: document.querySelector("#kakomonn-reader-time-limit")?.value,
+          value: document.querySelector("#kakomonn-reader-time-limit")?.getAttribute("aria-valuenow"),
         },
       }),
       PENDING_ATTEMPT_KEY,
@@ -164,8 +164,8 @@ async function explanationExpiryRecordsAndStays(browser, script) {
     await page.clock.runFor(300_100);
     assert.equal(await frame.evaluate(() => location.href), currentURL);
     assert.equal(
-      await page.locator("#kakomonn-reader-time-limit").evaluate((progress) => progress.value),
-      0,
+      await page.locator("#kakomonn-reader-time-limit").getAttribute("aria-valuenow"),
+      "0",
     );
     assert.deepEqual(browserErrors, []);
   } finally {

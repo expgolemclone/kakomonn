@@ -245,7 +245,7 @@ export function installStudyTimeController(app) {
   }
 
   function renderStudyTime() {
-    if (app.studyTimeBadge === undefined) {
+    if (app.setStudyTimeBadge === undefined) {
       return;
     }
     const today = tokyoDateFromMs(Date.now());
@@ -262,12 +262,7 @@ export function installStudyTimeController(app) {
       liveMs = Math.min(wallDuration, performanceDuration, totalWallDuration);
     }
     const total = Math.max(0, Math.trunc(serverMs + localMs + liveMs));
-    app.studyTimeBadge.textContent = compactDuration(total);
-    app.studyTimeBadge.setAttribute(
-      "aria-label",
-      `今日の勉強時間 ${accessibleDuration(total)}`,
-    );
-    app.studyTimeBadge.title = `今日の勉強時間 ${accessibleDuration(total)}`;
+    app.setStudyTimeBadge(compactDuration(total), `今日の勉強時間 ${accessibleDuration(total)}`);
   }
 
   function withStudyStorageLock(run) {
@@ -499,7 +494,7 @@ export function installStudyTimeController(app) {
     void flushStudyTime();
   }
 
-  const dialogObserver = new MutationObserver(() => {
+  function handleDialogStateChange() {
     const dialogOpen = app.syncSettings.open || app.errorDialog.open;
     if (previousDialogOpen && !dialogOpen) {
       refreshStudyTracking({ engage: true });
@@ -507,9 +502,7 @@ export function installStudyTimeController(app) {
       refreshStudyTracking();
     }
     previousDialogOpen = dialogOpen;
-  });
-  dialogObserver.observe(app.syncSettings, { attributes: true, attributeFilter: ["open"] });
-  dialogObserver.observe(app.errorDialog, { attributes: true, attributeFilter: ["open"] });
+  }
 
   window.addEventListener("focus", handleStudyFocus);
   window.addEventListener("blur", handleStudyBlur);
@@ -517,6 +510,7 @@ export function installStudyTimeController(app) {
   document.addEventListener("visibilitychange", handleStudyVisibilityChange);
 
   Object.assign(app, {
+    handleDialogStateChange,
     initializeStudyTime,
     prepareStudyTimeSnapshots,
     acknowledgeStudyTimeSnapshots,

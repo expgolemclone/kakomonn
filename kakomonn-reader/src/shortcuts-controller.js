@@ -361,7 +361,7 @@ export function installShortcutsController(app) {
       darkModeStyle.id = app.FRAME_DARK_MODE_STYLE_ID;
       sourceDocument.head.appendChild(darkModeStyle);
     }
-    darkModeStyle.textContent = `${app.FRAME_DARK_MODE_CSS}\n${app.CORRECT_FEEDBACK_CSS}`;
+    darkModeStyle.textContent = app.FRAME_DARK_MODE_CSS;
   }
 
   function bindFrameDocument() {
@@ -488,13 +488,6 @@ export function installShortcutsController(app) {
     bindFrameDocument();
   }
 
-  app.syncSettings.addEventListener("cancel", (event) => {
-    event.preventDefault();
-  });
-  app.syncSettingsPanel.addEventListener("submit", (event) => {
-    event.preventDefault();
-    void app.saveSyncSettings();
-  });
   window.addEventListener("message", onReaderFrameReady);
   document.addEventListener("keydown", onReaderKeyDown, true);
   if (app.speechSupported) {

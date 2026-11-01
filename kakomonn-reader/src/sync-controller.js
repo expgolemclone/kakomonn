@@ -291,15 +291,8 @@ export function installSyncController(app) {
       return;
     }
     app.clearShortcutSequence();
-    app.syncTokenInput.value = "";
-    app.syncSettingsError.textContent = "";
-    if (app.errorDialog.open) {
-      app.errorDialog.close();
-    }
-    if (!app.syncSettings.open) {
-      app.syncSettings.showModal();
-    }
-    window.setTimeout(() => app.syncTokenInput.focus(), 0);
+    if (app.errorDialog.open) app.closeReaderError();
+    app.setSyncSettings({ draft: "", error: "", open: true });
   }
 
   function isCatalogFresh(catalog) {
@@ -450,9 +443,9 @@ export function installSyncController(app) {
   }
 
   async function saveSyncSettings() {
-    const candidateToken = app.syncTokenInput.value.trim();
+    const candidateToken = app.syncSettings.draft.trim();
     if (!candidateToken) {
-      app.syncSettingsError.textContent = "同期トークンを入力してください.";
+      app.setSyncSettings({ error: "同期トークンを入力してください." });
       return;
     }
     if (
@@ -460,13 +453,11 @@ export function installSyncController(app) {
       app.catalogPromise !== null ||
       app.nextQuestionOperationInProgress
     ) {
-      app.syncSettingsError.textContent = "同期処理の完了を待ってください.";
+      app.setSyncSettings({ error: "同期処理の完了を待ってください." });
       return;
     }
     app.syncInProgress = true;
-    app.syncSettingsSaveButton.disabled = true;
-    app.syncTokenInput.disabled = true;
-    app.syncSettingsError.textContent = "同期APIを確認中です.";
+    app.setSyncSettings({ disabled: true, error: "同期APIを確認中です." });
     updateSyncDependentControls();
     app.syncPromise = (async () => {
       try {
@@ -479,8 +470,7 @@ export function installSyncController(app) {
         clearAzureSpeechToken();
         applySyncState(state);
         void refreshQuestionCatalog(candidateToken, state);
-        app.syncSettings.close();
-        app.syncTokenInput.value = "";
+        app.setSyncSettings({ open: false, draft: "" });
         if (nextQuestionResult?.question === null) {
           app.showNoNextQuestionLauncher();
         } else if (nextQuestionResult?.question !== undefined) {
@@ -494,13 +484,12 @@ export function installSyncController(app) {
         app.syncReady = false;
         app.catalogReady = false;
         app.currentSyncState = null;
-        app.syncSettingsError.textContent = `${syncErrorMessage(error)}. ${app.readerErrorDetail(error, "sync-token")}`;
+        app.setSyncSettings({ error: `${syncErrorMessage(error)}. ${app.readerErrorDetail(error, "sync-token")}` });
         return false;
       } finally {
         app.syncInProgress = false;
         app.syncPromise = null;
-        app.syncSettingsSaveButton.disabled = false;
-        app.syncTokenInput.disabled = false;
+        app.setSyncSettings({ disabled: false });
         updateSyncDependentControls();
         void app.resumePendingLearningFlow();
         void app.flushStudyTime();

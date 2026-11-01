@@ -12,11 +12,9 @@ import {
   splitText,
 } from "./content.js";
 import {
-  CORRECT_FEEDBACK_CSS,
   CORRECT_FEEDBACK_LEAVE_DURATION_MS,
   CORRECT_FEEDBACK_MINIMUM_DURATION_MS,
   chooseCorrectFeedbackVariant,
-  renderCorrectFeedbackElement,
   FEEDBACK_AUDIO_URLS,
 } from "@expgolemclone/congratulations/feedback";
 import { calculateKpiQuestionsRemaining, resolveCorrectFeedbackKpi,
@@ -26,7 +24,7 @@ import { installReaderStyles } from "./styles.js";
 import { createSyncRequest } from "./sync-request.js";
 import { installSyncController } from "./sync-controller.js";
 import { installLauncherController } from "./launcher-controller.js";
-import { installViewController } from "./view-controller.js";
+import { installViewController } from "./view-controller.jsx";
 import { installCopyController } from "./copy-controller.js";
 import { installNavigationController } from "./navigation-controller.js";
 import { installLifecycleController } from "./lifecycle-controller.js";
@@ -471,7 +469,7 @@ export async function startReader() {
     SyncRequestError,
     timeoutMs: CATALOG_TIMEOUT_MS,
   });
-  installReaderStyles(CORRECT_FEEDBACK_CSS);
+  installReaderStyles();
 
   Object.assign(app, {
     loadCompleteQuestionCatalog,
@@ -495,7 +493,6 @@ export async function startReader() {
     TIME_LIMIT_MS,
     FRAME_DARK_MODE_STYLE_ID,
     FRAME_DARK_MODE_CSS,
-    CORRECT_FEEDBACK_CSS,
     QUESTION_SPEECH_RATE,
     ANSWER_RESULT_SPEECH_RATE,
     SPEECH_TOKEN_RENEWAL_SKEW_MS,
@@ -523,7 +520,6 @@ export async function startReader() {
     CORRECT_FEEDBACK_MINIMUM_DURATION_MS,
     calculateKpiQuestionsRemaining,
     chooseCorrectFeedbackVariant,
-    renderCorrectFeedbackElement,
     resolveCorrectFeedbackKpi,
     buildCopyMarkdown,
     directChild,

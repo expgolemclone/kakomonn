@@ -168,8 +168,7 @@ export function installLifecycleController(app) {
     app.timeLimitDeadline = 0;
     app.timeLimitSourceDocument = null;
     if (hide) {
-      app.timeLimitProgress.hidden = true;
-      app.timeLimitProgress.removeAttribute("data-phase");
+      app.setTimeLimitProgress({ visible: false, phase: null });
     }
   }
 
@@ -182,13 +181,12 @@ export function installLifecycleController(app) {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     const phaseLabel = app.timeLimitPhase === "question" ? "問題" : "解説";
-    app.timeLimitProgress.hidden = false;
-    app.timeLimitProgress.dataset.phase = app.timeLimitPhase;
-    app.timeLimitProgress.value = remaining;
-    app.timeLimitProgress.setAttribute(
-      "aria-valuetext",
-      `${phaseLabel}の残り時間${minutes}分${seconds}秒`,
-    );
+    app.setTimeLimitProgress({
+      visible: true,
+      phase: app.timeLimitPhase,
+      value: remaining,
+      label: `${phaseLabel}の残り時間${minutes}分${seconds}秒`,
+    });
   }
 
   function startTimeLimit(phase, sourceDocument) {
@@ -245,7 +243,7 @@ export function installLifecycleController(app) {
 
     renderTimeLimit();
     clearTimeLimit(false);
-    app.timeLimitProgress.value = 0;
+    app.setTimeLimitProgress({ value: 0 });
 
     if (expectedPhase === "question") {
       void app.handleSkipQuestion();

@@ -141,9 +141,9 @@ async function waitForSyncReady(page) {
 }
 
 async function dismissReaderErrorForTest(page) {
-  await page.locator("#kakomonn-reader-error-dialog").evaluate((dialog) => {
-    if (dialog.open) dialog.close();
-  });
+  if (await page.locator("#kakomonn-reader-error-dialog").isVisible()) {
+    await page.locator("#kakomonn-reader-error-close").click();
+  }
 }
 
 async function submitAnswer(page, frame, answerText, inputMethod = "click") {
@@ -525,9 +525,9 @@ async function runCase(
     const historyLengthBefore = await submitAnswer(page, frame, answerText, inputMethod);
     console.log(JSON.stringify({ phase: "answer-submitted", answerText }));
     if (expectedResultClass === 'is-correct') {
-      const feedback = frame.locator('.congratulations-feedback');
+      const feedback = page.locator('#kakomonn-reader-feedback');
       await feedback.waitFor({ state: 'visible', timeout: 15_000 });
-      const displayed = await feedback.locator('.congratulations-feedback-message').innerText();
+      const displayed = await feedback.locator('#kakomonn-reader-feedback-message').innerText();
       assert(CORRECT_FEEDBACK_VARIANTS.some(variant => variant.displayText === displayed),
         `Unexpected shared feedback: ${displayed}`);
     } else {

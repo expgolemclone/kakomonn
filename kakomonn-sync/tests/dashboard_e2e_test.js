@@ -8,6 +8,9 @@ const {
 } = require("../../scripts/kakomonn-config.cjs");
 
 const distDir = path.resolve(__dirname, "..", "dist");
+const contentSecurityPolicy = fs.readFileSync(path.resolve(__dirname, "../public/_headers"), "utf8")
+  .split("\n").find((line) => line.trimStart().startsWith("Content-Security-Policy:"))
+  .trim().slice("Content-Security-Policy:".length).trim();
 const token = "test-dashboard-token";
 const site = "chushoks.kakomonn.com";
 const otherSite = "shindans.kakomonn.com";
@@ -256,18 +259,29 @@ async function installApiMock(page) {
   );
 }
 
-async function assertDashboard(page) {
-  const errors = [];
+async function chooseOption(page, selector, value) {
+  await page.locator(selector).click();
+  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  await page.getByRole("option", { name: new RegExp(`^${escaped}(?:,|$)`) }).click();
+}
+
+function trackErrors(page, errors) {
   page.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
   });
+}
+
+async function assertDashboard(page) {
+  const errors = [];
+  trackErrors(page, errors);
   await installApiMock(page);
   await page.route("https://dashboard.test/**", async (route) => {
     const assetPath = builtAssetForPath(new URL(route.request().url()).pathname);
     await route.fulfill({
       body: fs.readFileSync(assetPath),
       contentType: contentTypes.get(path.extname(assetPath)) ?? "application/octet-stream",
+      headers: path.extname(assetPath) === ".html" ? { "content-security-policy": contentSecurityPolicy } : {},
     });
   });
   await page.goto("https://dashboard.test/");
@@ -322,91 +336,30 @@ async function assertDashboard(page) {
     await page.locator("#history-title").innerText(),
     "stabilityDaysDelta, dailyCorrectRatePercent, 勉強時間の31日推移",
   );
-  assert.equal(await page.locator("#stability-chart .chart-day").count(), 31);
-  assert.equal(await page.locator("#stability-chart rect.delta-bar").count(), 6);
-  assert.equal(await page.locator("#stability-chart rect.delta-bar.negative").count(), 1);
-  assert.equal(await page.locator("#stability-chart rect.delta-bar.zero").count(), 1);
-  assert.equal(await page.locator("#stability-chart .delta-value-label").count(), 6);
-  assert.equal(
-    await page.locator('[data-chart-date="2026-08-10"] .delta-value-label').textContent(),
-    "+104",
-  );
-  assert.equal(
-    await page.locator('[data-chart-date="2026-08-09"] .delta-value-label').textContent(),
-    "+106",
-  );
-  assert.equal(await page.locator("#stability-chart .correct-rate-line").count(), 1);
-  assert.equal(await page.locator("#stability-chart .correct-rate-point").count(), 5);
-  assert.equal(await page.locator("#stability-chart .study-time-bar").count(), 31);
-  assert.equal(await page.locator("#stability-chart .study-time-value-label").count(), 31);
-  assert.match(
-    await page.locator("#stability-chart .correct-rate-line").getAttribute("d"),
-    /^M[^M]+M/,
-  );
-  assert.equal(
-    await page.locator('[data-chart-date="2026-08-10"] .correct-rate-value-label').textContent(),
-    "67%",
-  );
-  assert.equal(
-    await page.locator('[data-chart-date="2026-08-04"] .correct-rate-value-label').textContent(),
-    "--",
-  );
-  assert.equal(
-    await page.locator('[data-chart-date="2026-08-10"] .study-time-value-label').textContent(),
-    "3h30",
-  );
-  assert.match(
-    await page.locator('[data-chart-date="2026-08-10"]').getAttribute("aria-label"),
-    /stabilityDaysDelta \+104日, dailyCorrectRatePercent 67%, 勉強時間 3時間 30分/,
-  );
-  assert.equal((await page.locator("#stability-chart-axis .delta-axis-label").count()) >= 2, true);
-  assert.equal(
-    (await page.locator("#stability-chart-axis .study-time-axis-label").count()) >= 2,
-    true,
-  );
-  assert.match(
-    await page.locator("#history-chart-description").textContent(),
-    /2026-08-04, stabilityDaysDelta 記録なし/,
-  );
-  assert.match(
-    await page.locator("#history-chart-description").textContent(),
-    /2026-08-10, stabilityDaysDelta \+104日/,
-  );
-  assert.match(
-    await page.locator("#history-chart-description").textContent(),
-    /dailyCorrectRatePercent 67%/,
-  );
-  assert.match(
-    await page.locator("#history-chart-description").textContent(),
-    /勉強時間 3時間 30分/,
-  );
+  assert.equal(await page.locator("#history-scroll svg.recharts-surface").count(), 3);
+  await page.locator("#history-date").click();
+  assert.equal(await page.getByRole("option").count(), 31);
+  assert.match(await page.getByRole("option", { name: /^2026-08-10,/ }).innerText(),
+    /stabilityDaysDelta \+104, dailyCorrectRatePercent 67%, 勉強時間 3時間 30分/);
+  assert.match(await page.getByRole("option", { name: /^2026-08-04,/ }).innerText(),
+    /stabilityDaysDelta 記録なし, dailyCorrectRatePercent 記録なし/);
+  assert.match(await page.getByRole("option", { name: /^2026-08-06,/ }).innerText(),
+    /stabilityDaysDelta -14, dailyCorrectRatePercent 33%/);
+  assert.match(await page.getByRole("option", { name: /^2026-08-07,/ }).innerText(),
+    /stabilityDaysDelta \+0, dailyCorrectRatePercent 記録なし/);
+  await page.locator("#history-date").press("Escape");
+  assert.match(await page.locator("#history-scroll svg").first().textContent(), /-14/);
+  assert.match(await page.locator("#history-scroll svg").first().textContent(), /\+104/);
   await page.waitForFunction(() => {
-    const scroller = document.querySelector("#history-scroll");
-    return (
-      scroller !== null &&
-      scroller.scrollWidth > scroller.clientWidth &&
-      Math.abs(scroller.scrollLeft - (scroller.scrollWidth - scroller.clientWidth)) <= 1
-    );
+    const scroller = document.querySelector("#history-scroll [data-scrollarea-viewport]");
+    return scroller !== null && scroller.scrollWidth > scroller.clientWidth &&
+      Math.abs(scroller.scrollLeft - (scroller.scrollWidth - scroller.clientWidth)) <= 1;
   });
   assert.equal(await page.locator("#history-scroll").getAttribute("tabindex"), "0");
-  assert.match(
-    await page.locator("#history-scroll").getAttribute("aria-label"),
-    /左右にスワイプまたはスクロール/,
-  );
-  await page.locator("#history-scroll").evaluate((scroller) => {
-    scroller.scrollLeft = 0;
-  });
-  assert.equal(
-    await page.locator('[data-chart-date="2026-07-11"]').evaluate((day) => {
-      const dayRect = day.getBoundingClientRect();
-      const scrollRect = day.closest("#history-scroll").getBoundingClientRect();
-      return dayRect.left >= scrollRect.left - 1 && dayRect.right <= scrollRect.right + 1;
-    }),
-    true,
-  );
-  await page.locator("#history-scroll").evaluate((scroller) => {
-    scroller.scrollLeft = scroller.scrollWidth;
-  });
+  assert.match(await page.locator("#history-scroll").getAttribute("aria-label"),
+    /左右にスワイプまたはスクロール/);
+  const correctRateLine = page.locator("#history-scroll svg").nth(1).locator("path.recharts-line-curve");
+  assert.match(await correctRateLine.getAttribute("d"), /^M[^M]+M/);
   assert.equal(await page.locator("#daily-details-instruction").isVisible(), true);
   assert.equal(await page.locator("#daily-details-tables").isHidden(), true);
 
@@ -437,14 +390,18 @@ async function assertDashboard(page) {
   );
   assert.deepEqual(errors, []);
 
-  await page.locator('[data-chart-date="2026-08-10"]').click();
+  await chooseOption(page, "#history-date", "2026-08-06");
+  await page.waitForFunction(() => document.querySelector("#daily-details-date")?.textContent === "2026-08-06" &&
+    document.querySelector("#daily-details-status")?.textContent === "0 rows");
+  const latestBar = page.locator("#history-scroll svg.recharts-surface").first().locator("path.recharts-rectangle").last();
+  await latestBar.click();
   await page.waitForFunction(
     () =>
       document.querySelector("#attempts-table tbody td")?.textContent === "chushoks.kakomonn.com",
   );
   assert.equal(
-    await page.locator('[data-chart-date="2026-08-10"]').getAttribute("aria-pressed"),
-    "true",
+    (await page.locator("#history-date").inputValue()).startsWith("2026-08-10,"),
+    true,
   );
   assert.equal(await page.locator("#daily-details-date").innerText(), "2026-08-10");
   assert.equal(
@@ -487,8 +444,10 @@ async function assertDashboard(page) {
     false,
   );
 
-  await page.locator('[data-chart-date="2026-08-09"]').focus();
-  await page.locator('[data-chart-date="2026-08-09"]').press("Enter");
+  await page.locator("#history-date").focus();
+  await page.locator("#history-date").press("ArrowDown");
+  await page.locator("#history-date").press("ArrowUp");
+  await page.locator("#history-date").press("Enter");
   await page.waitForFunction(
     () =>
       document.querySelector("#daily-details-date")?.textContent === "2026-08-09" &&
@@ -501,8 +460,8 @@ async function assertDashboard(page) {
   await page.evaluate(() => {
     window.__delayedDetailDate = "2026-08-08";
   });
-  await page.locator('[data-chart-date="2026-08-08"]').press("Space");
-  await page.locator('[data-chart-date="2026-08-10"]').click();
+  await chooseOption(page, "#history-date", "2026-08-08");
+  await chooseOption(page, "#history-date", "2026-08-10");
   await page.waitForFunction(
     () =>
       document.querySelector("#daily-details-date")?.textContent === "2026-08-10" &&
@@ -515,7 +474,7 @@ async function assertDashboard(page) {
   await page.evaluate(() => {
     window.__detailErrorDate = "2026-08-07";
   });
-  await page.locator('[data-chart-date="2026-08-07"]').click();
+  await chooseOption(page, "#history-date", "2026-08-07");
   await page.waitForFunction(
     () =>
       document.querySelector("#daily-details-status")?.textContent ===
@@ -525,12 +484,12 @@ async function assertDashboard(page) {
   await page.evaluate(() => {
     window.__detailErrorDate = "";
   });
-  await page.locator('[data-chart-date="2026-08-10"]').click();
+  await chooseOption(page, "#history-date", "2026-08-10");
   await page.waitForFunction(
     () => document.querySelector("#daily-details-status")?.textContent === "53 rows",
   );
 
-  await page.locator("#site-select").selectOption(otherSite);
+  await chooseOption(page, "#site-select", otherSite);
   await page.waitForFunction(
     () => document.querySelector("#today-stability-days-delta")?.textContent === "+21",
   );
@@ -540,7 +499,7 @@ async function assertDashboard(page) {
   assert.equal(await page.locator("#today-correct-rate-percent").innerText(), "0");
   assert.equal(await page.locator("#today-correct-rate-percent-unit").isHidden(), false);
   assert.equal(await page.locator("#today-study-time").innerText(), "45分");
-  await page.locator("#site-select").selectOption(site);
+  await chooseOption(page, "#site-select", site);
   await page.waitForFunction(
     () => document.querySelector("#today-stability-days-delta")?.textContent === "+104",
   );
@@ -548,8 +507,8 @@ async function assertDashboard(page) {
   await page.evaluate((siteValue) => {
     window.__delayedSite = siteValue;
   }, otherSite);
-  await page.locator("#site-select").selectOption(otherSite);
-  await page.locator("#site-select").selectOption(site);
+  await chooseOption(page, "#site-select", otherSite);
+  await chooseOption(page, "#site-select", site);
   await page.waitForFunction(
     () => document.querySelector("#today-stability-days-delta")?.textContent === "+104",
   );
@@ -564,11 +523,14 @@ async function assertDashboard(page) {
     () => document.querySelector("#dashboard-status")?.textContent === "更新日 2026-08-10",
   );
   assert.equal(await page.locator("#settings-button, #settings-dialog, #auth-token").count(), 0);
+  assert.deepEqual(errors, []);
 }
 
 async function assertDashboardConnectionStates(browser) {
+  const errors = [];
   async function openState(mode) {
     const page = await browser.newPage();
+    trackErrors(page, errors);
     await page.addInitScript((bridgeMode) => {
       if (bridgeMode === "missing" || bridgeMode === "unauthorized") {
         document.addEventListener("kakomonn-dashboard:request", (event) => {
@@ -603,6 +565,7 @@ async function assertDashboardConnectionStates(browser) {
       await route.fulfill({
         body: fs.readFileSync(assetPath),
         contentType: contentTypes.get(path.extname(assetPath)) ?? "application/octet-stream",
+        headers: path.extname(assetPath) === ".html" ? { "content-security-policy": contentSecurityPolicy } : {},
       });
     });
     return page;
@@ -649,6 +612,7 @@ async function assertDashboardConnectionStates(browser) {
   } finally {
     await timeoutPage.close();
   }
+  assert.deepEqual(errors, []);
 }
 
 async function assertOpenBridge(browser) {
@@ -690,6 +654,7 @@ async function assertOpenBridge(browser) {
     await route.fulfill({
       body: fs.readFileSync(assetPath),
       contentType: contentTypes.get(path.extname(assetPath)) ?? "application/octet-stream",
+      headers: path.extname(assetPath) === ".html" ? { "content-security-policy": contentSecurityPolicy } : {},
     });
   });
   await context.route("https://chushoks.kakomonn.com/**", (route) => {
@@ -702,7 +667,7 @@ async function assertOpenBridge(browser) {
 
   const page = await context.newPage();
   const errors = [];
-  page.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
+  trackErrors(page, errors);
   try {
     await page.goto("https://dashboard.test/open");
     assert.equal(page.url(), "https://dashboard.test/open");
@@ -740,12 +705,12 @@ async function assertOpenBridge(browser) {
     assert.equal(dashboardRequestCount, 1);
 
     const unavailablePage = await context.newPage();
-    unavailablePage.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
+    trackErrors(unavailablePage, errors);
     await unavailablePage.goto("https://dashboard.test/open");
     await unavailablePage.evaluate(() => {
       document.documentElement.dataset.kakomonnReaderBridgeState = "error";
     });
-    await unavailablePage.locator("#open-error").waitFor({ state: "visible" });
+    await unavailablePage.getByRole("dialog").waitFor({ state: "visible" });
     assert.equal(
       await unavailablePage.locator("#open-error-title").innerText(),
       "Readerを起動できません",
@@ -791,7 +756,7 @@ async function assertOpenBridge(browser) {
       },
     ]) {
       const failurePage = await context.newPage();
-      failurePage.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
+      trackErrors(failurePage, errors);
       await failurePage.goto("https://dashboard.test/open");
       await failurePage.evaluate(({ state, target }) => {
         if (target !== undefined) {
@@ -799,7 +764,7 @@ async function assertOpenBridge(browser) {
         }
         document.documentElement.dataset.kakomonnReaderBridgeState = state;
       }, bridgeFailure);
-      await failurePage.locator("#open-error").waitFor({ state: "visible" });
+      await failurePage.getByRole("dialog").waitFor({ state: "visible" });
       assert.equal(await failurePage.locator("#open-error-title").innerText(), bridgeFailure.title);
       assert.match(
         await failurePage.locator("#open-error-detail").innerText(),
@@ -810,11 +775,11 @@ async function assertOpenBridge(browser) {
     }
 
     const timeoutPage = await context.newPage();
-    timeoutPage.on("pageerror", (error) => errors.push(error.stack ?? String(error)));
+    trackErrors(timeoutPage, errors);
     await timeoutPage.clock.install();
     await timeoutPage.goto("https://dashboard.test/open");
     await timeoutPage.clock.fastForward(15_000);
-    await timeoutPage.locator("#open-error").waitFor({ state: "visible" });
+    await timeoutPage.getByRole("dialog").waitFor({ state: "visible" });
     assert.match(
       await timeoutPage.locator("#open-error-detail").innerText(),
       /code=reader_ready_timeout$/,

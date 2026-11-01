@@ -1,91 +1,17 @@
 export function installLauncherController(app) {
   let nextQuestionLauncherRequestInProgress = false;
   let readerInitializationStarted = false;
-  let launcher = null;
-  let launcherPanel = null;
-  let launcherTitle = null;
-  let launcherStatus = null;
-  let launcherActions = null;
-  let launcherRetry = null;
-
-  function ensureNextQuestionLauncher() {
-    if (launcher !== null) {
-      return;
-    }
-
-    document.title = "次の問題へ | KAKOMONN";
-
-    launcher = document.createElement("main");
-    launcher.id = "kakomonn-next-question-launcher";
-    launcher.setAttribute("aria-labelledby", "kakomonn-next-question-title");
-
-    launcherPanel = document.createElement("section");
-    launcherPanel.id = "kakomonn-next-question-panel";
-
-    const launcherBrand = document.createElement("div");
-    launcherBrand.id = "kakomonn-next-question-brand";
-    launcherBrand.textContent = "KAKOMONN";
-
-    const launcherContent = document.createElement("div");
-    launcherContent.id = "kakomonn-next-question-content";
-
-    const launcherIndicator = document.createElement("div");
-    launcherIndicator.id = "kakomonn-next-question-indicator";
-    launcherIndicator.setAttribute("aria-hidden", "true");
-
-    launcherTitle = document.createElement("h1");
-    launcherTitle.id = "kakomonn-next-question-title";
-
-    launcherStatus = document.createElement("p");
-    launcherStatus.id = "next-question-status";
-    launcherStatus.setAttribute("role", "status");
-    launcherStatus.setAttribute("aria-live", "polite");
-
-    launcherContent.append(launcherIndicator, launcherTitle, launcherStatus);
-
-    launcherActions = document.createElement("div");
-    launcherActions.id = "kakomonn-next-question-actions";
-
-    launcherRetry = document.createElement("button");
-    launcherRetry.id = "next-question-retry";
-    launcherRetry.type = "button";
-    launcherRetry.textContent = "もう一度試す";
-    launcherRetry.addEventListener("click", () => {
-      void startNextQuestionLauncher();
-    });
-
-    launcherActions.appendChild(launcherRetry);
-    launcherPanel.append(launcherBrand, launcherContent, launcherActions);
-    launcher.appendChild(launcherPanel);
-  }
-
-  function mountNextQuestionLauncher() {
-    ensureNextQuestionLauncher();
-    delete document.body.dataset.kakomonnReaderUi;
-    document.body.replaceChildren(launcher);
-  }
-
   function showLauncherLoading() {
-    mountNextQuestionLauncher();
-    launcherPanel.dataset.state = "loading";
-    launcherPanel.setAttribute("aria-busy", "true");
-    launcherTitle.textContent = "次の問題を準備しています";
-    launcherStatus.setAttribute("role", "status");
-    launcherStatus.textContent = "学習状況から, 今取り組む問題を確認しています.";
-    launcherActions.hidden = true;
-    launcherRetry.hidden = true;
+    app.showLauncher({
+      state: "loading",
+      title: "次の問題を準備しています",
+      message: "学習状況から, 今取り組む問題を確認しています.",
+      showRetry: false,
+    });
   }
 
-  function showLauncherState({ state, title, message, showRetry }) {
-    mountNextQuestionLauncher();
-    launcherPanel.dataset.state = state;
-    launcherPanel.setAttribute("aria-busy", "false");
-    launcherTitle.textContent = title;
-    launcherStatus.setAttribute("role", state === "empty" ? "status" : "alert");
-    launcherStatus.textContent = message;
-    launcherRetry.hidden = !showRetry;
-    launcherRetry.dataset.variant = "primary";
-    launcherActions.hidden = !showRetry;
+  function showLauncherState(launcher) {
+    app.showLauncher(launcher);
   }
 
   function showLauncherRequestFailure(error) {
@@ -140,7 +66,7 @@ export function installLauncherController(app) {
     if (initializationAlreadyStarted) {
       app.syncReady = false;
       app.openSyncSettings();
-      app.syncSettingsError.textContent = message;
+      app.setSyncSettings({ error: message });
       app.updateSyncDependentControls();
     }
   }

@@ -715,7 +715,7 @@ async function runTest() {
     await driver.waitUntil(
       () =>
         driver.execute(
-          () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+          () => document.querySelector("#kakomonn-reader-error-dialog") !== null,
         ),
       { interval: 250, timeout: 30_000, timeoutMsg: "The speech error dialog did not open" },
     );
@@ -864,7 +864,7 @@ async function runTest() {
     await driver.waitUntil(
       () =>
         driver.execute(
-          () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+          () => document.querySelector("#kakomonn-reader-error-dialog") !== null,
         ),
       {
         interval: 250,
@@ -940,7 +940,7 @@ async function runTest() {
     );
     const syncSettingsLayout = await driver.execute(() => {
       const settings = document.querySelector("#kakomonn-reader-sync-settings");
-      const panel = document.querySelector("#kakomonn-reader-sync-settings-panel");
+      const panel = document.querySelector("#kakomonn-reader-sync-settings");
       const input = document.querySelector("#kakomonn-reader-sync-token");
       const save = document.querySelector("#kakomonn-reader-sync-settings-save");
       const panelRect = panel.getBoundingClientRect();

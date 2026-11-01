@@ -6,7 +6,7 @@ const webDirectory = new URL("../kakomonn-sync/web/", import.meta.url);
 const publicDirectory = new URL("../kakomonn-sync/public/", import.meta.url);
 
 test("the fixed URL serves the dashboard bridge to the configured userscript origin", async () => {
-  const openScript = await readFile(new URL("open.js", webDirectory), "utf8");
+  const openScript = await readFile(new URL("open.jsx", webDirectory), "utf8");
   const openPage = await readFile(new URL("open.html", webDirectory), "utf8");
   const publicFiles = await readdir(publicDirectory);
 
@@ -18,7 +18,7 @@ test("the fixed URL serves the dashboard bridge to the configured userscript ori
   assert.equal(openScript.includes('state === "ready"'), true);
   assert.equal(openScript.includes('state === "error"'), true);
   assert.equal(openScript.includes('"reader_ready_timeout"'), true);
-  assert.equal(openPage.includes("Readerを準備しています"), true);
+  assert.equal(openScript.includes("Readerを準備しています"), true);
   assert.equal(openScript.includes("location.replace(target)"), true);
   assert.equal(openScript.includes('location.replace("/")'), true);
   assert.equal(publicFiles.includes("_redirects"), false);

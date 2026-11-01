@@ -65,6 +65,12 @@
   },
   "dependencies": {
     "@expgolemclone/congratulations": "https://github.com/expgolemclone/congratulations/releases/download/v2.1.0/expgolemclone-congratulations-2.1.0.tgz",
+    "@mantine/charts": "9.7.4",
+    "@mantine/core": "9.7.4",
+    "@mantine/hooks": "9.7.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "recharts": "3.10.1",
     "ts-fsrs": "5.4.2",
     "turndown": "7.2.4",
     "turndown-plugin-gfm": "1.0.2"

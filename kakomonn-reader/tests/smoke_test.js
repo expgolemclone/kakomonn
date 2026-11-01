@@ -915,16 +915,16 @@ async function runCorrectFeedbackCase(context, script) {
     await page.waitForFunction(() => window.__audioInstance?.src === "");
 
     await markAnswerResult(childFrame, "correct");
-    await childFrame.waitForSelector(".congratulations-feedback");
+    await page.waitForSelector("#kakomonn-reader-feedback");
     assert.deepEqual(
-      await childFrame.locator(".congratulations-feedback").evaluate((element) => {
+      await page.locator("#kakomonn-reader-feedback").evaluate((element) => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
         return {
           animationName: style.animationName,
-          badge: element.querySelector(".congratulations-feedback-badge")?.textContent,
+          badge: element.querySelector("#kakomonn-reader-feedback-rarity")?.textContent,
           display: style.display,
-          message: element.querySelector(".congratulations-feedback-message")?.textContent,
+          message: element.querySelector("#kakomonn-reader-feedback-message")?.textContent,
           pointerEvents: style.pointerEvents,
           rarity: element.dataset.rarity,
           withinViewport:
@@ -934,7 +934,7 @@ async function runCorrectFeedbackCase(context, script) {
       {
         animationName: "none",
         badge: "NORMAL",
-        display: "grid",
+        display: "block",
         message: "That's Right!!",
         pointerEvents: "none",
         rarity: "normal",
@@ -971,7 +971,7 @@ async function runCorrectFeedbackCase(context, script) {
         typeof window.__audioInstance?.onended === "function",
     );
     await finishManualAudio(page);
-    await childFrame.locator(".congratulations-feedback").waitFor({
+    await page.locator("#kakomonn-reader-feedback").waitFor({
       state: "hidden",
     });
     assert.equal(
@@ -1127,7 +1127,7 @@ async function runSpeechLookaheadCase(context, script) {
         audioSource: window.__audioInstance?.src,
         audioPlayCalls: window.__audioPlayCalls,
         abortedRequestCount: window.__syncFixture.abortedRequestCount,
-        feedback: document.querySelector(".congratulations-feedback")?.outerHTML,
+        feedback: document.querySelector("#kakomonn-reader-feedback")?.outerHTML,
         heldSpeechRequest: window.__syncFixture.releaseHeldSpeechRequest !== null,
         readerError: document.querySelector("#kakomonn-reader-error-detail")?.textContent,
       }));
@@ -1300,7 +1300,7 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
       () => window.__audioPlayCalls >= 1 && window.__audioInstance?.src === "",
     );
     await markAnswerResult(childFrame, "correct");
-    const feedback = childFrame.locator(".congratulations-feedback");
+    const feedback = page.locator("#kakomonn-reader-feedback");
     await feedback.waitFor();
     assert.deepEqual(
       await feedback.evaluate((element) => {
@@ -1308,13 +1308,9 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
         const style = getComputedStyle(element);
         return {
           animationName: style.animationName,
-          badge: element.querySelector(".congratulations-feedback-badge")?.textContent,
-          coversViewport:
-            Math.abs(rect.left) <= 1 &&
-            Math.abs(rect.top) <= 1 &&
-            rect.right >= innerWidth - 1 &&
-            rect.bottom >= innerHeight - 1,
-          message: element.querySelector(".congratulations-feedback-message")?.textContent,
+          badge: element.querySelector("#kakomonn-reader-feedback-rarity")?.textContent,
+          mantineAlert: element.classList.contains("mantine-Alert-root"),
+          message: element.querySelector("#kakomonn-reader-feedback-message")?.textContent,
           pointerEvents: style.pointerEvents,
           position: style.position,
           rarity: element.dataset.rarity,
@@ -1325,10 +1321,10 @@ async function runCorrectFeedbackVariantCase(context, script, expected) {
       {
         animationName: "none",
         badge: expected.badge,
-        coversViewport: expected.rarity === "ssr",
+        mantineAlert: true,
         message: expected.displayText,
         pointerEvents: "none",
-        position: expected.rarity === "ssr" ? "fixed" : "relative",
+        position: "absolute",
         rarity: expected.rarity,
         withinViewport: true,
       },
@@ -1413,12 +1409,12 @@ async function runQueuedCorrectFeedbackVariantCase(context, script) {
         typeof window.__audioInstance?.onended === "function",
     );
 
-    const queuedFeedback = childFrame.locator(
-      '.congratulations-feedback[data-rarity="ssr"]',
+    const queuedFeedback = page.locator(
+      '#kakomonn-reader-feedback[data-rarity="ssr"]',
     );
     await queuedFeedback.waitFor();
     assert.equal(
-      await queuedFeedback.locator(".congratulations-feedback-message").innerText(),
+      await queuedFeedback.locator("#kakomonn-reader-feedback-message").innerText(),
       "Legendary! That's Right!!",
     );
     await finishManualAudio(page);
@@ -1483,7 +1479,7 @@ async function runCorrectCelebrationFeedbackCase(context, script) {
     await page.waitForTimeout(200);
     assert.equal(page.url(), "https://chushoks.kakomonn.com/questions/45124");
     assert.equal(
-      await childFrame.locator(".congratulations-feedback-message").innerText(),
+      await page.locator("#kakomonn-reader-feedback-message").innerText(),
       "That's Right!!",
     );
 
@@ -1521,7 +1517,7 @@ async function runIncorrectEnterReservationCase(context, script) {
   const errors = await preparePage(page, "none");
   const childFrame = await loadMockQuestion(page, script);
   try {
-    if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
+    if (await page.locator("#kakomonn-reader-error-dialog").isVisible()) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate(() => {
@@ -1597,7 +1593,7 @@ async function runIncorrectEnterCopyFailureCase(context, script) {
       })),
       { attempts: 1, copies: 0 },
     );
-    assert.equal(await page.locator("#kakomonn-reader-error-dialog").getAttribute("open"), null);
+    assert.equal(await page.locator("#kakomonn-reader-error-dialog").isVisible(), false);
     assert.deepEqual(await page.evaluate(() => window.__syncFixture.calls.filter(
       (call) => new URL(call.url).pathname === "/v12/copy-failures").map((call) => call.body)), [
       { site: "chushoks.kakomonn.com", questionId: "45124", reason: "clipboard_write_failed" },
@@ -1613,7 +1609,7 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
   const errors = await preparePage(page, "none");
   const childFrame = await loadMockQuestion(page, script);
   try {
-    if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
+    if (await page.locator("#kakomonn-reader-error-dialog").isVisible()) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate((pendingAttemptKey) => {
@@ -1629,7 +1625,7 @@ async function runIncorrectEnterSyncRetryCase(context, script) {
     });
 
     await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+      () => document.querySelector("#kakomonn-reader-error-dialog") !== null,
     );
     assert.equal(
       await page.locator("#kakomonn-reader-error-title").innerText(),
@@ -1669,7 +1665,7 @@ async function runMismatchedCelebrationRejectedCase(context, script) {
   const errors = await preparePage(page, "none", KPI_COMPLETION_SYNC_OPTIONS);
   const childFrame = await loadMockQuestion(page, script);
   try {
-    if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
+    if (await page.locator("#kakomonn-reader-error-dialog").isVisible()) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate(() => {
@@ -1681,7 +1677,7 @@ async function runMismatchedCelebrationRejectedCase(context, script) {
     });
     await markAnswerResult(childFrame, "incorrect");
     await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+      () => document.querySelector("#kakomonn-reader-error-dialog") !== null,
     );
 
     assert.equal(
@@ -1772,7 +1768,7 @@ async function runIncorrectEnterNoNextCase(context, script) {
   });
   const childFrame = await loadMockQuestion(page, script);
   try {
-    if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
+    if (await page.locator("#kakomonn-reader-error-dialog").isVisible()) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await page.evaluate(() => {
@@ -1785,7 +1781,7 @@ async function runIncorrectEnterNoNextCase(context, script) {
     await page.evaluate(() => window.__syncFixture.releaseHeldRequest());
 
     await page.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+      () => document.querySelector("#kakomonn-reader-error-dialog") !== null,
     );
     assert.equal(
       await page.locator("#kakomonn-reader-error-title").innerText(),
@@ -1806,9 +1802,9 @@ async function assertIncorrectSkip(context, script) {
     await page.waitForFunction(
       () =>
         window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/state") &&
-        document.querySelector("#kakomonn-reader-sync-settings")?.open === false,
+        document.querySelector("#kakomonn-reader-sync-settings") === null,
     );
-    if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
+    if (await page.locator("#kakomonn-reader-error-dialog").isVisible()) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     await frame.evaluate(() => {
@@ -1989,24 +1985,13 @@ async function main() {
       );
     });
     assert.deepEqual(
-      await page.evaluate(() => {
-        const root = getComputedStyle(document.documentElement);
-        const panel = getComputedStyle(
-          document.querySelector("#kakomonn-reader-sync-settings-panel"),
-        );
-        return {
-          colorScheme: root.colorScheme,
-          panelBackground: panel.backgroundColor,
-          panelColor: panel.color,
-          rootBackground: root.backgroundColor,
-        };
-      }),
-      {
-        colorScheme: "dark",
-        panelBackground: "oklch(0.22 0.018 255)",
-        panelColor: "oklch(0.97 0.006 255)",
-        rootBackground: "oklch(0.13 0.012 255)",
-      },
+      await page.evaluate(() => ({
+        colorScheme: document.documentElement.dataset.mantineColorScheme,
+        bodyBackground: getComputedStyle(document.body).backgroundColor,
+        mantineBadge: document.querySelector("#kakomonn-reader-study-time")
+          .classList.contains("mantine-Badge-root"),
+      })),
+      { colorScheme: "dark", bodyBackground: "rgb(11, 13, 16)", mantineBadge: true },
     );
     assert.deepEqual(
       await childFrame.evaluate(() => {
@@ -2573,8 +2558,8 @@ async function main() {
       () => window.__audioPlayCalls === 1 && window.__audioInstance?.src === "",
     );
     assert.equal(
-      await gestureRetryPage.locator("#kakomonn-reader-error-dialog").getAttribute("open"),
-      null,
+      await gestureRetryPage.locator("#kakomonn-reader-error-dialog").isVisible(),
+      false,
     );
     assert.equal((await azureSpeechCalls(gestureRetryPage)).length, 0);
     assert.equal(await speechTokenCallCount(gestureRetryPage), 0);
@@ -2624,8 +2609,8 @@ async function main() {
       autoplayBlockedHistoryLength,
     );
     assert.equal(
-      await autoplayBlockedPage.locator("#kakomonn-reader-error-dialog").getAttribute("open"),
-      null,
+      await autoplayBlockedPage.locator("#kakomonn-reader-error-dialog").isVisible(),
+      false,
     );
     assert.deepEqual(autoplayBlockedErrors, []);
     await autoplayBlockedPage.close();
@@ -2711,7 +2696,7 @@ async function main() {
     const unsupportedErrors = await preparePage(unsupportedPage, "none");
     await loadMockQuestion(unsupportedPage, script);
     await unsupportedPage.waitForFunction(
-      () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+      () => document.querySelector("#kakomonn-reader-error-dialog") !== null,
     );
     assert.equal(
       await unsupportedPage.locator("#kakomonn-reader-error-title").innerText(),
@@ -2840,8 +2825,8 @@ async function main() {
       () => window.__audioPlayCalls === 1 && window.__audioInstance?.src === "",
     );
     assert.equal(
-      await iosGestureRetryPage.locator("#kakomonn-reader-error-dialog").getAttribute("open"),
-      null,
+      await iosGestureRetryPage.locator("#kakomonn-reader-error-dialog").isVisible(),
+      false,
     );
     assert.equal((await azureSpeechCalls(iosGestureRetryPage)).length, 0);
     assert.equal(await speechTokenCallCount(iosGestureRetryPage), 0);

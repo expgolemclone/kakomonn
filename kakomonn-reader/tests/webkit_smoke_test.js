@@ -405,18 +405,13 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
           window.__syncFixture.calls.some((call) => new URL(call.url).pathname === "/v12/state"),
         );
         await page.waitForFunction(
-          () => document.querySelector("#kakomonn-reader-error-dialog")?.open === true,
+          () => document.querySelector("#kakomonn-reader-error-dialog") !== null,
         );
         assert.equal(
           await page.locator("#kakomonn-reader-error-title").innerText(),
           "読み上げを利用できません",
         );
-        await page.evaluate(() => {
-          const dialog = document.querySelector("#kakomonn-reader-error-dialog");
-          if (dialog?.open) {
-            dialog.close();
-          }
-        });
+        await page.locator("#kakomonn-reader-error-close").click();
         await questionFrame.locator("label").first().tap();
         await questionFrame.locator(".problem_detail button").tap();
         await questionFrame.evaluate(() => {
@@ -449,7 +444,7 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
             copiedTextCount: window.__copiedTexts.length,
             errorDialog: {
               code: document.querySelector("#kakomonn-reader-error-code")?.textContent,
-              open: document.querySelector("#kakomonn-reader-error-dialog")?.open,
+              open: document.querySelector("#kakomonn-reader-error-dialog") !== null,
               title: document.querySelector("#kakomonn-reader-error-title")?.textContent,
             },
             frameURL:
@@ -671,7 +666,7 @@ async function main() {
       0,
     );
     const settingsLayout = await settingsEntryPage.evaluate(() => {
-      const panel = document.querySelector("#kakomonn-reader-sync-settings-panel");
+      const panel = document.querySelector("#kakomonn-reader-sync-settings");
       const input = document.querySelector("#kakomonn-reader-sync-token");
       const save = document.querySelector("#kakomonn-reader-sync-settings-save");
       const panelRect = panel.getBoundingClientRect();
@@ -780,7 +775,7 @@ async function main() {
       });
     });
     const historyLengthBeforeIncorrect = await page.evaluate(() => history.length);
-    if ((await page.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null) {
+    if (await page.locator("#kakomonn-reader-error-dialog").isVisible()) {
       await page.locator("#kakomonn-reader-error-close").click();
     }
     for (const viewport of [
@@ -891,7 +886,7 @@ async function main() {
     });
     await page.waitForFunction(() => window.__syncFixture.calls.some(
       (call) => new URL(call.url).pathname === "/v12/copy-failures"));
-    assert.equal(await page.locator("#kakomonn-reader-error-dialog").getAttribute("open"), null);
+    assert.equal(await page.locator("#kakomonn-reader-error-dialog").isVisible(), false);
     assert.deepEqual(await page.evaluate(() => window.__syncFixture.calls.filter(
       (call) => new URL(call.url).pathname === "/v12/copy-failures").map((call) => call.body)), [
       { site: "chushoks.kakomonn.com", questionId: "86956", reason: "clipboard_write_failed" },
@@ -969,7 +964,7 @@ async function main() {
       });
     });
     if (
-      (await correctPage.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null
+      await correctPage.locator("#kakomonn-reader-error-dialog").isVisible()
     ) {
       await correctPage.locator("#kakomonn-reader-error-close").click();
     }
@@ -987,13 +982,13 @@ async function main() {
         explanation.hidden = false;
       }
     });
-    await correctFrame.waitForSelector(".congratulations-feedback");
+    await correctPage.waitForSelector("#kakomonn-reader-feedback");
     assert.deepEqual(
-      await correctFrame.locator(".congratulations-feedback").evaluate((element) => {
+      await correctPage.locator("#kakomonn-reader-feedback").evaluate((element) => {
         const rect = element.getBoundingClientRect();
         return {
-          badge: element.querySelector(".congratulations-feedback-badge")?.textContent,
-          message: element.querySelector(".congratulations-feedback-message")?.textContent,
+          badge: element.querySelector("#kakomonn-reader-feedback-rarity")?.textContent,
+          message: element.querySelector("#kakomonn-reader-feedback-message")?.textContent,
           pointerEvents: getComputedStyle(element).pointerEvents,
           rarity: element.dataset.rarity,
           withinViewport:
@@ -1047,7 +1042,7 @@ async function main() {
     );
     await correctPage.waitForTimeout(5_100);
     assert.equal(
-      (await correctPage.locator("#kakomonn-reader-error-dialog").getAttribute("open")) !== null,
+      await correctPage.locator("#kakomonn-reader-error-dialog").isVisible(),
       false,
     );
     assert.deepEqual(await correctPage.evaluate(() => window.__syncFixture.calls.filter(

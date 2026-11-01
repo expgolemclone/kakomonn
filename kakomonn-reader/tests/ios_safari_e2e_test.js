@@ -389,38 +389,40 @@ async function installReaderInCurrentDocument(driver, script, syncOptions) {
   await driver.execute(
     `(${installSyncFixtureInWindow.toString()})(${JSON.stringify(syncConfiguration)});`,
   );
-  await driver.execute(
-    (source, sourceURL) => {
-      const injectedDocuments = new WeakSet();
-      window.__kakomonnReaderFrameInstaller = window.setInterval(() => {
-        const frame = document.querySelector("#kakomonn-reader-frame");
-        if (frame === null) {
-          return;
-        }
+  if (documentURL.href !== nextQuestionOpenURL) {
+    await driver.execute(
+      (source, sourceURL) => {
+        const injectedDocuments = new WeakSet();
+        window.__kakomonnReaderFrameInstaller = window.setInterval(() => {
+          const frame = document.querySelector("#kakomonn-reader-frame");
+          if (frame === null) {
+            return;
+          }
 
-        const frameDocument = frame.contentDocument;
-        const frameWindow = frame.contentWindow;
-        if (
-          frameDocument === null ||
-          frameWindow === null ||
-          frameDocument.readyState === "loading" ||
-          injectedDocuments.has(frameDocument)
-        ) {
-          return;
-        }
+          const frameDocument = frame.contentDocument;
+          const frameWindow = frame.contentWindow;
+          if (
+            frameDocument === null ||
+            frameWindow === null ||
+            frameDocument.readyState === "loading" ||
+            injectedDocuments.has(frameDocument)
+          ) {
+            return;
+          }
 
-        const frameURL = new URL(frameWindow.location.href);
-        if (frameURL.href === "about:blank" || !frameURL.hostname.endsWith(".kakomonn.com")) {
-          return;
-        }
+          const frameURL = new URL(frameWindow.location.href);
+          if (frameURL.href === "about:blank" || !frameURL.hostname.endsWith(".kakomonn.com")) {
+            return;
+          }
 
-        injectedDocuments.add(frameDocument);
-        frameWindow.eval(`${source}\n//# sourceURL=${sourceURL}`);
-      }, 25);
-    },
-    script,
-    readerSourceURL,
-  );
+          injectedDocuments.add(frameDocument);
+          frameWindow.eval(`${source}\n//# sourceURL=${sourceURL}`);
+        }, 25);
+      },
+      script,
+      readerSourceURL,
+    );
+  }
   await driver.execute(`${script}\n//# sourceURL=${readerSourceURL}`);
 
   if (!/^\/questions\/(?:next\/)?\d+$/.test(documentURL.pathname)) {

@@ -411,7 +411,8 @@ async function assertEarlyFrameReadyNavigation(browser, script) {
           await page.locator("#kakomonn-reader-error-title").innerText(),
           "読み上げを利用できません",
         );
-        await page.locator("#kakomonn-reader-error-close").click();
+        await page.locator("#kakomonn-reader-error-close").tap();
+        await page.locator("#kakomonn-reader-error-dialog").waitFor({ state: "hidden" });
         await questionFrame.locator("label").first().tap();
         await questionFrame.locator(".problem_detail button").tap();
         await questionFrame.evaluate(() => {

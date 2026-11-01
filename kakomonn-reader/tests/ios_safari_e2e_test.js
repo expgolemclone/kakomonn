@@ -255,6 +255,14 @@ async function clickWebElementNatively(driver, selector, index = 0) {
   return element;
 }
 
+async function closeSpeechError(driver) {
+  await clickWebElementNatively(driver, "#kakomonn-reader-error-close");
+  await driver.waitUntil(
+    () => driver.execute(() => document.querySelector("#kakomonn-reader-error-dialog") === null),
+    { interval: 100, timeout: 10_000, timeoutMsg: "The speech error dialog did not close after a native tap" },
+  );
+}
+
 async function readNativeWebTapViewport(driver) {
   return driver.execute(() => {
     const visualViewport = window.visualViewport;
@@ -344,6 +352,21 @@ async function installReaderInCurrentDocument(driver, script, syncOptions) {
     });
     window.__kakomonnReaderErrors = [];
     window.__kakomonnReaderRejections = [];
+    window.__kakomonnReaderTapTrace = [];
+    for (const type of ["touchstart", "touchend", "click"]) {
+      document.addEventListener(type, (event) => {
+        const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+        const point = event.changedTouches?.[0] ?? event;
+        window.__kakomonnReaderTapTrace.push({
+          type,
+          target: target?.closest("[id]")?.id ?? target?.tagName ?? null,
+          trusted: event.isTrusted,
+          x: point.clientX,
+          y: point.clientY,
+        });
+        if (window.__kakomonnReaderTapTrace.length > 20) window.__kakomonnReaderTapTrace.shift();
+      }, true);
+    }
     window.addEventListener("error", (event) => {
       window.__kakomonnReaderErrors.push({
         column: event.colno,
@@ -505,6 +528,11 @@ async function submitAnswer(driver, answerText) {
   );
   assert.equal(selectedAnswerInputs.length, choiceTexts.length);
   assert.equal(await selectedAnswerInputs[choiceIndex].isSelected(), true);
+  assert.equal(
+    await driver.execute(() => window.parent.document.querySelector("#kakomonn-reader-error-dialog") === null),
+    true,
+    "The Reader error dialog blocked answer submission",
+  );
   await clickWebElementNatively(driver, "#send_exam_btn");
 }
 
@@ -641,6 +669,23 @@ async function captureFailureArtifacts(driver, error) {
     if (source !== null) {
       fs.writeFileSync(failureSourcePath, source, "utf8");
     }
+    await driver.switchToFrame(null).catch(() => {});
+    diagnostics.readerState = await driver.execute(() => {
+      const frame = document.querySelector("#kakomonn-reader-frame");
+      const frameDocument = frame?.contentDocument;
+      const dialog = document.querySelector("#kakomonn-reader-error-dialog");
+      return {
+        attemptCount: window.__syncFixture?.attemptCount ?? null,
+        dialog: dialog?.innerText ?? null,
+        frameURL: frame?.contentWindow?.location.href ?? null,
+        resultClass: frameDocument?.querySelector("#js-answer-result-box")?.className ?? null,
+        selectedAnswers: Array.from(
+          frameDocument?.querySelectorAll(".problem_detail ul.check input[name='intAnswerData']:checked") ?? [],
+          (input) => input.value,
+        ),
+        tapTrace: window.__kakomonnReaderTapTrace ?? [],
+      };
+    }).catch(() => null);
     const safariConsole = await driver.getLogs("safariConsole").catch(() => []);
     diagnostics.safariConsole = safariConsole;
   }
@@ -725,7 +770,7 @@ async function runTest() {
       ),
       "読み上げを利用できません",
     );
-    await clickWebElementNatively(driver, "#kakomonn-reader-error-close");
+    await closeSpeechError(driver);
     const layout = await driver.execute(() => {
       const shell = document.querySelector("#kakomonn-reader-shell");
       const frame = document.querySelector("#kakomonn-reader-frame");
@@ -872,12 +917,22 @@ async function runTest() {
         timeoutMsg: "The correct-answer speech error dialog did not open",
       },
     );
-    await clickWebElementNatively(driver, "#kakomonn-reader-error-close");
+    await closeSpeechError(driver);
     const correctClipboardNonce = `kakomonn-ios-correct-copy-before-${Date.now()}`;
     await driver.execute("mobile: setClipboard", { content: Buffer.from(correctClipboardNonce, "utf8").toString("base64"), contentType: "plaintext" });
     await switchToReaderFrame(driver);
     await submitAnswer(driver, correctAnswerText);
     await driver.switchToFrame(null);
+    await driver.waitUntil(
+      () => driver.execute(() => window.__syncFixture.attemptCount === 1),
+      { interval: 250, timeout: 30_000, timeoutMsg: "The correct answer was not recorded" },
+    );
+    assert.equal(
+      await driver.execute(() => window.__syncFixture.calls.find(
+        (call) => call.method === "POST" && new URL(call.url).pathname === "/v12/attempts",
+      )?.body.answerResult),
+      "correct",
+    );
     await driver.waitUntil(
       () =>
         driver.execute(

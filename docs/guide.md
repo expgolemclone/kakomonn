@@ -28,9 +28,9 @@ Provision Chrome from an elevated PowerShell 7 session. This changes machine-wid
 
 ```powershell
 npm run test:chrome-policy
-pwsh -NoProfile -File scripts/provision-chrome.ps1 -Operation Install -WhatIf
-pwsh -NoProfile -File scripts/provision-chrome.ps1 -Operation Install
-pwsh -NoProfile -File scripts/provision-chrome.ps1 -Operation Verify
+mise exec -- pwsh -NoProfile -File C:/dev/settings/browser-policies/scripts/provision-tampermonkey.ps1 -Operation Install -WhatIf
+mise exec -- pwsh -NoProfile -File C:/dev/settings/browser-policies/scripts/provision-tampermonkey.ps1 -Operation Install
+mise exec -- pwsh -NoProfile -File C:/dev/settings/browser-policies/scripts/provision-tampermonkey.ps1 -Operation Verify
 ```
 
 Copy [`kakomonn.example.toml`](../kakomonn.example.toml) to `kakomonn.toml` and set `KAKOMONN_SYNC_TOKEN` to the production Worker token. Keep secrets out of source control. Let the live tests manage userscript installation and browser restarts; do not edit browser storage or Secure Preferences manually.
